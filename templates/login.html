@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - Cloud Cost Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg:#0f1117; --card:#1e2130; --input:#252836; --border:#2d3148; --text:#e4e6f0; --muted:#8b8fa3; --accent:#4f6ef7; --accent-h:#3d5ce5; --red:#e74c3c; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:"Inter",-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; }
+        .wrap { width:100%; max-width:440px; padding:20px; }
+        .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:40px 36px; box-shadow:0 8px 32px rgba(0,0,0,.4); }
+        .logo { text-align:center; margin-bottom:32px; }
+        .logo .ic { width:56px; height:56px; background:linear-gradient(135deg,var(--accent),#3d5ce5); border-radius:14px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:14px; }
+        .logo h1 { font-size:22px; font-weight:700; }
+        .logo p { font-size:13px; color:var(--muted); margin-top:5px; }
+        .fg { margin-bottom:18px; }
+        .fg label { display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:7px; }
+        .fg input { width:100%; padding:12px 16px; background:var(--input); border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:14px; font-family:inherit; transition:border-color .2s; }
+        .fg input:focus { outline:none; border-color:var(--accent); }
+        .btn { width:100%; padding:14px; background:var(--accent); color:#fff; border:none; border-radius:10px; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer; transition:background .2s; margin-top:4px; }
+        .btn:hover { background:var(--accent-h); }
+        .err { background:rgba(231,76,60,.12); border:1px solid rgba(231,76,60,.3); color:var(--red); padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:18px; text-align:center; }
+        .divider { display:flex; align-items:center; gap:12px; margin:22px 0; color:var(--muted); font-size:12px; }
+        .divider::before,.divider::after { content:""; flex:1; height:1px; background:var(--border); }
+        .signup-link { display:block; text-align:center; padding:13px; border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:14px; font-weight:500; text-decoration:none; transition:border-color .2s,background .2s; }
+        .signup-link:hover { border-color:var(--accent); background:rgba(79,110,247,.06); }
+        .footer { text-align:center; margin-top:24px; font-size:12px; color:var(--muted); }
+        .badges { display:flex; justify-content:center; gap:8px; margin-top:14px; flex-wrap:wrap; }
+        .badge { font-size:11px; color:var(--muted); background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:20px; padding:4px 12px; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="logo">
+      <div class="ic">
+        <svg width="28" height="28" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+        </svg>
+      </div>
+      <h1>Cloud Cost Analyzer</h1>
+      <p>Multi-Cloud Cost Management Platform</p>
+    </div>
+
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+    <form method="POST" action="/login">
+      <div class="fg">
+        <label>Work Email</label>
+        <input type="email" name="username" placeholder="you@company.com" required autofocus>
+      </div>
+      <div class="fg">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Enter password" required>
+      </div>
+      <button type="submit" class="btn">Sign In</button>
+    </form>
+
+    <div class="divider">or</div>
+    <a href="/signup" class="signup-link">Create a new organisation account</a>
+
+    <div class="badges">
+      <span class="badge">Azure</span>
+      <span class="badge">AWS</span>
+      <span class="badge">GCP</span>
+    </div>
+    <div class="footer">Secure &bull; Multi-tenant &bull; Enterprise ready</div>
+  </div>
+</div>
+</body>
+</html>

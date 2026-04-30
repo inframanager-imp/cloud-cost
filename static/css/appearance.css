@@ -1,0 +1,97 @@
+/* ─── Light (sun) mode — loads after themes-trial; overrides trial when active ─ */
+
+html[data-appearance="light"] {
+    --bg-primary: #eceff3;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --bg-input: #e8ecf2;
+    --bg: var(--bg-input);
+    --border: #cfd6df;
+    --text-primary: #141821;
+    --text-secondary: #5a6578;
+    --accent: #3451d1;
+    --accent-hover: #2a3fae;
+    --green: #0b7a45;
+    --red: #c53030;
+    --orange: #b45309;
+    --purple: #6d28d9;
+    --cyan: #0e7490;
+    --shadow: 0 2px 14px rgba(15, 23, 42, 0.08);
+    --card-bg: #ffffff;
+    --page-bg-overlay: none;
+    --accent-subtle: rgba(52, 81, 209, 0.1);
+    --hero-gradient: linear-gradient(135deg, #e0e8ff 0%, #f0f4ff 45%, #e8eeff 100%);
+    --hero-border: rgba(52, 81, 209, 0.22);
+    --hero-shadow: 0 8px 28px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    --hero-text-primary: #0f172a;
+    --hero-stat-bg: rgba(255, 255, 255, 0.75);
+    --hero-stat-border: rgba(15, 23, 42, 0.1);
+    --hero-progress-track: rgba(15, 23, 42, 0.1);
+    --sub-card-bg: #f4f6fa;
+    --sub-card-border: #d8dee8;
+    --sub-card-name: #141821;
+    --sub-card-id-fg: #5a6578;
+    --sub-card-id-bg: #e8ecf2;
+    --sub-card-id-border: #cfd6df;
+    --sub-card-meta: #5a6578;
+    --subfilter-bg: #ffffff;
+    --subfilter-color: #141821;
+    --subfilter-border: #b8c0cc;
+    --subfilter-focus: #3451d1;
+    --subfilter-focus-ring: rgba(52, 81, 209, 0.22);
+    --subfilter-option-bg: #ffffff;
+}
+
+/* Sidebar appearance toggle */
+.sidebar-appearance {
+    padding: 10px 16px 8px;
+    border-top: 1px solid var(--border);
+}
+
+.sidebar-appearance-label {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 8px;
+}
+
+.sidebar-appearance-btns {
+    display: flex;
+    gap: 8px;
+}
+
+.appearance-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.appearance-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+
+.appearance-btn.active {
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
+.appearance-btn svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}

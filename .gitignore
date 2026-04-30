@@ -1,0 +1,39 @@
+# Secrets & credentials
+.env
+*.env
+*.json
+!detailed-cur-Manifest.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Data / uploads
+data/
+*.csv.gz
+*.csv
+report_preview.html
+
+# Logs
+*.log
+logs/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+.claude/

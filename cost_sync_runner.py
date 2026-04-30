@@ -1,0 +1,183 @@
+"""
+Run cost sync in a separate process so Flask can stay single-threaded (thread-starved hosts).
+Invoked as: python3 cost_sync_runner.py <path-to-json-payload>
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from database import (
+    init_db,
+    insert_cost_records,
+    clear_cost_data,
+    delete_cost_data_by_date,
+    get_latest_cost_date,
+    log_sync,
+    update_sync_log,
+    get_subscriptions,
+    update_subscription_sync_time,
+)
+from azure_fetcher import fetch_cost_data
+
+SYNC_SEQUENTIAL = os.getenv("SYNC_SEQUENTIAL", "false").lower() in ("true", "1", "yes")
+
+
+def _status_path() -> str:
+    base = os.getenv("DB_PATH", "/app/data/azure_costs.db")
+    return os.path.join(os.path.dirname(os.path.abspath(base)), ".cost_sync_status.json")
+
+
+def _write_status(running: bool, message: str, progress: int) -> None:
+    path = _status_path()
+    try:
+        with open(path, "w") as f:
+            json.dump({"running": running, "message": message, "progress": progress}, f)
+    except OSError as e:
+        print(f"[cost_sync_runner] status write failed: {e}")
+
+
+def _fetch_one_subscription(sub, is_full: bool, months: int, date_to: str):
+    sub_id = sub["subscription_id"]
+    sub_name = sub.get("name", sub_id[:12])
+
+    if is_full:
+        date_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
+        clear_cost_data(subscription_id=sub_id)
+    else:
+        latest = get_latest_cost_date(subscription_id=sub_id)
+        if latest:
+            date_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
+            delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
+        else:
+            date_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
+
+    all_records = []
+    current_from = datetime.strptime(date_from, "%Y-%m-%d")
+    final_to = datetime.strptime(date_to, "%Y-%m-%d")
+    total_days = (final_to - current_from).days
+    total_chunks = max(1, total_days // 30 + (1 if total_days % 30 else 0))
+
+    for chunk in range(1, total_chunks + 1):
+        chunk_to = min(current_from + timedelta(days=30), final_to)
+        records = fetch_cost_data(
+            current_from.strftime("%Y-%m-%d"),
+            chunk_to.strftime("%Y-%m-%d"),
+            subscription_id=sub_id,
+        )
+        all_records.extend(records)
+        current_from = chunk_to + timedelta(days=1)
+
+    count = insert_cost_records(all_records)
+    update_subscription_sync_time(sub_id, "cost")
+    return sub_name, count
+
+
+def run_cost_sync_from_payload(payload: dict) -> None:
+    init_db()
+    mode = payload.get("mode", "incremental")
+    target_sub = payload.get("subscription_id")
+    months = int(os.getenv("COST_HISTORY_MONTHS", "3"))
+    date_to = payload.get("date_to") or datetime.utcnow().strftime("%Y-%m-%d")
+
+    if target_sub:
+        all_subs = get_subscriptions()
+        match = [s for s in all_subs if s["subscription_id"] == target_sub]
+        subs_to_sync = match if match else [{"subscription_id": target_sub, "name": target_sub[:12]}]
+    else:
+        subs_to_sync = get_subscriptions(enabled_only=True)
+        if not subs_to_sync:
+            subs_to_sync = [{"subscription_id": os.getenv("AZURE_SUBSCRIPTION_ID", ""), "name": "Default"}]
+
+    is_full = mode == "full"
+    mode_label = "Full sync" if is_full else "Quick sync"
+    total_subs = len(subs_to_sync)
+    _write_status(True, f"{mode_label}: Starting ({total_subs} subscription(s))...", 5)
+    sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to)
+    total_records = 0
+
+    try:
+        completed = 0
+        if SYNC_SEQUENTIAL:
+            for sub in subs_to_sync:
+                sub_name = sub.get("name", sub["subscription_id"][:12])
+                try:
+                    name, count = _fetch_one_subscription(sub, is_full, months, date_to)
+                    total_records += count
+                    completed += 1
+                    _write_status(
+                        True,
+                        f"{mode_label}: {name} done ({count} records) [{completed}/{total_subs}]",
+                        5 + int(90 * completed / total_subs),
+                    )
+                except Exception as sub_err:
+                    completed += 1
+                    _write_status(
+                        True,
+                        f"{mode_label}: {sub_name} failed: {str(sub_err)[:80]} [{completed}/{total_subs}]",
+                        5 + int(90 * completed / total_subs),
+                    )
+        else:
+            max_workers = min(total_subs, 5)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(_fetch_one_subscription, sub, is_full, months, date_to): sub
+                    for sub in subs_to_sync
+                }
+                for future in as_completed(futures):
+                    sub = futures[future]
+                    sub_name = sub.get("name", sub["subscription_id"][:12])
+                    try:
+                        name, count = future.result()
+                        total_records += count
+                        completed += 1
+                        _write_status(
+                            True,
+                            f"{mode_label}: {name} done ({count} records) [{completed}/{total_subs}]",
+                            5 + int(90 * completed / total_subs),
+                        )
+                    except Exception as sub_err:
+                        completed += 1
+                        _write_status(
+                            True,
+                            f"{mode_label}: {sub_name} failed: {str(sub_err)[:80]} [{completed}/{total_subs}]",
+                            5 + int(90 * completed / total_subs),
+                        )
+
+        _write_status(
+            False,
+            f"{mode_label} complete! {total_records} records across {total_subs} subscription(s).",
+            100,
+        )
+        update_sync_log(sync_id, "success", total_records)
+    except Exception as e:
+        _write_status(False, f"{mode_label} failed: {str(e)}", 0)
+        update_sync_log(sync_id, "failed", total_records, str(e))
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print("usage: cost_sync_runner.py <payload.json>", file=sys.stderr)
+        return 2
+    path = sys.argv[1]
+    try:
+        with open(path, encoding="utf-8") as f:
+            payload = json.load(f)
+        run_cost_sync_from_payload(payload)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

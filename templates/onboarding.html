@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Setup — Cloud Cost Analyzer</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f1117;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+    .header{text-align:center;margin-bottom:36px}
+    .logo{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:12px}
+    .logo-icon{width:38px;height:38px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+    .logo-text{font-size:18px;font-weight:700;color:#fff}
+    h1{font-size:28px;font-weight:700;color:#fff;margin-bottom:6px}
+    .subtitle{font-size:15px;color:#8b92a5}
+    /* Steps */
+    .steps{display:flex;align-items:center;gap:0;margin-bottom:36px}
+    .step{display:flex;flex-direction:column;align-items:center;position:relative}
+    .step-circle{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;border:2px solid #2a2d3d;background:#1a1d27;color:#4a4e63;transition:all .3s}
+    .step-circle.done{background:#667eea;border-color:#667eea;color:#fff}
+    .step-circle.active{background:#1a1d27;border-color:#667eea;color:#667eea}
+    .step-label{font-size:11px;color:#4a4e63;margin-top:6px;white-space:nowrap}
+    .step-label.active{color:#667eea}
+    .step-label.done{color:#8b92a5}
+    .step-line{width:80px;height:2px;background:#2a2d3d;margin-bottom:20px;flex-shrink:0}
+    .step-line.done{background:#667eea}
+    /* Card */
+    .card{background:#1a1d27;border:1px solid #2a2d3d;border-radius:16px;padding:40px;width:100%;max-width:560px}
+    .step-content{display:none}
+    .step-content.active{display:block}
+    /* Step 1 — welcome */
+    .welcome-icon{font-size:56px;text-align:center;margin-bottom:16px}
+    .welcome-title{font-size:22px;font-weight:700;color:#fff;text-align:center;margin-bottom:8px}
+    .welcome-desc{font-size:14px;color:#8b92a5;text-align:center;line-height:1.6;margin-bottom:28px}
+    .checklist{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:28px}
+    .checklist li{display:flex;align-items:center;gap:10px;font-size:14px;color:#c5c8d6}
+    .checklist li::before{content:'✓';color:#4ade80;font-weight:700;font-size:15px}
+    /* Step 2 — provider */
+    .provider-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px}
+    .provider-card{background:#0f1117;border:2px solid #2a2d3d;border-radius:12px;padding:20px 12px;text-align:center;cursor:pointer;transition:all .2s}
+    .provider-card:hover{border-color:#667eea}
+    .provider-card.selected{border-color:#667eea;background:#1a1f35}
+    .provider-icon{font-size:28px;margin-bottom:8px}
+    .provider-name{font-size:13px;font-weight:600;color:#fff}
+    .provider-note{font-size:11px;color:#4a4e63;margin-top:3px}
+    .form-group{margin-bottom:16px}
+    label{display:block;font-size:13px;font-weight:500;color:#c5c8d6;margin-bottom:6px}
+    input,select,textarea{width:100%;padding:10px 13px;background:#0f1117;border:1px solid #2a2d3d;border-radius:8px;color:#fff;font-size:14px;outline:none;transition:border-color .2s;font-family:inherit}
+    input:focus,select:focus,textarea:focus{border-color:#667eea}
+    input::placeholder,textarea::placeholder{color:#4a4e63}
+    textarea{resize:vertical;min-height:80px;font-size:12px}
+    select option{background:#1a1d27}
+    .provider-fields{display:none}
+    .provider-fields.active{display:block}
+    .hint{font-size:11px;color:#4a4e63;margin-top:4px}
+    /* Step 3 — invite */
+    .invite-row{display:flex;gap:10px;margin-bottom:10px}
+    .invite-row input{flex:1}
+    .invite-row select{width:130px;flex-shrink:0}
+    .add-invite-btn{background:none;border:1px dashed #2a2d3d;border-radius:8px;color:#667eea;font-size:13px;padding:9px;width:100%;cursor:pointer;transition:border-color .2s}
+    .add-invite-btn:hover{border-color:#667eea}
+    /* Step 4 — done */
+    .done-icon{font-size:64px;text-align:center;margin-bottom:16px}
+    .done-title{font-size:22px;font-weight:700;color:#fff;text-align:center;margin-bottom:8px}
+    .done-desc{font-size:14px;color:#8b92a5;text-align:center;line-height:1.6;margin-bottom:28px}
+    /* Buttons */
+    .btn-row{display:flex;gap:12px;justify-content:flex-end;margin-top:8px}
+    .btn{padding:11px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s;border:none}
+    .btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+    .btn-primary:hover{opacity:.9}
+    .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+    .btn-secondary{background:#1a1d27;border:1px solid #2a2d3d;color:#8b92a5}
+    .btn-secondary:hover{border-color:#667eea;color:#fff}
+    .btn-skip{background:none;border:none;color:#4a4e63;font-size:13px;cursor:pointer;padding:11px 0}
+    .btn-skip:hover{color:#8b92a5}
+    .error{background:#2d1f1f;border:1px solid #5c2626;border-radius:8px;padding:10px;color:#ff6b6b;font-size:13px;margin-bottom:14px;display:none}
+    .success-msg{background:#1a2d1a;border:1px solid #2d5c2d;border-radius:8px;padding:10px;color:#4ade80;font-size:13px;margin-bottom:14px;display:none}
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">&#9729;</div>
+    <div class="logo-text">Cloud Cost Analyzer</div>
+  </div>
+  <h1>Welcome! Let's get you set up.</h1>
+  <p class="subtitle">This takes about 3 minutes.</p>
+</div>
+
+<!-- Steps indicator -->
+<div class="steps">
+  <div class="step">
+    <div class="step-circle active" id="sc-1">1</div>
+    <div class="step-label active" id="sl-1">Welcome</div>
+  </div>
+  <div class="step-line" id="line-1"></div>
+  <div class="step">
+    <div class="step-circle" id="sc-2">2</div>
+    <div class="step-label" id="sl-2">Cloud Provider</div>
+  </div>
+  <div class="step-line" id="line-2"></div>
+  <div class="step">
+    <div class="step-circle" id="sc-3">3</div>
+    <div class="step-label" id="sl-3">Invite Team</div>
+  </div>
+  <div class="step-line" id="line-3"></div>
+  <div class="step">
+    <div class="step-circle" id="sc-4">4</div>
+    <div class="step-label" id="sl-4">Done</div>
+  </div>
+</div>
+
+<div class="card">
+  <!-- Step 1: Welcome -->
+  <div class="step-content active" id="step-1">
+    <div class="welcome-icon">&#127381;</div>
+    <div class="welcome-title">Your organisation is ready!</div>
+    <div class="welcome-desc">Connect your cloud accounts to start tracking costs across Azure, AWS, and GCP in one unified dashboard.</div>
+    <ul class="checklist">
+      <li>Real-time cost visibility across all cloud providers</li>
+      <li>Budget alerts before you overspend</li>
+      <li>Slack &amp; email notifications</li>
+      <li>Team collaboration with role-based access</li>
+    </ul>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goStep(2)">Connect a Cloud Account &rarr;</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Cloud Provider -->
+  <div class="step-content" id="step-2">
+    <div style="margin-bottom:20px">
+      <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px">Connect your first cloud account</div>
+      <div style="font-size:13px;color:#8b92a5">You can add more accounts later from Cloud Providers in the sidebar.</div>
+    </div>
+
+    <div class="provider-grid">
+      <div class="provider-card" onclick="selectProvider('azure')">
+        <div class="provider-icon">&#9729;</div>
+        <div class="provider-name">Azure</div>
+        <div class="provider-note">Tenant ID + App</div>
+      </div>
+      <div class="provider-card" onclick="selectProvider('aws')">
+        <div class="provider-icon">&#9881;</div>
+        <div class="provider-name">AWS</div>
+        <div class="provider-note">Access Keys / Role</div>
+      </div>
+      <div class="provider-card" onclick="selectProvider('gcp')">
+        <div class="provider-icon">&#11044;</div>
+        <div class="provider-name">GCP</div>
+        <div class="provider-note">Service Account</div>
+      </div>
+    </div>
+
+    <div class="error" id="prov-error"></div>
+    <div class="success-msg" id="prov-success"></div>
+
+    <!-- Azure fields -->
+    <div class="provider-fields" id="fields-azure">
+      <div class="form-group">
+        <label>Display Name</label>
+        <input type="text" id="az-name" placeholder="Production Azure"/>
+      </div>
+      <div class="form-group">
+        <label>Tenant ID</label>
+        <input type="text" id="az-tenant" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+      </div>
+      <div class="form-group">
+        <label>Subscription ID</label>
+        <input type="text" id="az-sub" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+      </div>
+      <div class="form-group">
+        <label>Client ID (App ID)</label>
+        <input type="text" id="az-client" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+      </div>
+      <div class="form-group">
+        <label>Client Secret</label>
+        <input type="password" id="az-secret" placeholder="Your app secret"/>
+      </div>
+    </div>
+
+    <!-- AWS fields -->
+    <div class="provider-fields" id="fields-aws">
+      <div class="form-group">
+        <label>Display Name</label>
+        <input type="text" id="aws-name" placeholder="Production AWS"/>
+      </div>
+      <div class="form-group">
+        <label>Auth Method</label>
+        <select id="aws-auth" onchange="toggleAwsAuth()">
+          <option value="keys">Access Key + Secret</option>
+          <option value="role">Cross-Account Role ARN</option>
+        </select>
+      </div>
+      <div id="aws-keys-fields">
+        <div class="form-group">
+          <label>Access Key ID</label>
+          <input type="text" id="aws-key" placeholder="AKIAIOSFODNN7EXAMPLE"/>
+        </div>
+        <div class="form-group">
+          <label>Secret Access Key</label>
+          <input type="password" id="aws-secret" placeholder="wJalrXUtnFEMI/K7MDENG/..."/>
+        </div>
+      </div>
+      <div id="aws-role-fields" style="display:none">
+        <div class="form-group">
+          <label>Role ARN</label>
+          <input type="text" id="aws-role" placeholder="arn:aws:iam::123456789012:role/CostRole"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>AWS Region</label>
+        <input type="text" id="aws-region" placeholder="us-east-1" value="us-east-1"/>
+      </div>
+    </div>
+
+    <!-- GCP fields -->
+    <div class="provider-fields" id="fields-gcp">
+      <div class="form-group">
+        <label>Display Name</label>
+        <input type="text" id="gcp-name" placeholder="Production GCP"/>
+      </div>
+      <div class="form-group">
+        <label>Billing Mode</label>
+        <select id="gcp-mode">
+          <option value="bigquery">BigQuery Export (recommended)</option>
+          <option value="billing_api">Cloud Billing API</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Service Account JSON</label>
+        <textarea id="gcp-sa" placeholder='{"type":"service_account","project_id":"...","private_key_id":"...",...}'></textarea>
+        <div class="hint">Paste the full service account JSON key file content</div>
+      </div>
+      <div class="form-group">
+        <label>BigQuery Dataset (if using BigQuery mode)</label>
+        <input type="text" id="gcp-bq" placeholder="my-project.billing_export.gcp_billing_export_v1_XXXXXX"/>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-skip" onclick="goStep(3)">Skip for now</button>
+      <button class="btn btn-secondary" onclick="goStep(1)">&larr; Back</button>
+      <button class="btn btn-primary" id="save-prov-btn" onclick="saveProvider()" disabled>Save &amp; Continue &rarr;</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Invite Team -->
+  <div class="step-content" id="step-3">
+    <div style="margin-bottom:20px">
+      <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px">Invite your team</div>
+      <div style="font-size:13px;color:#8b92a5">Team members can view cost data and manage budgets. Admins can also add cloud accounts.</div>
+    </div>
+
+    <div id="invite-rows">
+      <div class="invite-row">
+        <input type="email" placeholder="colleague@company.com" class="invite-email"/>
+        <select class="invite-role">
+          <option value="viewer">Viewer</option>
+          <option value="admin" selected>Admin</option>
+        </select>
+      </div>
+    </div>
+    <button class="add-invite-btn" onclick="addInviteRow()">+ Add another person</button>
+
+    <div class="error" id="invite-error" style="margin-top:14px"></div>
+    <div class="success-msg" id="invite-success" style="margin-top:14px"></div>
+
+    <div class="btn-row" style="margin-top:20px">
+      <button class="btn-skip" onclick="goStep(4)">Skip for now</button>
+      <button class="btn btn-secondary" onclick="goStep(2)">&larr; Back</button>
+      <button class="btn btn-primary" onclick="sendInvites()">Send Invites &rarr;</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Done -->
+  <div class="step-content" id="step-4">
+    <div class="done-icon">&#127881;</div>
+    <div class="done-title">You're all set!</div>
+    <div class="done-desc">Your Cloud Cost Analyzer is ready. Head to your dashboard to explore cost insights, set up budget alerts, and track spending across all your cloud providers.</div>
+    <div class="btn-row" style="justify-content:center">
+      <a href="/" style="text-decoration:none">
+        <button class="btn btn-primary" style="padding:13px 36px;font-size:15px">Go to Dashboard &rarr;</button>
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentStep = 1;
+let selectedCloud = null;
+
+function goStep(n) {
+  document.getElementById('step-' + currentStep).classList.remove('active');
+  // Update circles
+  for (let i = 1; i <= 4; i++) {
+    const c = document.getElementById('sc-' + i);
+    const l = document.getElementById('sl-' + i);
+    const line = document.getElementById('line-' + i);
+    if (i < n) {
+      c.classList.add('done'); c.classList.remove('active');
+      c.innerHTML = '&#10003;';
+      l.classList.add('done'); l.classList.remove('active');
+      if (line) line.classList.add('done');
+    } else if (i === n) {
+      c.classList.add('active'); c.classList.remove('done');
+      c.innerHTML = i;
+      l.classList.add('active'); l.classList.remove('done');
+    } else {
+      c.classList.remove('active','done');
+      c.innerHTML = i;
+      l.classList.remove('active','done');
+      if (line) line.classList.remove('done');
+    }
+  }
+  currentStep = n;
+  document.getElementById('step-' + n).classList.add('active');
+}
+
+function selectProvider(cloud) {
+  selectedCloud = cloud;
+  document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  document.querySelectorAll('.provider-fields').forEach(f => f.classList.remove('active'));
+  document.getElementById('fields-' + cloud).classList.add('active');
+  document.getElementById('save-prov-btn').disabled = false;
+}
+
+function toggleAwsAuth() {
+  const mode = document.getElementById('aws-auth').value;
+  document.getElementById('aws-keys-fields').style.display = mode === 'keys' ? 'block' : 'none';
+  document.getElementById('aws-role-fields').style.display = mode === 'role' ? 'block' : 'none';
+}
+
+async function saveProvider() {
+  const btn = document.getElementById('save-prov-btn');
+  const errEl = document.getElementById('prov-error');
+  const okEl = document.getElementById('prov-success');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  let payload = {cloud_type: selectedCloud, enabled: true};
+  if (selectedCloud === 'azure') {
+    payload.name = document.getElementById('az-name').value.trim() || 'Azure';
+    payload.credentials = {
+      tenant_id: document.getElementById('az-tenant').value.trim(),
+      subscription_id: document.getElementById('az-sub').value.trim(),
+      client_id: document.getElementById('az-client').value.trim(),
+      client_secret: document.getElementById('az-secret').value.trim()
+    };
+  } else if (selectedCloud === 'aws') {
+    payload.name = document.getElementById('aws-name').value.trim() || 'AWS';
+    const mode = document.getElementById('aws-auth').value;
+    payload.credentials = {auth_method: mode, region: document.getElementById('aws-region').value.trim() || 'us-east-1'};
+    if (mode === 'keys') {
+      payload.credentials.access_key_id = document.getElementById('aws-key').value.trim();
+      payload.credentials.secret_access_key = document.getElementById('aws-secret').value.trim();
+    } else {
+      payload.credentials.role_arn = document.getElementById('aws-role').value.trim();
+    }
+  } else if (selectedCloud === 'gcp') {
+    payload.name = document.getElementById('gcp-name').value.trim() || 'GCP';
+    let saJson = {};
+    try { saJson = JSON.parse(document.getElementById('gcp-sa').value.trim()); } catch(e) {}
+    payload.credentials = {
+      mode: document.getElementById('gcp-mode').value,
+      service_account: saJson,
+      bigquery_dataset: document.getElementById('gcp-bq').value.trim()
+    };
+  }
+
+  try {
+    const res = await fetch('/api/cloud-providers', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const data = await res.json();
+    if (res.ok && data.success) {
+      okEl.textContent = 'Cloud account saved! Syncing costs in the background…';
+      okEl.style.display = 'block';
+      setTimeout(() => goStep(3), 1200);
+    } else {
+      errEl.textContent = data.error || 'Failed to save provider.';
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    errEl.textContent = 'Network error.';
+    errEl.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = 'Save & Continue →';
+}
+
+function addInviteRow() {
+  const div = document.createElement('div');
+  div.className = 'invite-row';
+  div.innerHTML = '<input type="email" placeholder="colleague@company.com" class="invite-email"/><select class="invite-role"><option value="viewer">Viewer</option><option value="admin" selected>Admin</option></select>';
+  document.getElementById('invite-rows').appendChild(div);
+}
+
+async function sendInvites() {
+  const emails = Array.from(document.querySelectorAll('.invite-email')).map(i => i.value.trim()).filter(Boolean);
+  const roles = Array.from(document.querySelectorAll('.invite-role')).map(s => s.value);
+  if (emails.length === 0) { goStep(4); return; }
+  const errEl = document.getElementById('invite-error');
+  const okEl = document.getElementById('invite-success');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+  const invites = emails.map((e,i) => ({email:e, role:roles[i]||'viewer'}));
+  try {
+    const res = await fetch('/api/tenant/invite-bulk', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({invites})});
+    const data = await res.json();
+    if (res.ok) {
+      okEl.textContent = 'Invites sent! Moving on…';
+      okEl.style.display = 'block';
+      setTimeout(() => goStep(4), 1000);
+    } else {
+      errEl.textContent = data.error || 'Failed to send invites.';
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    errEl.textContent = 'Network error.';
+    errEl.style.display = 'block';
+  }
+}
+</script>
+</body>
+</html>

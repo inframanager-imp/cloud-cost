@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cost Drilldown</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body { background: var(--bg-primary); padding: 24px; }
+        .dd-container { max-width: 1200px; margin: 0 auto; }
+        .dd-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+        .dd-header h1 { font-size: 22px; color: var(--text-primary); flex: 1; }
+        .dd-back { color: var(--accent); text-decoration: none; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+        .dd-back:hover { text-decoration: underline; }
+        .dd-loading { text-align: center; padding: 80px 20px; color: var(--text-secondary); font-size: 16px; }
+        .dd-error { text-align: center; padding: 60px 20px; color: var(--red); }
+        .dd-meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+        .dd-meta-tag { background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; font-size: 12px; color: var(--text-secondary); }
+        .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .tab-btn { background: var(--bg-input); border: 1px solid var(--border); color: var(--text-secondary); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .tab-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+        .tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    </style>
+</head>
+<body>
+<div class="dd-container">
+    <div class="dd-header">
+        <a href="/" class="dd-back">&larr; Back to Dashboard</a>
+        <h1 id="ddTitle">Loading...</h1>
+    </div>
+
+    <div id="ddMeta" class="dd-meta"></div>
+
+    <div id="ddLoading" class="dd-loading">Loading drilldown data...</div>
+    <div id="ddError" class="dd-error" style="display:none"></div>
+
+    <div id="ddContent" style="display:none">
+        <div id="ddSummary" class="stats-grid" style="margin-bottom:24px"></div>
+
+        <div class="chart-card" style="margin-bottom:24px">
+            <h3>Daily Cost Trend</h3>
+            <div style="height:280px"><canvas id="ddTrendChart"></canvas></div>
+        </div>
+
+        <div id="ddTabs" class="tab-bar"></div>
+
+        <div class="table-container" style="margin-bottom:24px">
+            <table>
+                <thead id="ddTableHead">
+                    <tr>
+                        <th>Name</th>
+                        <th>Period 1</th>
+                        <th>Period 2</th>
+                        <th>Difference</th>
+                        <th>Change %</th>
+                        <th>Trend</th>
+                    </tr>
+                </thead>
+                <tbody id="ddTableBody"></tbody>
+            </table>
+        </div>
+
+        <div class="chart-card">
+            <h3 id="ddChartTitle">Breakdown</h3>
+            <div style="height:300px"><canvas id="ddBarChart"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const chartInstances = {};
+const DD_COLORS = ['#4f6ef7', '#2ecc71', '#e67e22', '#9b59b6', '#1abc9c', '#e74c3c'];
+const params = new URLSearchParams(window.location.search);
+const name = params.get('name') || '';
+const groupBy = params.get('group_by') || 'resource_group';
+const subId = params.get('subscription_id') || '';
+const rgs = params.get('resource_groups') || '';
+
+let periodSpecs = [];
+const periodsRaw = params.get('periods');
+if (periodsRaw) {
+    try {
+        const parsed = JSON.parse(periodsRaw);
+        if (Array.isArray(parsed) && parsed.length >= 2) {
+            periodSpecs = parsed.map((item) => {
+                if (item && typeof item === 'object' && item.from && item.to) {
+                    return {
+                        from: item.from,
+                        to: item.to,
+                        label: (item.label && String(item.label).trim()) || `${item.from} – ${item.to}`,
+                    };
+                }
+                if (Array.isArray(item) && item.length >= 2) {
+                    return { from: item[0], to: item[1], label: `${item[0]} – ${item[1]}` };
+                }
+                return null;
+            }).filter(Boolean);
+        }
+    } catch (e) { console.error(e); }
+}
+
+const p1From = params.get('p1_from');
+const p1To = params.get('p1_to');
+const p2From = params.get('p2_from');
+const p2To = params.get('p2_to');
+const p1Label = params.get('p1_label') || 'Period 1';
+const p2Label = params.get('p2_label') || 'Period 2';
+
+if (periodSpecs.length < 2 && p1From && p1To && p2From && p2To) {
+    periodSpecs = [
+        { from: p1From, to: p1To, label: p1Label },
+        { from: p2From, to: p2To, label: p2Label },
+    ];
+}
+
+const labels = periodSpecs.map((p) => p.label);
+const n = labels.length;
+
+let ddData = null;
+
+document.title = `${name} — Cost Drilldown`;
+document.getElementById('ddTitle').textContent =
+    n <= 2 ? `${name} — ${labels[0] || ''} vs ${labels[1] || ''}` : `${name} — ${n} periods`;
+
+const groupLabel =
+    groupBy === 'service_name'
+        ? 'Service'
+        : groupBy === 'resource_group'
+          ? 'Resource Group'
+          : groupBy === 'resource_name'
+            ? 'Resource'
+            : 'Meter Category';
+
+document.getElementById('ddMeta').innerHTML =
+    `<span class="dd-meta-tag">Group By: ${groupLabel}</span>` +
+    periodSpecs
+        .map(
+            (p) =>
+                `<span class="dd-meta-tag">${p.label.replace(/</g, '&lt;')}: ${p.from} to ${p.to}</span>`
+        )
+        .join('');
+
+function renderChart(canvasId, type, data, title, extraOpts = {}) {
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+    const ctx = document.getElementById(canvasId)?.getContext('2d');
+    if (!ctx) return;
+    let actualType = type;
+    let indexAxis;
+    if (type === 'horizontalBar') {
+        actualType = 'bar';
+        indexAxis = 'y';
+    }
+    const isStacked = extraOpts.stacked || false;
+    const showLegend =
+        type === 'doughnut' || type === 'pie' || isStacked || (data.datasets && data.datasets.length > 1);
+    chartInstances[canvasId] = new Chart(ctx, {
+        type: actualType,
+        data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis,
+            plugins: {
+                legend: {
+                    display: showLegend,
+                    position: isStacked ? 'top' : 'right',
+                    labels: { color: '#8b8fa3', font: { size: 10 }, padding: 8, boxWidth: 12 },
+                },
+                title: { display: false },
+            },
+            scales:
+                type !== 'doughnut' && type !== 'pie'
+                    ? {
+                          x: {
+                              stacked: isStacked,
+                              ticks: { color: '#8b8fa3', font: { size: 10 }, maxTicksLimit: 15 },
+                              grid: { color: 'rgba(45,49,72,0.5)' },
+                          },
+                          y: {
+                              stacked: isStacked,
+                              ticks: { color: '#8b8fa3', font: { size: 10 } },
+                              grid: { color: 'rgba(45,49,72,0.5)' },
+                          },
+                      }
+                    : undefined,
+        },
+    });
+}
+
+function buildDdTableHead() {
+    const thP = labels.map((lb) => `<th>${lb.replace(/</g, '&lt;')}</th>`).join('');
+    document.getElementById('ddTableHead').innerHTML = `<tr>
+        <th>Name</th>${thP}
+        <th>${n > 2 ? 'Last − first' : 'Difference'}</th>
+        <th>Change %</th>
+        <th>Trend</th>
+    </tr>`;
+}
+
+async function loadDrilldown() {
+    if (!name || periodSpecs.length < 2) {
+        document.getElementById('ddLoading').style.display = 'none';
+        document.getElementById('ddError').style.display = 'block';
+        document.getElementById('ddError').textContent = 'Missing required parameters.';
+        return;
+    }
+
+    try {
+        const qp = new URLSearchParams({
+            group_by: groupBy,
+            name,
+            periods: JSON.stringify(
+                periodSpecs.map(({ from, to, label }) => ({ from, to, label }))
+            ),
+        });
+        if (subId) qp.set('subscription_id', subId);
+        if (rgs) qp.set('resource_groups', rgs);
+
+        const resp = await fetch(`/api/compare/drilldown?${qp}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        ddData = await resp.json();
+
+        document.getElementById('ddLoading').style.display = 'none';
+        document.getElementById('ddContent').style.display = 'block';
+
+        buildDdTableHead();
+
+        const dailyTrend = ddData.daily_trend || [];
+        function sumInRange(from, to) {
+            const days = dailyTrend.filter((d) => d.date >= from && d.date <= to);
+            const total = days.reduce((s, d) => s + Number(d.total_cost || 0), 0);
+            return { total, count: days.length };
+        }
+
+        const periodStats = periodSpecs.map((p) => sumInRange(p.from, p.to));
+        const firstT = periodStats[0].total;
+        const lastT = periodStats[n - 1].total;
+        const diff = lastT - firstT;
+        const pct = firstT > 0 ? (diff / firstT) * 100 : 0;
+
+        const periodCards = periodStats
+            .map(
+                (s, i) => `
+            <div class="stat-card">
+                <div class="stat-label">${labels[i].replace(/</g, '&lt;')}</div>
+                <div class="stat-value" style="font-size:22px;color:var(--accent)">$${s.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div style="font-size:12px;color:var(--text-secondary)">${s.count} days</div>
+            </div>
+        `
+            )
+            .join('');
+
+        document.getElementById('ddSummary').innerHTML =
+            periodCards +
+            `
+            <div class="stat-card">
+                <div class="stat-label">${n > 2 ? 'Last vs first' : 'Change'}</div>
+                <div class="stat-value" style="font-size:22px;color:${diff > 0 ? 'var(--red)' : 'var(--green)'}">
+                    ${diff > 0 ? '+' : ''}$${diff.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style="font-size:12px;color:${diff > 0 ? 'var(--red)' : 'var(--green)'}">${diff > 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%</div>
+            </div>
+        `;
+
+        renderChart(
+            'ddTrendChart',
+            'line',
+            {
+                labels: dailyTrend.map((d) => d.date),
+                datasets: [
+                    {
+                        label: 'Daily Cost ($)',
+                        data: dailyTrend.map((d) => d.total_cost),
+                        borderColor: '#4f6ef7',
+                        backgroundColor: 'rgba(79,110,247,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 2,
+                    },
+                ],
+            },
+            'Daily Trend'
+        );
+
+        const tabKeys = Object.keys(ddData).filter((k) => k !== 'daily_trend');
+        document.getElementById('ddTabs').innerHTML = tabKeys
+            .map(
+                (key, i) =>
+                    `<button class="tab-btn ${i === 0 ? 'active' : ''}" onclick="switchTab('${key.replace(/'/g, "\\'")}', this)">${key}</button>`
+            )
+            .join('');
+
+        if (tabKeys.length > 0) renderTab(tabKeys[0]);
+    } catch (err) {
+        console.error('Drilldown load error:', err);
+        document.getElementById('ddLoading').style.display = 'none';
+        document.getElementById('ddError').style.display = 'block';
+        document.getElementById('ddError').textContent = 'Failed to load drilldown data: ' + err.message;
+    }
+}
+
+function switchTab(key, btn) {
+    document.querySelectorAll('#ddTabs .tab-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTab(key);
+}
+
+function renderTab(key) {
+    const items = ddData[key] || [];
+    const maxDiff = Math.max(...items.map((r) => Math.abs(r.difference || 0)), 1);
+
+    document.getElementById('ddTableBody').innerHTML = items
+        .map((r) => {
+            const costs = r.costs || [r.period1_cost, r.period2_cost];
+            const costCells = labels
+                .map((_, i) => {
+                    const v = costs[i] ?? 0;
+                    return `<td>$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>`;
+                })
+                .join('');
+            const barWidth = Math.max(4, Math.min(100, (Math.abs(r.difference) / maxDiff) * 100));
+            const barClass = r.difference > 0 ? 'up' : r.difference < 0 ? 'down' : 'neutral';
+            const badgeClass = r.change_pct > 0 ? 'up' : r.change_pct < 0 ? 'down' : 'neutral';
+            const arrow = r.change_pct > 0 ? '▲' : r.change_pct < 0 ? '▼' : '–';
+            const esc = String(r.name).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            return `<tr>
+            <td style="font-weight:500">${esc}</td>
+            ${costCells}
+            <td style="color:${r.difference > 0 ? 'var(--red)' : 'var(--green)'};font-weight:500">
+                ${r.difference > 0 ? '+' : ''}$${Number(r.difference).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </td>
+            <td><span class="cmp-badge ${badgeClass}">${arrow} ${Math.abs(r.change_pct).toFixed(1)}%</span></td>
+            <td><span class="trend-bar ${barClass}" style="width:${barWidth}px"></span></td>
+        </tr>`;
+        })
+        .join('');
+
+    document.getElementById('ddChartTitle').textContent = `${key} Breakdown`;
+    const top10 = items.slice(0, 10);
+    const datasets = labels.map((lb, i) => ({
+        label: lb,
+        data: top10.map((r) => (r.costs || [])[i] ?? 0),
+        backgroundColor: DD_COLORS[i % DD_COLORS.length],
+        borderRadius: 6,
+        barPercentage: n > 3 ? 0.65 : 0.4,
+    }));
+    renderChart(
+        'ddBarChart',
+        'bar',
+        {
+            labels: top10.map((r) =>
+                r.name.length > 25 ? r.name.substring(0, 25) + '...' : r.name
+            ),
+            datasets,
+        },
+        key
+    );
+}
+
+loadDrilldown();
+</script>
+</body>
+</html>

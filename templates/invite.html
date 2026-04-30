@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Accept Invitation — Cloud Cost Analyzer</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f1117;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:#1a1d27;border:1px solid #2a2d3d;border-radius:16px;padding:40px;width:100%;max-width:440px}
+    .logo{display:flex;align-items:center;gap:12px;margin-bottom:32px;justify-content:center}
+    .logo-icon{width:42px;height:42px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px}
+    .logo-text{font-size:18px;font-weight:700;color:#fff}
+    .logo-sub{font-size:11px;color:#8b92a5;margin-top:2px}
+    .invite-banner{background:linear-gradient(135deg,#1a1f35,#1a2535);border:1px solid #2a3a5d;border-radius:12px;padding:18px;margin-bottom:24px;text-align:center}
+    .invite-org{font-size:20px;font-weight:700;color:#fff;margin-bottom:4px}
+    .invite-text{font-size:13px;color:#8b92a5}
+    .invite-role-badge{display:inline-block;background:#1e2d4a;border:1px solid #2a3a5d;border-radius:20px;padding:3px 12px;font-size:12px;color:#667eea;margin-top:8px;font-weight:500}
+    h2{font-size:20px;font-weight:700;color:#fff;margin-bottom:6px}
+    .subtitle{font-size:14px;color:#8b92a5;margin-bottom:24px}
+    .form-group{margin-bottom:16px}
+    label{display:block;font-size:13px;font-weight:500;color:#c5c8d6;margin-bottom:6px}
+    input{width:100%;padding:11px 14px;background:#0f1117;border:1px solid #2a2d3d;border-radius:8px;color:#fff;font-size:14px;outline:none;transition:border-color .2s}
+    input:focus{border-color:#667eea}
+    input::placeholder{color:#4a4e63}
+    input[readonly]{color:#8b92a5;cursor:not-allowed}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .btn{width:100%;padding:13px;background:linear-gradient(135deg,#667eea,#764ba2);border:none;border-radius:8px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:opacity .2s;margin-top:6px}
+    .btn:hover{opacity:.9}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .error{background:#2d1f1f;border:1px solid #5c2626;border-radius:8px;padding:12px;color:#ff6b6b;font-size:13px;margin-bottom:16px;display:none}
+    .expired-state{text-align:center;padding:16px 0}
+    .expired-icon{font-size:48px;margin-bottom:12px}
+    .expired-title{font-size:18px;font-weight:700;color:#ff6b6b;margin-bottom:8px}
+    .expired-desc{font-size:14px;color:#8b92a5;line-height:1.5}
+    .signin-link{text-align:center;font-size:14px;color:#8b92a5;margin-top:20px}
+    .signin-link a{color:#667eea;text-decoration:none;font-weight:500}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">&#9729;</div>
+    <div>
+      <div class="logo-text">Cloud Cost Analyzer</div>
+      <div class="logo-sub">Multi-Cloud Intelligence</div>
+    </div>
+  </div>
+
+  <!-- Expired / invalid state -->
+  <div id="expired-view" style="display:none">
+    <div class="expired-state">
+      <div class="expired-icon">&#9888;</div>
+      <div class="expired-title">Invite link invalid or expired</div>
+      <div class="expired-desc">This invitation link may have already been used or has expired. Ask your team admin to send a new invite.</div>
+    </div>
+    <div class="signin-link"><a href="/login">Back to Sign In</a></div>
+  </div>
+
+  <!-- Valid invite state -->
+  <div id="invite-view">
+    <div class="invite-banner">
+      <div class="invite-org" id="org-name">Loading…</div>
+      <div class="invite-text">has invited you to join their workspace</div>
+      <div class="invite-role-badge" id="role-badge">viewer</div>
+    </div>
+
+    <h2>Complete your profile</h2>
+    <p class="subtitle">Set your name and password to activate your account.</p>
+
+    <div class="error" id="error-msg"></div>
+
+    <form id="invite-form">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="invite-email" readonly/>
+      </div>
+      <div class="row">
+        <div class="form-group">
+          <label>First Name</label>
+          <input type="text" id="first-name" placeholder="Jane" required autocomplete="given-name"/>
+        </div>
+        <div class="form-group">
+          <label>Last Name</label>
+          <input type="text" id="last-name" placeholder="Smith" required autocomplete="family-name"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="Min 8 characters" required autocomplete="new-password"/>
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" id="password-confirm" placeholder="Repeat password" required autocomplete="new-password"/>
+      </div>
+      <button type="submit" class="btn" id="submit-btn">Join Workspace &rarr;</button>
+    </form>
+  </div>
+</div>
+
+<script>
+const token = window.location.pathname.split('/invite/')[1] || '';
+
+async function loadInvite() {
+  if (!token) { showExpired(); return; }
+  try {
+    const res = await fetch('/api/invite/' + token);
+    if (!res.ok) { showExpired(); return; }
+    const data = await res.json();
+    document.getElementById('org-name').textContent = data.org_name || 'Your Organisation';
+    document.getElementById('role-badge').textContent = data.role || 'viewer';
+    document.getElementById('invite-email').value = data.email || '';
+  } catch(e) { showExpired(); }
+}
+
+function showExpired() {
+  document.getElementById('invite-view').style.display = 'none';
+  document.getElementById('expired-view').style.display = 'block';
+}
+
+document.getElementById('invite-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  const errEl = document.getElementById('error-msg');
+  errEl.style.display = 'none';
+  const pw = document.getElementById('password').value;
+  const pw2 = document.getElementById('password-confirm').value;
+  if (pw !== pw2) {
+    errEl.textContent = 'Passwords do not match.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (pw.length < 8) {
+    errEl.textContent = 'Password must be at least 8 characters.';
+    errEl.style.display = 'block';
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Joining…';
+  try {
+    const res = await fetch('/api/invite/' + token + '/accept', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        first_name: document.getElementById('first-name').value.trim(),
+        last_name: document.getElementById('last-name').value.trim(),
+        password: pw
+      })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      window.location.href = '/';
+    } else {
+      errEl.textContent = data.error || 'Failed to accept invite.';
+      errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Join Workspace →';
+    }
+  } catch(err) {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Join Workspace →';
+  }
+});
+
+loadInvite();
+</script>
+</body>
+</html>

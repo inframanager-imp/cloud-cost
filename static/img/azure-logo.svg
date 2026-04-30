@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 48">
+  <defs>
+    <linearGradient id="ag1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#114a8b"/>
+      <stop offset="100%" stop-color="#0669bc"/>
+    </linearGradient>
+    <linearGradient id="ag2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3ccbf4"/>
+      <stop offset="100%" stop-color="#2892df"/>
+    </linearGradient>
+  </defs>
+  <!-- Left triangle / body -->
+  <path d="M6 44 L22 2 L36 2 L20 30 Z" fill="url(#ag1)"/>
+  <!-- Right sweep -->
+  <path d="M20 30 L36 2 L54 2 L34 44 Z" fill="url(#ag2)"/>
+  <!-- Inner shadow overlap -->
+  <path d="M20 30 L36 2 L44 2 L26 30 Z" fill="#0050A0" opacity="0.25"/>
+</svg>

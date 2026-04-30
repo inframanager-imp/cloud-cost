@@ -1,0 +1,321 @@
+/* ─── Trial UI themes (optional) ─────────────────────────────────────────────
+   Remove the <link> to this file in index.html to fully revert.
+   Or choose "Original" in the sidebar — base colors come from style.css :root.
+   Includes hero, subscription area, grid pattern — not just base grays.
+   ───────────────────────────────────────────────────────────────────────── */
+
+html[data-ui-theme="forest"] {
+    --bg-primary: #0a100e;
+    --bg-secondary: #121a17;
+    --bg-card: #182320;
+    --bg-input: #1f2e28;
+    --bg: var(--bg-input);
+    --border: #2a3d34;
+    --text-primary: #ecf5f0;
+    --text-secondary: #86a090;
+    --accent: #34d399;
+    --accent-hover: #10b981;
+    --green: #4ade80;
+    --red: #fb7185;
+    --orange: #fbbf24;
+    --purple: #a78bfa;
+    --cyan: #2dd4bf;
+    --shadow: 0 4px 28px rgba(0, 32, 20, 0.5);
+    --accent-subtle: rgba(52, 211, 153, 0.12);
+    --page-bg-overlay:
+        radial-gradient(ellipse 110% 70% at 50% -15%, rgba(16, 185, 129, 0.2), transparent 55%),
+        radial-gradient(ellipse 50% 40% at 0% 80%, rgba(52, 211, 153, 0.06), transparent 50%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 36px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 36px);
+    --hero-gradient: linear-gradient(135deg, #134e2a 0%, #166534 42%, #0f2918 100%);
+    --hero-border: rgba(52, 211, 153, 0.38);
+    --hero-shadow: 0 8px 36px rgba(6, 40, 24, 0.55), inset 0 1px 0 rgba(52, 211, 153, 0.12);
+    --sub-card-bg: var(--bg-card);
+    --sub-card-border: var(--border);
+    --sub-card-name: var(--text-primary);
+    --sub-card-id-fg: var(--text-secondary);
+    --sub-card-id-bg: var(--bg-input);
+    --sub-card-id-border: var(--border);
+    --sub-card-meta: var(--text-secondary);
+    --subfilter-bg: var(--bg-input);
+    --subfilter-color: var(--text-primary);
+    --subfilter-border: var(--border);
+    --subfilter-focus: var(--accent);
+    --subfilter-focus-ring: rgba(52, 211, 153, 0.35);
+    --subfilter-option-bg: var(--bg-secondary);
+}
+
+html[data-ui-theme="ocean"] {
+    --bg-primary: #070d18;
+    --bg-secondary: #0c1628;
+    --bg-card: #111f3a;
+    --bg-input: #152a4f;
+    --bg: var(--bg-input);
+    --border: #1e3a5f;
+    --text-primary: #f0f7ff;
+    --text-secondary: #8fb0d4;
+    --accent: #38bdf8;
+    --accent-hover: #0ea5e9;
+    --green: #34d399;
+    --red: #f87171;
+    --orange: #fbbf24;
+    --purple: #a5b4fc;
+    --cyan: #22d3ee;
+    --shadow: 0 4px 28px rgba(4, 20, 48, 0.55);
+    --accent-subtle: rgba(56, 189, 248, 0.12);
+    --page-bg-overlay:
+        radial-gradient(ellipse 120% 75% at 50% -20%, rgba(14, 165, 233, 0.28), transparent 58%),
+        radial-gradient(ellipse 55% 45% at 100% 30%, rgba(59, 130, 246, 0.12), transparent 50%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 40px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 40px);
+    --hero-gradient: linear-gradient(135deg, #0c4a6e 0%, #0e7490 38%, #172554 100%);
+    --hero-border: rgba(56, 189, 248, 0.4);
+    --hero-shadow: 0 8px 40px rgba(8, 47, 80, 0.55), inset 0 1px 0 rgba(56, 189, 248, 0.14);
+    --sub-card-bg: var(--bg-card);
+    --sub-card-border: var(--border);
+    --sub-card-name: var(--text-primary);
+    --sub-card-id-fg: var(--text-secondary);
+    --sub-card-id-bg: var(--bg-input);
+    --sub-card-id-border: var(--border);
+    --sub-card-meta: var(--text-secondary);
+    --subfilter-bg: var(--bg-input);
+    --subfilter-color: var(--text-primary);
+    --subfilter-border: var(--border);
+    --subfilter-focus: var(--accent);
+    --subfilter-focus-ring: rgba(56, 189, 248, 0.38);
+    --subfilter-option-bg: var(--bg-secondary);
+}
+
+html[data-ui-theme="ember"] {
+    --bg-primary: #0f0c0a;
+    --bg-secondary: #1a1511;
+    --bg-card: #231c16;
+    --bg-input: #2e261f;
+    --bg: var(--bg-input);
+    --border: #3d342b;
+    --text-primary: #faf6f0;
+    --text-secondary: #b5a797;
+    --accent: #f59e0b;
+    --accent-hover: #d97706;
+    --green: #84cc16;
+    --red: #f87171;
+    --orange: #fb923c;
+    --purple: #c4b5fd;
+    --cyan: #5eead4;
+    --shadow: 0 4px 28px rgba(24, 12, 4, 0.55);
+    --accent-subtle: rgba(245, 158, 11, 0.12);
+    --page-bg-overlay:
+        radial-gradient(ellipse 100% 65% at 50% -10%, rgba(245, 158, 11, 0.18), transparent 55%),
+        radial-gradient(ellipse 45% 35% at 0% 100%, rgba(251, 113, 133, 0.06), transparent 45%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 34px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 34px);
+    --hero-gradient: linear-gradient(135deg, #7c2d12 0%, #b45309 45%, #431407 100%);
+    --hero-border: rgba(251, 191, 36, 0.35);
+    --hero-shadow: 0 8px 40px rgba(60, 20, 8, 0.5), inset 0 1px 0 rgba(251, 191, 36, 0.1);
+    --sub-card-bg: var(--bg-card);
+    --sub-card-border: var(--border);
+    --sub-card-name: var(--text-primary);
+    --sub-card-id-fg: var(--text-secondary);
+    --sub-card-id-bg: var(--bg-input);
+    --sub-card-id-border: var(--border);
+    --sub-card-meta: var(--text-secondary);
+    --subfilter-bg: var(--bg-input);
+    --subfilter-color: var(--text-primary);
+    --subfilter-border: var(--border);
+    --subfilter-focus: var(--accent);
+    --subfilter-focus-ring: rgba(245, 158, 11, 0.35);
+    --subfilter-option-bg: var(--bg-secondary);
+}
+
+html[data-ui-theme="violet"] {
+    --bg-primary: #0c0a12;
+    --bg-secondary: #15101f;
+    --bg-card: #1c1528;
+    --bg-input: #261d36;
+    --bg: var(--bg-input);
+    --border: #3d2f55;
+    --text-primary: #f3edff;
+    --text-secondary: #a898c4;
+    --accent: #a78bfa;
+    --accent-hover: #8b5cf6;
+    --green: #4ade80;
+    --red: #fb7185;
+    --orange: #fbbf24;
+    --purple: #c4b5fd;
+    --cyan: #22d3ee;
+    --shadow: 0 4px 28px rgba(40, 20, 80, 0.45);
+    --accent-subtle: rgba(167, 139, 250, 0.14);
+    --page-bg-overlay:
+        radial-gradient(ellipse 100% 70% at 50% -18%, rgba(139, 92, 246, 0.22), transparent 55%),
+        radial-gradient(ellipse 45% 40% at 100% 60%, rgba(236, 72, 153, 0.08), transparent 50%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.022) 0, rgba(255,255,255,0.022) 1px, transparent 1px, transparent 38px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 38px);
+    --hero-gradient: linear-gradient(135deg, #3b0764 0%, #5b21b6 40%, #1e1033 100%);
+    --hero-border: rgba(167, 139, 250, 0.4);
+    --hero-shadow: 0 8px 40px rgba(50, 20, 90, 0.55), inset 0 1px 0 rgba(167, 139, 250, 0.12);
+    --sub-card-bg: var(--bg-card);
+    --sub-card-border: var(--border);
+    --sub-card-name: var(--text-primary);
+    --sub-card-id-fg: var(--text-secondary);
+    --sub-card-id-bg: var(--bg-input);
+    --sub-card-id-border: var(--border);
+    --sub-card-meta: var(--text-secondary);
+    --subfilter-bg: var(--bg-input);
+    --subfilter-color: var(--text-primary);
+    --subfilter-border: var(--border);
+    --subfilter-focus: var(--accent);
+    --subfilter-focus-ring: rgba(167, 139, 250, 0.35);
+    --subfilter-option-bg: var(--bg-secondary);
+}
+
+html[data-ui-theme="rose"] {
+    --bg-primary: #120a0e;
+    --bg-secondary: #1a1016;
+    --bg-card: #24181d;
+    --bg-input: #2f2028;
+    --bg: var(--bg-input);
+    --border: #4a3540;
+    --text-primary: #fff5f7;
+    --text-secondary: #c4a8b0;
+    --accent: #f472b6;
+    --accent-hover: #ec4899;
+    --green: #4ade80;
+    --red: #fb7185;
+    --orange: #fb923c;
+    --purple: #c4b5fd;
+    --cyan: #f0abfc;
+    --shadow: 0 4px 28px rgba(40, 10, 30, 0.5);
+    --accent-subtle: rgba(244, 114, 182, 0.12);
+    --page-bg-overlay:
+        radial-gradient(ellipse 110% 70% at 50% -15%, rgba(244, 114, 182, 0.18), transparent 55%),
+        radial-gradient(ellipse 50% 40% at 0% 90%, rgba(251, 113, 133, 0.08), transparent 50%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.022) 0, rgba(255,255,255,0.022) 1px, transparent 1px, transparent 36px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 36px);
+    --hero-gradient: linear-gradient(135deg, #831843 0%, #9d174d 42%, #3c0518 100%);
+    --hero-border: rgba(244, 114, 182, 0.38);
+    --hero-shadow: 0 8px 36px rgba(80, 10, 40, 0.5), inset 0 1px 0 rgba(244, 114, 182, 0.12);
+    --sub-card-bg: var(--bg-card);
+    --sub-card-border: var(--border);
+    --sub-card-name: var(--text-primary);
+    --sub-card-id-fg: var(--text-secondary);
+    --sub-card-id-bg: var(--bg-input);
+    --sub-card-id-border: var(--border);
+    --sub-card-meta: var(--text-secondary);
+    --subfilter-bg: var(--bg-input);
+    --subfilter-color: var(--text-primary);
+    --subfilter-border: var(--border);
+    --subfilter-focus: var(--accent);
+    --subfilter-focus-ring: rgba(244, 114, 182, 0.35);
+    --subfilter-option-bg: var(--bg-secondary);
+}
+
+html[data-ui-theme="slate"] {
+    --bg-primary: #0c0e0f;
+    --bg-secondary: #1a1d21;
+    --bg-card: #22262c;
+    --bg-input: #2d3239;
+    --bg: var(--bg-input);
+    --border: #3f4654;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --accent: #60a5fa;
+    --accent-hover: #3b82f6;
+    --green: #4ade80;
+    --red: #f87171;
+    --orange: #fbbf24;
+    --purple: #a78bfa;
+    --cyan: #2dd4bf;
+    --shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+    --accent-subtle: rgba(96, 165, 250, 0.1);
+    --page-bg-overlay:
+        radial-gradient(ellipse 100% 60% at 50% -20%, rgba(56, 189, 248, 0.08), transparent 50%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 40px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 40px);
+    --hero-gradient: linear-gradient(135deg, #1e293b 0%, #334155 45%, #0f172a 100%);
+    --hero-border: rgba(96, 165, 250, 0.28);
+    --hero-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --sub-card-bg: var(--bg-card);
+    --sub-card-border: var(--border);
+    --sub-card-name: var(--text-primary);
+    --sub-card-id-fg: var(--text-secondary);
+    --sub-card-id-bg: var(--bg-input);
+    --sub-card-id-border: var(--border);
+    --sub-card-meta: var(--text-secondary);
+    --subfilter-bg: var(--bg-input);
+    --subfilter-color: var(--text-primary);
+    --subfilter-border: var(--border);
+    --subfilter-focus: var(--accent);
+    --subfilter-focus-ring: rgba(96, 165, 250, 0.3);
+    --subfilter-option-bg: var(--bg-secondary);
+}
+
+html[data-ui-theme="aurora"] {
+    --bg-primary: #0a1214;
+    --bg-secondary: #0f1c1f;
+    --bg-card: #152428;
+    --bg-input: #1a2f35;
+    --bg: var(--bg-input);
+    --border: #2a4a52;
+    --text-primary: #ecfeff;
+    --text-secondary: #8fb0b8;
+    --accent: #2dd4bf;
+    --accent-hover: #14b8a6;
+    --green: #4ade80;
+    --red: #f87171;
+    --orange: #fbbf24;
+    --purple: #a78bfa;
+    --cyan: #22d3ee;
+    --shadow: 0 4px 28px rgba(8, 40, 48, 0.5);
+    --accent-subtle: rgba(45, 212, 191, 0.12);
+    --page-bg-overlay:
+        radial-gradient(ellipse 110% 70% at 50% -15%, rgba(45, 212, 191, 0.16), transparent 55%),
+        radial-gradient(ellipse 50% 45% at 0% 50%, rgba(129, 140, 248, 0.1), transparent 50%),
+        radial-gradient(ellipse 40% 50% at 100% 80%, rgba(52, 211, 153, 0.06), transparent 50%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 40px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 40px);
+    --hero-gradient: linear-gradient(135deg, #134e4a 0%, #115e59 35%, #1e1b4b 100%);
+    --hero-border: rgba(45, 212, 191, 0.35);
+    --hero-shadow: 0 8px 40px rgba(10, 50, 55, 0.55), inset 0 1px 0 rgba(129, 140, 248, 0.1);
+    --sub-card-bg: var(--bg-card);
+    --sub-card-border: var(--border);
+    --sub-card-name: var(--text-primary);
+    --sub-card-id-fg: var(--text-secondary);
+    --sub-card-id-bg: var(--bg-input);
+    --sub-card-id-border: var(--border);
+    --sub-card-meta: var(--text-secondary);
+    --subfilter-bg: var(--bg-input);
+    --subfilter-color: var(--text-primary);
+    --subfilter-border: var(--border);
+    --subfilter-focus: var(--accent);
+    --subfilter-focus-ring: rgba(45, 212, 191, 0.35);
+    --subfilter-option-bg: var(--bg-secondary);
+}
+
+.sidebar-theme-trial {
+    padding: 10px 16px 12px;
+    border-top: 1px solid var(--border);
+}
+
+.sidebar-theme-trial label {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 5px;
+}
+
+.sidebar-theme-trial select {
+    width: 100%;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 8px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.sidebar-theme-trial select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}

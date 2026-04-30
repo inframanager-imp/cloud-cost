@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  azure-cost-analyzer:
+    build: .
+    container_name: azure-cost-analyzer
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/azure_costs.db
+    # Optional VM tuning (also set in .env): SYNC_SEQUENTIAL, FORCE_SYNC_INLINE, SYNC_SUBPROCESS,
+    # ACTIVITY_SYNC_SUBPROCESS, FLASK_THREADED — see env.example and app.py header comments.
+    # Host folder so azure_costs.db is the real file (not an empty Docker named volume)
+    volumes:
+      - ./data:/app/data
+    ulimits:
+      nproc: 65535
+      nofile: 65535
+    restart: unless-stopped

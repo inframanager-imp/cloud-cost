@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Super Admin — Cloud Cost Analyzer</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f1117;color:#c5c8d6;min-height:100vh}
+    /* Top bar */
+    .topbar{background:#1a1d27;border-bottom:1px solid #2a2d3d;padding:0 24px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+    .topbar-left{display:flex;align-items:center;gap:14px}
+    .logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .topbar-title{font-size:16px;font-weight:700;color:#fff}
+    .badge-admin{background:#3a1f5c;border:1px solid #6b35b5;color:#b47fe8;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;margin-left:4px}
+    .topbar-right{display:flex;align-items:center;gap:12px}
+    .btn-logout{background:none;border:1px solid #2a2d3d;border-radius:7px;color:#8b92a5;font-size:13px;padding:7px 14px;cursor:pointer;transition:all .2s}
+    .btn-logout:hover{border-color:#667eea;color:#fff}
+    /* Layout */
+    .layout{display:flex;min-height:calc(100vh - 58px)}
+    /* Sidebar */
+    .sidebar{width:200px;background:#14161f;border-right:1px solid #2a2d3d;padding:20px 0;flex-shrink:0}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;font-size:13px;color:#8b92a5;cursor:pointer;transition:all .2s;border-left:3px solid transparent}
+    .nav-item:hover{color:#fff;background:#1a1d27}
+    .nav-item.active{color:#fff;background:#1a1d27;border-left-color:#667eea}
+    .nav-item .icon{font-size:15px;width:18px;text-align:center}
+    .nav-section{font-size:10px;font-weight:600;color:#4a4e63;text-transform:uppercase;letter-spacing:.08em;padding:16px 20px 6px}
+    /* Main */
+    .main{flex:1;padding:28px;overflow-y:auto}
+    /* Stats row */
+    .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+    .stat-card{background:#1a1d27;border:1px solid #2a2d3d;border-radius:12px;padding:20px}
+    .stat-label{font-size:12px;color:#8b92a5;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+    .stat-value{font-size:28px;font-weight:700;color:#fff}
+    .stat-sub{font-size:12px;color:#4a4e63;margin-top:4px}
+    /* Table card */
+    .table-card{background:#1a1d27;border:1px solid #2a2d3d;border-radius:12px;overflow:hidden;margin-bottom:20px}
+    .table-header{padding:18px 20px;border-bottom:1px solid #2a2d3d;display:flex;align-items:center;justify-content:space-between}
+    .table-title{font-size:15px;font-weight:600;color:#fff}
+    .table-actions{display:flex;gap:10px}
+    table{width:100%;border-collapse:collapse}
+    th{padding:12px 16px;text-align:left;font-size:11px;font-weight:600;color:#4a4e63;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2a2d3d;background:#14161f}
+    td{padding:13px 16px;font-size:13px;border-bottom:1px solid #1e2133;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:#1e2133}
+    .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+    .badge-active{background:#1a2d1a;color:#4ade80;border:1px solid #2d5c2d}
+    .badge-suspended{background:#2d1a1a;color:#f87171;border:1px solid #5c2d2d}
+    .badge-plan-free{background:#1e2235;color:#667eea;border:1px solid #2a3a5d}
+    .badge-plan-pro{background:#2d2a1a;color:#fbbf24;border:1px solid #5c4f2d}
+    .badge-plan-enterprise{background:#2a1a2d;color:#c084fc;border:1px solid #4a2a5c}
+    .btn-sm{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;transition:all .2s}
+    .btn-primary-sm{background:#667eea;color:#fff}
+    .btn-primary-sm:hover{background:#5a70d8}
+    .btn-danger-sm{background:#5c2626;color:#ff6b6b}
+    .btn-danger-sm:hover{background:#7a2626}
+    .btn-outline-sm{background:none;border:1px solid #2a2d3d;color:#8b92a5}
+    .btn-outline-sm:hover{border-color:#667eea;color:#fff}
+    .btn-warning-sm{background:#5c4f2d;color:#fbbf24}
+    .search-input{background:#0f1117;border:1px solid #2a2d3d;border-radius:7px;color:#fff;font-size:13px;padding:8px 12px;outline:none;width:220px}
+    .search-input:focus{border-color:#667eea}
+    .search-input::placeholder{color:#4a4e63}
+    /* Modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center}
+    .modal-backdrop.open{display:flex}
+    .modal{background:#1a1d27;border:1px solid #2a2d3d;border-radius:14px;padding:28px;width:100%;max-width:480px}
+    .modal-title{font-size:17px;font-weight:700;color:#fff;margin-bottom:18px}
+    .form-group{margin-bottom:14px}
+    label{display:block;font-size:12px;font-weight:500;color:#8b92a5;margin-bottom:5px}
+    input,select{width:100%;padding:9px 12px;background:#0f1117;border:1px solid #2a2d3d;border-radius:7px;color:#fff;font-size:13px;outline:none}
+    input:focus,select:focus{border-color:#667eea}
+    select option{background:#1a1d27}
+    .modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+    .page-section{display:none}
+    .page-section.active{display:block}
+    .empty-state{text-align:center;padding:48px 20px;color:#4a4e63;font-size:14px}
+    .empty-icon{font-size:36px;margin-bottom:10px}
+    .impersonate-confirm{background:#2d2a1a;border:1px solid #5c4f2d;border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;color:#fbbf24;display:flex;align-items:center;gap:10px}
+  </style>
+</head>
+<body>
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo-icon">&#9729;</div>
+    <div class="topbar-title">Cloud Cost Analyzer</div>
+    <div class="badge-admin">SUPER ADMIN</div>
+  </div>
+  <div class="topbar-right">
+    <span style="font-size:13px;color:#8b92a5" id="admin-email-label"></span>
+    <button class="btn-logout" onclick="logout()">Sign Out</button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Sidebar nav -->
+  <div class="sidebar">
+    <div class="nav-section">Platform</div>
+    <div class="nav-item active" onclick="showPage('tenants')" id="nav-tenants">
+      <span class="icon">&#127968;</span> Tenants
+    </div>
+    <div class="nav-item" onclick="showPage('users')" id="nav-users">
+      <span class="icon">&#128100;</span> All Users
+    </div>
+    <div class="nav-section">System</div>
+    <div class="nav-item" onclick="showPage('stats')" id="nav-stats">
+      <span class="icon">&#128202;</span> Platform Stats
+    </div>
+    <div class="nav-item" onclick="showPage('audit')" id="nav-audit">
+      <span class="icon">&#128196;</span> Audit Log
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+
+    <!-- Tenants Page -->
+    <div class="page-section active" id="page-tenants">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div>
+          <div style="font-size:20px;font-weight:700;color:#fff">Tenants</div>
+          <div style="font-size:13px;color:#8b92a5;margin-top:3px">All registered organisations on the platform</div>
+        </div>
+        <input class="search-input" placeholder="Search tenants…" oninput="filterTenants(this.value)"/>
+      </div>
+      <div class="stats-grid" id="platform-stats-mini">
+        <div class="stat-card">
+          <div class="stat-label">Total Tenants</div>
+          <div class="stat-value" id="s-total">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active</div>
+          <div class="stat-value" id="s-active">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pro Plans</div>
+          <div class="stat-value" id="s-pro">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Users</div>
+          <div class="stat-value" id="s-users">—</div>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="table-header">
+          <span class="table-title">Organisations</span>
+        </div>
+        <table id="tenants-table">
+          <thead>
+            <tr>
+              <th>Organisation</th>
+              <th>Plan</th>
+              <th>Status</th>
+              <th>Users</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tenants-tbody">
+            <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">&#8987;</div>Loading…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Users Page -->
+    <div class="page-section" id="page-users">
+      <div style="margin-bottom:20px">
+        <div style="font-size:20px;font-weight:700;color:#fff">All Users</div>
+        <div style="font-size:13px;color:#8b92a5;margin-top:3px">Every user across all tenants</div>
+      </div>
+      <div class="table-card">
+        <div class="table-header">
+          <span class="table-title">Users</span>
+          <input class="search-input" placeholder="Search users…" oninput="filterUsers(this.value)"/>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Organisation</th>
+              <th>Role</th>
+              <th>Last Login</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">&#8987;</div>Loading…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Stats Page -->
+    <div class="page-section" id="page-stats">
+      <div style="margin-bottom:20px">
+        <div style="font-size:20px;font-weight:700;color:#fff">Platform Statistics</div>
+        <div style="font-size:13px;color:#8b92a5;margin-top:3px">High-level platform health</div>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat-card"><div class="stat-label">Total Tenants</div><div class="stat-value" id="ps-tenants">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total Users</div><div class="stat-value" id="ps-users">—</div></div>
+        <div class="stat-card"><div class="stat-label">Cloud Providers</div><div class="stat-value" id="ps-providers">—</div></div>
+        <div class="stat-card"><div class="stat-label">Cost Records</div><div class="stat-value" id="ps-records">—</div></div>
+        <div class="stat-card"><div class="stat-label">Active Budgets</div><div class="stat-value" id="ps-budgets">—</div></div>
+        <div class="stat-card"><div class="stat-label">Alerts Fired (30d)</div><div class="stat-value" id="ps-alerts">—</div></div>
+      </div>
+    </div>
+
+    <!-- Audit Page -->
+    <div class="page-section" id="page-audit">
+      <div style="margin-bottom:20px">
+        <div style="font-size:20px;font-weight:700;color:#fff">Audit Log</div>
+        <div style="font-size:13px;color:#8b92a5;margin-top:3px">Recent admin actions</div>
+      </div>
+      <div class="table-card">
+        <div class="table-header"><span class="table-title">Recent Events</span></div>
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Tenant</th><th>User</th><th>Action</th><th>Detail</th></tr>
+          </thead>
+          <tbody id="audit-tbody">
+            <tr><td colspan="5"><div class="empty-state"><div class="empty-icon">&#128196;</div>Audit log coming soon</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Tenant Modal -->
+<div class="modal-backdrop" id="edit-modal">
+  <div class="modal">
+    <div class="modal-title">Edit Tenant</div>
+    <input type="hidden" id="edit-tenant-id"/>
+    <div class="form-group">
+      <label>Organisation Name</label>
+      <input type="text" id="edit-org-name"/>
+    </div>
+    <div class="form-group">
+      <label>Plan</label>
+      <select id="edit-plan">
+        <option value="free">Free</option>
+        <option value="pro">Pro</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="edit-status">
+        <option value="active">Active</option>
+        <option value="suspended">Suspended</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sm btn-outline-sm" onclick="closeModal('edit-modal')">Cancel</button>
+      <button class="btn-sm btn-primary-sm" onclick="saveTenantEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Impersonate Confirm Modal -->
+<div class="modal-backdrop" id="imp-modal">
+  <div class="modal">
+    <div class="modal-title">Impersonate Tenant</div>
+    <div class="impersonate-confirm">
+      &#9888; You will enter this tenant's workspace. Your super-admin session is preserved — use "Exit Impersonation" in the app sidebar to return.
+    </div>
+    <p style="font-size:13px;color:#8b92a5;margin-bottom:20px">Impersonate: <strong style="color:#fff" id="imp-org-name"></strong></p>
+    <div class="modal-footer">
+      <button class="btn-sm btn-outline-sm" onclick="closeModal('imp-modal')">Cancel</button>
+      <button class="btn-sm btn-warning-sm" onclick="confirmImpersonate()">Enter Workspace</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allTenants = [];
+let allUsers = [];
+let impersonateTenantId = null;
+
+async function loadData() {
+  // Load admin info
+  try {
+    const me = await fetch('/api/me').then(r=>r.json());
+    document.getElementById('admin-email-label').textContent = me.email || '';
+  } catch(e) {}
+
+  // Load tenants
+  try {
+    const res = await fetch('/api/superadmin/tenants');
+    const data = await res.json();
+    allTenants = data.tenants || [];
+    renderTenants(allTenants);
+    updateMiniStats(allTenants);
+  } catch(e) {
+    document.getElementById('tenants-tbody').innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">&#10060;</div>Failed to load tenants</div></td></tr>';
+  }
+
+  // Load users
+  try {
+    const res = await fetch('/api/superadmin/users');
+    const data = await res.json();
+    allUsers = data.users || [];
+    renderUsers(allUsers);
+  } catch(e) {}
+
+  // Stats
+  loadStats();
+}
+
+function updateMiniStats(tenants) {
+  document.getElementById('s-total').textContent = tenants.length;
+  document.getElementById('s-active').textContent = tenants.filter(t=>t.status==='active').length;
+  document.getElementById('s-pro').textContent = tenants.filter(t=>t.plan==='pro'||t.plan==='enterprise').length;
+  const totalUsers = tenants.reduce((sum,t)=>sum+(t.user_count||0),0);
+  document.getElementById('s-users').textContent = totalUsers;
+}
+
+function planBadge(plan) {
+  const cls = plan==='pro'?'badge-plan-pro':plan==='enterprise'?'badge-plan-enterprise':'badge-plan-free';
+  return '<span class="badge '+cls+'">'+plan+'</span>';
+}
+
+function statusBadge(status) {
+  const cls = status==='active'?'badge-active':'badge-suspended';
+  return '<span class="badge '+cls+'">'+status+'</span>';
+}
+
+function renderTenants(tenants) {
+  const tbody = document.getElementById('tenants-tbody');
+  if (!tenants.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">&#127968;</div>No tenants yet</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = tenants.map(t => `
+    <tr>
+      <td><div style="font-weight:600;color:#fff">${esc(t.name)}</div><div style="font-size:11px;color:#4a4e63">${esc(t.slug||'')}</div></td>
+      <td>${planBadge(t.plan||'free')}</td>
+      <td>${statusBadge(t.status||'active')}</td>
+      <td style="color:#fff">${t.user_count||0}</td>
+      <td style="color:#4a4e63;font-size:12px">${fmtDate(t.created_at)}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-sm btn-outline-sm" onclick="editTenant(${t.id},'${esc(t.name)}','${t.plan||'free'}','${t.status||'active'}')">Edit</button>
+          <button class="btn-sm btn-warning-sm" onclick="impersonate(${t.id},'${esc(t.name)}')">Impersonate</button>
+          ${t.status==='active'
+            ? `<button class="btn-sm btn-danger-sm" onclick="suspendTenant(${t.id})">Suspend</button>`
+            : `<button class="btn-sm btn-primary-sm" onclick="activateTenant(${t.id})">Activate</button>`}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderUsers(users) {
+  const tbody = document.getElementById('users-tbody');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">&#128100;</div>No users yet</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td style="color:#fff">${esc(u.full_name||'—')}</td>
+      <td style="color:#8b92a5">${esc(u.email)}</td>
+      <td><span style="font-size:12px;color:#667eea">${esc(u.org_name||'—')}</span></td>
+      <td><span class="badge ${u.role==='admin'?'badge-plan-pro':'badge-plan-free'}">${u.role||'viewer'}</span></td>
+      <td style="font-size:12px;color:#4a4e63">${fmtDate(u.last_login)}</td>
+      <td><button class="btn-sm btn-danger-sm" onclick="deleteUser(${u.id})">Remove</button></td>
+    </tr>
+  `).join('');
+}
+
+function filterTenants(q) {
+  q = q.toLowerCase();
+  renderTenants(allTenants.filter(t=>(t.name||'').toLowerCase().includes(q)||(t.slug||'').toLowerCase().includes(q)));
+}
+
+function filterUsers(q) {
+  q = q.toLowerCase();
+  renderUsers(allUsers.filter(u=>(u.email||'').toLowerCase().includes(q)||(u.full_name||'').toLowerCase().includes(q)||(u.org_name||'').toLowerCase().includes(q)));
+}
+
+function editTenant(id, name, plan, status) {
+  document.getElementById('edit-tenant-id').value = id;
+  document.getElementById('edit-org-name').value = name;
+  document.getElementById('edit-plan').value = plan;
+  document.getElementById('edit-status').value = status;
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+async function saveTenantEdit() {
+  const id = document.getElementById('edit-tenant-id').value;
+  const payload = {
+    name: document.getElementById('edit-org-name').value.trim(),
+    plan: document.getElementById('edit-plan').value,
+    status: document.getElementById('edit-status').value
+  };
+  try {
+    const res = await fetch('/api/superadmin/tenants/'+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    if (res.ok) { closeModal('edit-modal'); loadData(); }
+    else { alert('Failed to update tenant.'); }
+  } catch(e) { alert('Network error.'); }
+}
+
+function suspendTenant(id) {
+  if (!confirm('Suspend this tenant? They will lose access.')) return;
+  fetch('/api/superadmin/tenants/'+id+'/suspend', {method:'POST'}).then(()=>loadData());
+}
+
+function activateTenant(id) {
+  fetch('/api/superadmin/tenants/'+id+'/activate', {method:'POST'}).then(()=>loadData());
+}
+
+function impersonate(id, name) {
+  impersonateTenantId = id;
+  document.getElementById('imp-org-name').textContent = name;
+  document.getElementById('imp-modal').classList.add('open');
+}
+
+async function confirmImpersonate() {
+  try {
+    const res = await fetch('/api/superadmin/impersonate/'+impersonateTenantId, {method:'POST'});
+    if (res.ok) { window.location.href = '/'; }
+    else { alert('Impersonation failed.'); }
+  } catch(e) { alert('Network error.'); }
+}
+
+async function deleteUser(id) {
+  if (!confirm('Remove this user from the platform?')) return;
+  try {
+    await fetch('/api/superadmin/users/'+id, {method:'DELETE'});
+    loadData();
+  } catch(e) { alert('Failed.'); }
+}
+
+async function loadStats() {
+  try {
+    const res = await fetch('/api/superadmin/stats');
+    const d = await res.json();
+    document.getElementById('ps-tenants').textContent = d.tenants||'—';
+    document.getElementById('ps-users').textContent = d.users||'—';
+    document.getElementById('ps-providers').textContent = d.providers||'—';
+    document.getElementById('ps-records').textContent = d.records||'—';
+    document.getElementById('ps-budgets').textContent = d.budgets||'—';
+    document.getElementById('ps-alerts').textContent = d.alerts_30d||'—';
+  } catch(e) {}
+}
+
+function showPage(name) {
+  document.querySelectorAll('.page-section').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.getElementById('nav-'+name).classList.add('active');
+  if (name==='stats') loadStats();
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function logout() {
+  fetch('/logout', {method:'POST'}).then(()=>{window.location.href='/login';}).catch(()=>{window.location.href='/login';});
+}
+
+function esc(s) {
+  if (s==null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtDate(s) {
+  if (!s) return '—';
+  try { return new Date(s).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
+  catch(e) { return s; }
+}
+
+// Close modals on backdrop click
+document.querySelectorAll('.modal-backdrop').forEach(b=>{
+  b.addEventListener('click',function(e){ if(e.target===this) this.classList.remove('open'); });
+});
+
+loadData();
+</script>
+</body>
+</html>
