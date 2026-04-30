@@ -292,41 +292,50 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email  ON users(email)")
 
+    def _table_exists(tbl):
+        r = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,)).fetchone()
+        return r is not None
+
     # ── Migration: tenant_id on cost_data ────────────────────────────────────
-    try:
-        cursor.execute("SELECT tenant_id FROM cost_data LIMIT 1")
-    except Exception:
-        cursor.execute("ALTER TABLE cost_data ADD COLUMN tenant_id INTEGER DEFAULT 1")
-        print("[DB] Migrated cost_data: added tenant_id column")
+    if _table_exists("cost_data"):
+        try:
+            cursor.execute("SELECT tenant_id FROM cost_data LIMIT 1")
+        except Exception:
+            cursor.execute("ALTER TABLE cost_data ADD COLUMN tenant_id INTEGER DEFAULT 1")
+            print("[DB] Migrated cost_data: added tenant_id column")
 
     # ── Migration: tenant_id on cloud_providers ──────────────────────────────
-    try:
-        cursor.execute("SELECT tenant_id FROM cloud_providers LIMIT 1")
-    except Exception:
-        cursor.execute("ALTER TABLE cloud_providers ADD COLUMN tenant_id INTEGER DEFAULT 1")
-        cursor.execute("DROP INDEX IF EXISTS idx_cp_type_id")
-        print("[DB] Migrated cloud_providers: added tenant_id column")
+    if _table_exists("cloud_providers"):
+        try:
+            cursor.execute("SELECT tenant_id FROM cloud_providers LIMIT 1")
+        except Exception:
+            cursor.execute("ALTER TABLE cloud_providers ADD COLUMN tenant_id INTEGER DEFAULT 1")
+            cursor.execute("DROP INDEX IF EXISTS idx_cp_type_id")
+            print("[DB] Migrated cloud_providers: added tenant_id column")
 
     # ── Migration: tenant_id on budgets ──────────────────────────────────────
-    try:
-        cursor.execute("SELECT tenant_id FROM budgets LIMIT 1")
-    except Exception:
-        cursor.execute("ALTER TABLE budgets ADD COLUMN tenant_id INTEGER DEFAULT 1")
-        print("[DB] Migrated budgets: added tenant_id column")
+    if _table_exists("budgets"):
+        try:
+            cursor.execute("SELECT tenant_id FROM budgets LIMIT 1")
+        except Exception:
+            cursor.execute("ALTER TABLE budgets ADD COLUMN tenant_id INTEGER DEFAULT 1")
+            print("[DB] Migrated budgets: added tenant_id column")
 
     # ── Migration: tenant_id on subscriptions ────────────────────────────────
-    try:
-        cursor.execute("SELECT tenant_id FROM subscriptions LIMIT 1")
-    except Exception:
-        cursor.execute("ALTER TABLE subscriptions ADD COLUMN tenant_id INTEGER DEFAULT 1")
-        print("[DB] Migrated subscriptions: added tenant_id column")
+    if _table_exists("subscriptions"):
+        try:
+            cursor.execute("SELECT tenant_id FROM subscriptions LIMIT 1")
+        except Exception:
+            cursor.execute("ALTER TABLE subscriptions ADD COLUMN tenant_id INTEGER DEFAULT 1")
+            print("[DB] Migrated subscriptions: added tenant_id column")
 
     # ── Migration: tenant_id on activity_logs ────────────────────────────────
-    try:
-        cursor.execute("SELECT tenant_id FROM activity_logs LIMIT 1")
-    except Exception:
-        cursor.execute("ALTER TABLE activity_logs ADD COLUMN tenant_id INTEGER DEFAULT 1")
-        print("[DB] Migrated activity_logs: added tenant_id column")
+    if _table_exists("activity_logs"):
+        try:
+            cursor.execute("SELECT tenant_id FROM activity_logs LIMIT 1")
+        except Exception:
+            cursor.execute("ALTER TABLE activity_logs ADD COLUMN tenant_id INTEGER DEFAULT 1")
+            print("[DB] Migrated activity_logs: added tenant_id column")
 
     # ── Seed: default tenant for existing single-tenant data ─────────────────
     cursor.execute("""
