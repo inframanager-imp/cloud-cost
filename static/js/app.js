@@ -3477,7 +3477,10 @@ async function sendReportNow() {
 }
 
 function previewReport() {
-    window.open('/api/email/preview', '_blank');
+    const sections = [];
+    document.querySelectorAll('.report-section-check input:checked').forEach(cb => sections.push(cb.value));
+    const qs = sections.length ? '?sections=' + sections.join(',') : '';
+    window.open('/api/email/preview' + qs, '_blank');
 }
 
 async function loadEmailLog() {
@@ -3781,12 +3784,14 @@ function previewCustomReport(rid) {
 function openSyncCenter() {
     document.getElementById('scDrawer').classList.add('open');
     document.getElementById('scOverlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
     loadSyncCenter();
 }
 
 function closeSyncCenter() {
     document.getElementById('scDrawer').classList.remove('open');
     document.getElementById('scOverlay').classList.remove('open');
+    document.body.style.overflow = '';
 }
 
 async function loadSyncCenter() {
@@ -4034,6 +4039,14 @@ async function scSyncProvider(id, name, mode = 'incremental') {
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="cp-sync-spinner"></span> Syncing…'; }
     if (lastSyncEl) lastSyncEl.innerHTML = '<span style="color:var(--accent)">⟳ Syncing…</span>';
 
+    // Capture current last_sync so we can detect when it changes
+    let prevLastSync = null;
+    try {
+        const cur = await fetch('/api/cloud-providers').then(r => r.json());
+        const curP = cur.find(x => x.id === id);
+        prevLastSync = curP?.last_sync || null;
+    } catch(e) {}
+
     try {
         const resp = await fetch(`/api/cloud-providers/${id}/sync`, { method: 'POST' });
         const d = await resp.json();
@@ -4043,22 +4056,23 @@ async function scSyncProvider(id, name, mode = 'incremental') {
             showToast('Sync failed: ' + d.error, 'error');
             return;
         }
-        // Poll until last_sync changes
+        // Poll until last_sync changes from its pre-sync value
         let attempts = 0;
         const poll = setInterval(async () => {
             attempts++;
             try {
                 const providers = await fetch('/api/cloud-providers').then(r => r.json());
                 const p = providers.find(x => x.id === id);
-                const newSync = p?.last_sync ? p.last_sync.slice(0,16).replace('T',' ') : null;
-                if (newSync || attempts >= 60) {
+                const changed = p?.last_sync && p.last_sync !== prevLastSync;
+                if (changed || attempts >= 60) {
                     clearInterval(poll);
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Quick Sync'; }
+                    const newSync = p?.last_sync ? p.last_sync.slice(0,16).replace('T',' ') : null;
                     if (p?.sync_error) {
                         if (lastSyncEl) lastSyncEl.innerHTML = `<span style="color:var(--red)" title="${_esc(p.sync_error)}">✗ Failed</span>`;
                         showToast(`${name} sync failed`, 'error');
                     } else {
-                        if (lastSyncEl) lastSyncEl.innerHTML = `<span style="color:var(--green)">✓</span> ${newSync}`;
+                        if (lastSyncEl) lastSyncEl.innerHTML = `<span style="color:var(--green)">✓</span> ${newSync || ''}`;
                         showToast(`${name} synced`, 'success');
                         _scLoadHistory();
                         _scLoadStatus();

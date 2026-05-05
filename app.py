@@ -2167,7 +2167,11 @@ def api_send_report_now():
 @login_required
 def api_preview_report():
     settings = get_email_settings()
-    sections = settings.get("report_sections", ["summary", "subscriptions", "top_services", "top_rgs", "trend"])
+    sections_param = request.args.get("sections")
+    if sections_param:
+        sections = [s.strip() for s in sections_param.split(",") if s.strip()]
+    else:
+        sections = settings.get("report_sections", ["summary", "subscriptions", "top_services", "top_rgs", "trend"])
     html = _build_report_html(sections, settings=settings)
     return Response(html, mimetype="text/html")
 

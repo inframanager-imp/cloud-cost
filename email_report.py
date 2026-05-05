@@ -499,8 +499,7 @@ def _build_report_html(sections=None, settings=None):
             daily_costs = {}
 
         if not resource_changes_available:
-            # Don't render the detailed section if data is unavailable.
-            return html
+            pass  # error message already added above, continue building rest of report
 
         def _rows_to_html_created(rows):
             out = ""
@@ -666,7 +665,9 @@ def _build_report_html(sections=None, settings=None):
             days_after = _days_between(del_date, today)
             deleted_savings_est += avg_daily * days_after
 
-        if int(total_created or 0) == 0 and int(total_deleted or 0) == 0:
+        if not resource_changes_available:
+            pass  # error message already in html, skip rendering
+        elif int(total_created or 0) == 0 and int(total_deleted or 0) == 0:
             html += f"""
             <div style="margin-bottom:20px">
                 <h2 style="margin:0 0 12px 0;font-size:16px;color:#1a1d2e">Resource Changes ({month_label})</h2>

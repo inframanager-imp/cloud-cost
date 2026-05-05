@@ -60,7 +60,7 @@ body {
     height: 100vh;
     background: var(--bg-secondary);
     border-right: 1px solid var(--border);
-    padding: 20px 0;
+    padding: 10px 0 6px;
     z-index: 100;
     display: flex;
     flex-direction: column;
@@ -86,29 +86,29 @@ body {
 #sidebar-expand-btn:hover   { opacity: .85; }
 
 .sidebar-logo {
-    padding: 0 20px 20px;
+    padding: 0 16px 10px;
     border-bottom: 1px solid var(--border);
-    margin-bottom: 10px;
+    margin-bottom: 4px;
 }
 
 .sidebar-logo h1 {
-    font-size: 18px;
+    font-size: 15px;
     color: var(--accent);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 }
 
 .sidebar-logo span {
-    font-size: 12px;
+    font-size: 10px;
     color: var(--text-secondary);
     display: block;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .sidebar-nav {
     flex: 1;
-    padding: 8px 0;
+    padding: 2px 0;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
@@ -119,25 +119,25 @@ body {
 .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
 .nav-section-label {
-    padding: 6px 16px 4px;
-    font-size: 10px;
+    padding: 4px 14px 2px;
+    font-size: 9px;
     font-weight: 700;
     letter-spacing: .08em;
     color: var(--text-secondary);
     text-transform: uppercase;
-    line-height: 1.6;
-    scroll-margin-top: 8px;
+    line-height: 1.4;
+    scroll-margin-top: 4px;
 }
 
 .nav-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 9px 20px;
+    gap: 8px;
+    padding: 6px 16px;
     color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s;
-    font-size: 13px;
+    font-size: 12px;
     border-left: 3px solid transparent;
 }
 
@@ -148,41 +148,41 @@ body {
     border-left-color: var(--accent);
 }
 
-.nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.nav-item svg { width: 15px; height: 15px; flex-shrink: 0; }
 
 /* ─── Sidebar User ──────────────────────────────────────────────────────── */
 .sidebar-user {
-    padding: 16px 20px;
+    padding: 8px 14px;
     border-top: 1px solid var(--border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
 }
 
 .user-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
 }
 
 .user-avatar {
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
     background: var(--accent);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
     flex-shrink: 0;
 }
 
 .user-info .nav-text {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--text-primary);
     white-space: nowrap;
@@ -1199,6 +1199,13 @@ tr:hover { background: rgba(79, 110, 247, 0.05); }
     overflow: hidden;
 }
 .sc-drawer.open { transform: translateX(0); }
+.sc-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
 
 .sc-header {
     display: flex;
@@ -1206,8 +1213,8 @@ tr:hover { background: rgba(79, 110, 247, 0.05); }
     justify-content: space-between;
     padding: 18px 20px;
     border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
     flex-shrink: 0;
-    background: var(--bg);
 }
 
 .sc-section {
@@ -1215,7 +1222,7 @@ tr:hover { background: rgba(79, 110, 247, 0.05); }
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
 }
-.sc-section:last-child { border-bottom: none; flex-shrink: 1; }
+.sc-section:last-child { border-bottom: none; }
 
 .sc-section-label {
     font-size: 10px;
@@ -1399,6 +1406,163 @@ tr:hover { background: rgba(79, 110, 247, 0.05); }
     gap: 10px;
 }
 .co-empty-card .co-logo { font-size: 32px; }
+
+/* ─── Cloud Overview compact fit-screen layout ───────────────────────── */
+#page-cloud-overview.active {
+    display: flex;
+    flex-direction: column;
+}
+#page-cloud-overview .page-header {
+    margin-bottom: 2px;
+    padding-bottom: 0;
+}
+#page-cloud-overview .page-header h2 { font-size: 16px; }
+#page-cloud-overview > p {
+    margin-bottom: 6px !important;
+    font-size: 10px !important;
+}
+#page-cloud-overview .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+}
+#page-cloud-overview .stat-card {
+    padding: 8px 12px;
+}
+#page-cloud-overview .stat-card .stat-label {
+    font-size: 9px;
+    margin-bottom: 2px;
+    letter-spacing: 0.3px;
+}
+#page-cloud-overview .stat-card .stat-value {
+    font-size: 17px;
+}
+/* Force 3-column grid — one card per cloud, always in a single row */
+#coProviderGrid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 0 !important;
+}
+#page-cloud-overview .co-card-header {
+    padding: 7px 12px;
+}
+#page-cloud-overview .co-card-header .co-logo { font-size: 15px; }
+#page-cloud-overview .co-card-header .co-title { font-size: 12px; }
+#page-cloud-overview .co-badge { font-size: 9px !important; padding: 1px 6px !important; }
+#page-cloud-overview .co-hero {
+    padding: 6px 12px 2px;
+    gap: 6px;
+}
+#page-cloud-overview .co-hero-amount { font-size: 18px; }
+#page-cloud-overview .co-hero-change { font-size: 10px !important; }
+#page-cloud-overview .co-meta-row {
+    padding: 2px 12px 6px;
+    gap: 10px;
+    flex-wrap: nowrap;
+}
+#page-cloud-overview .co-meta-item { font-size: 9px; }
+#page-cloud-overview .co-meta-item strong { font-size: 10px; }
+#page-cloud-overview .co-section-label { padding: 0 12px 3px; font-size: 8px; }
+#page-cloud-overview .co-list { padding: 0 12px; margin-bottom: 4px; }
+#page-cloud-overview .co-list-item { padding: 2px 0; font-size: 10px; }
+#page-cloud-overview .co-list-item .co-bar-wrap { height: 3px; }
+#page-cloud-overview .co-cost { font-size: 10px !important; }
+#page-cloud-overview .co-card-footer { padding: 6px 12px; gap: 5px; }
+#page-cloud-overview .co-card-footer .btn {
+    padding: 4px 8px;
+    font-size: 10px;
+}
+
+/* ─── Dashboard compact fit-screen layout ────────────────────────────── */
+#page-dashboard .page-header { margin-bottom: 6px; }
+#page-dashboard .page-header h2 { font-size: 16px; }
+
+/* Cloud filter bar */
+#page-dashboard #cloudProviderFilter {
+    padding: 5px 10px;
+    margin-bottom: 8px !important;
+    border-radius: 8px;
+}
+#page-dashboard #cloudProviderFilter span { font-size: 10px; }
+.cloud-pill {
+    padding: 3px 9px;
+    font-size: 11px;
+    border-radius: 12px;
+}
+
+/* Hero card */
+#page-dashboard .hero-card { margin-bottom: 8px; }
+#page-dashboard .hero-left { padding: 12px 18px; }
+#page-dashboard .hero-right { padding: 10px 16px; gap: 5px; }
+#page-dashboard .hero-label { font-size: 9px; margin-bottom: 2px; }
+#page-dashboard .hero-amount { font-size: 26px; }
+#page-dashboard .hero-meta { font-size: 10px; margin-top: 3px; }
+#page-dashboard .hero-change { font-size: 11px; margin-top: 2px; }
+#page-dashboard .hero-stat { padding: 5px 10px; border-radius: 6px; }
+#page-dashboard .hero-stat-label { font-size: 9px; }
+#page-dashboard .hero-stat-value { font-size: 12px; }
+#page-dashboard .hero-progress-wrap { margin-top: 4px; padding: 5px 10px; border-radius: 6px; }
+#page-dashboard .hero-progress-labels { font-size: 9px; margin-bottom: 3px; }
+#page-dashboard .hero-progress-bar { height: 4px; }
+
+/* Cloud breakdown card */
+#page-dashboard #cloudBreakdownCard { margin-bottom: 8px !important; padding: 10px 14px; }
+#page-dashboard #cloudBreakdownCard h3 { font-size: 12px; margin-bottom: 8px; }
+
+/* Middle grid */
+#page-dashboard .dash-middle-grid { gap: 8px; margin-bottom: 8px; }
+#page-dashboard .dash-middle-grid .chart-card { padding: 10px 14px; }
+#page-dashboard .chart-card h3 { font-size: 12px; margin-bottom: 8px; }
+#page-dashboard .chart-card h3::before { height: 12px; }
+#page-dashboard #dashSubCosts { max-height: 160px; }
+#page-dashboard .top-list { gap: 4px; }
+#page-dashboard .top-list-name { font-size: 11px; }
+#page-dashboard .top-list-cost { font-size: 11px; }
+#page-dashboard .top-list-rank { width: 18px; height: 18px; font-size: 9px; border-radius: 5px; }
+#page-dashboard .top-list-bar-bg { height: 3px; }
+#page-dashboard canvas { max-height: 130px !important; }
+
+/* Bottom RG card */
+#page-dashboard > .chart-card:last-child { padding: 10px 14px; }
+#page-dashboard .sub-cost-row { padding: 4px 8px; margin-bottom: 2px; }
+
+/* ─── Cost Data compact fit-screen layout ─────────────────────────────── */
+#page-costs .page-header { margin-bottom: 6px; }
+#page-costs .page-header h2 { font-size: 16px; }
+#page-costs .page-header .btn { padding: 5px 10px; font-size: 11px; }
+#page-costs #costsCount { font-size: 11px; }
+
+/* Stat cards row */
+#page-costs .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 8px !important;
+}
+#page-costs .stat-card { padding: 8px 12px; }
+#page-costs .stat-card .stat-label { font-size: 9px; margin-bottom: 2px; }
+#page-costs .stat-card .stat-value { font-size: 18px; }
+#page-costs .stat-card div[style*="font-size:12px"] { font-size: 10px !important; margin-top: 2px !important; }
+
+/* Account breakdown card */
+#page-costs .chart-card { padding: 10px 14px; margin-bottom: 8px !important; }
+#page-costs .chart-card h3 { font-size: 12px; margin-bottom: 6px; }
+#page-costs .chart-card h3::before { height: 12px; }
+#page-costs .table-container { max-height: 150px !important; }
+#page-costs table th, #page-costs table td { padding: 5px 10px; font-size: 11px; }
+
+/* Cloud filter pills */
+#page-costs > div[style*="align-items:center"] { margin-bottom: 6px !important; }
+
+/* Filters row */
+#page-costs .filters-row { gap: 6px; margin-bottom: 8px; }
+#page-costs .filter-group label { font-size: 10px; }
+#page-costs .filter-group input,
+#page-costs .filter-group select { padding: 4px 8px; font-size: 11px; }
+
+/* Main cost table */
+#page-costs #costsTableContainer { max-height: calc(100vh - 420px); }
+#page-costs #costsTable th,
+#page-costs #costsTable td { padding: 4px 10px; font-size: 11px; }
 
 /* ─── Sortable Table Headers ─────────────────────────────────────────── */
 .sortable-th {
