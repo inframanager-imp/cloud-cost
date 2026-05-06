@@ -718,6 +718,72 @@ def api_sync():
             except Exception as ba_err:
                 print(f"[BillingAccount] Supplementary fetch error (non-fatal): {ba_err}")
 
+            # Sync AWS/GCP providers as part of "all" sync (when no specific Azure subscription is targeted).
+            if not target_sub:
+                try:
+                    from aws_fetcher import fetch_aws_costs
+                    from gcp_fetcher import fetch_gcp_costs
+                    cp_providers = get_cloud_providers(enabled_only=True, tenant_id=current_tenant_id())
+                    cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp")]
+
+                    def _provider_date_from(provider_type, provider_id):
+                        conn = get_db()
+                        row = conn.execute(
+                            "SELECT MAX(substr(date,1,10)) AS latest FROM cost_data WHERE cloud_provider=? AND subscription_id=?",
+                            (provider_type, provider_id),
+                        ).fetchone()
+                        conn.close()
+                        latest = row["latest"] if row and row["latest"] else None
+                        if is_full:
+                            return (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
+                        if latest:
+                            return (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
+                        return (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
+
+                    for idx, provider in enumerate(cp_providers, start=1):
+                        ptype = provider.get("provider_type")
+                        pid = provider.get("provider_id")
+                        pname = provider.get("name") or pid or ptype
+                        p_from = _provider_date_from(ptype, pid)
+                        sync_status["message"] = f"{mode_label}: syncing {ptype.upper()} provider {pname} [{idx}/{len(cp_providers)}]"
+                        sync_status["progress"] = 95
+                        try:
+                            if ptype == "aws":
+                                records = fetch_aws_costs(provider, p_from, date_to)
+                            else:
+                                records = fetch_gcp_costs(provider, p_from, date_to)
+
+                            conn = get_db()
+                            if ptype == "gcp":
+                                conn.execute(
+                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND tenant_id=?",
+                                    (p_from, date_to, current_tenant_id()),
+                                )
+                            else:
+                                conn.execute(
+                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                                    (p_from, date_to, ptype, pid, current_tenant_id()),
+                                )
+                            if records:
+                                conn.executemany(
+                                    """
+                                    INSERT INTO cost_data
+                                      (date,resource_group,service_name,resource_type,resource_name,
+                                       meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider)
+                                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                                    """,
+                                    records,
+                                )
+                            conn.commit()
+                            conn.close()
+                            total_records += len(records or [])
+                            update_cloud_provider_sync_time(provider["id"], error=None)
+                        except Exception as cp_err:
+                            update_cloud_provider_sync_time(provider["id"], error=str(cp_err))
+                            print(f"[Sync] {ptype.upper()} provider '{pname}' failed: {cp_err}")
+                except Exception as cp_outer_err:
+                    print(f"[Sync] Cloud providers sync error (non-fatal): {cp_outer_err}")
+
             sync_status["message"] = f"{mode_label} complete! {total_records} records across {total_subs} subscription(s)."
             sync_status["progress"] = 100
             update_sync_log(sync_id, "success", total_records)
@@ -811,17 +877,28 @@ def api_sync_status():
 @app.route("/api/costs")
 @login_required
 def api_costs():
+    def _csv_list(name):
+        raw = (request.args.get(name) or "").strip()
+        return [v.strip() for v in raw.split(",") if v.strip()] if raw else []
     filters = {
         "subscription_id": request.args.get("subscription_id"),
+        "subscription_ids": _csv_list("subscription_ids"),
         "date_from": request.args.get("date_from"),
         "date_to": request.args.get("date_to"),
+        "granularity": request.args.get("granularity", "daily"),
         "resource_group": request.args.get("resource_group"),
+        "resource_groups": _csv_list("resource_groups"),
         "service_name": request.args.get("service_name"),
+        "service_names": _csv_list("service_names"),
+        "include_blank_subscription": (request.args.get("include_blank_subscription") or "").lower() in ("1", "true", "yes"),
+        "include_blank_resource_group": (request.args.get("include_blank_resource_group") or "").lower() in ("1", "true", "yes"),
+        "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
         "resource_type": request.args.get("resource_type"),
         "meter_category": request.args.get("meter_category"),
         "search": request.args.get("search"),
         "cloud_provider": request.args.get("cloud_provider") or None,
-        "limit": request.args.get("limit", 500, type=int),
+        "limit": request.args.get("limit", 100, type=int),
+        "offset": request.args.get("offset", 0, type=int),
     }
     # Remove None values
     filters = {k: v for k, v in filters.items() if v is not None}
@@ -840,18 +917,36 @@ def api_costs():
     except Exception:
         pass
 
-    return jsonify(data)
+    count_filters = dict(filters)
+    count_filters.pop("limit", None)
+    count_filters.pop("offset", None)
+    total_meta = get_cost_total(count_filters, tenant_id=current_tenant_id(), cloud_provider=filters.get("cloud_provider"))
+    return jsonify({
+        "rows": data,
+        "total": int(total_meta.get("total_records") or 0),
+        "offset": int(filters.get("offset") or 0),
+        "limit": int(filters.get("limit") or 100),
+    })
 
 
 @app.route("/api/costs/total")
 @login_required
 def api_costs_total():
+    def _csv_list(name):
+        raw = (request.args.get(name) or "").strip()
+        return [v.strip() for v in raw.split(",") if v.strip()] if raw else []
     filters = {
         "subscription_id": request.args.get("subscription_id"),
+        "subscription_ids": _csv_list("subscription_ids"),
         "date_from": request.args.get("date_from"),
         "date_to": request.args.get("date_to"),
         "resource_group": request.args.get("resource_group"),
+        "resource_groups": _csv_list("resource_groups"),
         "service_name": request.args.get("service_name"),
+        "service_names": _csv_list("service_names"),
+        "include_blank_subscription": (request.args.get("include_blank_subscription") or "").lower() in ("1", "true", "yes"),
+        "include_blank_resource_group": (request.args.get("include_blank_resource_group") or "").lower() in ("1", "true", "yes"),
+        "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
         "resource_type": request.args.get("resource_type"),
         "meter_category": request.args.get("meter_category"),
         "search": request.args.get("search"),
@@ -864,11 +959,20 @@ def api_costs_total():
 @app.route("/api/costs/total-by-subscription")
 @login_required
 def api_costs_total_by_subscription():
+    def _csv_list(name):
+        raw = (request.args.get(name) or "").strip()
+        return [v.strip() for v in raw.split(",") if v.strip()] if raw else []
     filters = {
+        "subscription_ids": _csv_list("subscription_ids"),
         "date_from": request.args.get("date_from"),
         "date_to": request.args.get("date_to"),
         "resource_group": request.args.get("resource_group"),
+        "resource_groups": _csv_list("resource_groups"),
         "service_name": request.args.get("service_name"),
+        "service_names": _csv_list("service_names"),
+        "include_blank_subscription": (request.args.get("include_blank_subscription") or "").lower() in ("1", "true", "yes"),
+        "include_blank_resource_group": (request.args.get("include_blank_resource_group") or "").lower() in ("1", "true", "yes"),
+        "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
         "resource_type": request.args.get("resource_type"),
         "meter_category": request.args.get("meter_category"),
         "search": request.args.get("search"),
@@ -1069,7 +1173,38 @@ def _parse_compare_periods_arg(raw):
     return periods, labels
 
 
-def _compare_rows_from_costs(rows_data):
+def _friendly_compare_name(name, group_by):
+    """Normalize display names for compare grids, especially AWS resource identifiers."""
+    value = (name or "").strip()
+    if not value:
+        return "Unknown"
+    if group_by != "resource_name":
+        return value
+
+    # Resolve EC2 instance IDs via cached Name tags.
+    if value.startswith("i-"):
+        try:
+            from database import get_aws_resource_names
+            return get_aws_resource_names().get(value, value)
+        except Exception:
+            return value
+
+    # Convert common AWS ARNs into friendly resource names.
+    if value.startswith("arn:aws:"):
+        parts = value.split(":")
+        arn_resource = parts[5] if len(parts) > 5 else ""
+        if arn_resource.startswith("db:"):
+            return arn_resource.split(":", 1)[1] or value
+        if arn_resource.startswith("loadbalancer/"):
+            lb_parts = arn_resource.split("/")
+            return lb_parts[2] if len(lb_parts) >= 3 else (lb_parts[-1] or value)
+        tail_parts = arn_resource.split("/")
+        return tail_parts[-1] or value
+
+    return value
+
+
+def _compare_rows_from_costs(rows_data, group_by):
     """rows_data: iterable of {name, costs: list} — add difference (last−first) and change_pct vs first."""
     out = []
     for row in rows_data:
@@ -1079,7 +1214,7 @@ def _compare_rows_from_costs(rows_data):
         diff = round(last - first, 2)
         pct = round((diff / first * 100), 1) if first > 0 else (100.0 if last > 0 else 0.0)
         out.append({
-            "name": row["name"] or "Unknown",
+            "name": _friendly_compare_name(row.get("name"), group_by),
             "costs": costs,
             "difference": diff,
             "change_pct": pct,
@@ -1116,7 +1251,7 @@ def _periods_labels_from_spec_list(spec):
 
 def _compare_multi_response(group_by, periods, labels, sub_id, resource_groups, cloud_provider=None, subscription_ids=None):
     data = get_comparison_data_multi(group_by, periods, subscription_id=sub_id, resource_groups=resource_groups, tenant_id=current_tenant_id(), cloud_provider=cloud_provider, subscription_ids=subscription_ids)
-    rows = _compare_rows_from_costs(data)
+    rows = _compare_rows_from_costs(data, group_by)
     return jsonify({"labels": labels, "rows": rows})
 
 
@@ -1175,7 +1310,7 @@ def api_compare():
             diff = round(p2 - p1, 2)
             pct = round((diff / p1 * 100), 1) if p1 > 0 else (100.0 if p2 > 0 else 0)
             rows.append({
-                "name": row["name"] or "Unknown",
+                "name": _friendly_compare_name(row.get("name"), group_by),
                 "costs": [p1, p2],
                 "difference": diff,
                 "change_pct": pct,
@@ -1278,12 +1413,14 @@ def api_compare_weekly():
 @login_required
 def api_filters():
     sub_id = request.args.get("subscription_id")
+    sub_ids_raw = (request.args.get("subscription_ids") or "").strip()
+    sub_ids = [v.strip() for v in sub_ids_raw.split(",") if v.strip()] if sub_ids_raw else None
     cloud = request.args.get("cloud_provider")
     return jsonify({
-        "resource_groups": get_distinct_values("resource_group", subscription_id=sub_id, cloud_provider=cloud),
-        "services": get_distinct_values("service_name", subscription_id=sub_id, cloud_provider=cloud),
-        "resource_types": get_distinct_values("resource_type", subscription_id=sub_id, cloud_provider=cloud),
-        "meter_categories": get_distinct_values("meter_category", subscription_id=sub_id, cloud_provider=cloud),
+        "resource_groups": get_distinct_values("resource_group", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud),
+        "services": get_distinct_values("service_name", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud),
+        "resource_types": get_distinct_values("resource_type", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud),
+        "meter_categories": get_distinct_values("meter_category", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud),
     })
 
 
@@ -1300,12 +1437,24 @@ def api_sync_history():
 @app.route("/api/export")
 @login_required
 def api_export():
+    def _csv_list(name):
+        raw = (request.args.get(name) or "").strip()
+        return [v.strip() for v in raw.split(",") if v.strip()] if raw else []
     filters = {
         "subscription_id": request.args.get("subscription_id"),
+        "subscription_ids": _csv_list("subscription_ids"),
         "date_from": request.args.get("date_from"),
         "date_to": request.args.get("date_to"),
+        "granularity": request.args.get("granularity", "daily"),
         "resource_group": request.args.get("resource_group"),
+        "resource_groups": _csv_list("resource_groups"),
         "service_name": request.args.get("service_name"),
+        "service_names": _csv_list("service_names"),
+        "include_blank_subscription": (request.args.get("include_blank_subscription") or "").lower() in ("1", "true", "yes"),
+        "include_blank_resource_group": (request.args.get("include_blank_resource_group") or "").lower() in ("1", "true", "yes"),
+        "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
+        "resource_type": request.args.get("resource_type"),
+        "cloud_provider": request.args.get("cloud_provider"),
         "search": request.args.get("search"),
     }
     filters = {k: v for k, v in filters.items() if v is not None}
@@ -1376,7 +1525,7 @@ def _sync_or_activity_busy():
     return _sync_is_busy() or _activity_sync_is_busy()
 
 
-def _spawn_activity_sync_subprocess(days, target_sub):
+def _spawn_activity_sync_subprocess(days, target_sub, cloud_provider=None):
     """Start activity_sync_runner.py; same pattern as cost subprocess sync."""
     try:
         os.unlink(_activity_sync_status_path())
@@ -1384,7 +1533,7 @@ def _spawn_activity_sync_subprocess(days, target_sub):
         pass
     data_dir = os.path.dirname(os.path.abspath(os.getenv("DB_PATH", "/app/data/azure_costs.db")))
     os.makedirs(data_dir, exist_ok=True)
-    payload = {"days": int(days), "subscription_id": target_sub}
+    payload = {"days": int(days), "subscription_id": target_sub, "cloud_provider": cloud_provider}
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", dir=data_dir, delete=False, encoding="utf-8"
     ) as tf:
@@ -1403,13 +1552,20 @@ def _spawn_activity_sync_subprocess(days, target_sub):
     print("[Activity-sync] spawned activity_sync_runner.py")
 
 
-def _execute_activity_sync(days=7, target_sub=None):
-    """Run activity sync job. Updates global activity_sync_status."""
+def _execute_activity_sync(days=7, target_sub=None, cloud_provider=None):
+    """Run activity sync job. Updates global activity_sync_status.
+    cloud_provider: None=all, 'azure'=only Azure, 'aws'=only AWS, 'gcp'=only GCP
+    """
     global activity_sync_status
 
     date_to = datetime.utcnow().strftime("%Y-%m-%d")
+    skip_azure = cloud_provider in ("aws", "gcp")
+    skip_cloud_providers = cloud_provider == "azure"
+
     if target_sub:
         subs_to_sync = [{"subscription_id": target_sub}]
+    elif skip_azure:
+        subs_to_sync = []
     else:
         subs_to_sync = get_subscriptions(enabled_only=True)
         if not subs_to_sync:
@@ -1434,7 +1590,13 @@ def _execute_activity_sync(days=7, target_sub=None):
 
     total_subs = len(subs_to_sync)
     mode_lbl = "sequentially" if SYNC_SEQUENTIAL else "in parallel"
-    activity_sync_status = {"running": True, "message": f"Starting ({total_subs} subscription(s)) {mode_lbl}...", "progress": 5}
+    provider_lbl = cloud_provider.upper() if cloud_provider else "All clouds"
+    start_msg = (
+        f"Starting {provider_lbl} ({total_subs} subscription(s)) {mode_lbl}..."
+        if total_subs else
+        f"Starting {provider_lbl} cloud provider activity sync..."
+    )
+    activity_sync_status = {"running": True, "message": start_msg, "progress": 5}
     total_count = 0
     all_caller_ids = set()
 
@@ -1480,20 +1642,21 @@ def _execute_activity_sync(days=7, target_sub=None):
                     activity_sync_status["message"] = f"{sub_name} failed: {str(sub_err)[:80]} [{completed}/{total_subs}]"
                     activity_sync_status["progress"] = 5 + int(75 * completed / total_subs)
 
-        if SYNC_SEQUENTIAL:
-            _run_activity_sequential()
-        else:
-            try:
-                _run_activity_parallel()
-            except RuntimeError as re:
-                if "thread" in str(re).lower():
-                    print(f"[Activity-sync] Parallel run failed ({re}), retrying sequential.")
-                    completed = 0
-                    total_count = 0
-                    all_caller_ids = set()
-                    _run_activity_sequential()
-                else:
-                    raise
+        if total_subs > 0:
+            if SYNC_SEQUENTIAL:
+                _run_activity_sequential()
+            else:
+                try:
+                    _run_activity_parallel()
+                except RuntimeError as re:
+                    if "thread" in str(re).lower():
+                        print(f"[Activity-sync] Parallel run failed ({re}), retrying sequential.")
+                        completed = 0
+                        total_count = 0
+                        all_caller_ids = set()
+                        _run_activity_sequential()
+                    else:
+                        raise
 
         activity_sync_status["message"] = "Resolving user names..."
         activity_sync_status["progress"] = 85
@@ -1509,7 +1672,33 @@ def _execute_activity_sync(days=7, target_sub=None):
             name_map = resolve_caller_names(still_unknown)
             save_caller_names(name_map)
 
-        activity_sync_status = {"running": False, "message": f"Done! {total_count} events across {total_subs} subscription(s).", "progress": 100}
+        # Sync AWS CloudTrail and GCP Audit Logs from cloud_providers table
+        if not target_sub and not skip_cloud_providers:
+            try:
+                from aws_fetcher import fetch_aws_activity
+                from gcp_fetcher import fetch_gcp_activity
+                cp_providers = get_cloud_providers(enabled_only=True)
+                allowed_types = {cloud_provider} if cloud_provider in ("aws", "gcp") else {"aws", "gcp"}
+                aws_gcp = [p for p in cp_providers if p.get("provider_type") in allowed_types]
+                for cp in aws_gcp:
+                    cp_type = cp.get("provider_type", "")
+                    cp_name = cp.get("name", cp.get("provider_id", ""))
+                    activity_sync_status["message"] = f"Syncing {cp_name} ({cp_type.upper()}) activity..."
+                    activity_sync_status["progress"] = 90
+                    try:
+                        if cp_type == "aws":
+                            recs = fetch_aws_activity(cp, days)
+                        else:
+                            recs = fetch_gcp_activity(cp, days)
+                        count = insert_activity_logs(recs, subscription_id=cp.get("provider_id"), cloud_provider=cp_type)
+                        total_count += count
+                        print(f"[Activity-sync] {cp_name} ({cp_type}): {count} events inserted")
+                    except Exception as cp_err:
+                        print(f"[Activity-sync] {cp_name} ({cp_type}) failed: {cp_err}")
+            except Exception as outer_err:
+                print(f"[Activity-sync] Cloud provider sync error: {outer_err}")
+
+        activity_sync_status = {"running": False, "message": f"Done! {total_count} events synced.", "progress": 100}
         return True
     except Exception as e:
         activity_sync_status = {"running": False, "message": f"Failed: {str(e)}", "progress": 0}
@@ -1524,15 +1713,16 @@ def api_activity_sync():
     body = request.get_json(silent=True) or {}
     days = int(body.get("days", 7))
     target_sub = body.get("subscription_id")
+    cloud_provider = (body.get("cloud_provider") or "").strip().lower() or None
 
     if ACTIVITY_SYNC_SUBPROCESS:
-        _spawn_activity_sync_subprocess(days, target_sub)
+        _spawn_activity_sync_subprocess(days, target_sub, cloud_provider)
         return jsonify({"message": "Activity sync started", "subprocess": True})
 
     started = start_background_thread(
         _execute_activity_sync,
         name="activity-sync",
-        args=(days, target_sub),
+        args=(days, target_sub, cloud_provider),
         fallback_inline=ACTIVITY_SYNC_INLINE_MODE,
     )
     if not started:
@@ -1654,6 +1844,7 @@ def api_activity_auto_sync_run_now():
 def api_activity():
     filters = {
         "subscription_id": request.args.get("subscription_id"),
+        "cloud_provider": request.args.get("cloud_provider"),
         "date_from": request.args.get("date_from"),
         "date_to": request.args.get("date_to"),
         "caller": request.args.get("caller"),
@@ -1671,7 +1862,6 @@ def api_activity():
         rid = row.get("resource_id", "")
         if rid:
             parts = rid.strip("/").split("/")
-            # Build clean resource type
             res_type = ""
             for i, p in enumerate(parts):
                 if p.lower() == "providers" and i + 2 < len(parts):
@@ -1686,6 +1876,7 @@ def api_activity():
 def api_activity_export():
     filters = {
         "subscription_id": request.args.get("subscription_id"),
+        "cloud_provider": request.args.get("cloud_provider"),
         "date_from": request.args.get("date_from"),
         "date_to": request.args.get("date_to"),
         "caller": request.args.get("caller"),
@@ -1726,12 +1917,16 @@ def api_activity_export():
 @login_required
 def api_activity_overview():
     sub_id = request.args.get("subscription_id")
+    cloud_provider = request.args.get("cloud_provider")
     conn = get_db()
     params = []
     where = " WHERE 1=1"
     if sub_id:
         where += " AND subscription_id = ?"
         params.append(sub_id)
+    if cloud_provider:
+        where += " AND cloud_provider = ?"
+        params.append(cloud_provider)
 
     row = conn.execute(f"SELECT COUNT(*) as total_events, MIN(timestamp) as earliest, MAX(timestamp) as latest FROM activity_logs{where}", params).fetchone()
     by_status = conn.execute(f"SELECT status, COUNT(*) as cnt FROM activity_logs{where} GROUP BY status ORDER BY cnt DESC", params).fetchall()
@@ -1790,12 +1985,16 @@ def api_activity_overview():
 @login_required
 def api_activity_users():
     sub_id = request.args.get("subscription_id")
+    cloud_provider = request.args.get("cloud_provider")
     conn = get_db()
     params = []
     where = " WHERE caller IS NOT NULL AND caller != ''"
     if sub_id:
         where += " AND subscription_id = ?"
         params.append(sub_id)
+    if cloud_provider:
+        where += " AND cloud_provider = ?"
+        params.append(cloud_provider)
     rows = conn.execute(f"""
         SELECT caller,
                COUNT(*) as total_ops,
@@ -1825,6 +2024,7 @@ def api_activity_users():
 @login_required
 def api_activity_resource_timeline():
     sub_id = request.args.get("subscription_id")
+    cloud_provider = request.args.get("cloud_provider")
     resource_name = request.args.get("resource_name")
     resource_group = request.args.get("resource_group")
     conn = get_db()
@@ -1833,6 +2033,9 @@ def api_activity_resource_timeline():
     if sub_id:
         where += " AND subscription_id = ?"
         params.append(sub_id)
+    if cloud_provider:
+        where += " AND cloud_provider = ?"
+        params.append(cloud_provider)
     if resource_group:
         where += " AND resource_group = ?"
         params.append(resource_group)
@@ -1882,12 +2085,16 @@ def api_activity_resource_timeline():
 @login_required
 def api_activity_failed():
     sub_id = request.args.get("subscription_id")
+    cloud_provider = request.args.get("cloud_provider")
     conn = get_db()
     params = []
     where = " WHERE status = 'Failed'"
     if sub_id:
         where += " AND subscription_id = ?"
         params.append(sub_id)
+    if cloud_provider:
+        where += " AND cloud_provider = ?"
+        params.append(cloud_provider)
     total = conn.execute(f"SELECT COUNT(*) as cnt FROM activity_logs{where}", params).fetchone()
     by_op = conn.execute(f"""
         SELECT operation_name, COUNT(*) as cnt
@@ -1945,12 +2152,16 @@ def api_activity_failed():
 @login_required
 def api_activity_security():
     sub_id = request.args.get("subscription_id")
+    cloud_provider = request.args.get("cloud_provider")
     conn = get_db()
     params = []
     where = " WHERE 1=1"
     if sub_id:
         where += " AND subscription_id = ?"
         params.append(sub_id)
+    if cloud_provider:
+        where += " AND cloud_provider = ?"
+        params.append(cloud_provider)
     events = conn.execute(f"""
         SELECT timestamp, caller, operation_name, operation, resource_name, resource_group, status, level
         FROM activity_logs
@@ -2172,7 +2383,8 @@ def api_preview_report():
         sections = [s.strip() for s in sections_param.split(",") if s.strip()]
     else:
         sections = settings.get("report_sections", ["summary", "subscriptions", "top_services", "top_rgs", "trend"])
-    html = _build_report_html(sections, settings=settings)
+    cloud_provider = request.args.get("cloud_provider", "").strip() or None
+    html = _build_report_html(sections, settings=settings, cloud_provider=cloud_provider)
     return Response(html, mimetype="text/html")
 
 

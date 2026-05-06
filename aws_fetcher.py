@@ -397,3 +397,106 @@ def fetch_aws_accounts(credentials: dict) -> list:
     except Exception as e:
         print(f"[AWS] Could not determine account: {e}")
         return []
+
+
+def fetch_aws_activity(provider_record: dict, days: int = 7) -> list:
+    """
+    Fetch AWS CloudTrail events for the past N days using lookup_events.
+    Returns tuples: (event_id, timestamp, caller, operation, operation_name,
+                     resource_group, resource_type, resource_name, resource_id,
+                     status, level, category, description)
+    """
+    if not BOTO3_AVAILABLE:
+        raise ImportError("boto3 is not installed. Run: pip install boto3")
+
+    credentials = provider_record.get("credentials_json", {})
+    if isinstance(credentials, str):
+        try:
+            credentials = json.loads(credentials)
+        except Exception:
+            credentials = {}
+
+    account_id = provider_record.get("provider_id", "unknown")
+    region = credentials.get("region", "us-east-1")
+
+    sess_kwargs = {
+        "aws_access_key_id": credentials.get("access_key_id") or os.getenv("AWS_ACCESS_KEY_ID"),
+        "aws_secret_access_key": credentials.get("secret_access_key") or os.getenv("AWS_SECRET_ACCESS_KEY"),
+        "region_name": region,
+    }
+    role_arn = credentials.get("role_arn")
+    if role_arn:
+        try:
+            sts = boto3.client("sts", **sess_kwargs)
+            assume_kwargs = {"RoleArn": role_arn, "RoleSessionName": "cloud-activity-sync"}
+            if credentials.get("external_id"):
+                assume_kwargs["ExternalId"] = credentials["external_id"]
+            assumed = sts.assume_role(**assume_kwargs)
+            c = assumed["Credentials"]
+            ct_client = boto3.client(
+                "cloudtrail",
+                aws_access_key_id=c["AccessKeyId"],
+                aws_secret_access_key=c["SecretAccessKey"],
+                aws_session_token=c["SessionToken"],
+                region_name=region,
+            )
+        except Exception as e:
+            print(f"[AWS CloudTrail] Role assumption failed: {e}")
+            ct_client = boto3.client("cloudtrail", **sess_kwargs)
+    else:
+        ct_client = boto3.client("cloudtrail", **sess_kwargs)
+
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(days=days)
+    records = []
+    kwargs = {"StartTime": start_time, "EndTime": end_time, "MaxResults": 50}
+
+    while True:
+        try:
+            resp = ct_client.lookup_events(**kwargs)
+        except Exception as e:
+            print(f"[AWS CloudTrail] lookup_events error for {account_id}: {e}")
+            break
+
+        for event in resp.get("Events", []):
+            event_id = event.get("EventId", "")
+            ts = event.get("EventTime")
+            timestamp = ts.isoformat() if ts else ""
+            caller = event.get("Username", "") or ""
+            operation = event.get("EventName", "")
+
+            resources = event.get("Resources") or []
+            resource_type = resources[0].get("ResourceType", "") if resources else ""
+            resource_name = resources[0].get("ResourceName", "") if resources else ""
+            resource_id = resource_name
+
+            status = "Succeeded"
+            description = ""
+            resource_group = region
+            try:
+                ct_event = json.loads(event.get("CloudTrailEvent", "{}"))
+                if ct_event.get("errorCode"):
+                    status = "Failed"
+                    description = ct_event.get("errorMessage", ct_event.get("errorCode", ""))
+                else:
+                    description = ct_event.get("eventSource", "")
+                if not caller:
+                    uid = ct_event.get("userIdentity", {})
+                    caller = uid.get("arn", uid.get("userName", ""))
+                resource_group = ct_event.get("awsRegion", region)
+            except Exception:
+                pass
+
+            records.append((
+                event_id, timestamp, caller, operation, operation,
+                resource_group, resource_type, resource_name, resource_id,
+                status, "Informational", "Administrative", description[:500]
+            ))
+
+        next_token = resp.get("NextToken")
+        if not next_token:
+            break
+        kwargs["NextToken"] = next_token
+
+    print(f"[AWS CloudTrail] Fetched {len(records)} events for account {account_id}")
+    return records

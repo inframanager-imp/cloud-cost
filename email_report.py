@@ -66,23 +66,29 @@ def _get_all_cloud_accounts():
     return accounts
 
 
-def _build_report_html(sections=None, settings=None):
+def _build_report_html(sections=None, settings=None, cloud_provider=None):
     """Generate a professional multi-cloud HTML cost report."""
     if not sections:
         sections = ["summary", "subscriptions", "top_services", "top_rgs", "trend"]
     if settings is None:
         settings = get_email_settings() or {}
 
+    # Cloud provider filter: explicit arg overrides saved setting
+    if cloud_provider is None:
+        cloud_provider = settings.get("report_cloud_provider") or ""
+    cloud_provider = (cloud_provider or "").strip().lower()
+
     now        = datetime.utcnow()
     period     = _resolve_report_period(settings)
     month_start = period["date_from"]
     today      = period["date_to"]
 
-    # ── Data gathering ────────────────────────────────────────────────────
-    top_services = get_summary("service_name",  date_from=month_start, date_to=today)[:10]
-    top_rgs      = get_summary("resource_group", date_from=month_start, date_to=today)[:10]
-    trend        = get_daily_trend(date_from=month_start, date_to=today)
-    monthly      = get_monthly_summary()
+    # ── Data gathering (filtered by cloud_provider if set) ────────────────
+    cp_filter = cloud_provider if cloud_provider else None
+    top_services = get_summary("service_name",  date_from=month_start, date_to=today, cloud_provider=cp_filter)[:10]
+    top_rgs      = get_summary("resource_group", date_from=month_start, date_to=today, cloud_provider=cp_filter)[:10]
+    trend        = get_daily_trend(date_from=month_start, date_to=today, cloud_provider=cp_filter)
+    monthly      = get_monthly_summary(cloud_provider=cp_filter)
 
     total_this_month = sum(r["total_cost"] for r in top_services) if top_services else 0
     last_month_data  = [m for m in monthly if m["month"] != now.strftime("%Y-%m")]
@@ -92,10 +98,16 @@ def _build_report_html(sections=None, settings=None):
 
     from database import get_db
     conn = get_db()
-    cloud_rows = conn.execute(
-        "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? GROUP BY cloud_provider ORDER BY total DESC",
-        (month_start, today)
-    ).fetchall()
+    if cp_filter:
+        cloud_rows = conn.execute(
+            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? GROUP BY cloud_provider ORDER BY total DESC",
+            (month_start, today, cp_filter)
+        ).fetchall()
+    else:
+        cloud_rows = conn.execute(
+            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? GROUP BY cloud_provider ORDER BY total DESC",
+            (month_start, today)
+        ).fetchall()
     conn.close()
 
     cloud_totals = [{"cloud": r["cloud_provider"] or "unknown", "total": r["total"] or 0} for r in cloud_rows]
@@ -106,6 +118,9 @@ def _build_report_html(sections=None, settings=None):
     CLOUD_ICON   = {"azure": "&#9632;", "aws": "&#9650;", "gcp": "&#11044;"}
 
     all_accounts = _get_all_cloud_accounts()
+    # Filter accounts by cloud provider if set
+    if cp_filter:
+        all_accounts = [a for a in all_accounts if a["cloud"] == cp_filter]
     sub_costs = []
     for acct in all_accounts:
         svcs = get_summary("service_name", date_from=month_start, date_to=today, subscription_id=acct["id"])
@@ -665,12 +680,21 @@ def _build_report_html(sections=None, settings=None):
             days_after = _days_between(del_date, today)
             deleted_savings_est += avg_daily * days_after
 
+        # Azure-only notice shown in all resource_changes states
+        azure_only_note = """
+            <div style="display:inline-flex;align-items:center;gap:6px;background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;padding:5px 10px;font-size:11px;color:#92400e;margin-bottom:10px">
+                <span style="font-size:13px">&#9888;</span>
+                Resource Changes data is sourced from <strong>Azure Activity Logs only</strong>. AWS &amp; GCP create/delete events are not yet tracked.
+            </div>
+        """
+
         if not resource_changes_available:
             pass  # error message already in html, skip rendering
         elif int(total_created or 0) == 0 and int(total_deleted or 0) == 0:
             html += f"""
             <div style="margin-bottom:20px">
-                <h2 style="margin:0 0 12px 0;font-size:16px;color:#1a1d2e">Resource Changes ({month_label})</h2>
+                <h2 style="margin:0 0 8px 0;font-size:16px;color:#1a1d2e">Resource Changes ({month_label})</h2>
+                {azure_only_note}
                 <div style="font-size:12px;color:#6b7280">
                     No resource create/delete events found for this period.
                 </div>
@@ -679,7 +703,8 @@ def _build_report_html(sections=None, settings=None):
         else:
             html += f"""
         <div style="margin-bottom:20px">
-            <h2 style="margin:0 0 12px 0;font-size:16px;color:#1a1d2e">Resource Changes ({month_label})</h2>
+            <h2 style="margin:0 0 8px 0;font-size:16px;color:#1a1d2e">Resource Changes ({month_label})</h2>
+            {azure_only_note}
             <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
                 <div style="background:#f8f9fc;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;min-width:180px">
                     <div style="font-size:12px;color:#6b7280">Resources Created</div>

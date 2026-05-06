@@ -5,6 +5,7 @@ let syncInterval = null;
 let dashboardCache = null;
 let selectedSubscription = '';
 let selectedCloud = '';          // '' | 'azure' | 'aws' | 'gcp'
+let selectedActCloud = '';       // '' | 'azure' | 'aws' | 'gcp' — Activity Log cloud filter
 let costSortBy = 'date';
 let costSortDir = 'desc';
 let actSortBy = 'timestamp';
@@ -26,6 +27,14 @@ const CLOUD_META = {
     aws:   { icon: '⚙', logo: CLOUD_LOGOS.aws,   label: 'AWS',   color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Region',         service: 'Service' } },
     gcp:   { icon: '◉', logo: CLOUD_LOGOS.gcp,   label: 'GCP',   color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service' } },
 };
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const CHART_COLORS = () => [
+    cssVar('--chart-1'), cssVar('--chart-2'), cssVar('--chart-3'),
+    cssVar('--chart-4'), cssVar('--chart-5'), cssVar('--chart-other'),
+];
+const CHART_TEXT = () => cssVar('--text-secondary');
+const CHART_GRID = () => cssVar('--border-subtle');
+
 // Helper: get cloud-aware label for resource_group column
 function rgLabel(cloud) { return CLOUD_META[cloud]?.groupLabel?.rg || 'Resource Group / Region / Project'; }
 // Helper: get cloud-aware label for subscription column
@@ -34,7 +43,7 @@ function subLabel(cloud) { return CLOUD_META[cloud]?.groupLabel?.sub || 'Account
 function setCloudFilter(cloud) {
     selectedCloud = cloud;
     // Update pill active state
-    document.querySelectorAll('.cloud-pill').forEach(p => {
+    document.querySelectorAll('[data-cloud]').forEach(p => {
         p.classList.toggle('active', p.dataset.cloud === cloud);
     });
     // Update adaptive labels
@@ -85,28 +94,27 @@ function renderCloudBreakdown(cloudBreakdown) {
     const clouds = Object.keys(cur).filter(c => cur[c] > 0);
     if (clouds.length <= 1) { card.style.display = 'none'; return; }
     const total = clouds.reduce((s, c) => s + (cur[c] || 0), 0);
-    const colors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
+    const colors = { azure: cssVar('--azure') || '#0078d4', aws: cssVar('--aws') || '#ff9900', gcp: cssVar('--gcp') || '#4285f4' };
     const names  = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
     const $fmt = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
 
     content.innerHTML = clouds.map(cloud => {
         const cost = cur[cloud] || 0;
         const pct = total > 0 ? (cost / total * 100).toFixed(1) : 0;
-        const color = colors[cloud] || '#667eea';
+        const color = colors[cloud] || (CHART_COLORS()[0] || '#667eea');
         const lmCost = lm[cloud] || 0;
         const m2Cost = m2[cloud] || 0;
         const lmDiff = lmCost > 0 ? ((cost - lmCost)/lmCost*100).toFixed(1) : null;
         const lmArrow = lmDiff !== null ? (parseFloat(lmDiff) > 0 ? '▲' : '▼') : '';
         const lmColor = lmDiff !== null ? (parseFloat(lmDiff) > 0 ? '#f87171' : '#4ade80') : 'var(--text-secondary)';
         const logo = CLOUD_LOGOS[cloud] || '';
-        const bgTint = cloud === 'azure' ? 'rgba(0,120,212,0.08)' : cloud === 'aws' ? 'rgba(255,153,0,0.08)' : 'rgba(66,133,244,0.08)';
-        return `<div class="cloud-breakdown-item" style="border-top:3px solid ${color};background:linear-gradient(135deg,${bgTint},var(--bg-card))" onclick="setCloudFilter('${cloud}')">
+        return `<div class="cloud-breakdown-item provider-card" style="border:1px solid var(--border-subtle);background:var(--bg-card)" onclick="setCloudFilter('${cloud}')">
             <div class="cb-header">
                 <div class="cb-logo">${logo}</div>
-                <span class="cb-badge" style="color:${color};background:${bgTint};border:1px solid ${color}33">${names[cloud]||cloud}</span>
+                <span class="badge ${cloud}">${pct}%</span>
             </div>
-            <div class="cb-cost">${$fmt(cost)}</div>
-            <div class="cb-pct">${pct}% of total spend</div>
+            <div class="cb-cost"><span class="metric-number">${$fmt(cost)}</span></div>
+            <div class="cb-pct">${names[cloud]||cloud}</div>
             <div class="cb-bar-bg"><div class="cb-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}99)"></div></div>
             <div class="cb-footer">
                 <div class="cb-row"><span class="cb-row-label">${lmLabel}</span><span class="cb-row-val">${$fmt(lmCost)} ${lmDiff !== null ? `<span style="color:${lmColor};font-size:10px">${lmArrow}${Math.abs(lmDiff)}%</span>` : ''}</span></div>
@@ -237,7 +245,7 @@ async function loadDashboard() {
         renderCloudBreakdown(data.cloud_breakdown);
 
         // Top services list + chart (all clouds)
-        const colors = ['#4f6ef7','#2ecc71','#e74c3c','#f39c12','#9b59b6','#00d2d3','#e84393','#fd79a8','#6c5ce7','#00b894'];
+        const colors = CHART_COLORS();
         const topSvc = (data.top_services || []).filter(s => s.name && s.name !== 'Unknown').slice(0, 8);
         renderTopList('dashTopServicesList', topSvc);
         renderChart('dashServiceChart', 'doughnut', {
@@ -332,7 +340,7 @@ async function loadCloudOverview() {
     }
 
     // 4. Render provider cards
-    const colors = ['#4f6ef7','#2ecc71','#e74c3c','#f39c12','#9b59b6','#00d2d3','#e84393','#fd79a8'];
+    const colors = CHART_COLORS();
     grid.innerHTML = '';
 
     ['azure', 'aws', 'gcp'].forEach(cloud => {
@@ -492,7 +500,7 @@ function renderSubCosts(subCosts) {
         return;
     }
     const grandTotal = subCosts.reduce((s, c) => s + c.cost, 0);
-    const colors = ['#4f6ef7','#2ecc71','#e74c3c','#f39c12','#9b59b6','#00d2d3','#e84393','#fd79a8','#6c5ce7','#00b894'];
+    const colors = CHART_COLORS();
     const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
     const $fmt = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
     el.innerHTML = subCosts.map((s, i) => {
@@ -572,7 +580,7 @@ async function switchDashPeriod(period, btn) {
         renderDashTrend(dashboardCache.current_month.trend, dashboardCache.current_month.label);
         renderTopList('dashTopServicesList', dashboardCache.top_services);
         renderTopList('dashTopRGsList', dashboardCache.top_rgs);
-        const colors = ['#4f6ef7','#2ecc71','#e74c3c','#f39c12','#9b59b6','#00d2d3','#e84393','#fd79a8','#6c5ce7','#00b894'];
+        const colors = CHART_COLORS();
         renderChart('dashServiceChart', 'doughnut', {
             labels: dashboardCache.top_services.map(s => s.name),
             datasets: [{ data: dashboardCache.top_services.map(s => s.cost), backgroundColor: colors, borderWidth: 0 }]
@@ -627,7 +635,7 @@ async function switchDashPeriod(period, btn) {
         const topRg = rgs.slice(0, 5).map(r => ({name: r.resource_group || 'Unknown', cost: r.total_cost}));
         renderTopList('dashTopServicesList', topSvc);
         renderTopList('dashTopRGsList', topRg);
-        const colors = ['#4f6ef7','#2ecc71','#e74c3c','#f39c12','#9b59b6','#00d2d3','#e84393','#fd79a8','#6c5ce7','#00b894'];
+        const colors = CHART_COLORS();
         renderChart('dashServiceChart', 'doughnut', {
             labels: topSvc.map(s => s.name),
             datasets: [{ data: topSvc.map(s => s.cost), backgroundColor: colors, borderWidth: 0 }]
@@ -643,9 +651,20 @@ async function switchDashPeriod(period, btn) {
 
 // ─── Costs Table ─────────────────────────────────────────────────────────
 let costsSelectedCloud = '';
+let costPageOffset = 0;
+let costPageLimit = 100;
+let costPageTotal = 0;
+let costCompact = false;
+
+function getMultiSelectValues(id) {
+    const sel = document.getElementById(id);
+    if (!sel) return [];
+    return Array.from(sel.selectedOptions || []).map(o => o.value).filter(v => v !== '');
+}
 
 function setCostsCloud(btn, cloud) {
     costsSelectedCloud = cloud;
+    costPageOffset = 0;
     document.querySelectorAll('[data-costs-cloud]').forEach(b => b.classList.toggle('active', b.dataset.costsCloud === cloud));
     _updateCostsCloudFilters(cloud);
     loadCostsTable();
@@ -668,7 +687,7 @@ async function _updateCostsCloudFilters(cloud) {
         const awsAccounts = providers.filter(p => p.provider_type === 'aws');
         const sel = document.getElementById('costAccount');
         if (sel) {
-            sel.innerHTML = '<option value="">All Accounts</option>' +
+            sel.innerHTML = '<option value="__BLANK__">(Blank)</option>' +
                 awsAccounts.map(a => `<option value="${a.provider_id}">${a.name || a.provider_id}</option>`).join('');
         }
     } else {
@@ -684,35 +703,54 @@ async function loadCostsTable() {
     const search = document.getElementById('costSearch')?.value;
     const dateFrom = document.getElementById('costDateFrom')?.value;
     const dateTo = document.getElementById('costDateTo')?.value;
-    const rg = document.getElementById('costRG')?.value;
-    const service = document.getElementById('costService')?.value;
-    // AWS account sub-filter: maps to subscription_id in cost_data
-    const awsAccount = (costsSelectedCloud === 'aws') ? (document.getElementById('costAccount')?.value || '') : '';
+    const granularity = document.getElementById('costGranularity')?.value || 'daily';
+    const dateHeader = document.getElementById('costDateHeader');
+    if (dateHeader) {
+        dateHeader.innerHTML = `${granularity === 'monthly' ? 'Month' : 'Date'} <span id="sort-date" class="sort-indicator">↕</span>`;
+    }
+    const rgValues = getMultiSelectValues('costRG');
+    const serviceValues = getMultiSelectValues('costService');
+    // AWS account sub-filter
+    const awsAccounts = (costsSelectedCloud === 'aws') ? getMultiSelectValues('costAccount') : [];
     const resType = (costsSelectedCloud === 'aws') ? (document.getElementById('costResourceType')?.value || '') : '';
+    const activeCloud = costsSelectedCloud || '';
+    const includeBlankRG = rgValues.includes('__BLANK__');
+    const includeBlankService = serviceValues.includes('__BLANK__');
+    const includeBlankSub = awsAccounts.includes('__BLANK__');
+    const rg = rgValues.filter(v => v !== '__BLANK__');
+    const services = serviceValues.filter(v => v !== '__BLANK__');
+    const subs = awsAccounts.filter(v => v !== '__BLANK__');
 
     if (search) params.set('search', search);
     if (dateFrom) params.set('date_from', dateFrom);
     if (dateTo) params.set('date_to', dateTo);
-    if (rg) params.set('resource_group', rg);
-    if (service) params.set('service_name', service);
+    params.set('granularity', granularity);
+    if (rg.length) params.set('resource_groups', rg.join(','));
+    if (services.length) params.set('service_names', services.join(','));
+    if (includeBlankRG) params.set('include_blank_resource_group', '1');
+    if (includeBlankService) params.set('include_blank_service', '1');
     if (resType) params.set('resource_type', resType);
-    // AWS account filter takes priority over global subscription filter
-    if (awsAccount) params.set('subscription_id', awsAccount);
-    else if (selectedSubscription) params.set('subscription_id', selectedSubscription);
+    if (subs.length) params.set('subscription_ids', subs.join(','));
+    if (includeBlankSub) params.set('include_blank_subscription', '1');
+    else if (!subs.length && selectedSubscription && activeCloud === 'azure') params.set('subscription_id', selectedSubscription);
     if (costsSelectedCloud) params.set('cloud_provider', costsSelectedCloud);
-    else addCloudParam(params);
-    params.set('limit', '5000');
+    params.set('limit', String(costPageLimit));
+    params.set('offset', String(costPageOffset));
 
     try {
         const paramsBySub = new URLSearchParams(params);
         paramsBySub.delete('subscription_id');
         paramsBySub.delete('limit');
 
-        const [data, totals, totalsBySub] = await Promise.all([
+        const [costsResp, totals, totalsBySub] = await Promise.all([
             fetch(`/api/costs?${params}`).then(r => r.json()),
             fetch(`/api/costs/total?${params}`).then(r => r.json()),
             fetch(`/api/costs/total-by-subscription?${paramsBySub}`).then(r => r.json())
         ]);
+        const data = Array.isArray(costsResp) ? costsResp : (costsResp.rows || []);
+        costPageTotal = Array.isArray(costsResp) ? data.length : (costsResp.total || 0);
+        costPageOffset = Array.isArray(costsResp) ? 0 : (costsResp.offset || 0);
+        costPageLimit = Array.isArray(costsResp) ? costPageLimit : (costsResp.limit || costPageLimit);
         const tbody = document.getElementById('costsTableBody');
         const sortedData = sortCostRows(data);
         updateCostSortIndicators();
@@ -728,22 +766,53 @@ async function loadCostsTable() {
                 let tags = {};
                 try { tags = r.tags ? JSON.parse(r.tags) : {}; } catch(e) {}
                 const vmName = tags.name || null;
+                let prettyResourceName = r.resource_name || '';
+                // AWS resource names are often full ARNs; show only the trailing friendly name.
+                if ((r.cloud_provider || '').toLowerCase() === 'aws' && prettyResourceName.startsWith('arn:')) {
+                    const parts = prettyResourceName.split(':');
+                    const arnResourcePart = parts.length >= 6 ? parts.slice(5).join(':') : prettyResourceName;
+                    if (arnResourcePart.startsWith('loadbalancer/')) {
+                        // ARN pattern: loadbalancer/{app|net}/{lb-name}/{id}
+                        const lbParts = arnResourcePart.split('/');
+                        prettyResourceName = lbParts[2] || lbParts[lbParts.length - 1] || prettyResourceName;
+                    } else if (arnResourcePart.startsWith('db:')) {
+                        // ARN pattern: db:{db-identifier}
+                        prettyResourceName = arnResourcePart.split(':')[1] || prettyResourceName;
+                    } else {
+                        const slashParts = arnResourcePart.split('/');
+                        prettyResourceName = slashParts[slashParts.length - 1] || prettyResourceName;
+                    }
+                }
                 const resourceDisplay = vmName
-                    ? `<span style="font-weight:600">${vmName}</span><br><span style="font-size:11px;color:var(--text-secondary)">${r.resource_name||''}</span>`
-                    : (r.resource_name || '-');
-                const resourceTitle = vmName ? `${vmName} (${r.resource_name})` : (r.resource_name||'');
+                    ? `<span style="font-weight:600">${vmName}</span><br><span style="font-size:11px;color:var(--text-secondary)">${prettyResourceName}</span>`
+                    : (prettyResourceName || '-');
+                const resourceTitle = vmName ? `${vmName} (${prettyResourceName})` : (prettyResourceName || '');
+                const rawDate = (r.date || '').toString();
+                const dateOnly = granularity === 'monthly' ? rawDate.slice(0, 7) : rawDate.split('T')[0];
                 return `<tr>
-                <td style="white-space:nowrap">${r.date}</td>
+                <td style="white-space:nowrap">${dateOnly}</td>
                 <td style="white-space:nowrap;font-size:13px;color:${cloudColor}">${cloudIcon} ${(r.cloud_provider || 'azure').toUpperCase()}</td>
                 <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.resource_group||''}">${r.resource_group || '-'}</td>
                 <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.service_name||''}">${r.service_name || '-'}</td>
                 <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:var(--accent);text-decoration:underline;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))">${resourceDisplay}</td>
-                <td style="font-weight:600;color:var(--green);white-space:nowrap">$${r.cost.toFixed(4)}</td>
+                <td class="cell-cost" style="font-weight:600;color:var(--green);white-space:nowrap">$${r.cost.toFixed(4)}</td>
             </tr>`;
             }).join('');
         }
 
         document.getElementById('costsCount').textContent = `${data.length} records`;
+        const from = costPageTotal ? (costPageOffset + 1) : 0;
+        const to = Math.min(costPageOffset + costPageLimit, costPageTotal);
+        const page = Math.floor(costPageOffset / costPageLimit) + 1;
+        const pages = Math.max(1, Math.ceil(costPageTotal / costPageLimit));
+        const countChip = document.getElementById('costRowCountChip');
+        if (countChip) countChip.textContent = `${costPageTotal.toLocaleString()} records · showing ${from}-${to}`;
+        const pageInfo = document.getElementById('costPageInfo');
+        if (pageInfo) pageInfo.textContent = `Page ${page} of ${pages}`;
+        const prev = document.getElementById('costPrevBtn');
+        const next = document.getElementById('costNextBtn');
+        if (prev) prev.disabled = costPageOffset <= 0;
+        if (next) next.disabled = costPageOffset + costPageLimit >= costPageTotal;
         document.getElementById('costTotalAmount').textContent =
             `$${(totals.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
         document.getElementById('costTotalRecords').textContent =
@@ -752,7 +821,7 @@ async function loadCostsTable() {
         // Adaptive header label
         const costsSubTitleEl = document.getElementById('costsSubTitle');
         if (costsSubTitleEl) {
-            const activeCloud = costsSelectedCloud || selectedCloud;
+            const activeCloud = costsSelectedCloud || '';
             const subWord = subLabel(activeCloud);
             costsSubTitleEl.textContent = `Total Cost by ${subWord} (Selected Dates)`;
             const colHdr = document.getElementById('costSubColHeader');
@@ -773,10 +842,9 @@ async function loadCostsTable() {
 
         // Load filter options scoped to the active cloud + account
         const filterParams = new URLSearchParams();
-        const activeCloud = costsSelectedCloud || selectedCloud;
         if (activeCloud) filterParams.set('cloud_provider', activeCloud);
-        if (awsAccount) filterParams.set('subscription_id', awsAccount);
-        else if (selectedSubscription) filterParams.set('subscription_id', selectedSubscription);
+        if (subs.length) filterParams.set('subscription_ids', subs.join(','));
+        else if (selectedSubscription && activeCloud === 'azure') filterParams.set('subscription_id', selectedSubscription);
         const filterQs = filterParams.toString() ? '?' + filterParams.toString() : '';
         const filters = await fetch('/api/filters' + filterQs).then(r => r.json());
         populateSelect('costRG', filters.resource_groups);
@@ -784,6 +852,22 @@ async function loadCostsTable() {
     } catch (err) {
         console.error('Costs load error:', err);
     }
+}
+
+function changeCostPage(delta) {
+    const nextOffset = costPageOffset + (delta * costPageLimit);
+    if (nextOffset < 0) return;
+    if (nextOffset >= costPageTotal && delta > 0) return;
+    costPageOffset = nextOffset;
+    loadCostsTable();
+}
+
+function toggleCostCompact() {
+    costCompact = !costCompact;
+    const table = document.getElementById('costsTable');
+    const btn = document.getElementById('costCompactToggle');
+    if (table) table.classList.toggle('compact', costCompact);
+    if (btn) btn.classList.toggle('active', costCompact);
 }
 
 function sortCostsBy(field) {
@@ -840,8 +924,16 @@ function populateSelect(id, options) {
 
     // Rebuild options each time so subscription/date filter changes
     // don't keep stale values from previous context.
-    const previous = sel.value;
-    sel.innerHTML = '<option value="">All</option>';
+    const previous = sel.multiple ? Array.from(sel.selectedOptions || []).map(o => o.value) : [sel.value];
+    sel.innerHTML = '';
+    if (!sel.multiple) {
+        sel.innerHTML = '<option value="">All</option>';
+    } else {
+        const blank = document.createElement('option');
+        blank.value = '__BLANK__';
+        blank.textContent = '(Blank)';
+        sel.appendChild(blank);
+    }
     options.forEach(opt => {
         const o = document.createElement('option');
         o.value = opt; o.textContent = opt;
@@ -849,8 +941,13 @@ function populateSelect(id, options) {
     });
 
     // Restore previous selection only if still valid
-    if (previous && options.includes(previous)) {
-        sel.value = previous;
+    if (sel.multiple) {
+        const allowed = new Set(['__BLANK__', ...options]);
+        Array.from(sel.options).forEach(o => {
+            o.selected = previous.includes(o.value) && allowed.has(o.value);
+        });
+    } else if (previous[0] && options.includes(previous[0])) {
+        sel.value = previous[0];
     }
 }
 
@@ -864,7 +961,7 @@ async function loadAnalytics() {
             fetch('/api/trend' + subParam()).then(r => r.json())
         ]);
 
-        const colors = ['#4f6ef7','#2ecc71','#e74c3c','#f39c12','#9b59b6','#00d2d3','#e84393','#fd79a8','#6c5ce7','#00b894'];
+        const colors = CHART_COLORS();
 
         renderChart('anaServiceChart', 'bar', {
             labels: byService.slice(0, 10).map(r => r.service_name || 'Unknown'),
@@ -936,7 +1033,7 @@ async function loadMonthly() {
         monthlyData = await fetch('/api/monthly' + subParam()).then(r => r.json());
         if (!monthlyData.length) return;
 
-        const colors = ['#4f6ef7','#2ecc71','#e74c3c','#f39c12','#9b59b6','#00d2d3','#e84393','#fd79a8','#6c5ce7','#00b894'];
+        const colors = CHART_COLORS();
         const monthLabels = monthlyData.map(m => formatMonth(m.month));
         const monthlyCosts = monthlyData.map(m => m.total_cost);
 
@@ -1173,7 +1270,7 @@ let comparePeriods = { months: [], weeks: [] };
 /** @type {{ groupBy: string, periodSpecs: {from:string,to:string,label:string}[], rgsParam: string }} */
 let cmpContext = { groupBy: '', periodSpecs: [], rgsParam: '' };
 
-const CMP_PERIOD_COLORS = ['#4f6ef7', '#2ecc71', '#e67e22', '#9b59b6', '#1abc9c', '#e74c3c'];
+const CMP_PERIOD_COLORS = CHART_COLORS();
 
 /** Period indices 1–6 to include in monthly compare (always starts with 1, 2). */
 function getActiveMonthlyPeriodIndices() {
@@ -1725,11 +1822,50 @@ function renderChart(canvasId, type, data, title, extraOpts = {}) {
     }
 
     const isStacked = extraOpts.stacked || false;
+    Chart.defaults.color = CHART_TEXT();
+    Chart.defaults.borderColor = CHART_GRID();
     const showLegend = type === 'doughnut' || type === 'pie' || isStacked || (data.datasets && data.datasets.length > 1);
+    const chartData = JSON.parse(JSON.stringify(data || {}));
+    const centerLabelPlugin = {
+        id: `centerLabel-${canvasId}`,
+        afterDraw(chart) {
+            if (!(type === 'doughnut' || type === 'pie')) return;
+            const text = chart?.config?.options?.plugins?.centerLabel?.text;
+            if (!text) return;
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return;
+            ctx.save();
+            ctx.fillStyle = CHART_TEXT();
+            ctx.font = "500 12px Inter, sans-serif";
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, (chartArea.left + chartArea.right) / 2, (chartArea.top + chartArea.bottom) / 2);
+            ctx.restore();
+        }
+    };
+
+    if (type === 'doughnut' || type === 'pie') {
+        const ds = chartData.datasets?.[0];
+        const labels = chartData.labels || [];
+        const values = (ds?.data || []).map(v => Number(v || 0));
+        const zipped = labels.map((l, i) => ({ label: l, value: values[i] || 0 })).sort((a, b) => b.value - a.value);
+        const top = zipped.slice(0, 5);
+        const other = zipped.slice(5).reduce((s, r) => s + r.value, 0);
+        if (other > 0) top.push({ label: 'Other', value: other });
+        chartData.labels = top.map(r => r.label);
+        ds.data = top.map(r => r.value);
+        const base = CHART_COLORS();
+        ds.backgroundColor = top.map((_, i) => i < base.length - 1 ? base[i] : cssVar('--chart-other'));
+        ds.borderColor = cssVar('--bg-card');
+        ds.borderWidth = 1;
+        const total = top.reduce((s, r) => s + r.value, 0);
+        extraOpts.centerLabel = { text: '$' + total.toLocaleString(undefined, { maximumFractionDigits: 0 }) };
+    }
 
     chartInstances[canvasId] = new Chart(ctx, {
         type: actualType,
-        data: data,
+        data: chartData,
+        plugins: [centerLabelPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -1738,20 +1874,21 @@ function renderChart(canvasId, type, data, title, extraOpts = {}) {
                 legend: {
                     display: showLegend,
                     position: isStacked ? 'top' : 'right',
-                    labels: { color: '#8b8fa3', font: { size: 10 }, padding: 8, boxWidth: 12 }
+                    labels: { color: CHART_TEXT(), font: { size: 10 }, padding: 8, boxWidth: 12 }
                 },
-                title: { display: false }
+                title: { display: false },
+                centerLabel: extraOpts.centerLabel || {}
             },
             scales: (type !== 'doughnut' && type !== 'pie') ? {
                 x: {
                     stacked: isStacked,
-                    ticks: { color: '#8b8fa3', font: { size: 10 }, maxTicksLimit: 15 },
-                    grid: { color: 'rgba(45,49,72,0.5)' }
+                    ticks: { color: CHART_TEXT(), font: { size: 10 }, maxTicksLimit: 15 },
+                    grid: { color: CHART_GRID() }
                 },
                 y: {
                     stacked: isStacked,
-                    ticks: { color: '#8b8fa3', font: { size: 10 } },
-                    grid: { color: 'rgba(45,49,72,0.5)' }
+                    ticks: { color: CHART_TEXT(), font: { size: 10 } },
+                    grid: { color: CHART_GRID() }
                 }
             } : undefined
         }
@@ -1775,10 +1912,31 @@ function exportCSV() {
     const search = document.getElementById('costSearch')?.value;
     const dateFrom = document.getElementById('costDateFrom')?.value;
     const dateTo = document.getElementById('costDateTo')?.value;
+    const granularity = document.getElementById('costGranularity')?.value || 'daily';
+    const rgValues = getMultiSelectValues('costRG');
+    const serviceValues = getMultiSelectValues('costService');
+    const awsAccounts = (costsSelectedCloud === 'aws') ? getMultiSelectValues('costAccount') : [];
+    const resType = (costsSelectedCloud === 'aws') ? (document.getElementById('costResourceType')?.value || '') : '';
+    const activeCloud = costsSelectedCloud || '';
+    const includeBlankRG = rgValues.includes('__BLANK__');
+    const includeBlankService = serviceValues.includes('__BLANK__');
+    const includeBlankSub = awsAccounts.includes('__BLANK__');
+    const rg = rgValues.filter(v => v !== '__BLANK__');
+    const services = serviceValues.filter(v => v !== '__BLANK__');
+    const subs = awsAccounts.filter(v => v !== '__BLANK__');
     if (search) params.set('search', search);
     if (dateFrom) params.set('date_from', dateFrom);
     if (dateTo) params.set('date_to', dateTo);
-    if (selectedSubscription) params.set('subscription_id', selectedSubscription);
+    params.set('granularity', granularity);
+    if (rg.length) params.set('resource_groups', rg.join(','));
+    if (services.length) params.set('service_names', services.join(','));
+    if (includeBlankRG) params.set('include_blank_resource_group', '1');
+    if (includeBlankService) params.set('include_blank_service', '1');
+    if (resType) params.set('resource_type', resType);
+    if (subs.length) params.set('subscription_ids', subs.join(','));
+    if (includeBlankSub) params.set('include_blank_subscription', '1');
+    else if (!subs.length && selectedSubscription && activeCloud === 'azure') params.set('subscription_id', selectedSubscription);
+    if (costsSelectedCloud) params.set('cloud_provider', costsSelectedCloud);
     window.location.href = `/api/export?${params}`;
 }
 
@@ -1850,7 +2008,7 @@ function renderChatChart(canvasId, chartData) {
     const ctx = document.getElementById(canvasId)?.getContext('2d');
     if (!ctx) return;
 
-    const colors = ['#4f6ef7','#2ecc71','#e74c3c','#f39c12','#9b59b6','#00d2d3','#e84393','#fd79a8','#6c5ce7','#00b894'];
+        const colors = CHART_COLORS();
 
     let config;
     if (chartData.type === 'comparison') {
@@ -2104,6 +2262,15 @@ function switchActTab(tab, btn) {
     else if (tab === 'logs') loadActivityTable();
 }
 
+function setActCloud(btn, cloud) {
+    selectedActCloud = cloud;
+    document.querySelectorAll('[data-act-cloud]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Reload current tab with new filter
+    const activeTab = document.querySelector('.act-tabs .tab-btn.active');
+    if (activeTab) activeTab.click();
+}
+
 async function loadActivityPage() {
     try {
         await loadActivityAutoSyncStatus();
@@ -2206,8 +2373,11 @@ async function runActivityAutoSyncNow() {
 // ─── Overview Tab ─────────────────────────────────────────────────────
 async function loadActOverview() {
     try {
-        const sub = selectedSubscription ? `?subscription_id=${selectedSubscription}` : '';
-        const data = await fetch(`/api/activity/overview${sub}`).then(r => r.json());
+        const params = new URLSearchParams();
+        if (selectedSubscription) params.set('subscription_id', selectedSubscription);
+        if (selectedActCloud) params.set('cloud_provider', selectedActCloud);
+        const qs = params.toString() ? '?' + params.toString() : '';
+        const data = await fetch(`/api/activity/overview${qs}`).then(r => r.json());
         const bs = data.by_status || {};
         const bl = data.by_level || {};
         const bot = data.by_operation_type || {};
@@ -2275,8 +2445,11 @@ async function loadActOverview() {
 // ─── User Activity Tab ────────────────────────────────────────────────
 async function loadActUsers() {
     try {
-        const sub = selectedSubscription ? `?subscription_id=${selectedSubscription}` : '';
-        const data = await fetch(`/api/activity/users${sub}`).then(r => r.json());
+        const params = new URLSearchParams();
+        if (selectedSubscription) params.set('subscription_id', selectedSubscription);
+        if (selectedActCloud) params.set('cloud_provider', selectedActCloud);
+        const qs = params.toString() ? '?' + params.toString() : '';
+        const data = await fetch(`/api/activity/users${qs}`).then(r => r.json());
         const users = data.users || [];
 
         if (!users.length) {
@@ -2331,11 +2504,11 @@ async function loadResourceTimeline() {
     document.getElementById('tlResourceList').style.display = '';
 
     try {
-        const sub = selectedSubscription ? `&subscription_id=${selectedSubscription}` : '';
         const params = new URLSearchParams();
         if (rg) params.set('resource_group', rg);
         if (resName) params.set('resource_name', resName);
         if (selectedSubscription) params.set('subscription_id', selectedSubscription);
+        if (selectedActCloud) params.set('cloud_provider', selectedActCloud);
 
         let url = `/api/activity/resource-timeline?${params}`;
         if (resName && resName.length >= 2) {
@@ -2418,8 +2591,11 @@ function backToResourceList() {
 // ─── Failed Operations Tab ────────────────────────────────────────────
 async function loadActFailed() {
     try {
-        const sub = selectedSubscription ? `?subscription_id=${selectedSubscription}` : '';
-        const data = await fetch(`/api/activity/failed${sub}`).then(r => r.json());
+        const failParams = new URLSearchParams();
+        if (selectedSubscription) failParams.set('subscription_id', selectedSubscription);
+        if (selectedActCloud) failParams.set('cloud_provider', selectedActCloud);
+        const failQs = failParams.toString() ? '?' + failParams.toString() : '';
+        const data = await fetch(`/api/activity/failed${failQs}`).then(r => r.json());
 
         document.getElementById('failedStats').innerHTML = `
             <div class="stat-card"><div class="stat-label">Total Failures</div><div class="stat-value" style="color:var(--red)">${(data.total_failed||0).toLocaleString()}</div></div>
@@ -2473,8 +2649,11 @@ async function loadActFailed() {
 // ─── Security Audit Tab ───────────────────────────────────────────────
 async function loadActSecurity() {
     try {
-        const sub = selectedSubscription ? `?subscription_id=${selectedSubscription}` : '';
-        const data = await fetch(`/api/activity/security${sub}`).then(r => r.json());
+        const secParams = new URLSearchParams();
+        if (selectedSubscription) secParams.set('subscription_id', selectedSubscription);
+        if (selectedActCloud) secParams.set('cloud_provider', selectedActCloud);
+        const secQs = secParams.toString() ? '?' + secParams.toString() : '';
+        const data = await fetch(`/api/activity/security${secQs}`).then(r => r.json());
         const byType = data.by_type || {};
         const topCallers = data.top_callers || [];
 
@@ -2534,13 +2713,14 @@ async function loadActivityTable() {
     if (status) params.set('status', status);
     if (level) params.set('level', level);
     if (selectedSubscription) params.set('subscription_id', selectedSubscription);
+    if (selectedActCloud) params.set('cloud_provider', selectedActCloud);
 
     try {
         const data = await fetch(`/api/activity?${params}`).then(r => r.json());
         const tbody = document.getElementById('activityTableBody');
 
         if (!data.length) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary)">No activity logs found. Click sync to fetch from Azure.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary)">No activity logs found. Click sync to fetch from your cloud providers.</td></tr>';
             document.getElementById('activityCount').textContent = '';
             return;
         }
@@ -2649,6 +2829,7 @@ function exportActivityCSV() {
     if (caller) params.set('caller', caller);
     if (status) params.set('status', status);
     if (selectedSubscription) params.set('subscription_id', selectedSubscription);
+    if (selectedActCloud) params.set('cloud_provider', selectedActCloud);
     window.open(`/api/activity/export?${params}`, '_blank');
 }
 
@@ -2656,11 +2837,14 @@ async function syncActivityLogs(days) {
     const btn = document.getElementById('actSyncBtn');
     btn.disabled = true;
 
+    const body = { days };
+    if (selectedActCloud) body.cloud_provider = selectedActCloud;
+
     try {
         await fetch('/api/activity/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ days })
+            body: JSON.stringify(body)
         });
         document.getElementById('actSyncBar').classList.add('active');
         monitorActivitySync();
@@ -3087,7 +3271,7 @@ function ccRenderResults(data) {
     const byRes = data.by_resource || [];
     document.getElementById('ccResourceTotal').textContent = byRes.length.toLocaleString();
 
-    const colors = ['#4f6ef7','#2ecc71','#e74c3c','#f39c12','#9b59b6','#00d2d3','#e84393','#fd79a8','#6c5ce7','#00b894'];
+    const colors = CHART_COLORS();
 
     // Daily trend
     const trend = data.daily_trend || [];
@@ -3350,6 +3534,7 @@ async function loadReportsPage() {
         document.getElementById('emReportDateRange').value = settings.report_date_range || 'this_month';
         document.getElementById('emReportDateFrom').value = settings.report_date_from || '';
         document.getElementById('emReportDateTo').value = settings.report_date_to || '';
+        document.getElementById('emReportCloudProvider').value = settings.report_cloud_provider || '';
 
         const sections = settings.report_sections || [];
         document.querySelectorAll('.report-section-check input').forEach(cb => {
@@ -3410,6 +3595,7 @@ async function saveReportSettings() {
         report_date_range: document.getElementById('emReportDateRange').value,
         report_date_from: document.getElementById('emReportDateFrom').value,
         report_date_to: document.getElementById('emReportDateTo').value,
+        report_cloud_provider: document.getElementById('emReportCloudProvider').value,
         report_sections: sections,
         enabled: document.getElementById('emEnabled').checked,
     };
@@ -3479,7 +3665,11 @@ async function sendReportNow() {
 function previewReport() {
     const sections = [];
     document.querySelectorAll('.report-section-check input:checked').forEach(cb => sections.push(cb.value));
-    const qs = sections.length ? '?sections=' + sections.join(',') : '';
+    const params = new URLSearchParams();
+    if (sections.length) params.set('sections', sections.join(','));
+    const cp = document.getElementById('emReportCloudProvider')?.value;
+    if (cp) params.set('cloud_provider', cp);
+    const qs = params.toString() ? '?' + params.toString() : '';
     window.open('/api/email/preview' + qs, '_blank');
 }
 
@@ -4174,6 +4364,12 @@ function syncAppearanceToggleActive() {
     if (sun)   { sun.style.opacity   = isLight ? '1'    : '0.45'; sun.style.boxShadow   = isLight ? '0 0 0 2px var(--accent)' : ''; }
 }
 
+function refreshAllCharts() {
+    Object.values(chartInstances || {}).forEach(c => {
+        if (c && typeof c.update === 'function') c.update();
+    });
+}
+
 function applyAppearance(mode) {
     const light = mode === 'light';
     const sel = document.getElementById('themeTrialSelect');
@@ -4204,13 +4400,23 @@ function applyAppearance(mode) {
     }
     try {
         localStorage.setItem(UI_APPEARANCE_KEY, light ? 'light' : 'dark');
+        localStorage.setItem('theme', light ? 'light' : 'dark');
     } catch (e) { /* ignore */ }
+    document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
     syncAppearanceToggleActive();
+    refreshAllCharts();
 }
 
 function setAppearance(mode) { applyAppearance(mode === 'night' ? 'dark' : mode); }
 
 function initAppearanceToggle() {
+    try {
+        const saved = localStorage.getItem('theme');
+        if (saved === 'dark' || saved === 'light') {
+            document.documentElement.setAttribute('data-theme', saved);
+            applyAppearance(saved);
+        }
+    } catch (e) { /* ignore */ }
     syncAppearanceToggleActive();
 }
 

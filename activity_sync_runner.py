@@ -19,6 +19,7 @@ from database import (
     init_db,
     insert_activity_logs,
     get_subscriptions,
+    get_cloud_providers,
     get_latest_activity_timestamp,
     update_subscription_sync_time,
     save_caller_names,
@@ -64,10 +65,16 @@ def run(payload: dict) -> None:
     init_db()
     days = int(payload.get("days", 7))
     target_sub = payload.get("subscription_id")
+    cloud_provider = (payload.get("cloud_provider") or "").strip().lower() or None
     date_to = datetime.utcnow().strftime("%Y-%m-%d")
+
+    skip_azure = cloud_provider in ("aws", "gcp")
+    skip_cloud_providers = cloud_provider == "azure"
 
     if target_sub:
         subs_to_sync = [{"subscription_id": target_sub}]
+    elif skip_azure:
+        subs_to_sync = []
     else:
         subs_to_sync = get_subscriptions(enabled_only=True)
         if not subs_to_sync:
@@ -75,7 +82,13 @@ def run(payload: dict) -> None:
 
     total_subs = len(subs_to_sync)
     mode_lbl = "sequentially" if SYNC_SEQUENTIAL else "in parallel"
-    _write_status(True, f"Starting ({total_subs} subscription(s)) {mode_lbl}...", 5)
+    provider_lbl = cloud_provider.upper() if cloud_provider else "All clouds"
+    start_msg = (
+        f"Starting {provider_lbl} ({total_subs} subscription(s)) {mode_lbl}..."
+        if total_subs else
+        f"Starting {provider_lbl} cloud provider activity sync..."
+    )
+    _write_status(True, start_msg, 5)
     total_count = 0
     all_caller_ids: set = set()
     completed = 0
@@ -132,20 +145,21 @@ def run(payload: dict) -> None:
                         5 + int(75 * completed / total_subs),
                     )
 
-        if SYNC_SEQUENTIAL:
-            _sequential()
-        else:
-            try:
-                _parallel()
-            except RuntimeError as re:
-                if "thread" in str(re).lower():
-                    print(f"[activity_sync_runner] Parallel failed ({re}), retrying sequential.")
-                    completed = 0
-                    total_count = 0
-                    all_caller_ids = set()
-                    _sequential()
-                else:
-                    raise
+        if total_subs > 0:
+            if SYNC_SEQUENTIAL:
+                _sequential()
+            else:
+                try:
+                    _parallel()
+                except RuntimeError as re:
+                    if "thread" in str(re).lower():
+                        print(f"[activity_sync_runner] Parallel failed ({re}), retrying sequential.")
+                        completed = 0
+                        total_count = 0
+                        all_caller_ids = set()
+                        _sequential()
+                    else:
+                        raise
 
         _write_status(True, "Resolving user names...", 85)
         guid_ids = [c for c in all_caller_ids if "@" not in c and len(c) > 8]
@@ -159,11 +173,32 @@ def run(payload: dict) -> None:
             name_map = resolve_caller_names(still_unknown)
             save_caller_names(name_map)
 
-        _write_status(
-            False,
-            f"Done! {total_count} events across {total_subs} subscription(s).",
-            100,
-        )
+        # Sync AWS CloudTrail and GCP Audit Logs from cloud_providers table
+        if not target_sub and not skip_cloud_providers:
+            try:
+                from aws_fetcher import fetch_aws_activity
+                from gcp_fetcher import fetch_gcp_activity
+                cp_providers = get_cloud_providers(enabled_only=True)
+                allowed_types = {cloud_provider} if cloud_provider in ("aws", "gcp") else {"aws", "gcp"}
+                aws_gcp = [p for p in cp_providers if p.get("provider_type") in allowed_types]
+                for cp in aws_gcp:
+                    cp_type = cp.get("provider_type", "")
+                    cp_name = cp.get("name", cp.get("provider_id", ""))
+                    _write_status(True, f"Syncing {cp_name} ({cp_type.upper()}) activity...", 90)
+                    try:
+                        if cp_type == "aws":
+                            recs = fetch_aws_activity(cp, days)
+                        else:
+                            recs = fetch_gcp_activity(cp, days)
+                        count = insert_activity_logs(recs, subscription_id=cp.get("provider_id"), cloud_provider=cp_type)
+                        total_count += count
+                        print(f"[activity_sync_runner] {cp_name} ({cp_type}): {count} events inserted")
+                    except Exception as cp_err:
+                        print(f"[activity_sync_runner] {cp_name} ({cp_type}) failed: {cp_err}")
+            except Exception as outer_err:
+                print(f"[activity_sync_runner] Cloud provider sync error: {outer_err}")
+
+        _write_status(False, f"Done! {total_count} events synced.", 100)
     except Exception as e:
         _write_status(False, f"Failed: {str(e)}", 0)
         raise

@@ -100,12 +100,16 @@ def init_db():
         )
     """)
 
-    # Migration: add subscription_id to existing activity_logs if missing
-    try:
-        cursor.execute("SELECT subscription_id FROM activity_logs LIMIT 1")
-    except Exception:
-        cursor.execute("ALTER TABLE activity_logs ADD COLUMN subscription_id TEXT")
-        print("[DB] Migrated activity_logs: added subscription_id column")
+    # Migration: add columns to activity_logs if missing
+    for col, ddl in [
+        ("subscription_id", "ALTER TABLE activity_logs ADD COLUMN subscription_id TEXT"),
+        ("cloud_provider",  "ALTER TABLE activity_logs ADD COLUMN cloud_provider TEXT DEFAULT 'azure'"),
+    ]:
+        try:
+            cursor.execute(f"SELECT {col} FROM activity_logs LIMIT 1")
+        except Exception:
+            cursor.execute(ddl)
+            print(f"[DB] Migrated activity_logs: added {col} column")
 
     # Indexes for fast searching
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_date ON cost_data(date)")
@@ -152,11 +156,12 @@ def init_db():
         )
     """)
 
-    # Migration: add report date range columns if missing
+    # Migration: add report date range / cloud provider columns if missing
     for col, ddl in [
         ("report_date_range", "ALTER TABLE email_settings ADD COLUMN report_date_range TEXT DEFAULT 'this_month'"),
         ("report_date_from", "ALTER TABLE email_settings ADD COLUMN report_date_from TEXT DEFAULT ''"),
         ("report_date_to", "ALTER TABLE email_settings ADD COLUMN report_date_to TEXT DEFAULT ''"),
+        ("report_cloud_provider", "ALTER TABLE email_settings ADD COLUMN report_cloud_provider TEXT DEFAULT ''"),
     ]:
         try:
             cursor.execute(f"SELECT {col} FROM email_settings LIMIT 1")
@@ -529,11 +534,23 @@ def query_costs(filters=None, tenant_id=None):
     conn = get_db()
     # Aggregate SKU-level rows into one row per day/cloud/project/service/resource
     # so the Cost Data table shows one line per logical grouping, not per billing SKU.
+    granularity = (filters or {}).get("granularity", "daily")
+    date_expr = "substr(date,1,7)" if granularity == "monthly" else "substr(date,1,10)"
     where = "WHERE 1=1"
     params = []
 
     if filters:
-        if filters.get("subscription_id"):
+        if filters.get("subscription_ids"):
+            sub_ids = filters["subscription_ids"]
+            placeholders = ",".join(["?"] * len(sub_ids))
+            cond = f"subscription_id IN ({placeholders})"
+            params.extend(sub_ids)
+            if filters.get("include_blank_subscription"):
+                cond = f"({cond} OR subscription_id IS NULL OR subscription_id='')"
+            where += f" AND {cond}"
+        elif filters.get("include_blank_subscription"):
+            where += " AND (subscription_id IS NULL OR subscription_id='')"
+        elif filters.get("subscription_id"):
             where += " AND subscription_id = ?"
             params.append(filters["subscription_id"])
         if filters.get("date_from"):
@@ -542,10 +559,30 @@ def query_costs(filters=None, tenant_id=None):
         if filters.get("date_to"):
             where += " AND date <= ?"
             params.append(filters["date_to"])
-        if filters.get("resource_group"):
+        if filters.get("resource_groups"):
+            vals = filters["resource_groups"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"resource_group IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_resource_group"):
+                cond = f"({cond} OR resource_group IS NULL OR resource_group='')"
+            where += f" AND {cond}"
+        elif filters.get("include_blank_resource_group"):
+            where += " AND (resource_group IS NULL OR resource_group='')"
+        elif filters.get("resource_group"):
             where += " AND resource_group LIKE ?"
             params.append(f"%{filters['resource_group']}%")
-        if filters.get("service_name"):
+        if filters.get("service_names"):
+            vals = filters["service_names"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"service_name IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_service"):
+                cond = f"({cond} OR service_name IS NULL OR service_name='')"
+            where += f" AND {cond}"
+        elif filters.get("include_blank_service"):
+            where += " AND (service_name IS NULL OR service_name='')"
+        elif filters.get("service_name"):
             where += " AND service_name = ?"
             params.append(filters['service_name'])
         if filters.get("resource_type"):
@@ -570,7 +607,7 @@ def query_costs(filters=None, tenant_id=None):
 
     query = f"""
         SELECT
-            date,
+            {date_expr} AS date,
             cloud_provider,
             resource_group,
             service_name,
@@ -583,14 +620,17 @@ def query_costs(filters=None, tenant_id=None):
             tenant_id
         FROM cost_data
         {where}
-        GROUP BY date, cloud_provider, resource_group, service_name,
+        GROUP BY {date_expr}, cloud_provider, resource_group, service_name,
                  resource_type, resource_name, subscription_id, currency, tenant_id
-        ORDER BY date DESC, cost DESC
+        ORDER BY {date_expr} DESC, cost DESC
     """
 
     if filters and filters.get("limit"):
         query += " LIMIT ?"
         params.append(filters["limit"])
+        if filters.get("offset") is not None:
+            query += " OFFSET ?"
+            params.append(filters["offset"])
 
     rows = conn.execute(query, params).fetchall()
     conn.close()
@@ -604,7 +644,17 @@ def get_cost_total(filters=None, tenant_id=None, cloud_provider=None):
     params = []
 
     if filters:
-        if filters.get("subscription_id"):
+        if filters.get("subscription_ids"):
+            sub_ids = filters["subscription_ids"]
+            placeholders = ",".join(["?"] * len(sub_ids))
+            cond = f"subscription_id IN ({placeholders})"
+            params.extend(sub_ids)
+            if filters.get("include_blank_subscription"):
+                cond = f"({cond} OR subscription_id IS NULL OR subscription_id='')"
+            query += f" AND {cond}"
+        elif filters.get("include_blank_subscription"):
+            query += " AND (subscription_id IS NULL OR subscription_id='')"
+        elif filters.get("subscription_id"):
             query += " AND subscription_id = ?"
             params.append(filters["subscription_id"])
         if filters.get("date_from"):
@@ -613,10 +663,30 @@ def get_cost_total(filters=None, tenant_id=None, cloud_provider=None):
         if filters.get("date_to"):
             query += " AND date <= ?"
             params.append(filters["date_to"])
-        if filters.get("resource_group"):
+        if filters.get("resource_groups"):
+            vals = filters["resource_groups"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"resource_group IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_resource_group"):
+                cond = f"({cond} OR resource_group IS NULL OR resource_group='')"
+            query += f" AND {cond}"
+        elif filters.get("include_blank_resource_group"):
+            query += " AND (resource_group IS NULL OR resource_group='')"
+        elif filters.get("resource_group"):
             query += " AND resource_group LIKE ?"
             params.append(f"%{filters['resource_group']}%")
-        if filters.get("service_name"):
+        if filters.get("service_names"):
+            vals = filters["service_names"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"service_name IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_service"):
+                cond = f"({cond} OR service_name IS NULL OR service_name='')"
+            query += f" AND {cond}"
+        elif filters.get("include_blank_service"):
+            query += " AND (service_name IS NULL OR service_name='')"
+        elif filters.get("service_name"):
             query += " AND service_name = ?"
             params.append(filters['service_name'])
         if filters.get("resource_type"):
@@ -667,17 +737,46 @@ def get_cost_totals_by_subscription(filters=None, tenant_id=None, cloud_provider
     params = []
 
     if filters:
-        # Intentionally ignore filters['subscription_id'] because we are grouping by it
+        if filters.get("subscription_ids"):
+            vals = filters["subscription_ids"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"cd.subscription_id IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_subscription"):
+                cond = f"({cond} OR cd.subscription_id IS NULL OR cd.subscription_id='')"
+            query += f" AND {cond}"
+        elif filters.get("include_blank_subscription"):
+            query += " AND (cd.subscription_id IS NULL OR cd.subscription_id='')"
         if filters.get("date_from"):
             query += " AND cd.date >= ?"
             params.append(filters["date_from"])
         if filters.get("date_to"):
             query += " AND cd.date <= ?"
             params.append(filters["date_to"])
-        if filters.get("resource_group"):
+        if filters.get("resource_groups"):
+            vals = filters["resource_groups"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"cd.resource_group IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_resource_group"):
+                cond = f"({cond} OR cd.resource_group IS NULL OR cd.resource_group='')"
+            query += f" AND {cond}"
+        elif filters.get("include_blank_resource_group"):
+            query += " AND (cd.resource_group IS NULL OR cd.resource_group='')"
+        elif filters.get("resource_group"):
             query += " AND cd.resource_group LIKE ?"
             params.append(f"%{filters['resource_group']}%")
-        if filters.get("service_name"):
+        if filters.get("service_names"):
+            vals = filters["service_names"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"cd.service_name IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_service"):
+                cond = f"({cond} OR cd.service_name IS NULL OR cd.service_name='')"
+            query += f" AND {cond}"
+        elif filters.get("include_blank_service"):
+            query += " AND (cd.service_name IS NULL OR cd.service_name='')"
+        elif filters.get("service_name"):
             query += " AND cd.service_name = ?"
             params.append(filters['service_name'])
         if filters.get("resource_type"):
@@ -1173,14 +1272,18 @@ def get_available_periods(subscription_id=None):
     }
 
 
-def get_distinct_values(column, subscription_id=None, cloud_provider=None):
+def get_distinct_values(column, subscription_id=None, subscription_ids=None, cloud_provider=None):
     conn = get_db()
     valid = ["resource_group", "service_name", "resource_type", "meter_category"]
     if column not in valid:
         return []
     conditions = [f"{column} IS NOT NULL"]
     params = []
-    if subscription_id:
+    if subscription_ids:
+        placeholders = ",".join(["?"] * len(subscription_ids))
+        conditions.append(f"subscription_id IN ({placeholders})")
+        params.extend(subscription_ids)
+    elif subscription_id:
         conditions.append("subscription_id = ?")
         params.append(subscription_id)
     if cloud_provider:
@@ -1388,6 +1491,7 @@ def get_email_settings():
     d["report_date_range"] = d.get("report_date_range") or "this_month"
     d["report_date_from"] = d.get("report_date_from") or ""
     d["report_date_to"] = d.get("report_date_to") or ""
+    d["report_cloud_provider"] = d.get("report_cloud_provider") or ""
     try:
         d["report_sections"] = json.loads(d.get("report_sections", "[]"))
     except Exception:
@@ -1402,7 +1506,7 @@ def update_email_settings(settings):
     allowed = ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from",
                "smtp_use_tls", "recipients", "schedule", "schedule_day", "schedule_hour",
                "report_date_range", "report_date_from", "report_date_to",
-               "report_sections", "enabled"]
+               "report_cloud_provider", "report_sections", "enabled"]
     for key in allowed:
         if key in settings:
             val = settings[key]
@@ -1700,32 +1804,32 @@ def get_stats(subscription_id=None):
     return stats
 
 
-def insert_activity_logs(logs, subscription_id=None):
+def insert_activity_logs(logs, subscription_id=None, cloud_provider="azure"):
     if not logs:
         return 0
     conn = get_db()
     cursor = conn.cursor()
     inserted = 0
     sub = subscription_id or ""
+    cp = cloud_provider or "azure"
     for log in logs:
         try:
             t = list(log)
             eid = (t[0] or "").strip()
-            # Azure sometimes omits eventDataId; duplicate "" violates UNIQUE and would drop all but one row.
             if not eid:
                 h = hashlib.sha256(
                     "|".join(
-                        str(x) for x in (sub, t[1], t[2], t[3], t[8], t[4])
+                        str(x) for x in (sub, cp, t[1], t[2], t[3], t[8], t[4])
                     ).encode("utf-8", errors="replace")
                 ).hexdigest()[:48]
                 eid = f"synth:{h}"
             cursor.execute("""
                 INSERT OR IGNORE INTO activity_logs
-                (event_id, subscription_id, timestamp, caller, operation, operation_name,
+                (event_id, subscription_id, cloud_provider, timestamp, caller, operation, operation_name,
                  resource_group, resource_type, resource_name, resource_id,
                  status, level, category, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (eid, sub, *t[1:]))
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (eid, sub, cp, *t[1:]))
             inserted += cursor.rowcount
         except Exception:
             pass
@@ -1770,6 +1874,9 @@ def query_activity_logs(filters=None):
         if filters.get("level"):
             query += " AND al.level = ?"
             params.append(filters["level"])
+        if filters.get("cloud_provider"):
+            query += " AND al.cloud_provider = ?"
+            params.append(filters["cloud_provider"])
         if filters.get("search"):
             query += """ AND (al.caller LIKE ? OR al.operation_name LIKE ?
                          OR al.resource_name LIKE ? OR al.resource_group LIKE ?

@@ -1,22 +1,22 @@
 /* ─── Root Variables ──────────────────────────────────────────────────────── */
 :root {
-    --bg-primary: #0f1117;
-    --bg-secondary: #1a1d27;
-    --bg-card: #1e2130;
-    --bg-input: #252836;
-    --bg: var(--bg-input);
-    --border: #2d3148;
-    --text-primary: #e4e6f0;
-    --text-secondary: #8b8fa3;
-    --accent: #4f6ef7;
-    --accent-hover: #3d5ce5;
+    /* --bg-primary: #0f1117; */
+    /* --bg-secondary: #1a1d27; */
+    /* --bg-card: #1e2130; */
+    /* --bg-input: #252836; */
+    /* --bg: var(--bg-input); */
+    /* --border: #2d3148; */
+    /* --text-primary: #e4e6f0; */
+    /* --text-secondary: #8b8fa3; */
+    /* --accent: #4f6ef7; */
+    /* --accent-hover: #3d5ce5; */
     --green: #2ecc71;
     --red: #e74c3c;
     --orange: #f39c12;
     --purple: #9b59b6;
     --cyan: #00d2d3;
     --shadow: 0 4px 24px rgba(0,0,0,0.3);
-    --card-bg: var(--bg-card);
+    /* --card-bg: var(--bg-card); */
     --page-bg-overlay: none;
     --accent-subtle: rgba(79, 110, 247, 0.08);
     --hero-gradient: linear-gradient(135deg, #1a2342 0%, #1e2a4a 50%, #1a2342 100%);
@@ -271,21 +271,13 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0;
-    background: var(--hero-gradient);
-    border: 1px solid var(--hero-border);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 16px;
     margin-bottom: 16px;
     box-shadow: var(--hero-shadow);
     overflow: hidden;
     position: relative;
-}
-.hero-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #4f6ef7, #00d2d3, #4ade80);
-    border-radius: 16px 16px 0 0;
 }
 
 .hero-left {
@@ -653,6 +645,9 @@ td {
     border-bottom: 1px solid var(--border);
 }
 
+#costsTable.compact tbody td { padding: 4px 12px; }
+.cell-cost { text-align: right; }
+
 tr:hover { background: rgba(79, 110, 247, 0.05); }
 
 /* ─── Filters ────────────────────────────────────────────────────────────── */
@@ -740,18 +735,7 @@ tr:hover { background: rgba(79, 110, 247, 0.05); }
     font-weight: 600;
     margin-bottom: 16px;
     color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.chart-card h3::before {
-    content: '';
-    display: inline-block;
-    width: 3px;
-    height: 16px;
-    background: linear-gradient(180deg, var(--accent), var(--cyan));
-    border-radius: 2px;
-    flex-shrink: 0;
+    display: block;
 }
 
 .chart-card canvas { max-height: 300px; }
@@ -1547,7 +1531,7 @@ tr:hover { background: rgba(79, 110, 247, 0.05); }
 #page-costs .chart-card { padding: 10px 14px; margin-bottom: 8px !important; }
 #page-costs .chart-card h3 { font-size: 12px; margin-bottom: 6px; }
 #page-costs .chart-card h3::before { height: 12px; }
-#page-costs .table-container { max-height: 150px !important; }
+#page-costs .table-container { max-height: none !important; overflow: visible; }
 #page-costs table th, #page-costs table td { padding: 5px 10px; font-size: 11px; }
 
 /* Cloud filter pills */
@@ -1558,6 +1542,12 @@ tr:hover { background: rgba(79, 110, 247, 0.05); }
 #page-costs .filter-group label { font-size: 10px; }
 #page-costs .filter-group input,
 #page-costs .filter-group select { padding: 4px 8px; font-size: 11px; }
+
+/* Keep multi-select filters compact like dropdowns */
+#costAccount[multiple], #costRG[multiple], #costService[multiple] {
+    min-height: 34px;
+    height: 34px;
+}
 
 /* Main cost table */
 #page-costs #costsTableContainer { max-height: calc(100vh - 420px); }

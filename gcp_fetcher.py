@@ -271,3 +271,104 @@ def fetch_gcp_projects(credentials_cfg: dict) -> list:
         else:
             url = None
     return projects
+
+
+def fetch_gcp_activity(provider_record: dict, days: int = 7) -> list:
+    """
+    Fetch GCP Admin Activity audit logs for the past N days via Cloud Logging API.
+    Returns tuples: (event_id, timestamp, caller, operation, operation_name,
+                     resource_group, resource_type, resource_name, resource_id,
+                     status, level, category, description)
+    """
+    credentials_cfg = provider_record.get("credentials_json", {})
+    if isinstance(credentials_cfg, str):
+        try:
+            credentials_cfg = json.loads(credentials_cfg)
+        except Exception:
+            credentials_cfg = {}
+
+    project_id = provider_record.get("provider_id", "")
+    sa_json = credentials_cfg.get("service_account_json")
+
+    try:
+        from google.cloud import logging as gcloud_logging
+        from google.oauth2 import service_account as gcp_sa
+    except ImportError:
+        raise ImportError(
+            "google-cloud-logging is not installed. Run: pip install google-cloud-logging"
+        )
+
+    if sa_json:
+        creds = gcp_sa.Credentials.from_service_account_info(
+            sa_json, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        client = gcloud_logging.Client(project=project_id, credentials=creds)
+    else:
+        client = gcloud_logging.Client(project=project_id)
+
+    from datetime import timezone
+    end_time = datetime.utcnow().replace(tzinfo=timezone.utc)
+    start_time = end_time - timedelta(days=days)
+
+    filter_str = (
+        f'logName="projects/{project_id}/logs/cloudaudit.googleapis.com%2Factivity" '
+        f'timestamp>="{start_time.isoformat()}" '
+        f'timestamp<="{end_time.isoformat()}"'
+    )
+
+    records = []
+    try:
+        for entry in client.list_entries(filter_=filter_str, page_size=500):
+            event_id = getattr(entry, "insert_id", "") or ""
+            ts = getattr(entry, "timestamp", None)
+            timestamp = ts.isoformat() if ts else ""
+
+            payload = getattr(entry, "payload", {}) or {}
+            method_name = ""
+            caller = ""
+            status = "Succeeded"
+            description = ""
+            resource_name_str = ""
+
+            if isinstance(payload, dict):
+                method_name = payload.get("methodName", "")
+                caller = (payload.get("authenticationInfo") or {}).get("principalEmail", "")
+                svc_status = payload.get("status") or {}
+                if isinstance(svc_status, dict) and svc_status.get("code", 0) != 0:
+                    status = "Failed"
+                    description = svc_status.get("message", "")
+                resource_name_str = payload.get("resourceName", "")
+                description = description or payload.get("serviceName", "")
+
+            resource = getattr(entry, "resource", None)
+            resource_type = resource.type if resource else ""
+            resource_labels = resource.labels if resource else {}
+            resource_group = resource_labels.get("zone",
+                resource_labels.get("region", resource_labels.get("location", "")))
+            resource_name = (
+                resource_labels.get("instance_id") or
+                resource_labels.get("topic_id") or
+                resource_labels.get("database_id") or
+                (resource_name_str.split("/")[-1] if resource_name_str else "")
+            )
+
+            severity = str(getattr(entry, "severity", "INFO")).upper()
+            if severity in ("ERROR", "CRITICAL", "ALERT", "EMERGENCY"):
+                level = "Error"
+                if status != "Failed":
+                    status = "Failed"
+            elif severity == "WARNING":
+                level = "Warning"
+            else:
+                level = "Informational"
+
+            records.append((
+                event_id, timestamp, caller, method_name, method_name,
+                resource_group, resource_type, resource_name, resource_name_str,
+                status, level, "Administrative", description[:500]
+            ))
+    except Exception as e:
+        print(f"[GCP Audit Log] Error for project {project_id}: {e}")
+
+    print(f"[GCP Audit Log] Fetched {len(records)} events for project {project_id}")
+    return records

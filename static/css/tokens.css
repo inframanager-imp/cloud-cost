@@ -1,0 +1,123 @@
+/* ============================================================
+   Cloud Cost Analyzer — Design Tokens v1
+   Load BEFORE static/css/style.css.
+   ============================================================ */
+
+:root {
+  --font-sans: 'Inter', 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --fs-micro: 11px; --fs-xs: 12px; --fs-sm: 13px; --fs-base: 14px;
+  --fs-md: 15px; --fs-lg: 18px; --fs-xl: 22px; --fs-2xl: 28px;
+  --fw-regular: 400; --fw-medium: 500;
+  --lh-tight: 1.25; --lh-base: 1.5; --lh-relaxed: 1.7;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px;
+  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+
+  --bg-page: #FAFAF9; --bg-card: #FFFFFF; --bg-hover: #F5F5F4; --bg-subtle: #F1EFE8;
+  --text-primary: #1A1A1A; --text-secondary: #525252; --text-tertiary: #8A8A8A; --text-on-accent: #FFFFFF;
+  --border-subtle: rgba(0,0,0,0.06); --border-default: rgba(0,0,0,0.12); --border-strong: rgba(0,0,0,0.20);
+
+  --accent: #185FA5; --accent-hover: #144F89; --accent-bg: #E6F1FB; --accent-text: #0C447C;
+  --success: #3B6D11; --success-bg: #EAF3DE; --success-text: #27500A;
+  --warning: #BA7517; --warning-bg: #FAEEDA; --warning-text: #854F0B;
+  --danger:  #A32D2D; --danger-bg:  #FCEBEB; --danger-text:  #791F1F;
+
+  --chart-1: #185FA5; --chart-2: #1D9E75; --chart-3: #BA7517;
+  --chart-4: #7F77DD; --chart-5: #D85A30; --chart-other: #B4B2A9;
+  --aws: #FF9900; --azure: #0078D4; --gcp: #4285F4;
+
+  --focus-ring: 0 0 0 2px var(--accent), 0 0 0 4px rgba(24,95,165,0.20);
+}
+
+html[data-theme="dark"], html.dark, body.dark {
+  --bg-page: #0F0F0F; --bg-card: #1A1A1A; --bg-hover: #242424; --bg-subtle: #2C2C2A;
+  --text-primary: #F5F5F5; --text-secondary: #A3A3A3; --text-tertiary: #6B6B6B;
+  --border-subtle: rgba(255,255,255,0.08); --border-default: rgba(255,255,255,0.14); --border-strong: rgba(255,255,255,0.22);
+  --accent: #4D8DD3; --accent-hover: #6FA0DC; --accent-bg: #0C447C; --accent-text: #B5D4F4;
+  --success: #97C459; --success-bg: #173404; --success-text: #C0DD97;
+  --warning: #EF9F27; --warning-bg: #412402; --warning-text: #FAC775;
+  --danger:  #E24B4A; --danger-bg:  #501313; --danger-text:  #F7C1C1;
+  --chart-1: #378ADD; --chart-2: #5DCAA5; --chart-3: #EF9F27;
+  --chart-4: #AFA9EC; --chart-5: #F0997B; --chart-other: #888780;
+}
+
+html, body {
+  background: var(--bg-page); color: var(--text-primary);
+  font-family: var(--font-sans); font-size: var(--fs-base);
+  font-weight: var(--fw-regular); line-height: var(--lh-base);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 { font-weight: var(--fw-medium); letter-spacing: -0.01em; color: var(--text-primary); margin: 0 0 var(--space-3); }
+h1 { font-size: var(--fs-2xl); } h2 { font-size: var(--fs-xl); }
+h3 { font-size: var(--fs-lg); }  h4 { font-size: var(--fs-md); }
+
+.tabular, .metric-number, .cell-cost { font-variant-numeric: tabular-nums; }
+
+.card, .dashboard-card, .metric-card, .provider-card, .cloud-card, .cost-card {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); padding: var(--space-4); box-shadow: none;
+}
+
+button, .btn {
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-medium);
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius-md);
+  border: 1px solid var(--border-default); background: var(--bg-card); color: var(--text-primary);
+  cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease;
+}
+button:hover, .btn:hover { background: var(--bg-hover); }
+button:focus-visible, .btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn-primary { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.filter-chip {
+  font-size: var(--fs-xs); padding: 6px 12px; border-radius: var(--radius-md);
+  background: var(--bg-card); border: 1px solid var(--border-default);
+  color: var(--text-secondary); cursor: pointer;
+}
+.filter-chip:hover { background: var(--bg-hover); }
+.filter-chip.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+
+.metric-number { font-size: var(--fs-xl); font-weight: var(--fw-medium); letter-spacing: -0.02em; color: var(--text-primary); display: block; }
+.metric-label  { font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); font-weight: var(--fw-regular); }
+
+.badge { display: inline-block; font-size: var(--fs-micro); font-weight: var(--fw-medium); padding: 2px 8px; border-radius: var(--radius-sm); background: var(--bg-subtle); color: var(--text-secondary); }
+.badge.aws    { background: var(--warning-bg); color: var(--warning-text); }
+.badge.azure  { background: var(--accent-bg);  color: var(--accent-text);  }
+.badge.gcp    { background: var(--success-bg); color: var(--success-text); }
+.badge.danger { background: var(--danger-bg);  color: var(--danger-text);  }
+
+table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+thead th {
+  position: sticky; top: 0; background: var(--bg-card);
+  border-bottom: 1px solid var(--border-default);
+  padding: var(--space-2) var(--space-3); text-align: left;
+  font-weight: var(--fw-medium); font-size: var(--fs-micro);
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary);
+}
+tbody td { padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
+tbody tr:hover { background: var(--bg-hover); }
+.col-money, td.cost, .cell-cost { text-align: right; font-variant-numeric: tabular-nums; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+::-webkit-scrollbar-track { background: transparent; }
+
+.hero, .summary-banner, .total-spend-card, .dashboard-hero {
+  background: var(--bg-card) !important; background-image: none !important;
+  border: 1px solid var(--border-subtle) !important;
+}
+.cloud-card, .provider-card, .aws-card, .azure-card, .gcp-card {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-top: 1px solid var(--border-subtle) !important;
+}
+.sync-status, .sync-pill, .auto-sync-pill {
+  background: transparent !important; border: none !important;
+  color: var(--text-tertiary) !important; font-size: var(--fs-xs) !important; padding: 0 !important;
+}
+.amount, .cost-value, .metric-value, .huge-number {
+  font-weight: var(--fw-medium) !important; font-variant-numeric: tabular-nums;
+}

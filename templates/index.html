@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cloud Cost Analyzer</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=20260505g">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260503">
     <link rel="stylesheet" href="/static/css/appearance.css?v=20260503">
     <script>
@@ -25,6 +28,7 @@
     })();
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.19.0/clusterize.min.js"></script>
 </head>
 <body>
 
@@ -266,8 +270,7 @@
         <div class="page-header">
             <h2>Dashboard</h2>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-right:84px">
-                <span id="lastSyncInfo" class="sync-info-badge"></span>
-                <span id="autoSyncBadge" class="auto-sync-badge" onclick="openSyncCenter()" title="Open Sync Center"></span>
+                <div id="lastSyncInfo" class="sync-status">Last synced {{ last_sync_time }} · Auto-sync every 6h</div>
             </div>
         </div>
 
@@ -275,16 +278,16 @@
         <div id="cloudProviderFilter" style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:8px 14px">
             <span style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.08em">Filter:</span>
             <div style="display:flex;gap:6px;flex-wrap:wrap" id="cloudFilterPills">
-                <button class="cloud-pill active" data-cloud="" onclick="setCloudFilter('')">
+                <button class="filter-chip active" data-cloud="" onclick="setCloudFilter('')">
                     <span style="font-size:13px">☁</span> All Clouds
                 </button>
-                <button class="cloud-pill" data-cloud="azure" onclick="setCloudFilter('azure')">
+                <button class="filter-chip" data-cloud="azure" onclick="setCloudFilter('azure')">
                     <img src="/static/img/azure-logo.svg" alt="Azure" style="height:16px;vertical-align:middle"> Azure
                 </button>
-                <button class="cloud-pill" data-cloud="aws" onclick="setCloudFilter('aws')">
+                <button class="filter-chip" data-cloud="aws" onclick="setCloudFilter('aws')">
                     <img src="/static/img/aws-logo.svg" alt="AWS" style="height:14px;vertical-align:middle"> AWS
                 </button>
-                <button class="cloud-pill" data-cloud="gcp" onclick="setCloudFilter('gcp')">
+                <button class="filter-chip" data-cloud="gcp" onclick="setCloudFilter('gcp')">
                     <img src="/static/img/gcp-logo.svg" alt="GCP" style="height:16px;vertical-align:middle"> GCP
                 </button>
             </div>
@@ -297,23 +300,23 @@
         <!-- Current Month Hero -->
         <div class="hero-card" id="heroCard">
             <div class="hero-left">
-                <div class="hero-label" id="heroMonthLabel">Current Month</div>
-                <div class="hero-amount" id="heroAmount">$0.00</div>
+                <div class="hero-label"><span class="metric-label" id="heroMonthLabel">Current Month</span></div>
+                <div class="hero-amount"><span class="metric-number" id="heroAmount">$0.00</span></div>
                 <div class="hero-meta" id="heroMeta"></div>
                 <div class="hero-change" id="heroChange"></div>
             </div>
             <div class="hero-right">
                 <div class="hero-stat">
-                    <span class="hero-stat-label">Avg / Day</span>
-                    <span class="hero-stat-value" id="heroAvgDaily">$0</span>
+                    <span class="hero-stat-label metric-label">Avg / Day</span>
+                    <span class="hero-stat-value metric-number" id="heroAvgDaily">$0</span>
                 </div>
                 <div class="hero-stat">
-                    <span class="hero-stat-label">Projected Month-End</span>
-                    <span class="hero-stat-value" id="heroProjected">$0</span>
+                    <span class="hero-stat-label metric-label">Projected Month-End</span>
+                    <span class="hero-stat-value metric-number" id="heroProjected">$0</span>
                 </div>
                 <div class="hero-stat">
-                    <span class="hero-stat-label">Last Month Total</span>
-                    <span class="hero-stat-value" id="heroLastMonth">$0</span>
+                    <span class="hero-stat-label metric-label">Last Month Total</span>
+                    <span class="hero-stat-value metric-number" id="heroLastMonth">$0</span>
                 </div>
                 <div class="hero-progress-wrap">
                     <div class="hero-progress-labels">
@@ -364,6 +367,7 @@
         <div class="page-header">
             <h2>Cost Data</h2>
             <div style="display:flex;gap:10px">
+                <button class="filter-chip" id="costCompactToggle" onclick="toggleCostCompact()">Compact</button>
                 <span id="costsCount" style="color:var(--text-secondary);font-size:14px;align-self:center"></span>
                 <button class="btn btn-secondary" onclick="exportCSV()">
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -396,7 +400,7 @@
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap">
                 <h3 style="margin:0;font-size:14px" id="costsSubTitle">Total Cost by Subscription / Account / Project (Selected Dates)</h3>
             </div>
-            <div class="table-container" style="max-height:260px;overflow:auto">
+            <div class="table-container" style="max-height:520px;overflow:auto">
                 <table>
                     <thead>
                         <tr>
@@ -441,22 +445,29 @@
                 <label>Date To</label>
                 <input type="date" class="filter-input" id="costDateTo" onchange="loadCostsTable()">
             </div>
+            <div class="filter-group">
+                <label>View</label>
+                <select class="filter-input" id="costGranularity" onchange="loadCostsTable()">
+                    <option value="daily">Daily</option>
+                    <option value="monthly">Monthly</option>
+                </select>
+            </div>
             <!-- AWS Account filter — shown only when AWS cloud is selected -->
             <div class="filter-group" id="costAccountWrap" style="display:none">
                 <label>AWS Account</label>
-                <select class="filter-input" id="costAccount" onchange="loadCostsTable()">
+                <select class="filter-input" id="costAccount" multiple size="1" onchange="loadCostsTable()" title="Use Ctrl/Cmd to select multiple">
                     <option value="">All Accounts</option>
                 </select>
             </div>
             <div class="filter-group">
                 <label id="costRGLabel">Resource Group</label>
-                <select class="filter-input" id="costRG" onchange="loadCostsTable()">
+                <select class="filter-input" id="costRG" multiple size="1" onchange="loadCostsTable()" title="Use Ctrl/Cmd to select multiple">
                     <option value="">All</option>
                 </select>
             </div>
             <div class="filter-group">
                 <label>Service</label>
-                <select class="filter-input" id="costService" onchange="loadCostsTable()">
+                <select class="filter-input" id="costService" multiple size="1" onchange="loadCostsTable()" title="Use Ctrl/Cmd to select multiple">
                     <option value="">All</option>
                 </select>
             </div>
@@ -475,10 +486,10 @@
         </div>
 
         <div class="table-container" style="overflow-x:auto">
-            <table style="min-width:700px;table-layout:auto">
+            <table id="costsTable" style="min-width:700px;table-layout:auto">
                 <thead>
                     <tr>
-                        <th class="sortable-th" onclick="sortCostsBy('date')" style="white-space:nowrap">Date <span id="sort-date" class="sort-indicator">↕</span></th>
+                        <th id="costDateHeader" class="sortable-th" onclick="sortCostsBy('date')" style="white-space:nowrap">Date <span id="sort-date" class="sort-indicator">↕</span></th>
                         <th style="white-space:nowrap">Cloud</th>
                         <th class="sortable-th" onclick="sortCostsBy('resource_group')" style="white-space:nowrap"><span id="costsRGColumnLabel">Resource Group</span> <span id="sort-resource_group" class="sort-indicator">↕</span></th>
                         <th class="sortable-th" onclick="sortCostsBy('service_name')" style="white-space:nowrap">Service <span id="sort-service_name" class="sort-indicator">↕</span></th>
@@ -492,6 +503,14 @@
                     </td></tr>
                 </tbody>
             </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:12px;flex-wrap:wrap">
+            <span id="costRowCountChip" class="badge">0 records · showing 0-0</span>
+            <div style="display:flex;align-items:center;gap:8px">
+                <button class="filter-chip" id="costPrevBtn" onclick="changeCostPage(-1)">Prev</button>
+                <span id="costPageInfo" style="font-size:12px;color:var(--text-secondary)">Page 1 of 1</span>
+                <button class="filter-chip" id="costNextBtn" onclick="changeCostPage(1)">Next</button>
+            </div>
         </div>
     </section>
 
@@ -983,6 +1002,15 @@
             </div>
         </div>
 
+        <!-- Cloud Provider Filter -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--text-secondary);font-weight:600">Cloud Provider:</span>
+            <button class="cloud-pill active" data-act-cloud="" onclick="setActCloud(this,'')">☁ All</button>
+            <button class="cloud-pill" data-act-cloud="azure" onclick="setActCloud(this,'azure')">☁ Azure</button>
+            <button class="cloud-pill" data-act-cloud="aws" onclick="setActCloud(this,'aws')">☁ AWS</button>
+            <button class="cloud-pill" data-act-cloud="gcp" onclick="setActCloud(this,'gcp')">☁ GCP</button>
+        </div>
+
         <!-- Activity Sub-tabs -->
         <div class="act-tabs" style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap">
             <button class="tab-btn active" onclick="switchActTab('overview', this)">Overview</button>
@@ -1283,6 +1311,15 @@
                             <label>To</label>
                             <input type="date" id="emReportDateTo" class="filter-input">
                         </div>
+                    </div>
+                    <div class="email-field">
+                        <label>Cloud Provider</label>
+                        <select id="emReportCloudProvider" class="filter-input">
+                            <option value="">All Clouds</option>
+                            <option value="azure">Azure</option>
+                            <option value="aws">AWS</option>
+                            <option value="gcp">GCP</option>
+                        </select>
                     </div>
                     <div class="email-field">
                         <label style="margin-bottom:8px">Report Sections</label>
@@ -2555,7 +2592,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260505"></script>
+<script src="/static/js/app.js?v=20260505i"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -2586,7 +2623,9 @@ function renderFreshnessBanner(providers) {
     if (!banner) return;
     if (!stale.length) { banner.style.display = 'none'; return; }
     banner.style.display = 'block';
-    banner.innerHTML = stale.map(p => `
+    banner.innerHTML = stale.map(p => {
+        const latestDate = ((p.latest_date || '').toString().split('T')[0]) || 'never';
+        return `
         <div style="display:flex;align-items:center;gap:10px;background:var(--bg-card);border:1px solid #D69E2E;border-radius:8px;padding:10px 14px;margin-bottom:6px">
             <svg width="18" height="18" fill="none" stroke="#D69E2E" stroke-width="2" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -2594,11 +2633,11 @@ function renderFreshnessBanner(providers) {
             <div style="flex:1">
                 <span style="font-weight:600;color:var(--text-primary)">${p.cloud_provider.toUpperCase()} billing data may be stale</span>
                 <span style="font-size:12px;color:var(--text-secondary);margin-left:8px">
-                    Latest: ${p.latest_date || 'never'} &bull; ${p.lag_days} day(s) behind &bull; ${p.lag_note}
+                    Latest: ${latestDate} &bull; ${p.lag_days} day(s) behind &bull; ${p.lag_note}
                 </span>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 function renderFreshnessCards(providers) {
@@ -2612,6 +2651,7 @@ function renderFreshnessCards(providers) {
     container.innerHTML = providers.map(p => {
         const ok = !p.is_stale;
         const color = ok ? '#38A169' : '#D69E2E';
+        const latestDate = ((p.latest_date || '').toString().split('T')[0]) || '—';
         return `
         <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -2620,7 +2660,7 @@ function renderFreshnessCards(providers) {
                 <span style="margin-left:auto;width:10px;height:10px;border-radius:50%;background:${color};display:inline-block"></span>
             </div>
             <div style="font-size:13px;color:var(--text-secondary);line-height:1.6">
-                <div>Latest data: <strong style="color:var(--text-primary)">${p.latest_date || '—'}</strong></div>
+                <div>Latest data: <strong style="color:var(--text-primary)">${latestDate}</strong></div>
                 <div>Lag: <strong style="color:${p.lag_days > 3 ? '#E53E3E' : 'var(--text-primary)'}">${p.lag_days ?? '—'} day(s)</strong></div>
                 <div>Records: <strong style="color:var(--text-primary)">${(p.record_count||0).toLocaleString()}</strong></div>
                 <div style="font-size:11px;margin-top:4px;color:${color}">${ok ? '✓ Fresh' : '⚠ May be stale'}</div>
