@@ -1028,10 +1028,19 @@ function aggregateWeekly(dailyData) {
 // ─── Monthly Costs ───────────────────────────────────────────────────────
 let monthlyData = [];
 
+function _hideMonthlyLoaders() {
+    ['monthlyServiceLoader','monthlyRGLoader','monthlyBarLoader'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+    const tl = document.getElementById('monthlyTableLoader');
+    if (tl) tl.style.display = 'none';
+}
+
 async function loadMonthly() {
     try {
         monthlyData = await fetch('/api/monthly' + subParam()).then(r => r.json());
-        if (!monthlyData.length) return;
+        if (!monthlyData.length) { _hideMonthlyLoaders(); return; }
 
         const colors = CHART_COLORS();
         const monthLabels = monthlyData.map(m => formatMonth(m.month));
@@ -1184,8 +1193,10 @@ async function loadMonthly() {
             datasets: rgDatasets
         }, 'Resource Groups per Month', { stacked: true });
 
+        _hideMonthlyLoaders();
     } catch (err) {
         console.error('Monthly load error:', err);
+        _hideMonthlyLoaders();
     }
 }
 

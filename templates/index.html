@@ -9,7 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507b">
+    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507c">
     <link rel="stylesheet" href="/static/css/appearance.css?v=20260507b">
     <script>
     (function () {
@@ -521,7 +521,11 @@
         </div>
 
         <!-- 1. Monthly Comparison Cards -->
-        <div id="monthlyCards" class="stats-grid" style="margin-bottom:16px"></div>
+        <div id="monthlyCards" class="stats-grid" style="margin-bottom:16px">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+        </div>
 
         <!-- 2. Monthly Detail Table -->
         <div class="table-container" style="margin-bottom:16px">
@@ -536,6 +540,9 @@
                     </select>
                 </div>
             </div>
+            <div id="monthlyTableLoader" class="skeleton-table-wrap">
+                <div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div>
+            </div>
             <table>
                 <thead id="monthlyTableHead"></thead>
                 <tbody id="monthlyTableBody"></tbody>
@@ -546,18 +553,27 @@
         <div class="charts-grid" style="margin-bottom:16px">
             <div class="chart-card">
                 <h3>Top Services per Month</h3>
-                <div style="height:300px"><canvas id="monthlyServiceStack"></canvas></div>
+                <div style="position:relative;height:300px">
+                    <div id="monthlyServiceLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
+                    <canvas id="monthlyServiceStack"></canvas>
+                </div>
             </div>
             <div class="chart-card">
                 <h3>Top Resource Groups per Month</h3>
-                <div style="height:300px"><canvas id="monthlyRGStack"></canvas></div>
+                <div style="position:relative;height:300px">
+                    <div id="monthlyRGLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
+                    <canvas id="monthlyRGStack"></canvas>
+                </div>
             </div>
         </div>
 
         <!-- 4. Monthly Bar Chart — at the bottom -->
         <div class="chart-card" style="padding:14px 16px">
             <h3 style="margin:0 0 10px;font-size:13px">Month-wise Cost Overview</h3>
-            <div style="height:200px"><canvas id="monthlyBarChart"></canvas></div>
+            <div style="position:relative;height:200px">
+                <div id="monthlyBarLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
+                <canvas id="monthlyBarChart"></canvas>
+            </div>
         </div>
     </section>
 
@@ -2592,7 +2608,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260507a"></script>
+<script src="/static/js/app.js?v=20260507c"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
