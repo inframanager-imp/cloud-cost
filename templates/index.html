@@ -9,8 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507i">
-    <link rel="stylesheet" href="/static/css/appearance.css?v=20260507i">
+    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507j">
+    <link rel="stylesheet" href="/static/css/appearance.css?v=20260507j">
     <script>
     (function () {
         var THEME_IDS = ['forest','ocean','ember','violet','rose','slate','aurora'];
@@ -1637,46 +1637,73 @@
 
     <!-- ═══ Cloud Providers Page ═══════════════════════════════════════════ -->
     <section id="page-cloud-providers" class="page-section">
-        <div class="page-header">
-            <h2>Cloud Providers</h2>
-            <button class="btn btn-primary" onclick="showProviderModal()">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Provider
-            </button>
+
+        <!-- Page Header -->
+        <div class="cp-page-header">
+            <div class="cp-page-header__left">
+                <div class="cp-breadcrumb">SETUP</div>
+                <h1 class="cp-page-title">Cloud providers</h1>
+                <div class="cp-page-subtitle" id="cpSubtitle">Loading providers…</div>
+            </div>
+            <div class="cp-page-header__right">
+                <button class="cp-btn-secondary" onclick="openSyncCenter()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    Sync all
+                </button>
+                <button class="cp-btn-primary" onclick="showProviderModal()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add provider
+                </button>
+            </div>
         </div>
 
-        <!-- SaaS integrations banner -->
-        <div style="display:flex;align-items:center;gap:14px;background:linear-gradient(90deg,rgba(102,126,234,.12),rgba(167,139,250,.08));border:1px solid rgba(102,126,234,.25);border-radius:10px;padding:12px 18px;margin-bottom:16px;flex-wrap:wrap">
-            <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:200px">
-                <span style="font-size:20px">🔗</span>
-                <div>
-                    <div style="font-size:13px;font-weight:600;color:var(--text-primary)">Connect Dev Tools &amp; SaaS</div>
-                    <div style="font-size:12px;color:var(--text-secondary)">Jira · Bitbucket · Cursor · OpenAI — track costs &amp; send alerts</div>
+        <!-- Upsell Banner -->
+        <div class="upsell-banner">
+            <div class="upsell-banner__icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </div>
+            <div class="upsell-banner__body">
+                <div class="upsell-banner__title">Connect dev tools &amp; SaaS</div>
+                <div class="upsell-banner__sub">Jira · Bitbucket · Cursor · OpenAI — track costs &amp; send alerts.</div>
+            </div>
+            <a class="upsell-banner__action" onclick="navigateTo('integrations')" style="cursor:pointer">Open integrations →</a>
+        </div>
+
+        <!-- Provider Status Cards -->
+        <div class="provider-status-grid" id="freshnessCards"></div>
+
+        <!-- Connected Accounts Table -->
+        <div class="card connections-card">
+            <div class="connections-card__head">
+                <div class="connections-card__title">
+                    <h3>Connected accounts</h3>
+                    <span class="count-chip" id="cpAccountCount">—</span>
+                </div>
+                <div class="connections-card__controls">
+                    <div class="search-input">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="accountSearch" placeholder="Search accounts…">
+                    </div>
+                    <div class="cp-segmented" id="cpCloudFilter">
+                        <button class="cp-seg active" data-filter="all">All</button>
+                        <button class="cp-seg" data-filter="azure">Azure</button>
+                        <button class="cp-seg" data-filter="aws">AWS</button>
+                        <button class="cp-seg" data-filter="gcp">GCP</button>
+                    </div>
                 </div>
             </div>
-            <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px;white-space:nowrap" onclick="navigateTo('integrations')">
-                Open Integrations →
-            </button>
-        </div>
-
-        <!-- Data Freshness Cards -->
-        <div id="freshnessCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:20px"></div>
-
-        <!-- Providers Table -->
-        <div class="table-container">
-            <table>
+            <table class="connections-table">
                 <thead>
                     <tr>
-                        <th>Provider</th>
-                        <th>Name</th>
-                        <th>ID / Account</th>
+                        <th>Account</th>
+                        <th>ID</th>
                         <th>Status</th>
-                        <th>Last Sync</th>
-                        <th>Actions</th>
+                        <th>Last sync</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody id="providersTableBody">
-                    <tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">Loading...</td></tr>
+                    <tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-secondary)">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -2629,7 +2656,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260507i"></script>
+<script src="/static/js/app.js?v=20260507j"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -2681,26 +2708,44 @@ function renderFreshnessCards(providers) {
     const container = document.getElementById('freshnessCards');
     if (!container) return;
     if (!providers.length) {
-        container.innerHTML = '<p style="color:var(--text-secondary);font-size:13px">No billing data ingested yet. Add a provider and run a sync.</p>';
+        container.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;grid-column:1/-1">No billing data ingested yet. Add a provider and run a sync.</p>';
         return;
     }
-    const providerIcons = { azure: '☁️', aws: '🟠', gcp: '🔵' };
+    const fullNames = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud' };
+    const shortLabels = { azure: 'Az', aws: 'AW', gcp: 'G' };
+    const bgColors = { azure: 'var(--azure)', aws: 'var(--aws)', gcp: 'var(--gcp)' };
     container.innerHTML = providers.map(p => {
-        const ok = !p.is_stale;
-        const color = ok ? '#38A169' : '#D69E2E';
-        const latestDate = ((p.latest_date || '').toString().split('T')[0]) || '—';
+        const cp = (p.cloud_provider || '').toLowerCase();
+        const health = p.is_stale ? 'stale' : 'fresh';
+        const latestRaw = ((p.latest_date || '').toString().split('T')[0]) || '';
+        let latestRelative = latestRaw || '—';
+        if (latestRaw) {
+            const diff = Math.round((Date.now() - new Date(latestRaw)) / 86400000);
+            latestRelative = diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : `${diff} days ago`;
+        }
         return `
-        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-                <span style="font-size:20px">${providerIcons[p.cloud_provider] || '☁️'}</span>
-                <span style="font-weight:600;color:var(--text-primary);text-transform:uppercase">${p.cloud_provider}</span>
-                <span style="margin-left:auto;width:10px;height:10px;border-radius:50%;background:${color};display:inline-block"></span>
+        <div class="provider-status">
+            <div class="provider-status__head">
+                <div class="provider-status__brand">
+                    <div class="provider-status__icon" style="background:${bgColors[cp]||'var(--accent)'};">${shortLabels[cp]||cp.substring(0,2).toUpperCase()}</div>
+                    <div>
+                        <div class="provider-status__name">${fullNames[cp]||cp}</div>
+                        <div class="provider-status__sub">${p.account_count ?? '—'} accounts</div>
+                    </div>
+                </div>
+                <span class="status-pill status-pill--${health}">
+                    <span class="status-pill__dot"></span>${health.charAt(0).toUpperCase()+health.slice(1)}
+                </span>
             </div>
-            <div style="font-size:13px;color:var(--text-secondary);line-height:1.6">
-                <div>Latest data: <strong style="color:var(--text-primary)">${latestDate}</strong></div>
-                <div>Lag: <strong style="color:${p.lag_days > 3 ? '#E53E3E' : 'var(--text-primary)'}">${p.lag_days ?? '—'} day(s)</strong></div>
-                <div>Records: <strong style="color:var(--text-primary)">${(p.record_count||0).toLocaleString()}</strong></div>
-                <div style="font-size:11px;margin-top:4px;color:${color}">${ok ? '✓ Fresh' : '⚠ May be stale'}</div>
+            <div class="provider-status__stats">
+                <div>
+                    <div class="stat-label">Records</div>
+                    <div class="stat-value">${(p.record_count||0).toLocaleString()}</div>
+                </div>
+                <div>
+                    <div class="stat-label">Latest data</div>
+                    <div class="stat-value">${latestRelative}</div>
+                </div>
             </div>
         </div>`;
     }).join('');
@@ -2708,6 +2753,20 @@ function renderFreshnessCards(providers) {
 
 // ─── Cloud Providers ──────────────────────────────────────────────────────────
 let _editProviderId = null;
+
+function _cpTruncateId(s) {
+    if (!s || s.length <= 15) return s;
+    return s.slice(0, 8) + '…' + s.slice(-6);
+}
+
+function _cpRelativeSync(iso) {
+    if (!iso) return 'Never';
+    const diff = Math.round((Date.now() - new Date(iso)) / 60000);
+    if (diff < 2) return 'Just now';
+    if (diff < 60) return `${diff}m ago`;
+    if (diff < 1440) return `${Math.round(diff/60)}h ago`;
+    return `${Math.round(diff/1440)}d ago`;
+}
 
 function loadProviders() {
     Promise.all([
@@ -2718,66 +2777,94 @@ function loadProviders() {
         const tbody = document.getElementById('providersTableBody');
         if (!tbody) return;
 
-        // Azure last sync from history
         const lastAzure = hist.find(h => h.status === 'success' || h.status === 'running');
-        const azureLastSync = lastAzure
-            ? (lastAzure.sync_end || lastAzure.sync_start || '').slice(0,16).replace('T',' ')
-            : null;
+        const azureLastSync = lastAzure ? (lastAzure.sync_end || lastAzure.sync_start || null) : null;
+        const bgColors = { azure: 'var(--azure)', aws: 'var(--aws)', gcp: 'var(--gcp)' };
+        const shortLabels = { azure: 'Az', aws: 'AW', gcp: 'G' };
 
-        // Azure subscription rows
         const azureSubs = subs.filter(s => s.cloud === 'azure');
-        const azureRows = azureSubs.map(s => `
-            <tr id="cp-row-az-${s.subscription_id.replace(/[^a-z0-9]/gi,'_')}">
-                <td><span style="color:#0078d4;font-size:16px;font-weight:700">⊞</span> <span style="color:#0078d4;font-weight:600">AZURE</span></td>
-                <td>${s.name || s.subscription_id}</td>
-                <td style="font-family:monospace;font-size:12px">${s.subscription_id}</td>
-                <td>
-                    <label class="toggle-switch" style="transform:scale(0.85)">
-                        <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleAzureSub('${s.subscription_id}', this.checked)">
-                        <span class="toggle-slider"></span>
-                    </label>
+        const azureRows = azureSubs.map(s => {
+            const status = s.enabled ? 'fresh' : 'paused';
+            return `<tr data-cloud="azure" id="cp-row-az-${s.subscription_id.replace(/[^a-z0-9]/gi,'_')}">
+                <td><div class="acct-cell">
+                    <div class="provider-icon-sm" style="background:var(--azure)">Az</div>
+                    <span class="acct-name">${s.name || s.subscription_id}</span>
+                </div></td>
+                <td class="mono">${_cpTruncateId(s.subscription_id)}</td>
+                <td><span class="status-pill status-pill--${status}"><span class="status-pill__dot"></span>${s.enabled ? 'Active' : 'Paused'}</span></td>
+                <td class="muted">${_cpRelativeSync(azureLastSync)}</td>
+                <td class="actions-cell">
+                    <button class="icon-btn-ghost" onclick="openSyncCenter()" title="Sync">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
                 </td>
-                <td style="font-size:12px;color:var(--text-secondary)">${azureLastSync || 'Never'}</td>
-                <td>
-                    <div style="display:flex;gap:6px">
-                        <button class="btn-mini" onclick="openSyncCenter()">Sync</button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
 
-        // Other provider rows (AWS, GCP)
-        const icons = { azure: '☁️', aws: '🟠', gcp: '🔵' };
-        const otherRows = providers.map(p => `
-            <tr id="cp-row-${p.id}">
-                <td><span style="font-size:18px">${icons[p.provider_type]||'☁️'}</span> ${p.provider_type.toUpperCase()}</td>
-                <td>${p.name}</td>
-                <td style="font-family:monospace;font-size:12px">${p.provider_id}</td>
-                <td>
-                    <label class="toggle-switch" style="transform:scale(0.85)">
-                        <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="toggleProvider(${p.id}, this.checked)">
-                        <span class="toggle-slider"></span>
-                    </label>
+        const otherRows = providers.map(p => {
+            const cp = p.provider_type;
+            const status = p.enabled ? 'fresh' : 'paused';
+            return `<tr data-cloud="${cp}" id="cp-row-${p.id}">
+                <td><div class="acct-cell">
+                    <div class="provider-icon-sm" style="background:${bgColors[cp]||'var(--accent)'}">${shortLabels[cp]||cp.substring(0,2).toUpperCase()}</div>
+                    <span class="acct-name">${p.name}</span>
+                </div></td>
+                <td class="mono">${_cpTruncateId(p.provider_id)}</td>
+                <td><span class="status-pill status-pill--${status}"><span class="status-pill__dot"></span>${p.enabled ? 'Active' : 'Paused'}</span></td>
+                <td id="cp-lastsync-${p.id}" class="muted">${_cpRelativeSync(p.last_sync)}</td>
+                <td class="actions-cell">
+                    <button class="icon-btn-ghost" onclick="openSyncCenter()" title="Sync">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
+                    <button class="icon-btn-ghost" onclick="renameProvider(${p.id}, '${p.name.replace(/'/g,"\\'")}');" title="Rename">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="icon-btn-ghost" onclick="deleteProvider(${p.id}, '${p.name}');" title="Delete" style="color:var(--danger)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                    </button>
                 </td>
-                <td id="cp-lastsync-${p.id}" style="font-size:12px;color:var(--text-secondary)">${p.last_sync ? p.last_sync.slice(0,16).replace('T',' ') : 'Never'}</td>
-                <td>
-                    <div style="display:flex;gap:6px">
-                        <button class="btn-mini" onclick="openSyncCenter()">Sync</button>
-                        <button class="btn-mini" onclick="renameProvider(${p.id}, '${p.name.replace(/'/g,"\\'")}')">Rename</button>
-                        <button class="btn-mini" onclick="deleteProvider(${p.id}, '${p.name}')">Delete</button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
+
+        const total = azureSubs.length + providers.length;
+        const countChip = document.getElementById('cpAccountCount');
+        if (countChip) countChip.textContent = total;
 
         if (!azureRows && !otherRows) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">No providers configured. Click "Add Provider" to get started.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-secondary)">No providers configured. Click "Add provider" to get started.</td></tr>';
         } else {
             tbody.innerHTML = azureRows + otherRows;
         }
 
+        // Wire up search + filter
+        const searchInput = document.getElementById('accountSearch');
+        const segs = document.querySelectorAll('#cpCloudFilter .cp-seg');
+        function _cpApplyFilters() {
+            const q = (searchInput?.value || '').toLowerCase();
+            const active = document.querySelector('#cpCloudFilter .cp-seg.active')?.dataset.filter || 'all';
+            document.querySelectorAll('.connections-table tbody tr').forEach(tr => {
+                const name = (tr.querySelector('.acct-name')?.textContent || '').toLowerCase();
+                const cloud = tr.dataset.cloud;
+                tr.style.display = (!q || name.includes(q)) && (active === 'all' || cloud === active) ? '' : 'none';
+            });
+        }
+        searchInput?.removeEventListener('input', searchInput._cpHandler);
+        searchInput._cpHandler = _cpApplyFilters;
+        searchInput?.addEventListener('input', _cpApplyFilters);
+        segs.forEach(btn => {
+            btn.onclick = () => { segs.forEach(b => b.classList.remove('active')); btn.classList.add('active'); _cpApplyFilters(); };
+        });
+
         loadDataFreshness();
     });
+}
+
+function _cpUpdateSubtitle(providers, subs) {
+    const el = document.getElementById('cpSubtitle');
+    if (!el) return;
+    const provCount = new Set((providers||[]).map(p=>p.provider_type).concat((subs||[]).filter(s=>s.cloud==='azure').length > 0 ? ['azure'] : [])).size;
+    const accCount = (providers||[]).length + (subs||[]).filter(s=>s.cloud==='azure').length;
+    el.textContent = `${provCount} provider${provCount!==1?'s':''} connected · ${accCount} account${accCount!==1?'s':''} · Last synced recently`;
 }
 
 function toggleAzureSub(subId, enabled) {
