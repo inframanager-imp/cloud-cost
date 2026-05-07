@@ -104,9 +104,28 @@ SYNC_SUBPROCESS = os.getenv("SYNC_SUBPROCESS", "true").lower() in ("true", "1", 
 ACTIVITY_SYNC_INLINE_MODE = os.getenv("ACTIVITY_SYNC_INLINE_MODE", "false").lower() in ("true", "1", "yes")
 ACTIVITY_SYNC_SUBPROCESS = os.getenv("ACTIVITY_SYNC_SUBPROCESS", "true").lower() in ("true", "1", "yes")
 EMAIL_SCHEDULER_ENABLED = os.getenv("EMAIL_SCHEDULER_ENABLED", "true").lower() in ("true", "1", "yes")
+
+SYNC_SETTINGS_FILE = os.path.join(os.getenv("DATA_DIR", "/app/data"), "sync_settings.json")
+
+def _load_sync_settings():
+    try:
+        with open(SYNC_SETTINGS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_sync_settings(data):
+    try:
+        os.makedirs(os.path.dirname(SYNC_SETTINGS_FILE), exist_ok=True)
+        with open(SYNC_SETTINGS_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+_persisted_sync = _load_sync_settings()
 auto_sync_state = {
-    "enabled": AUTO_SYNC_ENABLED,
-    "interval_hours": AUTO_SYNC_INTERVAL_HOURS,
+    "enabled": _persisted_sync.get("enabled", AUTO_SYNC_ENABLED),
+    "interval_hours": _persisted_sync.get("interval_hours", AUTO_SYNC_INTERVAL_HOURS),
     "last_auto_sync": None,
     "next_auto_sync": None,
     "running": False,
@@ -1493,10 +1512,11 @@ activity_sync_status = {"running": False, "message": "", "progress": 0}
 ACTIVITY_AUTO_SYNC_INTERVAL_MINUTES = int(os.getenv("ACTIVITY_AUTO_SYNC_INTERVAL_MINUTES", 60))
 ACTIVITY_AUTO_SYNC_ENABLED = os.getenv("ACTIVITY_AUTO_SYNC_ENABLED", "false").lower() in ("true", "1", "yes")
 ACTIVITY_AUTO_SYNC_DAYS = int(os.getenv("ACTIVITY_AUTO_SYNC_DAYS", 7))
+_persisted_activity_sync = _load_sync_settings()
 activity_auto_sync_state = {
-    "enabled": ACTIVITY_AUTO_SYNC_ENABLED,
-    "interval_minutes": ACTIVITY_AUTO_SYNC_INTERVAL_MINUTES,
-    "days": ACTIVITY_AUTO_SYNC_DAYS,
+    "enabled": _persisted_activity_sync.get("activity_enabled", ACTIVITY_AUTO_SYNC_ENABLED),
+    "interval_minutes": _persisted_activity_sync.get("activity_interval_minutes", ACTIVITY_AUTO_SYNC_INTERVAL_MINUTES),
+    "days": _persisted_activity_sync.get("activity_days", ACTIVITY_AUTO_SYNC_DAYS),
     "last_auto_sync": None,
     "next_auto_sync": None,
     "running": False,
@@ -1817,6 +1837,12 @@ def api_set_activity_auto_sync():
             _activity_auto_sync_timer.cancel()
         activity_auto_sync_state["next_auto_sync"] = None
 
+    _save_sync_settings({
+        **_load_sync_settings(),
+        "activity_enabled": activity_auto_sync_state["enabled"],
+        "activity_interval_minutes": activity_auto_sync_state["interval_minutes"],
+        "activity_days": activity_auto_sync_state["days"],
+    })
     return jsonify({"message": f"Activity auto-sync {'enabled' if activity_auto_sync_state['enabled'] else 'disabled'}", **activity_auto_sync_state})
 
 
@@ -2689,6 +2715,11 @@ def api_set_auto_sync():
             _auto_sync_timer.cancel()
         auto_sync_state["next_auto_sync"] = None
 
+    _save_sync_settings({
+        **_load_sync_settings(),
+        "enabled": auto_sync_state["enabled"],
+        "interval_hours": auto_sync_state["interval_hours"],
+    })
     return jsonify({"message": f"Auto-sync {'enabled' if auto_sync_state['enabled'] else 'disabled'}", **auto_sync_state})
 
 
