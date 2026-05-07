@@ -490,7 +490,7 @@
                 <thead>
                     <tr>
                         <th id="costDateHeader" class="sortable-th" onclick="sortCostsBy('date')" style="white-space:nowrap">Date <span id="sort-date" class="sort-indicator">↕</span></th>
-                        <th style="white-space:nowrap">Cloud</th>
+                        <th class="sortable-th" onclick="sortCostsBy('cloud_provider')" style="white-space:nowrap">Cloud <span id="sort-cloud_provider" class="sort-indicator">↕</span></th>
                         <th class="sortable-th" onclick="sortCostsBy('resource_group')" style="white-space:nowrap"><span id="costsRGColumnLabel">Resource Group</span> <span id="sort-resource_group" class="sort-indicator">↕</span></th>
                         <th class="sortable-th" onclick="sortCostsBy('service_name')" style="white-space:nowrap">Service <span id="sort-service_name" class="sort-indicator">↕</span></th>
                         <th class="sortable-th" onclick="sortCostsBy('resource_name')" style="white-space:nowrap">Resource <span id="sort-resource_name" class="sort-indicator">↕</span></th>
@@ -2592,7 +2592,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260505i"></script>
+<script src="/static/js/app.js?v=20260507a"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
