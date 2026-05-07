@@ -9,8 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507j">
-    <link rel="stylesheet" href="/static/css/appearance.css?v=20260507j">
+    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507k">
+    <link rel="stylesheet" href="/static/css/appearance.css?v=20260507k">
     <script>
     (function () {
         var THEME_IDS = ['forest','ocean','ember','violet','rose','slate','aurora'];
@@ -1906,61 +1906,74 @@
 
     <!-- ═══ Budgets & Alerts Page ════════════════════════════════════════════ -->
     <section id="page-budgets" class="page-section">
-        <div class="page-header">
-            <h2>Budgets &amp; Alerts</h2>
-            <div style="display:flex;gap:10px">
-                <button class="btn btn-secondary" onclick="runBudgetCheck()">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
-                    Check Now
+
+        <!-- Page Header -->
+        <div class="cp-page-header">
+            <div class="cp-page-header__left">
+                <div class="cp-breadcrumb">SETUP</div>
+                <h1 class="cp-page-title">Budgets &amp; alerts</h1>
+                <div class="cp-page-subtitle" id="budgetSubtitle">Loading budgets…</div>
+            </div>
+            <div class="cp-page-header__right">
+                <button class="cp-btn-secondary" onclick="runBudgetCheck()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+                    Run check now
                 </button>
-                <button class="btn btn-primary" onclick="showBudgetModal()">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    New Budget
+                <button class="cp-btn-primary" onclick="showBudgetModal()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    New budget
                 </button>
             </div>
         </div>
 
-        <!-- Slack Config Banner -->
-        <div id="slackConfigBanner" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
-            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;color:var(--accent)">
-                <path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z"/><path d="M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                <path d="M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z"/><path d="M3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z"/>
-                <path d="M14 14.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5z"/><path d="M15.5 19H14v1.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z"/>
-                <path d="M10 9.5C10 8.67 9.33 8 8.5 8h-5C2.67 8 2 8.67 2 9.5S2.67 11 3.5 11h5c.83 0 1.5-.67 1.5-1.5z"/><path d="M8.5 5H10V3.5C10 2.67 9.33 2 8.5 2S7 2.67 7 3.5 7.67 5 8.5 5z"/>
-            </svg>
-            <div style="flex:1">
-                <div style="font-size:13px;font-weight:600;color:var(--text-primary)">Slack Notifications</div>
-                <div style="font-size:12px;color:var(--text-secondary)" id="slackStatusText">Checking...</div>
+        <!-- Notification Channels -->
+        <div class="card channels-card" style="margin-bottom:20px;padding:14px 16px">
+            <div class="channels-card__head">
+                <div>
+                    <div class="channels-card__title">Notification channels</div>
+                    <div class="channels-card__sub">Where alerts get delivered when a budget threshold trips.</div>
+                </div>
+                <button class="btn-link" onclick="testSlack()">Test Slack</button>
             </div>
-            <div style="display:flex;gap:8px">
-                <input type="text" id="slackWebhookInput" class="filter-input" placeholder="https://hooks.slack.com/services/..." style="width:280px;font-size:12px">
-                <button class="btn btn-secondary" style="font-size:12px" onclick="testSlack()">Test</button>
+            <div class="channels-row" id="channelsRow">
+                <div class="channel-chip channel-chip--warn" id="slackChip">
+                    <span class="channel-chip__icon" style="background:#4A154B">S</span>
+                    <span class="channel-chip__name">Slack</span>
+                    <span class="status-pill status-pill--error" id="slackChipStatus">Checking…</span>
+                </div>
+                <div class="channel-chip channel-chip--ok">
+                    <span class="channel-chip__icon" style="background:#3B6D11">@</span>
+                    <span class="channel-chip__name">Email</span>
+                    <span class="channel-chip__meta" id="emailChipMeta">alerts@system</span>
+                </div>
             </div>
         </div>
 
-        <!-- Budget cards grid -->
-        <div id="budgetCardsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:24px"></div>
+        <!-- Budget Cards Grid -->
+        <div class="budget-grid" id="budgetCardsGrid"></div>
 
         <!-- Alert History -->
-        <div style="margin-top:8px">
-            <h3 style="font-size:15px;color:var(--text-primary);margin-bottom:12px">Recent Alert History</h3>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Budget</th>
-                            <th>Threshold</th>
-                            <th>Spend</th>
-                            <th>Budget</th>
-                            <th>Notified Via</th>
-                            <th>Triggered</th>
-                        </tr>
-                    </thead>
-                    <tbody id="alertHistoryBody">
-                        <tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">No alerts yet.</td></tr>
-                    </tbody>
-                </table>
+        <div class="card alerts-card">
+            <div class="alerts-card__head">
+                <div style="display:flex;align-items:center;gap:12px">
+                    <h3 style="font-size:14px;font-weight:500;margin:0;color:var(--text-primary)">Recent alert history</h3>
+                    <span class="count-chip" id="alertCountChip">—</span>
+                </div>
             </div>
+            <table class="alerts-table">
+                <thead>
+                    <tr>
+                        <th>Budget</th>
+                        <th>Threshold</th>
+                        <th class="ta-right">Spend / Budget</th>
+                        <th>Channel</th>
+                        <th class="ta-right">Triggered</th>
+                    </tr>
+                </thead>
+                <tbody id="alertHistoryBody">
+                    <tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-secondary)">No alerts yet.</td></tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- Budget Modal -->
@@ -2656,7 +2669,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260507j"></script>
+<script src="/static/js/app.js?v=20260507k"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -3264,67 +3277,126 @@ function loadBudgets() {
     });
 }
 
+function _fmtMoney(v) {
+    v = parseFloat(v) || 0;
+    return v >= 1000 ? v.toLocaleString(undefined, {maximumFractionDigits:0}) : v.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function _relTime(iso) {
+    if (!iso) return '—';
+    const s = Math.round((Date.now() - new Date(iso)) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.floor(s/60)}m ago`;
+    if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+    if (s < 172800) return 'yesterday';
+    return `${Math.floor(s/86400)}d ago`;
+}
+
 function renderBudgetCards(budgets) {
     const grid = document.getElementById('budgetCardsGrid');
     if (!grid) return;
     if (!budgets.length) {
-        grid.innerHTML = '<p style="color:var(--text-secondary);font-size:13px">No budgets configured. Click "New Budget" to create one.</p>';
+        grid.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;grid-column:1/-1">No budgets configured. Click "New budget" to create one.</p>';
         return;
     }
+    const bgColors = { azure: 'var(--azure)', aws: 'var(--aws)', gcp: 'var(--gcp)', all: 'var(--accent)' };
+    const shortLabels = { azure: 'Az', aws: 'AW', gcp: 'G', all: '∑' };
+    const statusLabels = { on_track: 'On track', at_risk: 'At risk', exceeded: 'Exceeded' };
+    const pillMap = { on_track: 'fresh', at_risk: 'stale', exceeded: 'error' };
+
+    // Update subtitle
+    const exceeded = budgets.filter(b => b.status === 'exceeded').length;
+    const sub = document.getElementById('budgetSubtitle');
+    if (sub) sub.textContent = `${budgets.length} active budget${budgets.length!==1?'s':''} · ${exceeded} exceeded`;
+
+    const alertChip = document.getElementById('alertCountChip');
+
     grid.innerHTML = budgets.map(b => {
-        // We'd need current spend from a separate call; show last alert pct as proxy
-        const thresholds = (b.alert_thresholds || []).join(', ') + '%';
-        const channels = (b.alert_channels || []).join(', ');
-        const period = b.period.charAt(0).toUpperCase() + b.period.slice(1);
+        const cp = (b.provider_type || 'all').toLowerCase();
+        const pct = Math.min(100, b.pct || 0);
+        const status = b.status || 'on_track';
+        const pillStatus = pillMap[status] || 'fresh';
+        const thresholds = (b.alert_thresholds || []).map(t => `<span class="threshold-tag">${t}%</span>`).join('');
+        const subLine = status === 'exceeded'
+            ? `<span>Over by <span class="strong danger">$${_fmtMoney(b.over)}</span></span><span>Budget exceeded</span>`
+            : `<span>Day ${b.day_n} of ${b.days_in_month}</span><span>Projected <span class="strong">$${_fmtMoney(b.projected)}</span></span>`;
         return `
-        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-                <div>
-                    <div style="font-weight:600;color:var(--text-primary);margin-bottom:2px">${b.name}</div>
-                    <div style="font-size:12px;color:var(--text-secondary)">${period} &bull; ${b.provider_type.toUpperCase()}</div>
+        <div class="budget-card budget-card--${status}">
+            <div class="budget-card__head">
+                <div class="budget-card__brand">
+                    <div class="budget-card__icon" style="background:${bgColors[cp]||'var(--accent)'}">${shortLabels[cp]||cp.substring(0,2).toUpperCase()}</div>
+                    <span class="budget-card__name">${b.name}</span>
                 </div>
-                <div style="display:flex;gap:6px">
-                    <button class="btn-mini" onclick="deleteBudget(${b.id},'${b.name.replace(/'/g,"\\'")}')">Delete</button>
+                <span class="status-pill status-pill--${pillStatus}"><span class="status-pill__dot"></span>${statusLabels[status]}</span>
+            </div>
+            <div class="budget-card__row">
+                <span class="budget-card__spend">$${_fmtMoney(b.spent||0)}</span>
+                <span class="budget-card__limit">of $${_fmtMoney(b.amount)}</span>
+                <span class="budget-card__pct budget-card__pct--${status}">${b.pct||0}%</span>
+            </div>
+            <div class="budget-bar">
+                <div class="budget-bar__fill budget-bar__fill--${status}" style="width:${pct}%"></div>
+            </div>
+            <div class="budget-card__sub">${subLine}</div>
+            <div class="budget-card__foot">
+                <div class="threshold-tags">${thresholds}</div>
+                <div class="budget-card__actions">
+                    <button class="icon-btn-ghost" title="Delete" style="color:var(--danger)" onclick="deleteBudget(${b.id},'${b.name.replace(/'/g,"\\'")}')">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                    </button>
                 </div>
             </div>
-            <div style="font-size:22px;font-weight:700;color:var(--accent);margin-bottom:6px">$${b.amount.toLocaleString()}</div>
-            <div style="font-size:12px;color:var(--text-secondary)">Alert at: ${thresholds}</div>
-            <div style="font-size:12px;color:var(--text-secondary)">Channels: ${channels}</div>
         </div>`;
     }).join('');
 }
 
 function renderAlertHistory(alerts) {
     const tbody = document.getElementById('alertHistoryBody');
+    const chip = document.getElementById('alertCountChip');
     if (!tbody) return;
+    if (chip) chip.textContent = alerts.length;
     if (!alerts.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">No alerts fired yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-secondary)">No alerts fired yet.</td></tr>';
         return;
     }
-    const colors = { 100: '#E53E3E', 90: '#E53E3E', 80: '#D69E2E', 75: '#D69E2E', 50: '#3182CE' };
+    const bgColors = { azure: 'var(--azure)', aws: 'var(--aws)', gcp: 'var(--gcp)', all: 'var(--accent)' };
+    const shortLabels = { azure: 'Az', aws: 'AW', gcp: 'G', all: '∑' };
     tbody.innerHTML = alerts.map(a => {
-        const pct = Math.round(a.current_spend / a.budget_amount * 100);
-        const color = colors[a.threshold_pct] || '#D69E2E';
+        const cp = (a.provider_type || 'all').toLowerCase();
+        const pillStatus = a.threshold_pct >= 100 ? 'error' : 'stale';
+        const isOver = (a.current_spend || 0) > (a.budget_amount || 1);
+        const channels = (a.notified_via || []).join(', ') || 'Email';
         return `<tr>
-            <td>${a.budget_name}</td>
-            <td><span style="color:${color};font-weight:600">${a.threshold_pct}%</span></td>
-            <td>$${Number(a.current_spend).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
-            <td>$${Number(a.budget_amount).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
-            <td>${(a.notified_via||[]).join(', ') || '—'}</td>
-            <td style="font-size:12px;color:var(--text-secondary)">${(a.triggered_at||'').slice(0,16).replace('T',' ')}</td>
+            <td><div class="acct-cell">
+                <div class="provider-icon-sm" style="background:${bgColors[cp]||'var(--accent)'}">${shortLabels[cp]||'∑'}</div>
+                <span class="acct-name">${a.budget_name}</span>
+            </div></td>
+            <td><span class="status-pill status-pill--${pillStatus}"><span class="status-pill__dot"></span>${a.threshold_pct}%</span></td>
+            <td class="ta-right mono">
+                <span class="${isOver ? 'danger-text' : 'strong'}">$${_fmtMoney(a.current_spend)}</span>
+                <span class="muted"> / $${_fmtMoney(a.budget_amount)}</span>
+            </td>
+            <td><span class="ch-inline">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                ${channels}
+            </span></td>
+            <td class="ta-right muted">${_relTime(a.triggered_at)}</td>
         </tr>`;
     }).join('');
 }
 
 function updateSlackBanner(settings) {
-    const banner = document.getElementById('slackConfigBanner');
-    const statusText = document.getElementById('slackStatusText');
-    if (!banner || !statusText) return;
-    banner.style.display = 'flex';
+    const chip = document.getElementById('slackChip');
+    const chipStatus = document.getElementById('slackChipStatus');
+    if (!chipStatus) return;
     if (settings.slack_webhook_configured) {
-        statusText.textContent = 'Slack webhook is configured. You can test it below.';
+        if (chip) { chip.className = 'channel-chip channel-chip--ok'; }
+        chipStatus.className = 'status-pill status-pill--fresh';
+        chipStatus.textContent = 'Connected';
     } else {
-        statusText.textContent = 'Slack webhook not configured. Set SLACK_WEBHOOK_URL in .env or enter it here.';
+        if (chip) { chip.className = 'channel-chip channel-chip--warn'; }
+        chipStatus.className = 'status-pill status-pill--error';
+        chipStatus.textContent = 'Not configured';
     }
 }
 

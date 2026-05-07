@@ -3356,12 +3356,66 @@ def api_cur_import():
     return jsonify({"message": "CUR import started", "bucket": bucket, "prefix": prefix})
 
 
+# ─── Jinja template filters ───────────────────────────────────────────────────
+
+@app.template_filter('relative_time')
+def relative_time_filter(dt):
+    from datetime import timezone
+    try:
+        if isinstance(dt, str):
+            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - dt
+        s = int(delta.total_seconds())
+        if s < 60: return 'just now'
+        if s < 3600: return f"{s//60}m ago"
+        if s < 86400: return f"{s//3600}h ago"
+        if s < 172800: return 'yesterday'
+        return f"{s//86400}d ago"
+    except Exception:
+        return str(dt)[:16] if dt else '—'
+
+@app.template_filter('format_money')
+def format_money_filter(v):
+    try:
+        v = float(v)
+        if v >= 1000:
+            return f"{v:,.0f}"
+        return f"{v:,.2f}"
+    except Exception:
+        return str(v)
+
 # ─── Phase 1 MVP: Budgets ─────────────────────────────────────────────────────
 
 @app.route("/api/budgets", methods=["GET"])
 @login_required
 def api_budgets_list():
-    return jsonify(get_budgets(tenant_id=current_tenant_id()))
+    import calendar as _cal
+    from budget_manager import get_current_spend
+    budgets = get_budgets(tenant_id=current_tenant_id())
+    today = datetime.utcnow()
+    day_n = today.day
+    days_in_month = _cal.monthrange(today.year, today.month)[1]
+    for b in budgets:
+        spent = get_current_spend(b)
+        amount = float(b.get("amount") or 0)
+        pct = round(spent / amount * 100, 1) if amount else 0
+        if pct >= 100:
+            status = "exceeded"
+        elif pct >= 70:
+            status = "at_risk"
+        else:
+            status = "on_track"
+        projected = round(spent / day_n * days_in_month, 2) if day_n else 0
+        b["spent"] = round(spent, 2)
+        b["pct"] = pct
+        b["status"] = status
+        b["projected"] = projected
+        b["day_n"] = day_n
+        b["days_in_month"] = days_in_month
+        b["over"] = round(max(0, spent - amount), 2)
+    return jsonify(budgets)
 
 
 @app.route("/api/budgets", methods=["POST"])
