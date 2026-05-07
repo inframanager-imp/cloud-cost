@@ -122,20 +122,17 @@ tbody tr:hover { background: var(--bg-hover); }
   font-weight: var(--fw-medium) !important; font-variant-numeric: tabular-nums;
 }
 
-/* ─── Dashboard header right group ────────────────────────────────────── */
-.page-header__right { display: flex; align-items: center; gap: 10px; }
-.header-divider { width: 1px; height: 24px; background: var(--border-default, rgba(0,0,0,.12)); flex-shrink: 0; }
-
-.icon-btn {
-  width: 32px; height: 32px; border-radius: 7px;
-  background: var(--bg-card); border: 1px solid var(--border-subtle, rgba(0,0,0,.06));
+/* ─── Sidebar user-tile action buttons (theme toggle + sign-out) ──────── */
+.user-tile__action {
+  width: 26px; height: 26px; border-radius: 6px;
+  background: transparent; border: 1px solid transparent;
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--text-secondary); cursor: pointer;
+  color: var(--text-secondary); cursor: pointer; flex-shrink: 0;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
-  padding: 0;
+  padding: 0; text-decoration: none;
 }
-.icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-.icon-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.user-tile__action:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-default); }
+.user-tile__action:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* moon shown in dark mode (default), sun shown in light mode */
 .theme-toggle .icon-sun { display: none; }

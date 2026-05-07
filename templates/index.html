@@ -9,8 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507g">
-    <link rel="stylesheet" href="/static/css/appearance.css?v=20260507g">
+    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507h">
+    <link rel="stylesheet" href="/static/css/appearance.css?v=20260507h">
     <script>
     (function () {
         var THEME_IDS = ['forest','ocean','ember','violet','rose','slate','aurora'];
@@ -203,8 +203,16 @@
                 <div class="user-tile__name">{{ username }}</div>
                 <div class="user-tile__role">Cloud Admin</div>
             </div>
-            <a href="/logout" class="logout-btn" title="Sign out" style="margin-left:auto;flex-shrink:0">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <button class="user-tile__action theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle dark / light">
+                <svg class="icon-moon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                </svg>
+                <svg class="icon-sun" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-14.07 1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2m-15.07 5.07 1.41-1.41M17.66 6.34l1.41-1.41"/>
+                </svg>
+            </button>
+            <a href="/logout" class="user-tile__action" title="Sign out" aria-label="Sign out">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
                     <polyline points="16,17 21,12 16,7"/>
                     <line x1="21" y1="12" x2="9" y2="12"/>
@@ -214,7 +222,7 @@
     </div>
 </nav>
 
-<!-- Floating toggle removed — theme toggle is now in the dashboard header -->
+<!-- Theme toggle lives in the sidebar user tile — visible on all pages -->
 
 
 <!-- ─── Main Content ─────────────────────────────────────────────────── -->
@@ -264,22 +272,11 @@
                     <span id="lastSyncInfo" style="font-size:12px;color:var(--text-secondary)">Last synced {{ last_sync_time }} · Auto-sync every 6h</span>
                 </div>
             </div>
-            <div class="page-header__right">
-                <div class="db-segmented" id="cloudSegmented">
-                    <button class="db-seg-btn active" data-cloud="" onclick="setCloudFilter('')">All clouds</button>
-                    <button class="db-seg-btn" data-cloud="azure" onclick="setCloudFilter('azure')">Azure</button>
-                    <button class="db-seg-btn" data-cloud="aws" onclick="setCloudFilter('aws')">AWS</button>
-                    <button class="db-seg-btn" data-cloud="gcp" onclick="setCloudFilter('gcp')">GCP</button>
-                </div>
-                <div class="header-divider"></div>
-                <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle dark / light">
-                    <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                    </svg>
-                    <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-14.07 1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2m-15.07 5.07 1.41-1.41M17.66 6.34l1.41-1.41"/>
-                    </svg>
-                </button>
+            <div class="db-segmented" id="cloudSegmented">
+                <button class="db-seg-btn active" data-cloud="" onclick="setCloudFilter('')">All clouds</button>
+                <button class="db-seg-btn" data-cloud="azure" onclick="setCloudFilter('azure')">Azure</button>
+                <button class="db-seg-btn" data-cloud="aws" onclick="setCloudFilter('aws')">AWS</button>
+                <button class="db-seg-btn" data-cloud="gcp" onclick="setCloudFilter('gcp')">GCP</button>
             </div>
         </div>
 
@@ -2632,7 +2629,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260507g"></script>
+<script src="/static/js/app.js?v=20260507h"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
