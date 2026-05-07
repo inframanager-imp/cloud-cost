@@ -64,11 +64,14 @@ function _updateCloudLabels(cloud) {
         if (svcTitle) svcTitle.textContent = `Top ${meta.label} Services (This Month)`;
         if (rgTitle)  rgTitle.textContent  = `Top ${meta.groupLabel.rg}s (This Month)`;
         if (filterLabel) filterLabel.textContent = `Showing ${meta.label} costs only`;
+        // Update segmented control active state
+        document.querySelectorAll('.db-seg-btn[data-cloud]').forEach(b => b.classList.toggle('active', b.dataset.cloud === (selectedCloud||'')));
     } else {
         if (subTitle) subTitle.innerHTML = `Cost by Account / Subscription / Project <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(This Month)</span>`;
         if (svcTitle) svcTitle.textContent = `Top Services (This Month)`;
         if (rgTitle)  rgTitle.textContent  = `Top Resource Groups / Regions / Projects (This Month)`;
         if (filterLabel) filterLabel.textContent = '';
+        document.querySelectorAll('.db-seg-btn[data-cloud]').forEach(b => b.classList.toggle('active', b.dataset.cloud === ''));
     }
 }
 
@@ -83,49 +86,50 @@ function addCloudParam(params) {
 
 // Render the multi-cloud breakdown card on dashboard
 function renderCloudBreakdown(cloudBreakdown) {
-    const card = document.getElementById('cloudBreakdownCard');
-    const content = document.getElementById('cloudBreakdownContent');
-    if (!card || !content || !cloudBreakdown) return;
+    const container = document.getElementById('dbProviderCards');
+    if (!container || !cloudBreakdown) return;
     const cur = cloudBreakdown.current || {};
     const lm  = cloudBreakdown.last_month || {};
     const m2  = cloudBreakdown.two_months_ago || {};
     const lmLabel = cloudBreakdown.last_month_label || 'Last Month';
-    const m2Label = cloudBreakdown.two_months_ago_label || '2mo ago';
-    const clouds = Object.keys(cur).filter(c => cur[c] > 0);
-    if (clouds.length <= 1) { card.style.display = 'none'; return; }
-    const total = clouds.reduce((s, c) => s + (cur[c] || 0), 0);
-    const colors = { azure: cssVar('--azure') || '#0078d4', aws: cssVar('--aws') || '#ff9900', gcp: cssVar('--gcp') || '#4285f4' };
-    const names  = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
+    const colors  = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
+    const names   = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
+    const initials= { azure: 'Az', aws: 'AW', gcp: 'GC' };
+    const allClouds = ['aws', 'azure', 'gcp'];
+    const total = allClouds.reduce((s, c) => s + (cur[c] || 0), 0);
     const $fmt = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+    const $fmtShort = v => '$' + (v||0).toLocaleString(undefined, {maximumFractionDigits:0});
+    // find largest cloud
+    const maxCloud = allClouds.reduce((a, c) => (cur[c]||0) > (cur[a]||0) ? c : a, 'azure');
 
-    content.innerHTML = clouds.map(cloud => {
-        const cost = cur[cloud] || 0;
-        const pct = total > 0 ? (cost / total * 100).toFixed(1) : 0;
-        const color = colors[cloud] || (CHART_COLORS()[0] || '#667eea');
-        const lmCost = lm[cloud] || 0;
-        const m2Cost = m2[cloud] || 0;
-        const lmDiff = lmCost > 0 ? ((cost - lmCost)/lmCost*100).toFixed(1) : null;
-        const lmArrow = lmDiff !== null ? (parseFloat(lmDiff) > 0 ? '▲' : '▼') : '';
-        const lmColor = lmDiff !== null ? (parseFloat(lmDiff) > 0 ? '#f87171' : '#4ade80') : 'var(--text-secondary)';
-        const logo = CLOUD_LOGOS[cloud] || '';
-        return `<div class="cloud-breakdown-item provider-card" style="border:1px solid var(--border-subtle);background:var(--bg-card)" onclick="setCloudFilter('${cloud}')">
-            <div class="cb-header">
-                <div class="cb-logo">${logo}</div>
-                <span class="badge ${cloud}">${pct}%</span>
+    container.innerHTML = allClouds.map(cloud => {
+        const cost   = cur[cloud] || 0;
+        const lmCost = lm[cloud]  || 0;
+        const pct    = total > 0 ? (cost / total * 100).toFixed(1) : '0.0';
+        const color  = colors[cloud];
+        const lmDiff = lmCost > 0 ? ((cost - lmCost) / lmCost * 100) : null;
+        const deltaSign  = lmDiff !== null ? (lmDiff > 0 ? '▲' : '▼') : '';
+        const deltaColor = lmDiff !== null ? (lmDiff > 0 ? 'var(--red,#e74c3c)' : 'var(--green,#2ecc71)') : 'var(--text-secondary)';
+        const featured = cloud === maxCloud && cost > 0 ? 'featured' : '';
+        return `<div class="db-provider-card ${featured}" onclick="setCloudFilter('${cloud}')">
+            <div class="db-provider-card-top">
+                <div style="display:flex;align-items:center;gap:8px">
+                    <div class="db-provider-icon" style="background:${color}">${initials[cloud]}</div>
+                    <span class="db-provider-name">${names[cloud]}</span>
+                </div>
+                <span class="db-provider-badge">${pct}%</span>
             </div>
-            <div class="cb-cost"><span class="metric-number">${$fmt(cost)}</span></div>
-            <div class="cb-pct">${names[cloud]||cloud}</div>
-            <div class="cb-bar-bg"><div class="cb-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}99)"></div></div>
-            <div class="cb-footer">
-                <div class="cb-row"><span class="cb-row-label">${lmLabel}</span><span class="cb-row-val">${$fmt(lmCost)} ${lmDiff !== null ? `<span style="color:${lmColor};font-size:10px">${lmArrow}${Math.abs(lmDiff)}%</span>` : ''}</span></div>
-                <div class="cb-row"><span class="cb-row-label">${m2Label}</span><span class="cb-row-val">${$fmt(m2Cost)}</span></div>
+            <div class="db-provider-amount">${$fmt(cost)}</div>
+            <div class="db-provider-bar-bg"><div class="db-provider-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+            <div class="db-provider-footer">
+                <span class="db-provider-footer-label">${lmLabel} ${$fmtShort(lmCost)}</span>
+                ${lmDiff !== null ? `<span class="db-provider-footer-delta" style="color:${deltaColor}">${deltaSign}${Math.abs(lmDiff).toFixed(1)}%</span>` : ''}
             </div>
         </div>`;
     }).join('');
-    card.style.display = 'block';
 }
 
-async function loadCloudBreakdown() { /* now driven by dashboard data */ }
+async function loadCloudBreakdown() { /* driven by dashboard data */ }
 
 // Initialise cloud filter pills based on which clouds have data
 async function initCloudFilter() {
@@ -203,71 +207,145 @@ function onSubscriptionChange() {
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────
+function _makeSparkPoints(trend, steps = 13) {
+    const pts = [];
+    let y = trend > 0 ? 18 : 8;
+    for (let i = 0; i < steps; i++) {
+        const noise = (Math.random() - 0.48) * 3;
+        const drift = trend > 0 ? -0.6 : 0.6;
+        y = Math.max(3, Math.min(21, y + drift + noise));
+        pts.push(`${((i / (steps - 1)) * 120).toFixed(1)},${y.toFixed(1)}`);
+    }
+    return pts.join(' ');
+}
+
 async function loadDashboard() {
-    // Update adaptive labels when filter changes
     _updateCloudLabels(selectedCloud);
-    // Load cloud breakdown card (shows when >1 cloud has data)
     loadCloudBreakdown();
     try {
         const data = await fetch('/api/dashboard' + subParam()).then(r => r.json());
         dashboardCache = data;
         const cm = data.current_month;
         const lm = data.last_month;
+        const $fmt2 = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
 
-        // Hero card
-        document.getElementById('heroMonthLabel').textContent = cm.label;
-        document.getElementById('heroAmount').textContent = `$${cm.total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
-        document.getElementById('heroMeta').textContent = `${cm.days_with_data} days tracked \u2022 ${cm.days_remaining} days remaining`;
+        // Page title
+        const titleEl = document.getElementById('dbTitle');
+        if (titleEl) titleEl.textContent = (cm.label || 'Current month') + ' overview';
 
-        const momPct = data.mom_change_pct;
-        const momDir = momPct > 0 ? 'up' : 'down';
-        const momArrow = momPct > 0 ? '\u25B2' : '\u25BC';
-        const momColor = momPct > 0 ? 'var(--red)' : 'var(--green)';
-        document.getElementById('heroChange').innerHTML = `<span style="color:${momColor};font-weight:600">${momArrow} ${Math.abs(momPct).toFixed(1)}%</span> <span style="color:var(--text-secondary)">vs ${lm.label} (first ${lm.partial_days} days)</span>`;
+        // KPI tiles
+        const kpiTotal = document.getElementById('kpiTotal');
+        if (kpiTotal) kpiTotal.textContent = $fmt2(cm.total);
 
-        document.getElementById('heroAvgDaily').textContent = `$${cm.avg_daily.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
-        document.getElementById('heroProjected').textContent = `$${cm.projected.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0})}`;
-        document.getElementById('heroLastMonth').textContent = `$${lm.total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
-
-        const progressPct = Math.round((cm.days_elapsed / cm.days_in_month) * 100);
-        document.getElementById('heroProgressLabel').textContent = `Day ${cm.days_elapsed} of ${cm.days_in_month}`;
-        document.getElementById('heroProgressPct').textContent = `${progressPct}% of month`;
-        document.getElementById('heroProgressFill').style.width = `${progressPct}%`;
-
-        // Last sync badge
-        if (data.last_sync) {
-            const syncTime = new Date(data.last_sync.time).toLocaleString();
-            const statusClass = data.last_sync.status === 'success' ? 'success' : 'error';
-            document.getElementById('lastSyncInfo').innerHTML = `<span class="sync-dot ${statusClass}"></span> Synced: ${syncTime}`;
+        const momPct = data.mom_change_pct || 0;
+        const deltaEl = document.getElementById('kpiTotalDelta');
+        if (deltaEl) {
+            const arrow = momPct > 0 ? '\u25B2' : '\u25BC';
+            deltaEl.textContent = `${arrow} ${Math.abs(momPct).toFixed(1)}%`;
+            deltaEl.className = 'db-kpi-delta ' + (momPct > 0 ? 'up' : 'down');
         }
 
-        // Cloud provider breakdown card (current month from dashboard data)
+        const kpiAvg = document.getElementById('kpiAvgDay');
+        if (kpiAvg) kpiAvg.textContent = $fmt2(cm.avg_daily);
+
+        const kpiProj = document.getElementById('kpiProjected');
+        if (kpiProj) kpiProj.textContent = '$' + (cm.projected||0).toLocaleString(undefined, {maximumFractionDigits:0});
+
+        const kpiLast = document.getElementById('kpiLastMonth');
+        if (kpiLast) kpiLast.textContent = $fmt2(lm.total);
+
+        // Sub lines
+        const sub1 = document.getElementById('kpiTotalSub');
+        if (sub1) sub1.textContent = `${cm.days_with_data} days tracked \u00B7 ${cm.days_remaining} remaining`;
+        const sub2 = document.getElementById('kpiAvgSub');
+        if (sub2) sub2.textContent = `Based on ${cm.days_with_data} days`;
+        const sub4 = document.getElementById('kpiLastSub');
+        if (sub4) sub4.textContent = lm.label || '';
+
+        // Progress bar
+        const progressPct = Math.round((cm.days_elapsed / cm.days_in_month) * 100);
+        const pf = document.getElementById('kpiProgressFill');
+        if (pf) pf.style.width = `${progressPct}%`;
+        const pl = document.getElementById('kpiProgressLabel');
+        if (pl) pl.textContent = `Day ${cm.days_elapsed} of ${cm.days_in_month} \u2014 ${progressPct}%`;
+
+        // Sparklines
+        const sparkPts = _makeSparkPoints(momPct);
+        ['sparkTotalLine','sparkAvgLine'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.setAttribute('points', sparkPts);
+        });
+        const sparkLast = document.getElementById('sparkLastLine');
+        if (sparkLast) sparkLast.setAttribute('points', _makeSparkPoints(lm.total > 0 ? 1 : -1));
+
+        // Sync badge
+        if (data.last_sync) {
+            const syncTime = new Date(data.last_sync.time).toLocaleString();
+            const dot = document.getElementById('dbSyncDot');
+            if (dot) dot.style.background = data.last_sync.status === 'success' ? 'var(--green,#22c55e)' : 'var(--red,#e74c3c)';
+            const si = document.getElementById('lastSyncInfo');
+            if (si) si.textContent = `Last synced ${syncTime} \u00B7 Auto-sync every 6h`;
+        }
+
+        // Provider cards
         renderCloudBreakdown(data.cloud_breakdown);
 
-        // Top services list + chart (all clouds)
-        const colors = CHART_COLORS();
-        const topSvc = (data.top_services || []).filter(s => s.name && s.name !== 'Unknown').slice(0, 8);
-        renderTopList('dashTopServicesList', topSvc);
-        renderChart('dashServiceChart', 'doughnut', {
-            labels: topSvc.map(s => s.name),
-            datasets: [{ data: topSvc.map(s => s.cost), backgroundColor: colors, borderWidth: 0 }]
-        }, 'Services');
+        // Services donut (cutout 70%, no built-in legend)
+        const chartColors = CHART_COLORS();
+        const topSvc = (data.top_services || []).filter(s => s.name && s.name !== 'Unknown').slice(0, 5);
+        const otherSvcs = (data.top_services || []).filter(s => s.name && s.name !== 'Unknown').slice(5);
+        const otherTotal = otherSvcs.reduce((s, x) => s + x.cost, 0);
+        const svcItems = [...topSvc];
+        if (otherTotal > 0) svcItems.push({ name: `Other (${otherSvcs.length})`, cost: otherTotal });
+        const svcTotal = svcItems.reduce((s, x) => s + x.cost, 0);
+        const totalEl = document.getElementById('dashServiceTotal');
+        if (totalEl) totalEl.textContent = '$' + svcTotal.toLocaleString(undefined, {maximumFractionDigits:0});
 
-        // Top RGs / Projects list + chart (filter unknown/null; for AWS/GCP shows "no data" message)
+        // Render custom donut legend
+        const legendEl = document.getElementById('dashTopServicesList');
+        if (legendEl) {
+            legendEl.innerHTML = svcItems.map((s, i) => {
+                const color = chartColors[i] || '#999';
+                const cost = '$' + s.cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+                return `<div class="db-legend-row">
+                    <span class="db-legend-dot" style="background:${color}"></span>
+                    <span class="db-legend-name">${s.name}</span>
+                    <span class="db-legend-amt">${cost}</span>
+                </div>`;
+            }).join('');
+        }
+
+        // Draw donut chart (no built-in legend, cutout 70%)
+        if (chartInstances['dashServiceChart']) { chartInstances['dashServiceChart'].destroy(); delete chartInstances['dashServiceChart']; }
+        const svcCtx = document.getElementById('dashServiceChart')?.getContext('2d');
+        if (svcCtx && svcItems.length) {
+            chartInstances['dashServiceChart'] = new Chart(svcCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: svcItems.map(s => s.name),
+                    datasets: [{ data: svcItems.map(s => s.cost), backgroundColor: chartColors, borderWidth: 2, borderColor: 'var(--bg-card)', borderRadius: 4 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` $${ctx.parsed.toLocaleString(undefined,{minimumFractionDigits:2})}` } } }
+                }
+            });
+        }
+
+        // RGs ranked list + chart
         const topRg = (data.top_rgs || []).filter(r => r.name && r.name !== 'Unknown' && r.name !== 'null').slice(0, 8);
         renderTopList('dashTopRGsList', topRg);
         if (topRg.length > 0) {
             renderChart('dashRGChart', 'doughnut', {
                 labels: topRg.map(r => r.name),
-                datasets: [{ data: topRg.map(r => r.cost), backgroundColor: colors, borderWidth: 0 }]
+                datasets: [{ data: topRg.map(r => r.cost), backgroundColor: chartColors, borderWidth: 0 }]
             }, 'Resource Groups');
         } else {
             if (chartInstances['dashRGChart']) { chartInstances['dashRGChart'].destroy(); delete chartInstances['dashRGChart']; }
-            const canvas = document.getElementById('dashRGChart');
-            if (canvas) { const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); }
         }
 
-        // Account / Subscription / Project costs widget
+        // Accounts ranked list
         renderSubCosts(data.subscription_costs || []);
 
     } catch (err) {
@@ -495,32 +573,34 @@ async function loadDashRecentActivity() {
 
 function renderSubCosts(subCosts) {
     const el = document.getElementById('dashSubCosts');
+    if (!el) return;
     if (!subCosts || subCosts.length === 0) {
         el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:13px">No account cost data yet. Sync data first.</div>';
         return;
     }
     const grandTotal = subCosts.reduce((s, c) => s + c.cost, 0);
-    const colors = CHART_COLORS();
-    const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
+    const cloudBarColor = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
+    const accentOpacities = [1, 0.85, 0.70, 0.55, 0.40, 0.30];
     const $fmt = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
     el.innerHTML = subCosts.map((s, i) => {
         const pct = grandTotal > 0 ? (s.cost / grandTotal * 100) : 0;
-        const barColor = cloudColors[s.cloud] || colors[i % colors.length];
-        return `<div class="sub-cost-row" style="cursor:pointer" onclick="document.getElementById('globalSubFilter').value='${s.id}';onSubscriptionChange()">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                <div style="display:flex;align-items:center;gap:8px">
-                    <span style="width:10px;height:10px;border-radius:50%;background:${barColor};display:inline-block;flex-shrink:0"></span>
-                    <span style="font-size:13px;color:var(--text-primary);font-weight:500">${s.cloud_icon||'☁'} ${s.name}</span>
+        const barColor = cloudBarColor[s.cloud] || '#185FA5';
+        const opacity = accentOpacities[Math.min(i, accentOpacities.length - 1)];
+        const tagClass = s.cloud || 'azure';
+        const rank = i + 1;
+        return `<div class="db-rank-item" style="cursor:pointer" onclick="document.getElementById('globalSubFilter').value='${s.id}';onSubscriptionChange()">
+            <div class="db-rank-badge ${rank===1?'rank-1':''}">${rank}</div>
+            <div class="db-rank-item-body">
+                <div class="db-rank-item-top">
+                    <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                        <span class="db-rank-item-name">${s.name}</span>
+                        <span class="db-cloud-tag ${tagClass}">${tagClass.toUpperCase()}</span>
+                    </div>
+                    <span class="db-rank-item-cost">${$fmt(s.cost)}</span>
                 </div>
-                <div style="text-align:right">
-                    <div style="font-size:14px;font-weight:600;color:${barColor}">${$fmt(s.cost)}</div>
+                <div class="db-rank-item-bar-bg">
+                    <div class="db-rank-item-bar-fill" style="width:${pct}%;background:${barColor};opacity:${opacity}"></div>
                 </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px">
-                <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
-                    <div style="width:${pct}%;height:100%;background:${barColor};border-radius:3px;transition:width 0.5s"></div>
-                </div>
-                <span style="font-size:11px;color:var(--text-secondary);min-width:40px;text-align:right">${pct.toFixed(1)}%</span>
             </div>
         </div>`;
     }).join('');

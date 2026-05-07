@@ -9,8 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507c">
-    <link rel="stylesheet" href="/static/css/appearance.css?v=20260507b">
+    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507d">
+    <link rel="stylesheet" href="/static/css/appearance.css?v=20260507d">
     <script>
     (function () {
         var THEME_IDS = ['forest','ocean','ember','violet','rose','slate','aurora'];
@@ -265,100 +265,127 @@
 
     </section>
 
-    <!-- ═══ Dashboard Page ═══════════════════════════════════════════════ -->
+    <!-- ═══ Dashboard Page ══════════════════════════════════════════ -->
     <section id="page-dashboard" class="page-section active">
-        <div class="page-header">
-            <h2>Dashboard</h2>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-right:84px">
-                <div id="lastSyncInfo" class="sync-status">Last synced {{ last_sync_time }} · Auto-sync every 6h</div>
+
+        <!-- DB Header -->
+        <div class="db-header">
+            <div class="db-header-left">
+                <div class="db-breadcrumb">ANALYTICS / DASHBOARD</div>
+                <h1 class="db-title" id="dbTitle">Dashboard</h1>
+                <div class="db-sync-line">
+                    <span class="db-sync-dot" id="dbSyncDot"></span>
+                    <span id="lastSyncInfo" style="font-size:12px;color:var(--text-secondary)">Last synced {{ last_sync_time }} · Auto-sync every 6h</span>
+                </div>
+            </div>
+            <div class="db-segmented" id="cloudSegmented">
+                <button class="db-seg-btn active" data-cloud="" onclick="setCloudFilter('')">All clouds</button>
+                <button class="db-seg-btn" data-cloud="azure" onclick="setCloudFilter('azure')">Azure</button>
+                <button class="db-seg-btn" data-cloud="aws" onclick="setCloudFilter('aws')">AWS</button>
+                <button class="db-seg-btn" data-cloud="gcp" onclick="setCloudFilter('gcp')">GCP</button>
             </div>
         </div>
 
-        <!-- Cloud Provider Filter -->
-        <div id="cloudProviderFilter" style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:8px 14px">
-            <span style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.08em">Filter:</span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap" id="cloudFilterPills">
-                <button class="filter-chip active" data-cloud="" onclick="setCloudFilter('')">
-                    <span style="font-size:13px">☁</span> All Clouds
-                </button>
-                <button class="filter-chip" data-cloud="azure" onclick="setCloudFilter('azure')">
-                    <img src="/static/img/azure-logo.svg" alt="Azure" style="height:16px;vertical-align:middle"> Azure
-                </button>
-                <button class="filter-chip" data-cloud="aws" onclick="setCloudFilter('aws')">
-                    <img src="/static/img/aws-logo.svg" alt="AWS" style="height:14px;vertical-align:middle"> AWS
-                </button>
-                <button class="filter-chip" data-cloud="gcp" onclick="setCloudFilter('gcp')">
-                    <img src="/static/img/gcp-logo.svg" alt="GCP" style="height:16px;vertical-align:middle"> GCP
-                </button>
-            </div>
-            <span id="cloudFilterLabel" style="font-size:12px;color:var(--text-secondary)"></span>
-        </div>
-
-        <!-- Data Freshness + Billing Lag Banner -->
+        <!-- Data Freshness Banner -->
         <div id="dataFreshnessBanner" style="display:none;margin-bottom:12px"></div>
 
-        <!-- Current Month Hero -->
-        <div class="hero-card" id="heroCard">
-            <div class="hero-left">
-                <div class="hero-label"><span class="metric-label" id="heroMonthLabel">Current Month</span></div>
-                <div class="hero-amount"><span class="metric-number" id="heroAmount">$0.00</span></div>
-                <div class="hero-meta" id="heroMeta"></div>
-                <div class="hero-change" id="heroChange"></div>
+        <!-- 4 KPI Tiles -->
+        <div class="db-kpi-grid">
+            <div class="db-kpi-tile">
+                <div class="db-kpi-label">Total spend</div>
+                <div class="db-kpi-value-row">
+                    <span class="db-kpi-value" id="kpiTotal">$—</span>
+                    <span class="db-kpi-delta" id="kpiTotalDelta"></span>
+                </div>
+                <svg class="db-sparkline" viewBox="0 0 120 24" preserveAspectRatio="none">
+                    <polyline id="sparkTotalLine" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,20 120,20"/>
+                </svg>
+                <div class="db-kpi-sub" id="kpiTotalSub"></div>
             </div>
-            <div class="hero-right">
-                <div class="hero-stat">
-                    <span class="hero-stat-label metric-label">Avg / Day</span>
-                    <span class="hero-stat-value metric-number" id="heroAvgDaily">$0</span>
+            <div class="db-kpi-tile">
+                <div class="db-kpi-label">Avg / day</div>
+                <div class="db-kpi-value-row">
+                    <span class="db-kpi-value" id="kpiAvgDay">$—</span>
                 </div>
-                <div class="hero-stat">
-                    <span class="hero-stat-label metric-label">Projected Month-End</span>
-                    <span class="hero-stat-value metric-number" id="heroProjected">$0</span>
+                <svg class="db-sparkline" viewBox="0 0 120 24" preserveAspectRatio="none">
+                    <polyline id="sparkAvgLine" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,20 120,20"/>
+                </svg>
+                <div class="db-kpi-sub" id="kpiAvgSub"></div>
+            </div>
+            <div class="db-kpi-tile">
+                <div class="db-kpi-label">Projected EOM</div>
+                <div class="db-kpi-value-row">
+                    <span class="db-kpi-value" id="kpiProjected">$—</span>
                 </div>
-                <div class="hero-stat">
-                    <span class="hero-stat-label metric-label">Last Month Total</span>
-                    <span class="hero-stat-value metric-number" id="heroLastMonth">$0</span>
-                </div>
-                <div class="hero-progress-wrap">
-                    <div class="hero-progress-labels">
-                        <span id="heroProgressLabel">Day 0 of 0</span>
-                        <span id="heroProgressPct">0%</span>
+                <div class="db-kpi-progress-wrap">
+                    <div class="db-kpi-progress-bar">
+                        <div class="db-kpi-progress-fill" id="kpiProgressFill" style="width:0%"></div>
                     </div>
-                    <div class="hero-progress-bar">
-                        <div class="hero-progress-fill" id="heroProgressFill" style="width:0%"></div>
+                    <div class="db-kpi-progress-label" id="kpiProgressLabel">Day 0 of 31 — 0%</div>
+                </div>
+            </div>
+            <div class="db-kpi-tile">
+                <div class="db-kpi-label">Last month</div>
+                <div class="db-kpi-value-row">
+                    <span class="db-kpi-value" id="kpiLastMonth">$—</span>
+                </div>
+                <svg class="db-sparkline" viewBox="0 0 120 24" preserveAspectRatio="none">
+                    <polyline id="sparkLastLine" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,20 120,20"/>
+                </svg>
+                <div class="db-kpi-sub" id="kpiLastSub"></div>
+            </div>
+        </div>
+
+        <!-- Provider Cards -->
+        <div class="db-section">
+            <div class="db-section-hdr">
+                <span class="db-section-title">Cost by cloud provider <span class="db-section-period">· This month</span></span>
+                <button class="db-link-btn" onclick="navigateTo('cloud-overview')">View details →</button>
+            </div>
+            <div id="dbProviderCards" class="db-provider-grid"></div>
+        </div>
+
+        <!-- Mid Grid: Accounts + Services -->
+        <div class="db-mid-grid">
+            <div class="db-card">
+                <div class="db-card-hdr">
+                    <span class="db-card-title" id="dashSubTitle">Cost by account</span>
+                    <span class="db-card-period">This month</span>
+                </div>
+                <div id="dashSubCosts" class="db-ranked-list"></div>
+            </div>
+            <div class="db-card">
+                <div class="db-card-hdr">
+                    <span class="db-card-title" id="dashServiceTitle">Top services</span>
+                    <span class="db-card-period">This month</span>
+                </div>
+                <div class="db-donut-wrap">
+                    <div class="db-donut-canvas-wrap">
+                        <canvas id="dashServiceChart" width="160" height="160"></canvas>
+                        <div class="db-donut-center">
+                            <div class="db-donut-center-lbl">Total</div>
+                            <div class="db-donut-center-amt" id="dashServiceTotal">—</div>
+                        </div>
                     </div>
+                    <div id="dashTopServicesList" class="db-donut-legend"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Multi-Cloud Cost Breakdown Card (shown when multiple providers have data) -->
-        <div class="chart-card" id="cloudBreakdownCard" style="margin-bottom:16px;display:none;overflow:hidden">
-            <h3 style="margin-bottom:14px">Cost by Cloud Provider <span style="font-size:11px;font-weight:400;color:var(--text-secondary)">(This Month)</span></h3>
-            <div id="cloudBreakdownContent" style="display:flex;gap:12px;flex-wrap:wrap;width:100%"></div>
-        </div>
-
-        <!-- Middle Grid: Account Costs + Top Services -->
-        <div class="dash-middle-grid">
-            <div class="chart-card" style="margin-bottom:0">
-                <h3 id="dashSubTitle">Cost by Account <span style="font-size:11px;font-weight:400;color:var(--text-secondary)">(This Month)</span></h3>
-                <div id="dashSubCosts" style="max-height:300px;overflow-y:auto;margin-top:4px">
-                    <div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px">Loading...</div>
-                </div>
+        <!-- Top RGs full width -->
+        <div class="db-card">
+            <div class="db-card-hdr">
+                <span class="db-card-title" id="dashRGTitle">Top resource groups / projects</span>
+                <span class="db-card-period">This month</span>
             </div>
-            <div class="chart-card" style="margin-bottom:0">
-                <h3 id="dashServiceTitle">Top Services <span style="font-size:11px;font-weight:400;color:var(--text-secondary)">(This Month)</span></h3>
-                <div id="dashTopServicesList" class="top-list"></div>
-                <div style="height:180px;margin-top:12px"><canvas id="dashServiceChart"></canvas></div>
-            </div>
-        </div>
-
-        <!-- Bottom: Top Projects / RGs full width -->
-        <div class="chart-card" style="margin-bottom:0">
-            <h3 id="dashRGTitle">Top Projects / Accounts <span style="font-size:11px;font-weight:400;color:var(--text-secondary)">(This Month)</span></h3>
-            <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start">
-                <div id="dashTopRGsList" class="top-list"></div>
+            <div style="display:grid;grid-template-columns:1fr 220px;gap:16px;align-items:start">
+                <div id="dashTopRGsList" class="db-ranked-list"></div>
                 <div style="height:200px"><canvas id="dashRGChart"></canvas></div>
             </div>
         </div>
+
+        <!-- Hidden backward-compat -->
+        <span id="cloudFilterLabel" style="display:none"></span>
 
     </section>
 
@@ -2608,7 +2635,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260507c"></script>
+<script src="/static/js/app.js?v=20260507d"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
