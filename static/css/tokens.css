@@ -121,3 +121,23 @@ tbody tr:hover { background: var(--bg-hover); }
 .amount, .cost-value, .metric-value, .huge-number {
   font-weight: var(--fw-medium) !important; font-variant-numeric: tabular-nums;
 }
+
+/* ─── Dashboard header right group ────────────────────────────────────── */
+.page-header__right { display: flex; align-items: center; gap: 10px; }
+.header-divider { width: 1px; height: 24px; background: var(--border-default, rgba(0,0,0,.12)); flex-shrink: 0; }
+
+.icon-btn {
+  width: 32px; height: 32px; border-radius: 7px;
+  background: var(--bg-card); border: 1px solid var(--border-subtle, rgba(0,0,0,.06));
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-secondary); cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  padding: 0;
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.icon-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* moon shown in dark mode (default), sun shown in light mode */
+.theme-toggle .icon-sun { display: none; }
+html[data-appearance="light"] .theme-toggle .icon-moon { display: none; }
+html[data-appearance="light"] .theme-toggle .icon-sun  { display: inline-block; }

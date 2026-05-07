@@ -60,16 +60,16 @@ function _updateCloudLabels(cloud) {
     const filterLabel = document.getElementById('cloudFilterLabel');
 
     if (meta) {
-        if (subTitle) subTitle.innerHTML = `Cost by ${meta.groupLabel.sub} <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(This Month)</span>`;
-        if (svcTitle) svcTitle.textContent = `Top ${meta.label} Services (This Month)`;
-        if (rgTitle)  rgTitle.textContent  = `Top ${meta.groupLabel.rg}s (This Month)`;
+        if (subTitle) subTitle.textContent = `Cost by ${meta.groupLabel.sub.toLowerCase()}`;
+        if (svcTitle) svcTitle.textContent = `Top ${meta.label.toLowerCase()} services`;
+        if (rgTitle)  rgTitle.textContent  = `Top ${meta.groupLabel.rg.toLowerCase()}s`;
         if (filterLabel) filterLabel.textContent = `Showing ${meta.label} costs only`;
         // Update segmented control active state
         document.querySelectorAll('.db-seg-btn[data-cloud]').forEach(b => b.classList.toggle('active', b.dataset.cloud === (selectedCloud||'')));
     } else {
-        if (subTitle) subTitle.innerHTML = `Cost by Account / Subscription / Project <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(This Month)</span>`;
-        if (svcTitle) svcTitle.textContent = `Top Services (This Month)`;
-        if (rgTitle)  rgTitle.textContent  = `Top Resource Groups / Regions / Projects (This Month)`;
+        if (subTitle) subTitle.textContent = `Cost by account / subscription / project`;
+        if (svcTitle) svcTitle.textContent = `Top services`;
+        if (rgTitle)  rgTitle.textContent  = `Top resource groups / regions / projects`;
         if (filterLabel) filterLabel.textContent = '';
         document.querySelectorAll('.db-seg-btn[data-cloud]').forEach(b => b.classList.toggle('active', b.dataset.cloud === ''));
     }
@@ -92,14 +92,16 @@ function renderCloudBreakdown(cloudBreakdown) {
     const lm  = cloudBreakdown.last_month || {};
     const m2  = cloudBreakdown.two_months_ago || {};
     const lmLabel = cloudBreakdown.last_month_label || 'Last Month';
-    const colors  = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
-    const names   = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
-    const initials= { azure: 'Az', aws: 'AW', gcp: 'GC' };
+    const colors   = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
+    const names    = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
+    const initials = { azure: 'Az', aws: 'AW', gcp: 'GC' };
+    // spark stroke uses CSS chart vars: aws→chart-3(amber), azure→chart-1(blue), gcp→chart-2(teal)
+    const sparkStroke = { aws: 'var(--chart-3,#BA7517)', azure: 'var(--chart-1,#185FA5)', gcp: 'var(--chart-2,#1D9E75)' };
+    const sparkFill   = { aws: 'rgba(186,117,23,.08)',   azure: 'rgba(24,95,165,.08)',    gcp: 'rgba(29,158,117,.08)' };
     const allClouds = ['aws', 'azure', 'gcp'];
     const total = allClouds.reduce((s, c) => s + (cur[c] || 0), 0);
     const $fmt = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
     const $fmtShort = v => '$' + (v||0).toLocaleString(undefined, {maximumFractionDigits:0});
-    // find largest cloud
     const maxCloud = allClouds.reduce((a, c) => (cur[c]||0) > (cur[a]||0) ? c : a, 'azure');
 
     container.innerHTML = allClouds.map(cloud => {
@@ -111,6 +113,12 @@ function renderCloudBreakdown(cloudBreakdown) {
         const deltaSign  = lmDiff !== null ? (lmDiff > 0 ? '▲' : '▼') : '';
         const deltaColor = lmDiff !== null ? (lmDiff > 0 ? 'var(--red,#e74c3c)' : 'var(--green,#2ecc71)') : 'var(--text-secondary)';
         const featured = cloud === maxCloud && cost > 0 ? 'featured' : '';
+        // Generate 13-point sparkline normalized to 0-30 viewBox height
+        const trend = lmDiff !== null ? lmDiff : 0;
+        const sparkPts = _makeProviderSparkPoints(trend, 13);
+        const fillPts  = sparkPts + ' 200,30 0,30';
+        const stroke = sparkStroke[cloud];
+        const fill   = sparkFill[cloud];
         return `<div class="db-provider-card ${featured}" onclick="setCloudFilter('${cloud}')">
             <div class="db-provider-card-top">
                 <div style="display:flex;align-items:center;gap:8px">
@@ -120,7 +128,10 @@ function renderCloudBreakdown(cloudBreakdown) {
                 <span class="db-provider-badge">${pct}%</span>
             </div>
             <div class="db-provider-amount">${$fmt(cost)}</div>
-            <div class="db-provider-bar-bg"><div class="db-provider-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+            <svg class="provider-card__spark" viewBox="0 0 200 30" preserveAspectRatio="none">
+                <polyline points="${sparkPts}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <polyline points="${fillPts}" fill="${fill}" stroke="none"/>
+            </svg>
             <div class="db-provider-footer">
                 <span class="db-provider-footer-label">${lmLabel} ${$fmtShort(lmCost)}</span>
                 ${lmDiff !== null ? `<span class="db-provider-footer-delta" style="color:${deltaColor}">${deltaSign}${Math.abs(lmDiff).toFixed(1)}%</span>` : ''}
@@ -207,6 +218,19 @@ function onSubscriptionChange() {
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────
+function _makeProviderSparkPoints(trend, steps = 13) {
+    // viewBox 0 0 200 30, y=0 top, y=30 bottom
+    const pts = [];
+    let y = trend > 0 ? 22 : 10;
+    for (let i = 0; i < steps; i++) {
+        const noise = (Math.random() - 0.48) * 4;
+        const drift = trend > 0 ? -0.9 : 0.9;
+        y = Math.max(3, Math.min(27, y + drift + noise));
+        pts.push(`${((i / (steps - 1)) * 200).toFixed(1)},${y.toFixed(1)}`);
+    }
+    return pts.join(' ');
+}
+
 function _makeSparkPoints(trend, steps = 13) {
     const pts = [];
     let y = trend > 0 ? 18 : 8;
@@ -583,7 +607,7 @@ function renderSubCosts(subCosts) {
     const accentOpacities = [1, 0.85, 0.70, 0.55, 0.40, 0.30];
     const $fmt = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
     el.innerHTML = subCosts.map((s, i) => {
-        const pct = grandTotal > 0 ? (s.cost / grandTotal * 100) : 0;
+        const pct = Math.min(100, grandTotal > 0 ? (s.cost / grandTotal * 100) : 0);
         const barColor = cloudBarColor[s.cloud] || '#185FA5';
         const opacity = accentOpacities[Math.min(i, accentOpacities.length - 1)];
         const tagClass = s.cloud || 'azure';
@@ -594,7 +618,7 @@ function renderSubCosts(subCosts) {
                 <div class="db-rank-item-top">
                     <div style="display:flex;align-items:center;gap:6px;min-width:0">
                         <span class="db-rank-item-name">${s.name}</span>
-                        <span class="db-cloud-tag ${tagClass}">${tagClass.toUpperCase()}</span>
+                        <span class="db-cloud-tag ${tagClass}">${tagClass}</span>
                     </div>
                     <span class="db-rank-item-cost">${$fmt(s.cost)}</span>
                 </div>
@@ -631,7 +655,7 @@ function renderTopList(containerId, items) {
     }
     const maxCost = items[0].cost || 1;
     el.innerHTML = items.map((item, i) => {
-        const pct = Math.max(4, (item.cost / maxCost) * 100);
+        const pct = Math.min(100, Math.max(4, (item.cost / maxCost) * 100));
         return `<div class="top-list-item">
             <div class="top-list-rank">${i + 1}</div>
             <div class="top-list-body">
@@ -4449,6 +4473,7 @@ const UI_APPEARANCE_KEY = 'uiAppearance';
 
 function syncAppearanceToggleActive() {
     const isLight = document.documentElement.getAttribute('data-appearance') === 'light';
+    // legacy floating buttons (removed from DOM but guard anyway)
     const night = document.getElementById('appearanceNightBtn');
     const sun   = document.getElementById('appearanceSunBtn');
     if (night) { night.style.opacity = isLight ? '0.45' : '1'; night.style.boxShadow = isLight ? '' : '0 0 0 2px var(--accent)'; }
@@ -4509,6 +4534,15 @@ function initAppearanceToggle() {
         }
     } catch (e) { /* ignore */ }
     syncAppearanceToggleActive();
+
+    // Wire in-header theme toggle button
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', () => {
+            const isLight = document.documentElement.getAttribute('data-appearance') === 'light';
+            applyAppearance(isLight ? 'dark' : 'light');
+        });
+    }
 }
 
 function applyUiTheme(theme) {
