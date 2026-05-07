@@ -124,7 +124,7 @@ tbody tr:hover { background: var(--bg-hover); }
 
 /* ─── Sidebar user-tile action buttons (theme toggle + sign-out) ──────── */
 .user-tile__action {
-  width: 26px; height: 26px; border-radius: 6px;
+  width: 30px; height: 30px; border-radius: 6px;
   background: transparent; border: 1px solid transparent;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--text-secondary); cursor: pointer; flex-shrink: 0;
