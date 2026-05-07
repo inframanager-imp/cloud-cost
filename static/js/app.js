@@ -385,6 +385,27 @@ const PROVIDER_META = {
     gcp:   { label: 'GCP',    logo: '◉', color: '#4285f4', bg: 'rgba(66,133,244,0.10)' },
 };
 
+function _coFmtShort(v) {
+    if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+    if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'K';
+    return '$' + Math.round(v).toLocaleString();
+}
+
+function _computeSparkPoints(trend, width, height) {
+    if (!trend || trend.length < 2) return null;
+    const costs = trend.map(d => d.cost || 0);
+    const maxC = Math.max(...costs);
+    if (maxC === 0) return null;
+    const minC = Math.min(...costs);
+    const range = maxC - minC || 1;
+    const step = width / (trend.length - 1);
+    return trend.map((d, i) => {
+        const x = Math.round(i * step * 10) / 10;
+        const y = Math.round((height - 2 - ((d.cost - minC) / range) * (height - 6)) * 10) / 10;
+        return `${x},${y}`;
+    }).join(' ');
+}
+
 async function loadCloudOverview() {
     const grid    = document.getElementById('coProviderGrid');
     const summBar = document.getElementById('coSummaryBar');
@@ -411,117 +432,169 @@ async function loadCloudOverview() {
         })
     );
 
-    // 3. Summary bar — totals across all clouds this month
-    const totalAll = results.reduce((s, r) => s + (r.data?.current_month?.total || 0), 0);
-    const lastAll  = results.reduce((s, r) => s + (r.data?.last_month?.total  || 0), 0);
-    const momAll   = lastAll > 0 ? ((totalAll - lastAll) / lastAll * 100) : 0;
-    const momSign  = momAll > 0 ? '+' : '';
-    const momColor = momAll > 0 ? '#f87171' : '#4ade80';
-    const activeProviders = results.filter(r => r.hasData && r.data?.current_month?.total > 0).length;
+    // 3. Summary totals
+    const totalAll      = results.reduce((s, r) => s + (r.data?.current_month?.total || 0), 0);
+    const lastAll       = results.reduce((s, r) => s + (r.data?.last_month?.total  || 0), 0);
+    const activeProvs   = results.filter(r => r.hasData && (r.data?.current_month?.total || 0) > 0).length;
+    const totalAccounts = results.reduce((s, r) => s + ((r.data?.subscription_costs || []).filter(x => x.cost > 0).length), 0);
+    const momAll        = lastAll > 0 ? ((totalAll - lastAll) / lastAll * 100) : 0;
+    const avgPerDay     = results.reduce((s, r) => s + (r.data?.current_month?.avg_daily || 0), 0);
+    const daysTracked   = results.reduce((m, r) => Math.max(m, r.data?.current_month?.days_elapsed || 0), 0);
+    const lastMonthLabel = results[0]?.data?.last_month?.label || 'Last month';
 
     if (period) period.textContent = results[0]?.data?.current_month?.label || '';
 
+    // 4. KPI strip
     if (summBar) {
+        const momDir = momAll < 0 ? 'down' : 'up';
+        const momArrow = momAll < 0 ? '▼' : '▲';
         summBar.innerHTML = `
-            <div class="stat-card">
-                <div class="stat-label">Total This Month (All Clouds)</div>
-                <div class="stat-value green">$${totalAll.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+            <div class="co-kpi">
+                <div class="co-kpi__label">Total this month</div>
+                <div class="co-kpi__value-row">
+                    <span class="co-kpi__value">${_coFmtShort(totalAll)}</span>
+                    <span class="co-kpi__delta delta-${momDir}">${momArrow} ${Math.abs(momAll).toFixed(1)}%</span>
+                </div>
+                <div class="co-kpi__sub">across all clouds</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Last Month (All Clouds)</div>
-                <div class="stat-value accent">$${lastAll.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+            <div class="co-kpi">
+                <div class="co-kpi__label">Last month</div>
+                <div class="co-kpi__value-row">
+                    <span class="co-kpi__value">${_coFmtShort(lastAll)}</span>
+                </div>
+                <div class="co-kpi__sub">${lastMonthLabel} total</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Month-over-Month Change</div>
-                <div class="stat-value" style="color:${momColor}">${momSign}${momAll.toFixed(1)}%</div>
+            <div class="co-kpi">
+                <div class="co-kpi__label">Avg / day</div>
+                <div class="co-kpi__value-row">
+                    <span class="co-kpi__value">$${Math.round(avgPerDay).toLocaleString()}</span>
+                </div>
+                <div class="co-kpi__sub">${daysTracked}-day average</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Active Cloud Providers</div>
-                <div class="stat-value accent">${activeProviders}</div>
+            <div class="co-kpi">
+                <div class="co-kpi__label">Active providers</div>
+                <div class="co-kpi__value-row">
+                    <span class="co-kpi__value">${activeProvs}</span>
+                    <span class="co-kpi__sub-inline">of 3</span>
+                </div>
+                <div class="co-kpi__sub">${totalAccounts} accounts connected</div>
             </div>`;
     }
 
-    // 4. Render provider cards
-    const colors = CHART_COLORS();
+    // 5. Compute share_pct for each provider
+    const provTotals = { azure: 0, aws: 0, gcp: 0 };
+    results.forEach(r => { provTotals[r.cloud] = r.data?.current_month?.total || 0; });
+    const maxProvTotal = Math.max(...Object.values(provTotals));
+
+    // Brand palette
+    const cloudColor   = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
+    const sparkStroke  = { azure: 'var(--chart-1,#185FA5)', aws: 'var(--chart-3,#BA7517)', gcp: 'var(--chart-2,#1D9E75)' };
+    const cloudFull    = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud' };
+    const logoH        = { azure: '16', aws: '13', gcp: '16' };
+
+    // 6. Render provider cards
     grid.innerHTML = '';
 
     ['azure', 'aws', 'gcp'].forEach(cloud => {
         const r    = results.find(x => x.cloud === cloud);
-        const meta = PROVIDER_META[cloud];
         const card = document.createElement('div');
-        card.className = 'co-provider-card';
 
-        if (!r || !r.hasData || !r.data || !r.data.current_month?.total) {
-            // Empty / not connected card
-            card.className = 'co-empty-card';
+        if (!r || !r.hasData || !(r.data?.current_month?.total)) {
+            card.className = 'co-empty-lg';
             card.innerHTML = `
-                <div class="co-logo">${meta.logo}</div>
-                <div style="font-weight:600;color:var(--text-primary)">${meta.label}</div>
-                <div style="font-size:12px">No cost data available for this provider.</div>
-                <button class="btn btn-secondary" style="font-size:12px;margin-top:4px" onclick="navigateTo('cloud-providers')">
-                    Connect ${meta.label}
+                <img src="/static/img/${cloud}-logo.svg" alt="${cloud}" style="height:28px;opacity:0.45">
+                <div style="font-size:13px;font-weight:500;color:var(--text-primary)">${cloudFull[cloud]}</div>
+                <div style="font-size:12px;color:var(--text-secondary)">No cost data for this provider.</div>
+                <button class="cp-btn-secondary" style="font-size:12px;margin-top:4px" onclick="navigateTo('cloud-providers')">
+                    Connect ${cloudFull[cloud].split(' ')[0]}
                 </button>`;
             grid.appendChild(card);
             return;
         }
 
-        const cm  = r.data.current_month;
-        const lm  = r.data.last_month;
-        const mom = r.data.mom_change_pct || 0;
-        const momDir   = mom > 0 ? 'up' : 'down';
-        const momArrow = mom > 0 ? '▲' : '▼';
-        const subs     = (r.data.subscription_costs || []).filter(s => s.cost > 0);
-        const services = (r.data.top_services || []).filter(s => s.name && s.name !== 'Unknown').slice(0, 5);
-        const topSubs  = subs.slice(0, 5);
-        const maxSvc   = services[0]?.cost || 1;
-        const maxSub   = topSubs[0]?.cost  || 1;
+        const cm      = r.data.current_month;
+        const lm      = r.data.last_month;
+        const mom     = r.data.mom_change_pct || 0;
+        const subs    = (r.data.subscription_costs || []).filter(s => s.cost > 0);
+        const topSubs = subs.slice(0, 3);
+        const maxSub  = topSubs[0]?.cost || 1;
+        const sharePct  = totalAll > 0 ? Math.round(cm.total / totalAll * 100) : 0;
+        const isLargest = cm.total === maxProvTotal && maxProvTotal > 0;
+        const momDir2   = mom < 0 ? 'down' : 'up';
+        const momArrow2 = mom < 0 ? '▼' : '▲';
 
-        card.style.borderTop = `3px solid ${meta.color}`;
+        // Sparkline — last 13 days of daily trend
+        const trend13   = (cm.trend || []).slice(-13);
+        const sparkPts  = _computeSparkPoints(trend13, 240, 32);
+        const fillPts   = sparkPts && trend13.length > 1 ? `${sparkPts} 240,32 0,32` : null;
+        const clr       = cloudColor[cloud];
+        const strokeClr = sparkStroke[cloud];
+
+        card.className = 'co-card-lg' + (isLargest ? ' co-card-lg--featured' : '');
         card.innerHTML = `
-            <div class="co-card-header" style="background:${meta.bg}">
-                <span class="co-logo">${meta.logo}</span>
-                <span class="co-title">${meta.label}</span>
-                <span class="co-badge" style="background:${meta.bg};color:${meta.color};border:1px solid ${meta.color}44">
-                    ${subs.length} account${subs.length !== 1 ? 's' : ''}
-                </span>
+            <div class="co-card-lg__head">
+                <div class="co-card-lg__brand">
+                    <div class="co-card-lg__icon" style="background:${clr}">
+                        <img src="/static/img/${cloud}-logo.svg" alt="${cloud}" style="height:${logoH[cloud]}px;filter:brightness(0) invert(1)">
+                    </div>
+                    <div>
+                        <div class="co-card-lg__name">${cloudFull[cloud]}</div>
+                        <div class="co-card-lg__sub">${subs.length} account${subs.length !== 1 ? 's' : ''}</div>
+                    </div>
+                </div>
+                <span class="co-card-lg__share" style="background:${clr}1a;color:${clr}">${sharePct}%</span>
             </div>
 
-            <div class="co-hero">
-                <span class="co-hero-amount">$${cm.total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
-                <span class="co-hero-change ${momDir}">${momArrow} ${Math.abs(mom).toFixed(1)}%</span>
-            </div>
-            <div class="co-meta-row">
-                <div class="co-meta-item">This month <strong>${cm.label}</strong></div>
-                <div class="co-meta-item">Last month <strong>$${lm.total.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</strong></div>
-                <div class="co-meta-item">Avg/day <strong>$${cm.avg_daily.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</strong></div>
-                <div class="co-meta-item">Projected <strong>$${cm.projected.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</strong></div>
+            <div class="co-card-lg__amount">
+                <span class="metric-number">$${cm.total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                <span class="co-card-lg__delta delta-${momDir2}">${momArrow2} ${Math.abs(mom).toFixed(1)}%</span>
             </div>
 
+            <svg class="co-card-lg__spark" viewBox="0 0 240 32" preserveAspectRatio="none">
+                ${fillPts ? `<polyline points="${fillPts}" fill="${clr}" fill-opacity="0.08" stroke="none"/>` : ''}
+                ${sparkPts ? `<polyline points="${sparkPts}" fill="none" stroke="${strokeClr}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+            </svg>
+
+            <div class="co-card-lg__stats">
+                <div>
+                    <div class="co-stat-cell__label">Last month</div>
+                    <div class="co-stat-cell__value">$${Math.round(lm.total).toLocaleString()}</div>
+                </div>
+                <div>
+                    <div class="co-stat-cell__label">Avg / day</div>
+                    <div class="co-stat-cell__value">$${Math.round(cm.avg_daily).toLocaleString()}</div>
+                </div>
+                <div>
+                    <div class="co-stat-cell__label">Projected</div>
+                    <div class="co-stat-cell__value">$${Math.round(cm.projected).toLocaleString()}</div>
+                </div>
+            </div>
 
             ${topSubs.length ? `
-            <div class="co-section-label">Accounts / Subscriptions</div>
-            <div class="co-list">
-                ${topSubs.map((s, i) => `
-                <div class="co-list-item">
-                    <span style="color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px" title="${_esc(s.name)}">${_esc(s.name)}</span>
-                    <div class="co-bar-wrap"><div class="co-bar-fill" style="width:${Math.round((s.cost/maxSub)*100)}%;background:${meta.color}"></div></div>
-                    <span class="co-cost">$${s.cost.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
-                </div>`).join('')}
+            <div>
+                <div class="co-card-lg__section-head">
+                    <span class="co-micro-label">Top accounts</span>
+                    <span class="co-micro-label" style="font-weight:400">${subs.length} total</span>
+                </div>
+                <div class="co-rank-list">
+                    ${topSubs.map((s, i) => `
+                    <div class="co-rank-item">
+                        <div class="co-rank-row">
+                            <span class="co-rank-name" title="${_esc(s.name)}">${_esc(s.name)}</span>
+                            <span class="co-rank-amt">$${Math.round(s.cost).toLocaleString()}</span>
+                        </div>
+                        <div class="co-rank-bar"><div class="co-rank-bar__fill" style="width:${Math.round(s.cost/maxSub*100)}%;background:${clr};opacity:${1-i*0.25}"></div></div>
+                    </div>`).join('')}
+                </div>
             </div>` : ''}
 
-            <div class="co-card-footer">
-                <button class="btn btn-primary" style="font-size:12px;flex:1" onclick="setCloudFilter('${cloud}');navigateTo('dashboard')">
-                    View Dashboard
-                </button>
-                <button class="btn btn-secondary" style="font-size:12px;flex:1" onclick="setCloudFilter('${cloud}');navigateTo('costs')">
-                    Cost Data
-                </button>
+            <div class="co-card-lg__actions">
+                <button class="cp-btn-secondary" style="flex:1;justify-content:center" onclick="setCloudFilter('${cloud}');navigateTo('dashboard')">View dashboard</button>
+                <button class="co-btn-link" onclick="setCloudFilter('${cloud}');navigateTo('costs')">Cost data →</button>
             </div>`;
+
         grid.appendChild(card);
     });
-
-    // 5. Trend chart — monthly costs per provider (last 6 months)
-    _renderCoTrendChart(results);
 }
 
 async function _renderCoTrendChart(results) {
@@ -859,28 +932,27 @@ async function loadCostsTable() {
         const sortedData = sortCostRows(data);
         updateCostSortIndicators();
 
-        const cloudIcons = { azure: '⊞', aws: '⚙', gcp: '◉' };
+        const cloudLogoH = { azure: '12', aws: '10', gcp: '12' };
+        const cloudNames = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
         if (!sortedData.length) {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-secondary)">No records found for current filters.</td></tr>`;
         } else {
             tbody.innerHTML = sortedData.map(r => {
-                const cloudIcon = cloudIcons[r.cloud_provider] || '☁';
-                const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
-                const cloudColor = cloudColors[r.cloud_provider] || 'var(--text-secondary)';
+                const cp = (r.cloud_provider || 'azure').toLowerCase();
+                const logoH = cloudLogoH[cp] || '12';
+                const cloudLabel = cloudNames[cp] || cp.charAt(0).toUpperCase() + cp.slice(1);
+                const cloudCell = `<div class="cloud-cell"><img src="/static/img/${cp}-logo.svg" alt="${cloudLabel}" style="height:${logoH}px;flex-shrink:0"><span>${cloudLabel}</span></div>`;
                 let tags = {};
                 try { tags = r.tags ? JSON.parse(r.tags) : {}; } catch(e) {}
                 const vmName = tags.name || null;
                 let prettyResourceName = r.resource_name || '';
-                // AWS resource names are often full ARNs; show only the trailing friendly name.
-                if ((r.cloud_provider || '').toLowerCase() === 'aws' && prettyResourceName.startsWith('arn:')) {
+                if (cp === 'aws' && prettyResourceName.startsWith('arn:')) {
                     const parts = prettyResourceName.split(':');
                     const arnResourcePart = parts.length >= 6 ? parts.slice(5).join(':') : prettyResourceName;
                     if (arnResourcePart.startsWith('loadbalancer/')) {
-                        // ARN pattern: loadbalancer/{app|net}/{lb-name}/{id}
                         const lbParts = arnResourcePart.split('/');
                         prettyResourceName = lbParts[2] || lbParts[lbParts.length - 1] || prettyResourceName;
                     } else if (arnResourcePart.startsWith('db:')) {
-                        // ARN pattern: db:{db-identifier}
                         prettyResourceName = arnResourcePart.split(':')[1] || prettyResourceName;
                     } else {
                         const slashParts = arnResourcePart.split('/');
@@ -888,18 +960,18 @@ async function loadCostsTable() {
                     }
                 }
                 const resourceDisplay = vmName
-                    ? `<span style="font-weight:600">${vmName}</span><br><span style="font-size:11px;color:var(--text-secondary)">${prettyResourceName}</span>`
+                    ? `<span style="font-weight:500">${vmName}</span><br><span style="font-size:11px;color:var(--text-tertiary)">${prettyResourceName}</span>`
                     : (prettyResourceName || '-');
                 const resourceTitle = vmName ? `${vmName} (${prettyResourceName})` : (prettyResourceName || '');
                 const rawDate = (r.date || '').toString();
                 const dateOnly = granularity === 'monthly' ? rawDate.slice(0, 7) : rawDate.split('T')[0];
                 return `<tr>
-                <td style="white-space:nowrap">${dateOnly}</td>
-                <td style="white-space:nowrap;font-size:13px;color:${cloudColor}">${cloudIcon} ${(r.cloud_provider || 'azure').toUpperCase()}</td>
-                <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.resource_group||''}">${r.resource_group || '-'}</td>
-                <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.service_name||''}">${r.service_name || '-'}</td>
-                <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:var(--accent);text-decoration:underline;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))">${resourceDisplay}</td>
-                <td class="cell-cost" style="font-weight:600;color:var(--green);white-space:nowrap">$${r.cost.toFixed(4)}</td>
+                <td style="white-space:nowrap;color:var(--text-secondary)">${dateOnly}</td>
+                <td>${cloudCell}</td>
+                <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.resource_group||''}">${r.resource_group || '-'}</td>
+                <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.service_name||''}">${r.service_name || '-'}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))"><span class="res-link">${resourceDisplay}</span></td>
+                <td class="cost-cell">$${(r.cost || 0).toFixed(2)}</td>
             </tr>`;
             }).join('');
         }
@@ -910,7 +982,13 @@ async function loadCostsTable() {
         const page = Math.floor(costPageOffset / costPageLimit) + 1;
         const pages = Math.max(1, Math.ceil(costPageTotal / costPageLimit));
         const countChip = document.getElementById('costRowCountChip');
-        if (countChip) countChip.textContent = `${costPageTotal.toLocaleString()} records · showing ${from}-${to}`;
+        if (countChip) countChip.textContent = `${costPageTotal.toLocaleString()} records · showing ${from}–${to}`;
+        const subtitleBar = document.getElementById('costsSubtitleBar');
+        if (subtitleBar && costPageTotal > 0) {
+            subtitleBar.textContent = `Showing ${from}–${to} of ${costPageTotal.toLocaleString()} records · $${(totals.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})} filtered total`;
+        } else if (subtitleBar) {
+            subtitleBar.textContent = 'No records match current filters';
+        }
         const pageInfo = document.getElementById('costPageInfo');
         if (pageInfo) pageInfo.textContent = `Page ${page} of ${pages}`;
         const prev = document.getElementById('costPrevBtn');
@@ -939,7 +1017,7 @@ async function loadCostsTable() {
             bySubBody.innerHTML = totalsBySub.map(s => `
                 <tr>
                     <td>${s.subscription_name || s.subscription_id || '-'}</td>
-                    <td style="text-align:right;font-weight:600;color:var(--green)">$${(s.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                    <td style="text-align:right;font-weight:500;color:var(--text-primary)">$${(s.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
                 </tr>
             `).join('');
         }
@@ -969,9 +1047,18 @@ function changeCostPage(delta) {
 function toggleCostCompact() {
     costCompact = !costCompact;
     const table = document.getElementById('costsTable');
-    const btn = document.getElementById('costCompactToggle');
     if (table) table.classList.toggle('compact', costCompact);
-    if (btn) btn.classList.toggle('active', costCompact);
+}
+
+function setCostDensity(mode, btn) {
+    costCompact = (mode === 'compact');
+    const table = document.getElementById('costsTable');
+    if (table) table.classList.toggle('compact', costCompact);
+    if (btn) {
+        const ctrl = document.getElementById('costDensityCtrl');
+        if (ctrl) ctrl.querySelectorAll('.cp-seg').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
 }
 
 function sortCostsBy(field) {
@@ -1008,15 +1095,17 @@ function sortCostRows(rows) {
 }
 
 function updateCostSortIndicators() {
-    const fields = ['date', 'resource_group', 'service_name', 'resource_name', 'meter_category', 'cost'];
+    const fields = ['date', 'cloud_provider', 'resource_group', 'service_name', 'resource_name', 'meter_category', 'cost'];
     fields.forEach(f => {
         const el = document.getElementById(`sort-${f}`);
         if (!el) return;
         if (f === costSortBy) {
             el.textContent = costSortDir === 'asc' ? '↑' : '↓';
+            el.style.color = 'var(--text-primary)';
             el.classList.add('active');
         } else {
             el.textContent = '↕';
+            el.style.color = 'var(--text-tertiary)';
             el.classList.remove('active');
         }
     });
@@ -4612,7 +4701,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let searchTimeout;
     document.getElementById('costSearch')?.addEventListener('input', () => {
         clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(loadCostsTable, 300);
+        searchTimeout = setTimeout(loadCostsTable, 250);
     });
 
     // Search debounce for activity page
