@@ -42,6 +42,15 @@ html[data-appearance="light"] {
     --subfilter-option-bg: #ffffff;
 }
 
+html[data-appearance="light"] select.filter-input {
+    color-scheme: light;
+}
+
+html[data-appearance="light"] select.filter-input option {
+    background-color: #e8ecf2;
+    color: #141821;
+}
+
 /* Sidebar appearance toggle */
 .sidebar-appearance {
     padding: 10px 16px 8px;
