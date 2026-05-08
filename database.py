@@ -868,7 +868,7 @@ def get_summary(group_by="service_name", date_from=None, date_to=None, subscript
 def get_daily_trend(date_from=None, date_to=None, resource_group=None, service_name=None, subscription_id=None, tenant_id=None, cloud_provider=None):
     conn = get_db()
     query = """
-        SELECT date, SUM(cost) as total_cost, currency
+        SELECT SUBSTR(date, 1, 10) AS date, SUM(cost) as total_cost, currency
         FROM cost_data WHERE 1=1
     """
     params = []
@@ -876,10 +876,10 @@ def get_daily_trend(date_from=None, date_to=None, resource_group=None, service_n
         query += " AND subscription_id = ?"
         params.append(subscription_id)
     if date_from:
-        query += " AND date >= ?"
+        query += " AND SUBSTR(date, 1, 10) >= ?"
         params.append(date_from)
     if date_to:
-        query += " AND date <= ?"
+        query += " AND SUBSTR(date, 1, 10) <= ?"
         params.append(date_to)
     if resource_group:
         query += " AND resource_group LIKE ?"
@@ -894,7 +894,7 @@ def get_daily_trend(date_from=None, date_to=None, resource_group=None, service_n
         query += " AND cloud_provider = ?"
         params.append(cloud_provider)
 
-    query += " GROUP BY date ORDER BY date ASC"
+    query += " GROUP BY SUBSTR(date, 1, 10) ORDER BY date ASC"
 
     rows = conn.execute(query, params).fetchall()
     conn.close()

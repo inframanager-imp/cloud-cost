@@ -203,6 +203,9 @@ function navigateTo(page) {
     if (page === 'reports') loadReportsPage();
     if (page === 'activity') loadActivityPage();
     if (page === 'subscriptions') loadSubscriptionsPage();
+    if (page === 'budgets') loadBudgetsPage();
+    if (page === 'cloud-providers') loadCloudProvidersPage();
+    if (page === 'team') loadTeamPage();
 }
 
 function subParam(prefix = '?') {
@@ -210,6 +213,76 @@ function subParam(prefix = '?') {
     if (selectedSubscription) parts.push(`subscription_id=${selectedSubscription}`);
     if (selectedCloud) parts.push(`cloud_provider=${selectedCloud}`);
     return parts.length ? prefix + parts.join('&') : '';
+}
+
+async function loadBudgetsPage() {
+    const grid = document.getElementById('budgetCardsGrid');
+    const alertBody = document.getElementById('alertHistoryBody');
+    try {
+        const budgets = await fetch('/api/budgets').then(r => r.json()).catch(() => []);
+        if (grid) {
+            if (!budgets || budgets.length === 0) {
+                grid.innerHTML = _emptyState('success',
+                    '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+                    'No budgets yet',
+                    'Set monthly spend limits and get notified before you blow past them.',
+                    [{label:'+ New budget', primary:true, onclick:'showBudgetModal()'}]
+                );
+            }
+        }
+        const alerts = await fetch('/api/budgets/alerts').then(r => r.json()).catch(() => []);
+        if (alertBody) {
+            if (!alerts || alerts.length === 0) {
+                alertBody.innerHTML = `<tr><td colspan="5" style="padding:0;border:none">` +
+                    _emptyState('success',
+                        '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+                        'All caught up',
+                        'No alerts triggered yet. Your budgets are healthy.'
+                    ) + `</td></tr>`;
+            }
+        }
+    } catch (err) {
+        console.error('Budgets page error:', err);
+    }
+}
+
+async function loadCloudProvidersPage() {
+    const tbody = document.getElementById('providersTableBody');
+    if (!tbody) return;
+    try {
+        const providers = await fetch('/api/cloud-providers').then(r => r.json()).catch(() => []);
+        if (!providers || providers.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="padding:0;border:none">` +
+                _emptyState('info',
+                    '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
+                    'Connect your first cloud',
+                    'Link AWS, Azure, or GCP to start tracking costs. Takes about 2 minutes.',
+                    [{label:'+ Add provider', primary:true, onclick:'showProviderModal()'}]
+                ) + `</td></tr>`;
+        }
+    } catch (err) {
+        console.error('Cloud providers page error:', err);
+    }
+}
+
+async function loadTeamPage() {
+    const tbody = document.getElementById('team-members-tbody');
+    if (!tbody) return;
+    try {
+        const data = await fetch('/api/team/members').then(r => r.json()).catch(() => null);
+        const members = data?.members || data || [];
+        if (!members || members.length <= 1) {
+            tbody.innerHTML = `<tr><td colspan="5" style="padding:0;border:none">` +
+                _emptyState('info',
+                    '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>',
+                    'Invite your teammates',
+                    'Bring in finance, engineering, or leadership to collaborate on cost.',
+                    [{label:'+ Invite member', primary:true, onclick:"document.getElementById('invite-modal-backdrop') && (document.getElementById('invite-modal-backdrop').style.display='flex')"}]
+                ) + `</td></tr>`;
+        }
+    } catch (err) {
+        console.error('Team page error:', err);
+    }
 }
 
 function onSubscriptionChange() {
@@ -314,6 +387,23 @@ async function loadDashboard() {
         // Provider cards
         renderCloudBreakdown(data.cloud_breakdown);
 
+        // Dashboard empty state: no spend data at all
+        if (data.current_month.total === 0) {
+            const cb = data.cloud_breakdown;
+            const allZero = !cb || (
+                !(cb.current && (cb.current.azure || cb.current.aws || cb.current.gcp))
+            );
+            if (allZero) {
+                const dbProv = document.getElementById('dbProviderCards');
+                if (dbProv) dbProv.innerHTML = _emptyState('info',
+                    '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
+                    'Your dashboard is ready',
+                    'Connect a cloud provider to start seeing your spend, top services, and projections here.',
+                    [{label:'+ Connect cloud', primary:true, onclick:"navigateTo('cloud-providers')"}]
+                );
+            }
+        }
+
         // Services donut (cutout 70%, no built-in legend)
         const chartColors = CHART_COLORS();
         const topSvc = (data.top_services || []).filter(s => s.name && s.name !== 'Unknown').slice(0, 5);
@@ -389,6 +479,22 @@ function _coFmtShort(v) {
     if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
     if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'K';
     return '$' + Math.round(v).toLocaleString();
+}
+
+function _emptyState(tone, svgPath, headline, sub, actions) {
+  const actionsHtml = (actions || []).map(a =>
+    a.primary
+      ? `<button class="cp-btn-primary" style="font-size:13px" onclick="${a.onclick || ''}">${a.label}</button>`
+      : `<button class="cp-btn-secondary" style="font-size:13px" onclick="${a.onclick || ''}">${a.label}</button>`
+  ).join('');
+  return `<div class="empty-state">
+    <div class="empty-state__icon empty-state__icon--${tone}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">${svgPath}</svg>
+    </div>
+    <div class="empty-state__headline">${headline}</div>
+    <div class="empty-state__sub">${sub}</div>
+    ${actionsHtml ? `<div class="empty-state__actions">${actionsHtml}</div>` : ''}
+  </div>`;
 }
 
 function _computeSparkPoints(trend, width, height) {
@@ -494,6 +600,15 @@ async function loadCloudOverview() {
 
     // 6. Render provider cards
     grid.innerHTML = '';
+
+    if (activeProvs === 0) {
+      grid.innerHTML = _emptyState('info',
+        '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
+        'No cloud providers connected',
+        'Link AWS, Azure, or GCP to start tracking costs. Takes about 2 minutes.',
+        [{label:'+ Add provider', primary:true, onclick:"navigateTo('cloud-providers')"}]
+      );
+    }
 
     ['azure', 'aws', 'gcp'].forEach(cloud => {
         const r    = results.find(x => x.cloud === cloud);
@@ -935,7 +1050,24 @@ async function loadCostsTable() {
         const cloudLogoH = { azure: '12', aws: '10', gcp: '12' };
         const cloudNames = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
         if (!sortedData.length) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-secondary)">No records found for current filters.</td></tr>`;
+          const hasFilter = (document.getElementById('costSearch')?.value || '') ||
+            (document.getElementById('costDateFrom')?.value || '') ||
+            costsSelectedCloud;
+          tbody.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">` +
+            (hasFilter
+              ? _emptyState('neutral',
+                  '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
+                  'No results match your filters',
+                  'Try a wider date range, different cloud, or clear all filters.',
+                  [{label:'Clear filters', primary:false, onclick:'clearCostFilters()'}]
+                )
+              : _emptyState('info',
+                  '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+                  'No cost data yet',
+                  'Sync your connected providers to pull in usage records.',
+                  [{label:'Go to dashboard', primary:true, onclick:"navigateTo('dashboard')"}]
+                )
+            ) + `</td></tr>`;
         } else {
             tbody.innerHTML = sortedData.map(r => {
                 const cp = (r.cloud_provider || 'azure').toLowerCase();
@@ -1034,6 +1166,17 @@ async function loadCostsTable() {
     } catch (err) {
         console.error('Costs load error:', err);
     }
+}
+
+function clearCostFilters() {
+  const s = document.getElementById('costSearch'); if (s) s.value = '';
+  const df = document.getElementById('costDateFrom'); if (df) df.value = '';
+  const dt = document.getElementById('costDateTo'); if (dt) dt.value = '';
+  document.querySelectorAll('[data-costs-cloud]').forEach(b => {
+    b.classList.toggle('active', b.dataset.costsCloud === '');
+  });
+  costsSelectedCloud = '';
+  loadCostsTable();
 }
 
 function changeCostPage(delta) {
@@ -1233,7 +1376,16 @@ function _hideMonthlyLoaders() {
 async function loadMonthly() {
     try {
         monthlyData = await fetch('/api/monthly' + subParam()).then(r => r.json());
-        if (!monthlyData.length) { _hideMonthlyLoaders(); return; }
+        if (!monthlyData.length) {
+            _hideMonthlyLoaders();
+            const mc = document.getElementById('monthlyCards');
+            if (mc) mc.innerHTML = _emptyState('info',
+                '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>',
+                'Tracking starts as soon as data syncs',
+                'Once we have at least one full month of data, your breakdown will appear here.'
+            );
+            return;
+        }
 
         const colors = CHART_COLORS();
         const monthLabels = monthlyData.map(m => formatMonth(m.month));
@@ -1266,9 +1418,8 @@ async function loadMonthly() {
             const hasOlder = i < monthlyCardsOrder.length - 1;
             const prevMonthCost = hasOlder ? monthlyCardsOrder[i + 1].total_cost : null;
             const change = hasOlder && prevMonthCost > 0 ? ((m.total_cost - prevMonthCost) / prevMonthCost * 100) : 0;
-            const changeColor = change > 0 ? 'var(--red)' : 'var(--green)';
             const changeIcon = change > 0 ? '▲' : '▼';
-            const changeStr = hasOlder ? `<div style="font-size:13px;color:${changeColor};margin-top:4px">${changeIcon} ${Math.abs(change).toFixed(1)}% vs prev month</div>` : '';
+            const changeStr = hasOlder ? `<div class="co-card-lg__delta delta-${change>0?'up':'down'}" style="font-size:13px;margin-top:4px">${changeIcon} ${Math.abs(change).toFixed(1)}% vs prev month</div>` : '';
             const subs = m.by_subscription || [];
             const byCloud = m.by_cloud || {};
             const cloudTotal = m.total_cost || 1;
@@ -1287,8 +1438,8 @@ async function loadMonthly() {
                         const color = cloudColors[c];
                         return `<div style="margin-bottom:5px">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-                                <span style="font-size:11px;font-weight:600;color:${color}">${cloudLabels[c]}</span>
-                                <span style="font-size:11px;color:var(--text-primary);font-weight:600">$${Number(cost).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+                                <div style="display:flex;align-items:center;gap:5px"><img src="/static/img/${c}-logo.svg" style="height:${c==='aws'?'10':'12'}px"><span style="font-size:11px;color:var(--text-secondary)">${cloudLabels[c]}</span></div>
+                                <span style="color:var(--text-primary);flex-shrink:0;font-weight:500;font-variant-numeric:tabular-nums">$${Number(cost).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
                             </div>
                             <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden">
                                 <div style="width:${pct}%;height:100%;background:${color};border-radius:2px"></div>
@@ -1318,12 +1469,12 @@ async function loadMonthly() {
                         const esc = raw.replace(/"/g, '&quot;');
                         return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:11px;margin-top:2px;line-height:1.3;padding-left:8px">
                             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;color:var(--text-secondary)" title="${esc}">${short}</span>
-                            <span style="color:${color};flex-shrink:0;font-weight:600;font-variant-numeric:tabular-nums">$${Number(sub.cost).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+                            <span style="color:var(--text-primary);flex-shrink:0;font-weight:500;font-variant-numeric:tabular-nums">$${Number(sub.cost).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
                         </div>`;
                     }).join('');
                     return `<div style="margin-top:5px">
                         <div style="display:flex;align-items:center;gap:5px;margin-bottom:1px">
-                            <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
+                            <img src="/static/img/${c}-logo.svg" style="height:${c==='aws'?'9':'11'}px;flex-shrink:0">
                             <span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.06em">${cloudGroupLabels[c]}</span>
                         </div>
                         ${items}
@@ -1335,9 +1486,9 @@ async function loadMonthly() {
                 </div>`;
             }
             return `
-                <div class="stat-card" style="cursor:pointer" onclick="showMonthDetail('${m.month}')">
+                <div class="${i === 0 ? 'month-card month-card--current' : 'month-card'}" onclick="showMonthDetail('${m.month}')">
                     <div class="stat-label">${formatMonth(m.month)}</div>
-                    <div class="stat-value" style="font-size:22px;color:var(--green)">$${m.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                    <div class="metric-number" style="font-size:20px">$${m.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                     ${changeStr}
                     <div style="font-size:11px;color:var(--text-secondary);margin-top:6px">
                         ${m.service_count} services &bull; ${m.rg_count} RGs &bull; ${m.record_count.toLocaleString()} records
@@ -1348,6 +1499,9 @@ async function loadMonthly() {
             `;
         }).join('');
         document.getElementById('monthlyCards').innerHTML = cardsHtml;
+        const months = monthlyCardsOrder.map(m => formatMonth(m.month));
+        const subtitleEl = document.getElementById('monthlySubtitle');
+        if (subtitleEl) subtitleEl.textContent = `${monthlyData.length} months tracked · ${months.join(', ')}`;
 
         // ── Monthly table ──
         renderMonthlyTable();
@@ -1408,8 +1562,8 @@ function renderMonthlyTable() {
             const changeColor = !hasOlder ? 'var(--text-secondary)' : (change > 0 ? 'var(--red)' : 'var(--green)');
             const changeIcon = change > 0 ? '▲' : '▼';
             return `<tr>
-                <td style="font-weight:600">${formatMonth(m.month)}</td>
-                <td style="font-weight:600;color:var(--green)">$${m.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                <td style="font-weight:500">${formatMonth(m.month)}</td>
+                <td style="font-weight:500;color:var(--text-primary)">$${m.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
                 <td style="color:${changeColor}">${!hasOlder ? '-' : `${changeIcon} ${Math.abs(change).toFixed(1)}%`}</td>
                 <td>${m.service_count}</td>
                 <td>${m.rg_count}</td>
@@ -1431,7 +1585,7 @@ function renderMonthlyTable() {
             return `<tr>
                 <td style="font-weight:500">${svc}</td>
                 ${costs.map(c => `<td>${c > 0 ? '$' + c.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'}</td>`).join('')}
-                <td style="font-weight:600;color:var(--green)">$${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                <td style="font-weight:500;color:var(--text-primary)">$${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             </tr>`;
         }).join('');
 
@@ -1449,7 +1603,7 @@ function renderMonthlyTable() {
             return `<tr>
                 <td style="font-weight:500">${rg}</td>
                 ${costs.map(c => `<td>${c > 0 ? '$' + c.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'}</td>`).join('')}
-                <td style="font-weight:600;color:var(--green)">$${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                <td style="font-weight:500;color:var(--text-primary)">$${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             </tr>`;
         }).join('');
     }
@@ -2586,6 +2740,14 @@ async function loadActOverview() {
         const bl = data.by_level || {};
         const bot = data.by_operation_type || {};
 
+        if (!data.total_events || data.total_events === 0) {
+            document.getElementById('actOverviewStats').innerHTML = _emptyState('success',
+                '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+                'No activity data',
+                'Sync activity logs to see events here.',
+                [{label:'Sync 7 days', primary:true, onclick:'syncActivityLogs(7)'}]
+            );
+        } else {
         document.getElementById('actOverviewStats').innerHTML = `
             <div class="stat-card"><div class="stat-label">Total Events</div><div class="stat-value accent">${(data.total_events||0).toLocaleString()}</div></div>
             <div class="stat-card"><div class="stat-label">Succeeded</div><div class="stat-value" style="color:var(--green)">${(bs.Succeeded||0).toLocaleString()}</div></div>
@@ -2642,6 +2804,7 @@ async function loadActOverview() {
                 <td><strong>${r.cnt}</strong></td>
             </tr>`
         ).join('') : '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-secondary)">No data</td></tr>';
+        } // end else (total_events > 0)
 
     } catch (err) { console.error('Activity overview error:', err); }
 }
@@ -2924,7 +3087,17 @@ async function loadActivityTable() {
         const tbody = document.getElementById('activityTableBody');
 
         if (!data.length) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary)">No activity logs found. Click sync to fetch from your cloud providers.</td></tr>';
+            const hasFilter = (document.getElementById('actSearch')?.value || '') ||
+                (document.getElementById('actDateFrom')?.value || '') ||
+                (document.getElementById('actStatus')?.value || '') ||
+                (document.getElementById('actLevel')?.value || '');
+            tbody.innerHTML = `<tr><td colspan="8" style="padding:0;border:none">` +
+                _emptyState('success',
+                    '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+                    'All quiet here',
+                    'No events match your filters. Try widening the date range or syncing more days.',
+                    hasFilter ? [{label:'Reset filters', primary:false, onclick:'resetActivityFilters()'}] : []
+                ) + `</td></tr>`;
             document.getElementById('activityCount').textContent = '';
             return;
         }
@@ -2972,6 +3145,15 @@ async function loadActivityTable() {
     } catch (err) {
         console.error('Activity table error:', err);
     }
+}
+
+function resetActivityFilters() {
+  const s = document.getElementById('actSearch'); if (s) s.value = '';
+  const df = document.getElementById('actDateFrom'); if (df) df.value = '';
+  const dt = document.getElementById('actDateTo'); if (dt) dt.value = '';
+  const st = document.getElementById('actStatus'); if (st) st.value = '';
+  const lv = document.getElementById('actLevel'); if (lv) lv.value = '';
+  loadActivityTable();
 }
 
 function sortActivityBy(field) {
@@ -3466,6 +3648,7 @@ async function ccCalculate() {
 
 function ccRenderResults(data) {
     document.getElementById('ccResults').style.display = 'block';
+    const emptyState = document.getElementById('ccEmptyState'); if(emptyState) emptyState.style.display = 'none';
 
     document.getElementById('ccTotalCost').textContent =
         `$${data.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
@@ -3882,7 +4065,12 @@ async function loadEmailLog() {
         const log = await fetch('/api/email/log').then(r => r.json());
         const tbody = document.getElementById('emailLogBody');
         if (!log.length) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-secondary)">No emails sent yet</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="5" style="padding:0;border:none">` +
+                _emptyState('neutral',
+                    '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+                    'No deliveries yet',
+                    'Reports you send or schedule will show up here.'
+                ) + `</td></tr>`;
             return;
         }
         tbody.innerHTML = log.map(r => {
@@ -3917,7 +4105,12 @@ async function loadCustomReportsList() {
         const reports = await fetch('/api/custom-reports').then(r => r.json());
         const el = document.getElementById('customReportsList');
         if (!reports.length) {
-            el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px">No custom reports yet. Click "New Custom Report" to create one.</div>';
+            el.innerHTML = _emptyState('info',
+                '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+                'No scheduled reports yet',
+                'Set up recurring cost reports to keep your team in the loop.',
+                [{label:'+ New custom report', primary:true, onclick:'openCustomReportBuilder()'}]
+            );
             return;
         }
         el.innerHTML = reports.map(r => {

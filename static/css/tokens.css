@@ -365,3 +365,49 @@ html[data-appearance="light"] .theme-toggle .icon-sun  { display: inline-block; 
 .co-card-lg__actions { display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--border-subtle); }
 .co-btn-link { font-size: 12px; color: var(--accent); background: none; border: none; cursor: pointer; font-weight: 500; padding: 0; }
 .co-empty-lg { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 36px 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+
+/* ── Monthly page ───────────────────────────────────────────────────────────── */
+.monthly-cards-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 1000px) { .monthly-cards-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) { .monthly-cards-grid { grid-template-columns: 1fr; } }
+.month-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 16px; cursor: pointer; transition: background 0.12s; }
+.month-card:hover { background: var(--bg-hover); }
+.month-card--current { border-color: rgba(24,95,165,0.22); }
+.month-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.month-card__foot { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
+
+/* ── Calculator page ────────────────────────────────────────────────────────── */
+.calc-layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .calc-layout { grid-template-columns: 1fr; } }
+.calc-panel { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 16px; }
+.calc-field { display: flex; flex-direction: column; gap: 4px; }
+.calc-label { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
+.calc-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.calc-results { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.calc-empty { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 48px 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+
+/* ── Activity Log event rows ────────────────────────────────────────────────── */
+.event-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
+.event-row:hover { background: var(--bg-hover); }
+.event-row__icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.event-row__icon--info    { background: rgba(24,95,165,0.10);   color: #185FA5; }
+.event-row__icon--success { background: rgba(22,163,74,0.10);   color: #16a34a; }
+.event-row__icon--warn    { background: rgba(186,117,23,0.10);  color: #ba7517; }
+.event-row__icon--error   { background: rgba(163,45,45,0.10);   color: #dc2626; }
+.event-row__body { flex: 1; min-width: 0; }
+.event-row__title { font-size: 13px; color: var(--text-primary); }
+.event-row__title .strong { font-weight: 500; }
+.event-row__meta { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+
+/* ── Empty States ───────────────────────────────────── */
+.empty-state{display:flex;flex-direction:column;align-items:center;text-align:center;padding:48px 24px;max-width:360px;margin:0 auto}
+.empty-state__icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.empty-state__icon--info{background:var(--accent-bg,#EFF6FF);color:var(--accent,#2563EB)}
+.empty-state__icon--neutral{background:var(--bg-subtle,#F5F5F5);color:var(--text-secondary,#6B7280)}
+.empty-state__icon--success{background:#F0FDF4;color:#16A34A}
+.empty-state__icon--warning{background:#FFFBEB;color:#D97706}
+.empty-state__icon--danger{background:#FEF2F2;color:#DC2626}
+.empty-state__icon svg{width:26px;height:26px;stroke-width:1.5}
+.empty-state__headline{font-size:15px;font-weight:500;color:var(--text-primary);margin-bottom:4px}
+.empty-state__sub{font-size:12px;color:var(--text-tertiary);margin-bottom:14px;line-height:1.5}
+.empty-state__actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}

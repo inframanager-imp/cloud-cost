@@ -9,8 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507m">
-    <link rel="stylesheet" href="/static/css/appearance.css?v=20260507m">
+    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507n">
+    <link rel="stylesheet" href="/static/css/appearance.css?v=20260507n">
     <script>
     (function () {
         var THEME_IDS = ['forest','ocean','ember','violet','rose','slate','aurora'];
@@ -549,65 +549,72 @@
         <span id="costCompactToggle" style="display:none"></span>
     </section>
 
-    <!-- ═══ Monthly Costs Page ═══════════════════════════════════════════ -->
+    <!-- ═══ Monthly Page ═══════════════════════════════════════════════════ -->
     <section id="page-monthly" class="page-section">
-        <div class="page-header">
-            <h2>Monthly Cost Breakdown</h2>
+        <div class="cp-page-header">
+            <div>
+                <div class="cp-breadcrumb">ANALYTICS</div>
+                <h1 class="cp-page-title">Monthly cost breakdown</h1>
+                <p class="cp-page-subtitle" id="monthlySubtitle">Loading monthly data…</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding-top:6px">
+                <select class="cost-filter-input" id="monthlyViewType" onchange="renderMonthlyTable()" style="min-width:160px">
+                    <option value="overview">Overview</option>
+                    <option value="services">By service</option>
+                    <option value="rgs">By resource group</option>
+                </select>
+            </div>
         </div>
 
-        <!-- 1. Monthly Comparison Cards -->
-        <div id="monthlyCards" class="stats-grid" style="margin-bottom:16px">
-            <div class="skeleton-card"></div>
-            <div class="skeleton-card"></div>
-            <div class="skeleton-card"></div>
+        <!-- Monthly overview bar chart -->
+        <div class="sub-table-card" style="margin-bottom:16px;padding:16px">
+            <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px">
+                <span class="sub-table-card__title">Month-wise cost overview</span>
+            </div>
+            <div style="position:relative;height:180px">
+                <div id="monthlyBarLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
+                <canvas id="monthlyBarChart"></canvas>
+            </div>
         </div>
 
-        <!-- 2. Monthly Detail Table -->
-        <div class="table-container" style="margin-bottom:16px">
-            <div class="table-header">
-                <h3>Monthly Cost Details</h3>
-                <div style="display:flex;gap:10px;align-items:center">
-                    <label style="font-size:12px;color:var(--text-secondary)">View:</label>
-                    <select class="filter-input" id="monthlyViewType" onchange="renderMonthlyTable()" style="min-width:120px">
-                        <option value="overview">Overview</option>
-                        <option value="services">By Service</option>
-                        <option value="rgs">By Resource Group / Region / Project</option>
-                    </select>
-                </div>
+        <!-- Monthly summary cards (rendered by JS) -->
+        <div id="monthlyCards" class="monthly-cards-grid" style="margin-bottom:16px"></div>
+
+        <!-- Monthly detail table -->
+        <div class="sub-table-card" style="margin-bottom:16px">
+            <div class="sub-table-card__head">
+                <span class="sub-table-card__title">Monthly cost details</span>
             </div>
             <div id="monthlyTableLoader" class="skeleton-table-wrap">
-                <div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div>
+                <div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div>
             </div>
-            <table>
-                <thead id="monthlyTableHead"></thead>
-                <tbody id="monthlyTableBody"></tbody>
-            </table>
+            <div class="table-container">
+                <table>
+                    <thead id="monthlyTableHead"></thead>
+                    <tbody id="monthlyTableBody"></tbody>
+                </table>
+            </div>
         </div>
 
-        <!-- 3. Monthly Service Breakdown Charts -->
+        <!-- Stacked breakdowns -->
         <div class="charts-grid" style="margin-bottom:16px">
-            <div class="chart-card">
-                <h3>Top Services per Month</h3>
-                <div style="position:relative;height:300px">
+            <div class="sub-table-card" style="padding:16px">
+                <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px">
+                    <span class="sub-table-card__title">Top services per month</span>
+                </div>
+                <div style="position:relative;height:260px">
                     <div id="monthlyServiceLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
                     <canvas id="monthlyServiceStack"></canvas>
                 </div>
             </div>
-            <div class="chart-card">
-                <h3>Top Resource Groups per Month</h3>
-                <div style="position:relative;height:300px">
+            <div class="sub-table-card" style="padding:16px">
+                <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px">
+                    <span class="sub-table-card__title">Top resource groups per month</span>
+                </div>
+                <div style="position:relative;height:260px">
                     <div id="monthlyRGLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
                     <canvas id="monthlyRGStack"></canvas>
                 </div>
-            </div>
-        </div>
-
-        <!-- 4. Monthly Bar Chart — at the bottom -->
-        <div class="chart-card" style="padding:14px 16px">
-            <h3 style="margin:0 0 10px;font-size:13px">Month-wise Cost Overview</h3>
-            <div style="position:relative;height:200px">
-                <div id="monthlyBarLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
-                <canvas id="monthlyBarChart"></canvas>
             </div>
         </div>
     </section>
@@ -615,13 +622,17 @@
 
     <!-- ═══ Compare Page ═════════════════════════════════════════════════ -->
     <section id="page-compare" class="page-section">
-        <div class="page-header">
-            <h2>Cost Comparison</h2>
+        <div class="cp-page-header">
+            <div>
+                <div class="cp-breadcrumb">ANALYTICS</div>
+                <h1 class="cp-page-title">Cost comparison</h1>
+                <p class="cp-page-subtitle">Compare spend, services, and accounts across two periods or providers.</p>
+            </div>
         </div>
 
         <!-- Comparison Filters -->
-        <div class="table-container compare-filters-container" style="margin-bottom:20px">
-            <div style="padding:20px">
+        <div class="sub-table-card" style="margin-bottom:20px">
+            <div style="padding:18px">
                 <div class="filters-bar" style="margin-bottom:0;overflow:visible">
                     <div class="filter-group">
                         <label>Compare By</label>
@@ -693,7 +704,7 @@
                     </div>
 
                     <div class="filter-group" style="align-self:flex-end">
-                        <button type="button" class="btn btn-primary" onclick="runComparison()">
+                        <button type="button" class="cp-btn-primary" onclick="runComparison()">
                             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
                             </svg>
@@ -753,11 +764,11 @@
         <!-- Comparison Charts -->
         <div class="charts-grid" style="margin-bottom:20px">
             <div class="chart-card">
-                <h3 id="cmpBarTitle">Side-by-Side Comparison</h3>
+                <h3 id="cmpBarTitle" style="font-size:14px;font-weight:500;margin:0 0 12px">Side-by-side comparison</h3>
                 <div style="height:350px"><canvas id="cmpBarChart"></canvas></div>
             </div>
             <div class="chart-card">
-                <h3>Change % by Item</h3>
+                <h3 style="font-size:14px;font-weight:500;margin:0 0 12px">Change % by item</h3>
                 <div style="height:350px"><canvas id="cmpChangeChart"></canvas></div>
             </div>
         </div>
@@ -765,7 +776,7 @@
         <!-- Comparison Table -->
         <div class="table-container">
             <div class="table-header">
-                <h3 id="cmpTableTitle">Comparison Details</h3>
+                <h3 id="cmpTableTitle" style="font-size:14px;font-weight:500;margin:0">Comparison details</h3>
                 <span id="cmpTableCount" style="font-size:13px;color:var(--text-secondary)"></span>
             </div>
             <table>
@@ -780,8 +791,14 @@
                     </tr>
                 </thead>
                 <tbody id="cmpTableBody">
-                    <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-secondary)">
-                        Select periods and click "Compare" to see results
+                    <tr><td colspan="10" style="padding:0;border:none">
+                      <div class="empty-state">
+                        <div class="empty-state__icon empty-state__icon--info">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        </div>
+                        <div class="empty-state__headline">Pick two periods to compare</div>
+                        <div class="empty-state__sub">Select two months, two clouds, or two accounts and click Compare to see a side-by-side breakdown.</div>
+                      </div>
                     </td></tr>
                 </tbody>
             </table>
@@ -815,198 +832,200 @@
     </section>
 
     <!-- ═══ Custom Cost Calculator Page ═══════════════════════════════════ -->
+    <!-- ═══ Custom Cost Calculator Page ══════════════════════════════════════ -->
     <section id="page-custom-cost" class="page-section">
-        <div class="page-header">
-            <h2>Custom Cost Calculator</h2>
-        </div>
-        <p style="color:var(--text-secondary);margin-bottom:20px;font-size:14px">
-            Select an account / subscription / project, resource groups and services, and a date range to calculate a combined cost.
-        </p>
-
-        <div class="chart-card" style="margin-bottom:24px">
-            <div class="filters-bar" style="flex-wrap:wrap">
-                <div class="filter-group">
-                    <label>Date From</label>
-                    <input type="date" class="filter-input" id="ccDateFrom">
-                </div>
-                <div class="filter-group">
-                    <label>Date To</label>
-                    <input type="date" class="filter-input" id="ccDateTo">
-                </div>
+        <div class="cp-page-header">
+            <div>
+                <div class="cp-breadcrumb">ANALYTICS</div>
+                <h1 class="cp-page-title">Custom cost calculator</h1>
+                <p class="cp-page-subtitle">Build a custom cost view by selecting clouds, accounts, services, resource groups, and a date range.</p>
             </div>
+        </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:16px">
-                <div>
-                    <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px">Subscriptions <span id="ccSubCount" style="color:var(--accent)">(0 selected)</span></label>
-                    <div class="multi-select-box" id="ccSubBox">
+        <div class="calc-layout">
+            <!-- Left: filter panel -->
+            <div class="calc-panel">
+                <div class="sub-table-card__title" style="font-size:13px;font-weight:500;color:var(--text-primary)">Configuration</div>
+
+                <div class="calc-field-row">
+                    <div class="calc-field">
+                        <label class="calc-label">From</label>
+                        <input type="date" class="cost-filter-input" id="ccDateFrom">
+                    </div>
+                    <div class="calc-field">
+                        <label class="calc-label">To</label>
+                        <input type="date" class="cost-filter-input" id="ccDateTo">
+                    </div>
+                </div>
+
+                <div class="calc-field">
+                    <label class="calc-label">Subscriptions <span id="ccSubCount" style="color:var(--accent);font-weight:400">(0 selected)</span></label>
+                    <div class="multi-select-box" id="ccSubBox" style="max-height:160px">
                         <div class="multi-select-search">
-                            <input type="text" placeholder="Search subscriptions..." id="ccSubSearch" oninput="ccFilterList('sub')">
+                            <input type="text" placeholder="Search subscriptions…" id="ccSubSearch" oninput="ccFilterList('sub')">
                         </div>
                         <div class="multi-select-actions">
-                            <button class="btn-mini" onclick="ccSelectAll('sub')">Select All</button>
-                            <button class="btn-mini" onclick="ccDeselectAll('sub')">Clear All</button>
+                            <button class="btn-mini" onclick="ccSelectAll('sub')">All</button>
+                            <button class="btn-mini" onclick="ccDeselectAll('sub')">Clear</button>
                         </div>
                         <div class="multi-select-list" id="ccSubList"></div>
                     </div>
                 </div>
-                <div>
-                    <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px">Resource Groups <span id="ccRgCount" style="color:var(--accent)">(0 selected)</span></label>
-                    <div class="multi-select-box" id="ccRgBox">
+
+                <div class="calc-field">
+                    <label class="calc-label">Resource groups <span id="ccRgCount" style="color:var(--accent);font-weight:400">(0 selected)</span></label>
+                    <div class="multi-select-box" id="ccRgBox" style="max-height:160px">
                         <div class="multi-select-search">
-                            <input type="text" placeholder="Search resource groups..." id="ccRgSearch" oninput="ccFilterList('rg')">
+                            <input type="text" placeholder="Search resource groups…" id="ccRgSearch" oninput="ccFilterList('rg')">
                         </div>
                         <div class="multi-select-actions">
-                            <button class="btn-mini" onclick="ccSelectAll('rg')">Select All</button>
-                            <button class="btn-mini" onclick="ccDeselectAll('rg')">Clear All</button>
+                            <button class="btn-mini" onclick="ccSelectAll('rg')">All</button>
+                            <button class="btn-mini" onclick="ccDeselectAll('rg')">Clear</button>
                         </div>
                         <div class="multi-select-list" id="ccRgList"></div>
                     </div>
                 </div>
-                <div>
-                    <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px">Services <span id="ccSvcCount" style="color:var(--accent)">(0 selected)</span></label>
-                    <div class="multi-select-box" id="ccSvcBox">
+
+                <div class="calc-field">
+                    <label class="calc-label">Services <span id="ccSvcCount" style="color:var(--accent);font-weight:400">(0 selected)</span></label>
+                    <div class="multi-select-box" id="ccSvcBox" style="max-height:160px">
                         <div class="multi-select-search">
-                            <input type="text" placeholder="Search services..." id="ccSvcSearch" oninput="ccFilterList('svc')">
+                            <input type="text" placeholder="Search services…" id="ccSvcSearch" oninput="ccFilterList('svc')">
                         </div>
                         <div class="multi-select-actions">
-                            <button class="btn-mini" onclick="ccSelectAll('svc')">Select All</button>
-                            <button class="btn-mini" onclick="ccDeselectAll('svc')">Clear All</button>
+                            <button class="btn-mini" onclick="ccSelectAll('svc')">All</button>
+                            <button class="btn-mini" onclick="ccDeselectAll('svc')">Clear</button>
                         </div>
                         <div class="multi-select-list" id="ccSvcList"></div>
                     </div>
                 </div>
-            </div>
 
-            <div style="margin-top:20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-                <button class="btn btn-primary" onclick="ccCalculate()" id="ccCalcBtn">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path d="M9 7h6m-6 4h6m-4 4h2"/><circle cx="12" cy="12" r="10"/>
-                    </svg>
-                    Calculate Cost
-                </button>
-                <button class="btn btn-secondary" onclick="ccSaveFilterPrompt()">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-                        <polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/>
-                    </svg>
-                    Save Filter
-                </button>
-                <button class="btn btn-secondary" onclick="ccReset()">Reset</button>
-                <span id="ccCalcStatus" style="font-size:13px;color:var(--text-secondary)"></span>
-            </div>
-        </div>
-
-        <!-- Saved Filters -->
-        <div id="ccSavedSection" class="chart-card" style="margin-bottom:24px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-                <h3>
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align:-2px;margin-right:6px">
-                        <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
-                    </svg>
-                    Saved Filters
-                </h3>
-                <span id="ccSavedCount" style="font-size:12px;color:var(--text-secondary)"></span>
-            </div>
-            <div id="ccSavedList" class="saved-filters-grid">
-                <div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:13px">No saved filters yet. Set your filters and click "Save Filter".</div>
-            </div>
-        </div>
-
-        <!-- Results -->
-        <div id="ccResults" style="display:none">
-            <div class="stats-grid" style="margin-bottom:24px">
-                <div class="stat-card">
-                    <div class="stat-label">Total Cost</div>
-                    <div class="stat-value green" id="ccTotalCost">$0.00</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Total Records</div>
-                    <div class="stat-value accent" id="ccTotalRecords">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Resource Groups</div>
-                    <div class="stat-value" id="ccRgTotal">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Services</div>
-                    <div class="stat-value" id="ccSvcTotal">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Resources</div>
-                    <div class="stat-value" id="ccResourceTotal">0</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                    <button class="cp-btn-primary" onclick="ccCalculate()" id="ccCalcBtn" style="justify-content:center">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M9 7h6m-6 4h6m-4 4h2"/><circle cx="12" cy="12" r="10"/>
+                        </svg>
+                        Calculate
+                    </button>
+                    <button class="cp-btn-secondary" onclick="ccSaveFilterPrompt()" style="justify-content:center">Save preset</button>
+                    <button class="cp-btn-secondary" onclick="ccReset()" style="justify-content:center">Reset</button>
+                    <span id="ccCalcStatus" style="font-size:12px;color:var(--text-tertiary);text-align:center"></span>
                 </div>
             </div>
 
-            <!-- Breakdown tables side-by-side -->
-            <div class="charts-grid" style="margin-bottom:24px">
-                <div class="chart-card">
-                    <h3>Cost by Resource Group</h3>
-                    <div style="height:260px"><canvas id="ccRgChart"></canvas></div>
-                    <div class="table-container" style="margin-top:12px;max-height:300px;overflow-y:auto">
-                        <table>
-                            <thead><tr><th>Resource Group</th><th>Cost</th><th>Records</th></tr></thead>
-                            <tbody id="ccRgTableBody"></tbody>
-                        </table>
+            <!-- Right: results -->
+            <div class="calc-results">
+                <!-- Saved presets -->
+                <div id="ccSavedSection" class="sub-table-card">
+                    <div class="sub-table-card__head">
+                        <span class="sub-table-card__title">Saved presets</span>
+                        <span id="ccSavedCount" style="font-size:11px;color:var(--text-tertiary)"></span>
+                    </div>
+                    <div id="ccSavedList" class="saved-filters-grid" style="padding:12px 16px">
+                        <div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:13px">No saved presets yet.</div>
                     </div>
                 </div>
-                <div class="chart-card">
-                    <h3>Cost by Service</h3>
-                    <div style="height:260px"><canvas id="ccSvcChart"></canvas></div>
-                    <div class="table-container" style="margin-top:12px;max-height:300px;overflow-y:auto">
-                        <table>
-                            <thead><tr><th>Service</th><th>Cost</th><th>Records</th></tr></thead>
-                            <tbody id="ccSvcTableBody"></tbody>
-                        </table>
+
+                <!-- Results (hidden until calculated) -->
+                <div id="ccResults" style="display:none">
+                    <div class="co-kpi-grid" style="margin-bottom:16px">
+                        <div class="co-kpi">
+                            <div class="co-kpi__label">Total cost</div>
+                            <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccTotalCost">$0.00</span></div>
+                        </div>
+                        <div class="co-kpi">
+                            <div class="co-kpi__label">Records</div>
+                            <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccTotalRecords">0</span></div>
+                        </div>
+                        <div class="co-kpi">
+                            <div class="co-kpi__label">Resource groups</div>
+                            <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccRgTotal">0</span></div>
+                        </div>
+                        <div class="co-kpi">
+                            <div class="co-kpi__label">Services</div>
+                            <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccSvcTotal">0</span></div>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid" style="margin-bottom:16px">
+                        <div class="sub-table-card" style="padding:16px">
+                            <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px"><span class="sub-table-card__title">Cost by resource group</span></div>
+                            <div style="height:220px"><canvas id="ccRgChart"></canvas></div>
+                            <div class="table-container" style="margin-top:12px;max-height:240px;overflow-y:auto">
+                                <table>
+                                    <thead><tr><th>Resource group</th><th>Cost</th><th>Records</th></tr></thead>
+                                    <tbody id="ccRgTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="sub-table-card" style="padding:16px">
+                            <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px"><span class="sub-table-card__title">Cost by service</span></div>
+                            <div style="height:220px"><canvas id="ccSvcChart"></canvas></div>
+                            <div class="table-container" style="margin-top:12px;max-height:240px;overflow-y:auto">
+                                <table>
+                                    <thead><tr><th>Service</th><th>Cost</th><th>Records</th></tr></thead>
+                                    <tbody id="ccSvcTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sub-table-card" style="margin-bottom:16px">
+                        <div class="sub-table-card__head">
+                            <span class="sub-table-card__title">Cost by resource</span>
+                        </div>
+                        <p id="ccResourceTruncNote" style="display:none;font-size:12px;color:var(--accent);margin:8px 16px 0">Showing top 500 resources by cost.</p>
+                        <div class="table-container" style="max-height:360px;overflow-y:auto">
+                            <table>
+                                <thead><tr><th>Resource</th><th>Type</th><th>Resource group</th><th>Cost</th><th>Lines</th></tr></thead>
+                                <tbody id="ccResourceTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="sub-table-card" style="padding:16px">
+                        <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px"><span class="sub-table-card__title">Daily cost trend</span></div>
+                        <div style="height:220px"><canvas id="ccTrendChart"></canvas></div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Per-resource costs (VMs, storage accounts, SQL DBs, etc.) -->
-            <div class="chart-card" style="margin-bottom:24px">
-                <h3>Cost by resource</h3>
-                <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px;line-height:1.45">
-                    Each row sums usage for one logical cloud resource (name + type + group)—for example each VM, database, storage account, EC2 instance, or GCP service.
-                    Rows with no resource id are grouped as account- or service-level charges.
-                </p>
-                <p id="ccResourceTruncNote" style="display:none;font-size:12px;color:var(--accent);margin:0 0 12px">
-                    Showing the top 500 resources by cost. Narrow filters or date range to see more.
-                </p>
-                <div class="table-container" style="max-height:420px;overflow-y:auto">
-                    <table>
-                        <thead><tr><th>Resource</th><th>Type</th><th>Resource group</th><th>Cost</th><th>Meter lines</th></tr></thead>
-                        <tbody id="ccResourceTableBody"></tbody>
-                    </table>
+                <!-- Empty state shown when no results yet -->
+                <div id="ccEmptyState">
+                  <div class="empty-state">
+                    <div class="empty-state__icon empty-state__icon--info">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    </div>
+                    <div class="empty-state__headline">Build your custom view</div>
+                    <div class="empty-state__sub">Configure filters on the left and click Calculate to see results here.</div>
+                  </div>
                 </div>
-            </div>
-
-            <!-- Daily Trend (bottom) -->
-            <div class="chart-card">
-                <h3>Daily Cost Trend</h3>
-                <div style="height:260px"><canvas id="ccTrendChart"></canvas></div>
             </div>
         </div>
     </section>
 
     <!-- ═══ Activity Log Page ═════════════════════════════════════════════ -->
     <section id="page-activity" class="page-section">
-        <div class="page-header">
-            <h2>Activity Log</h2>
-            <div style="display:flex;gap:10px;align-items:center">
-                <span id="activityCount" style="color:var(--text-secondary);font-size:14px"></span>
+        <div class="cp-page-header">
+            <div>
+                <div class="cp-breadcrumb">AUDIT</div>
+                <h1 class="cp-page-title">Activity log</h1>
+                <p class="cp-page-subtitle" id="activityCount">Azure resource events — sync to fetch the latest audit trail.</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding-top:6px;flex-wrap:wrap">
                 <span id="actAutoSyncBadge" class="auto-sync-badge" onclick="toggleActAutoSyncPanel()" title="Click to configure activity auto-sync"></span>
-                <button class="btn btn-secondary" onclick="exportActivityCSV()" title="Export to CSV">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <button class="cp-btn-secondary" onclick="exportActivityCSV()">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     Export CSV
                 </button>
-                <button class="btn btn-primary" id="actSyncBtn" onclick="syncActivityLogs(7)">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <button class="cp-btn-primary" id="actSyncBtn" onclick="syncActivityLogs(7)">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <polyline points="23,4 23,10 17,10"/><polyline points="1,20 1,14 7,14"/>
                         <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
                     </svg>
-                    Sync 7 Days
+                    Sync 7 days
                 </button>
-                <button class="btn btn-secondary" onclick="syncActivityLogs(30)">30 Days</button>
-                <button class="btn btn-secondary" onclick="openCallerNamesModal()" title="Map user IDs to display names">Names</button>
+                <button class="cp-btn-secondary" onclick="syncActivityLogs(30)">30 days</button>
+                <button class="cp-btn-secondary" onclick="openCallerNamesModal()">Names</button>
             </div>
         </div>
 
@@ -1054,16 +1073,24 @@
         </div>
 
         <!-- Cloud Provider Filter -->
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-            <span style="font-size:12px;color:var(--text-secondary);font-weight:600">Cloud Provider:</span>
-            <button class="cloud-pill active" data-act-cloud="" onclick="setActCloud(this,'')">☁ All</button>
-            <button class="cloud-pill" data-act-cloud="azure" onclick="setActCloud(this,'azure')">☁ Azure</button>
-            <button class="cloud-pill" data-act-cloud="aws" onclick="setActCloud(this,'aws')">☁ AWS</button>
-            <button class="cloud-pill" data-act-cloud="gcp" onclick="setActCloud(this,'gcp')">☁ GCP</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+            <span class="cp-breadcrumb" style="margin:0">Cloud</span>
+            <div class="cp-segmented">
+                <button class="cp-seg active" data-act-cloud="" onclick="setActCloud(this,'')">All</button>
+                <button class="cp-seg" data-act-cloud="azure" onclick="setActCloud(this,'azure')">
+                    <img src="/static/img/azure-logo.svg" alt="" style="height:12px;vertical-align:middle;margin-right:3px">Azure
+                </button>
+                <button class="cp-seg" data-act-cloud="aws" onclick="setActCloud(this,'aws')">
+                    <img src="/static/img/aws-logo.svg" alt="" style="height:10px;vertical-align:middle;margin-right:3px">AWS
+                </button>
+                <button class="cp-seg" data-act-cloud="gcp" onclick="setActCloud(this,'gcp')">
+                    <img src="/static/img/gcp-logo.svg" alt="" style="height:12px;vertical-align:middle;margin-right:3px">GCP
+                </button>
+            </div>
         </div>
 
         <!-- Activity Sub-tabs -->
-        <div class="act-tabs" style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap">
+        <div class="act-tabs cp-segmented" style="flex-wrap:wrap;gap:4px;margin-bottom:20px">
             <button class="tab-btn active" onclick="switchActTab('overview', this)">Overview</button>
             <button class="tab-btn" onclick="switchActTab('users', this)">User Activity</button>
             <button class="tab-btn" onclick="switchActTab('timeline', this)">Resource Timeline</button>
@@ -1160,37 +1187,40 @@
 
         <!-- ═══ All Logs Tab ═══ -->
         <div id="actTab-logs" class="act-tab-content" style="display:none">
-            <div class="filters-bar">
-                <div class="search-box">
-                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                    <input type="text" id="actSearch" placeholder="Search activities, users, resources...">
+            <div class="cost-filter-strip">
+                <div class="cost-filter-field cost-filter-field--grow">
+                    <label class="cost-filter-label">Search</label>
+                    <div class="cost-search-wrap">
+                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        <input type="text" id="actSearch" class="cost-search-input" placeholder="Search activities, users, resources…">
+                    </div>
                 </div>
-                <div class="filter-group">
-                    <label>Date From</label>
-                    <input type="date" class="filter-input" id="actDateFrom" onchange="loadActivityTable()">
+                <div class="cost-filter-field">
+                    <label class="cost-filter-label">From</label>
+                    <input type="date" class="cost-filter-input" id="actDateFrom" onchange="loadActivityTable()">
                 </div>
-                <div class="filter-group">
-                    <label>Date To</label>
-                    <input type="date" class="filter-input" id="actDateTo" onchange="loadActivityTable()">
+                <div class="cost-filter-field">
+                    <label class="cost-filter-label">To</label>
+                    <input type="date" class="cost-filter-input" id="actDateTo" onchange="loadActivityTable()">
                 </div>
-                <div class="filter-group">
-                    <label>User</label>
-                    <select class="filter-input" id="actCaller" onchange="loadActivityTable()"><option value="">All Users</option></select>
+                <div class="cost-filter-field">
+                    <label class="cost-filter-label">User</label>
+                    <select class="cost-filter-input" id="actCaller" onchange="loadActivityTable()"><option value="">All Users</option></select>
                 </div>
-                <div class="filter-group">
-                    <label>Status</label>
-                    <select class="filter-input" id="actStatus" onchange="loadActivityTable()">
+                <div class="cost-filter-field">
+                    <label class="cost-filter-label">Status</label>
+                    <select class="cost-filter-input" id="actStatus" onchange="loadActivityTable()">
                         <option value="">All</option>
                         <option value="Succeeded">Succeeded</option>
                         <option value="Failed">Failed</option>
                         <option value="Started">Started</option>
                     </select>
                 </div>
-                <div class="filter-group">
-                    <label>Level</label>
-                    <select class="filter-input" id="actLevel" onchange="loadActivityTable()">
+                <div class="cost-filter-field">
+                    <label class="cost-filter-label">Level</label>
+                    <select class="cost-filter-input" id="actLevel" onchange="loadActivityTable()">
                         <option value="">All</option>
                         <option value="Informational">Informational</option>
                         <option value="Warning">Warning</option>
@@ -1242,20 +1272,24 @@
 
     <!-- ═══ Email Reports Page ═════════════════════════════════════════════ -->
     <section id="page-reports" class="page-section">
-        <div class="page-header">
-            <h2>Email Reports</h2>
-            <div style="display:flex;gap:10px;align-items:center">
-                <button class="btn btn-secondary" onclick="previewReport()">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <div class="cp-page-header">
+            <div>
+                <div class="cp-breadcrumb">SETTINGS</div>
+                <h1 class="cp-page-title">Email reports</h1>
+                <p class="cp-page-subtitle">Schedule recurring cost reports to inboxes. Configure SMTP, set recipients, and choose what to include.</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding-top:6px">
+                <button class="cp-btn-secondary" onclick="previewReport()">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                     </svg>
                     Preview
                 </button>
-                <button class="btn btn-primary" onclick="sendReportNow()" id="sendReportBtn">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <button class="cp-btn-primary" onclick="sendReportNow()" id="sendReportBtn">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/>
                     </svg>
-                    Send Report Now
+                    Send now
                 </button>
             </div>
         </div>
@@ -1263,7 +1297,7 @@
         <div class="charts-grid" style="grid-template-columns:1fr 1fr;margin-bottom:24px">
             <!-- SMTP Settings -->
             <div class="chart-card">
-                <h3 style="margin-bottom:16px">SMTP Configuration</h3>
+                <h3 style="font-size:14px;font-weight:500;color:var(--text-primary);margin:0 0 16px">SMTP configuration</h3>
                 <div class="email-form">
                     <div class="email-field">
                         <label>SMTP Host</label>
@@ -1295,15 +1329,15 @@
                         <input type="text" id="emSmtpFrom" class="filter-input" placeholder="Leave blank to use username">
                     </div>
                     <div style="display:flex;gap:10px;margin-top:12px">
-                        <button class="btn btn-primary" onclick="saveEmailSettings()" style="font-size:13px">Save Settings</button>
-                        <button class="btn btn-secondary" onclick="testEmail()" style="font-size:13px">Send Test Email</button>
+                        <button class="cp-btn-primary" onclick="saveEmailSettings()" style="font-size:13px">Save Settings</button>
+                        <button class="cp-btn-secondary" onclick="testEmail()" style="font-size:13px">Send Test Email</button>
                     </div>
                 </div>
             </div>
 
             <!-- Report Settings -->
             <div class="chart-card">
-                <h3 style="margin-bottom:16px">Report Settings</h3>
+                <h3 style="font-size:14px;font-weight:500;color:var(--text-primary);margin:0 0 16px">Report settings</h3>
                 <div class="email-form">
                     <div class="email-field">
                         <label>Recipients (comma-separated)</label>
@@ -1391,7 +1425,7 @@
                         </label>
                         <span style="font-size:13px;color:var(--text-primary)">Enable scheduled reports</span>
                     </div>
-                    <button class="btn btn-primary" onclick="saveReportSettings()" style="font-size:13px;margin-top:12px">Save Report Settings</button>
+                    <button class="cp-btn-primary" onclick="saveReportSettings()" style="font-size:13px;margin-top:12px">Save Report Settings</button>
                 </div>
             </div>
         </div>
@@ -1399,8 +1433,8 @@
         <!-- Custom Reports Builder -->
         <div class="chart-card" style="margin-bottom:24px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                <h3 style="margin:0">Custom Reports</h3>
-                <button class="btn btn-primary" onclick="openCustomReportBuilder()" style="font-size:13px">
+                <h3 style="font-size:14px;font-weight:500;color:var(--text-primary);margin:0">Custom reports</h3>
+                <button class="cp-btn-primary" onclick="openCustomReportBuilder()" style="font-size:13px">
                     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                     </svg>
@@ -1521,8 +1555,8 @@
 
                     <input type="hidden" id="crEditId" value="">
                     <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
-                        <button class="btn btn-secondary" onclick="closeCRBuilder()">Cancel</button>
-                        <button class="btn btn-primary" onclick="saveCRBuilder()">Save Report</button>
+                        <button class="cp-btn-secondary" onclick="closeCRBuilder()">Cancel</button>
+                        <button class="cp-btn-primary" onclick="saveCRBuilder()">Save Report</button>
                     </div>
                 </div>
             </div>
@@ -1530,7 +1564,7 @@
 
         <!-- Email History -->
         <div class="chart-card">
-            <h3 style="margin-bottom:12px">Email History</h3>
+            <h3 style="font-size:14px;font-weight:500;color:var(--text-primary);margin:0 0 12px">Email history</h3>
             <div class="table-container">
                 <table>
                     <thead>
@@ -2683,7 +2717,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260507m"></script>
+<script src="/static/js/app.js?v=20260507n"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
