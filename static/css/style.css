@@ -56,7 +56,7 @@ body {
 .sidebar {
     position: fixed;
     left: 0; top: 0;
-    width: 240px;
+    width: 220px;
     height: 100vh;
     background: var(--bg-secondary);
     border-right: 1px solid var(--border);
@@ -69,7 +69,7 @@ body {
 
 /* ─── Sidebar collapsed state ──────────────────────────────────────────── */
 .sidebar.collapsed {
-    transform: translateX(-240px);
+    transform: translateX(-220px);
     border-right: none;
 }
 
@@ -119,21 +119,22 @@ body {
 .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
 .nav-section-label {
-    padding: 4px 14px 2px;
+    padding: 2px 9px 1px;
     font-size: 9px;
     font-weight: 700;
     letter-spacing: .08em;
     color: var(--text-secondary);
     text-transform: uppercase;
     line-height: 1.4;
+    margin: 6px 0 2px;
     scroll-margin-top: 4px;
 }
 
 .nav-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 16px;
+    gap: 9px;
+    padding: 5px 9px;
     color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s;
@@ -149,6 +150,66 @@ body {
 }
 
 .nav-item svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+/* ─── Workspace switcher pill ───────────────────────────────────────────── */
+.workspace-switcher {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 5px 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+.workspace-switcher:hover { border-color: var(--accent); }
+.workspace-switcher select {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 11px;
+    color: var(--text-primary);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+/* ─── Sidebar sync one-row button ───────────────────────────────────────── */
+.sidebar-sync {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    padding: 6px 12px;
+    border: none;
+    border-top: 1px solid var(--border);
+    background: none;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-align: left;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+.sidebar-sync:hover { color: var(--accent); background: var(--bg-card); }
+.sidebar-sync svg { flex-shrink: 0; }
+.sidebar-sync__status {
+    flex: 1;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: right;
+}
 
 /* ─── Sidebar User ──────────────────────────────────────────────────────── */
 .sidebar-user {
@@ -209,10 +270,10 @@ body {
 
 /* ─── Main Content ───────────────────────────────────────────────────────── */
 .main-content {
-    margin-left: 240px;
+    margin-left: 220px;
     padding: 24px;
     min-height: 100vh;
-    max-width: calc(100vw - 240px);
+    max-width: calc(100vw - 220px);
     box-sizing: border-box;
     overflow-x: hidden;
     transition: margin-left 0.25s ease, max-width 0.25s ease;
