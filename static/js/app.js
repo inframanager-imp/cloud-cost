@@ -3498,16 +3498,29 @@ async function loadCustomCostPage() {
         });
     });
 
-    // Date preset buttons
-    document.querySelectorAll('.date-preset').forEach(btn => {
-        btn.addEventListener('click', () => ccApplyDatePreset(btn.dataset.range));
+    // Date range seg buttons
+    document.querySelectorAll('#ccDateFilter .seg').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const range = btn.dataset.range;
+            if (range === 'custom') {
+                document.querySelectorAll('#ccDateFilter .seg').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const cd = document.getElementById('customDateInputs');
+                if (cd) cd.style.display = 'flex';
+                ccUpdateSelectionPreview();
+            } else {
+                ccApplyDatePreset(range);
+            }
+        });
     });
 
-    // Manual date edits → clear active preset chip
+    // Manual date edits → mark Custom active
     ['ccDateFrom', 'ccDateTo'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', () => {
-            document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#ccDateFilter .seg').forEach(b => b.classList.remove('active'));
+            const custom = document.querySelector('#ccDateFilter .seg[data-range="custom"]');
+            if (custom) custom.classList.add('active');
             ccUpdateSelectionPreview();
         });
     });
@@ -3558,9 +3571,11 @@ function ccApplyDatePreset(range) {
     const toEl = document.getElementById('ccDateTo');
     if (fromEl) fromEl.value = fmt(from);
     if (toEl) toEl.value = fmt(to);
-    document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
-    const active = document.querySelector(`.date-preset[data-range="${range}"]`);
+    document.querySelectorAll('#ccDateFilter .seg').forEach(b => b.classList.remove('active'));
+    const active = document.querySelector(`#ccDateFilter .seg[data-range="${range}"]`);
     if (active) active.classList.add('active');
+    const cd = document.getElementById('customDateInputs');
+    if (cd) cd.style.display = 'none';
     ccUpdateSelectionPreview();
 }
 
@@ -3880,10 +3895,12 @@ function ccReset() {
     ccSelectedRgs.clear();
     ccSelectedSvcs.clear();
 
-    // Close panels
+    // Close panels and custom date inputs
     ['ccSubPanel', 'ccRgPanel', 'ccSvcPanel'].forEach(id => {
         const el = document.getElementById(id); if (el) el.hidden = true;
     });
+    const cd = document.getElementById('customDateInputs');
+    if (cd) cd.style.display = 'none';
 
     document.getElementById('ccResults').style.display = 'none';
     const sumEl = document.getElementById('ccSelectionSummary'); if (sumEl) sumEl.style.display = 'none';
@@ -4011,9 +4028,11 @@ async function ccApplyFilterData(saved) {
     if (fromEl) fromEl.value = fl.date_from || '';
     if (toEl) toEl.value = fl.date_to || '';
     if (fl.date_from || fl.date_to) {
-        document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
-        const c = document.querySelector('.date-preset[data-range="custom"]');
+        document.querySelectorAll('#ccDateFilter .seg').forEach(b => b.classList.remove('active'));
+        const c = document.querySelector('#ccDateFilter .seg[data-range="custom"]');
         if (c) c.classList.add('active');
+        const cd = document.getElementById('customDateInputs');
+        if (cd) cd.style.display = 'flex';
     }
 
     ccSelectedSubs.clear();

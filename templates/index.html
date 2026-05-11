@@ -835,7 +835,6 @@
         </div>
     </section>
 
-    <!-- ═══ Custom Cost Calculator Page ═══════════════════════════════════ -->
     <!-- ═══ Custom Cost Calculator Page ══════════════════════════════════════ -->
     <section id="page-custom-cost" class="page-section">
         <div class="cp-page-header">
@@ -846,107 +845,110 @@
             </div>
         </div>
 
-        <div class="calc-layout">
-            <!-- Left: filter panel -->
-            <div class="calc-panel calc-filters" id="ccFiltersPanel">
-                <div style="font-size:13px;font-weight:500;color:var(--text-primary);flex-shrink:0">Configuration</div>
-                <div class="form-helper">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    <span>Pick filters, then hit Calculate to see costs across your selection.</span>
+        <!-- Saved presets card -->
+        <div class="card preset-strip" id="ccSavedSection" style="margin-bottom:14px">
+            <div class="preset-strip__head">
+                <span style="font-size:13px;font-weight:500;color:var(--text-primary)">Saved presets</span>
+                <span class="count-chip" id="ccSavedCount" style="display:none"></span>
+            </div>
+            <div class="preset-strip__list" id="ccSavedList">
+                <div style="color:var(--text-secondary);font-size:12px;padding:4px 0">No saved presets yet.</div>
+            </div>
+        </div>
+
+        <!-- Horizontal filter bar -->
+        <div class="card filter-bar">
+            <div class="filter-bar__row">
+                <!-- Clouds -->
+                <div class="filter-bar__field">
+                    <span class="micro-label">Clouds</span>
+                    <div class="segmented-control segmented-control--small" id="ccCloudsFilter">
+                        <button class="seg active" data-cloud="all">All</button>
+                        <button class="seg" data-cloud="azure">Azure</button>
+                        <button class="seg" data-cloud="aws">AWS</button>
+                        <button class="seg" data-cloud="gcp">GCP</button>
+                    </div>
                 </div>
 
-                <!-- Scrollable filter fields -->
-                <div class="calc-filters__scroll">
-
-                    <!-- 1. Clouds segmented filter -->
-                    <div class="calc-field">
-                        <label class="calc-label">Clouds</label>
-                        <div class="segmented-control segmented-control--small" id="ccCloudsFilter">
-                            <button class="seg active" data-cloud="all">All</button>
-                            <button class="seg" data-cloud="azure">Azure</button>
-                            <button class="seg" data-cloud="aws">AWS</button>
-                            <button class="seg" data-cloud="gcp">GCP</button>
-                        </div>
+                <!-- Date range -->
+                <div class="filter-bar__field">
+                    <span class="micro-label">Date range</span>
+                    <div class="segmented-control segmented-control--small" id="ccDateFilter">
+                        <button class="seg" data-range="7d">7 days</button>
+                        <button class="seg" data-range="30d">30 days</button>
+                        <button class="seg active" data-range="month">This month</button>
+                        <button class="seg" data-range="last-month">Last mo.</button>
+                        <button class="seg" data-range="custom">Custom</button>
                     </div>
+                </div>
 
-                    <!-- 3. Date range with presets -->
-                    <div class="calc-field">
-                        <label class="calc-label">Date range</label>
-                        <div class="date-presets">
-                            <button class="date-preset" data-range="7d">7 days</button>
-                            <button class="date-preset" data-range="30d">30 days</button>
-                            <button class="date-preset active" data-range="month">This month</button>
-                            <button class="date-preset" data-range="last-month">Last month</button>
-                        </div>
-                        <div class="date-inputs">
-                            <input type="date" class="cost-filter-input" id="ccDateFrom">
-                            <span class="date-inputs__arrow">→</span>
-                            <input type="date" class="cost-filter-input" id="ccDateTo">
-                        </div>
-                    </div>
+                <!-- Custom date inputs (shown only when Custom selected) -->
+                <div class="filter-bar__custom-dates" id="customDateInputs" style="display:none">
+                    <input type="date" class="cost-filter-input" id="ccDateFrom">
+                    <span style="color:var(--text-tertiary);font-size:11px;flex-shrink:0">→</span>
+                    <input type="date" class="cost-filter-input" id="ccDateTo">
+                </div>
 
-                    <!-- 2. Subscriptions multi-select combobox -->
-                    <div class="calc-field">
-                        <label class="calc-label">Subscriptions <span class="count-chip count-chip--small" id="ccSubCount" style="display:none"></span></label>
-                        <div class="multiselect" id="ccSubMultiselect">
-                            <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('sub')">
-                                <span id="ccSubTriggerText" class="multiselect__placeholder">All subscriptions</span>
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                            </button>
-                            <div class="multiselect__panel" id="ccSubPanel" hidden>
-                                <input class="multiselect__search" id="ccSubSearch" placeholder="Search subscriptions..." oninput="ccFilterList('sub')">
-                                <div class="multiselect__actions">
-                                    <button class="btn-link" onclick="ccSelectAll('sub')">Select all</button>
-                                    <button class="btn-link" onclick="ccDeselectAll('sub')">Clear</button>
-                                </div>
-                                <div class="multiselect__options" id="ccSubList"></div>
+                <!-- Subscriptions -->
+                <div class="filter-bar__field filter-bar__dropdown">
+                    <span class="micro-label">Subscriptions <span class="count-chip count-chip--small" id="ccSubCount" style="display:none"></span></span>
+                    <div class="multiselect" id="ccSubMultiselect">
+                        <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('sub')">
+                            <span id="ccSubTriggerText" class="multiselect__placeholder">All subscriptions</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="multiselect__panel" id="ccSubPanel" hidden>
+                            <input class="multiselect__search" id="ccSubSearch" placeholder="Search subscriptions..." oninput="ccFilterList('sub')">
+                            <div class="multiselect__actions">
+                                <button class="btn-link" onclick="ccSelectAll('sub')">Select all</button>
+                                <button class="btn-link" onclick="ccDeselectAll('sub')">Clear</button>
                             </div>
+                            <div class="multiselect__options" id="ccSubList"></div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Resource groups multi-select combobox -->
-                    <div class="calc-field">
-                        <label class="calc-label">Resource groups <span class="count-chip count-chip--small" id="ccRgCount" style="display:none"></span></label>
-                        <div class="multiselect" id="ccRgMultiselect">
-                            <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('rg')">
-                                <span id="ccRgTriggerText" class="multiselect__placeholder">All resource groups</span>
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                            </button>
-                            <div class="multiselect__panel" id="ccRgPanel" hidden>
-                                <input class="multiselect__search" id="ccRgSearch" placeholder="Search resource groups..." oninput="ccFilterList('rg')">
-                                <div class="multiselect__actions">
-                                    <button class="btn-link" onclick="ccSelectAll('rg')">Select all</button>
-                                    <button class="btn-link" onclick="ccDeselectAll('rg')">Clear</button>
-                                </div>
-                                <div class="multiselect__options" id="ccRgList"></div>
+                <!-- Resource groups -->
+                <div class="filter-bar__field filter-bar__dropdown">
+                    <span class="micro-label">Resource groups <span class="count-chip count-chip--small" id="ccRgCount" style="display:none"></span></span>
+                    <div class="multiselect" id="ccRgMultiselect">
+                        <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('rg')">
+                            <span id="ccRgTriggerText" class="multiselect__placeholder">All resource groups</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="multiselect__panel" id="ccRgPanel" hidden>
+                            <input class="multiselect__search" id="ccRgSearch" placeholder="Search resource groups..." oninput="ccFilterList('rg')">
+                            <div class="multiselect__actions">
+                                <button class="btn-link" onclick="ccSelectAll('rg')">Select all</button>
+                                <button class="btn-link" onclick="ccDeselectAll('rg')">Clear</button>
                             </div>
+                            <div class="multiselect__options" id="ccRgList"></div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Services multi-select combobox -->
-                    <div class="calc-field">
-                        <label class="calc-label">Services <span class="count-chip count-chip--small" id="ccSvcCount" style="display:none"></span></label>
-                        <div class="multiselect" id="ccSvcMultiselect">
-                            <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('svc')">
-                                <span id="ccSvcTriggerText" class="multiselect__placeholder">All services</span>
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                            </button>
-                            <div class="multiselect__panel" id="ccSvcPanel" hidden>
-                                <input class="multiselect__search" id="ccSvcSearch" placeholder="Search services..." oninput="ccFilterList('svc')">
-                                <div class="multiselect__actions">
-                                    <button class="btn-link" onclick="ccSelectAll('svc')">Select all</button>
-                                    <button class="btn-link" onclick="ccDeselectAll('svc')">Clear</button>
-                                </div>
-                                <div class="multiselect__options" id="ccSvcList"></div>
+                <!-- Services -->
+                <div class="filter-bar__field filter-bar__dropdown">
+                    <span class="micro-label">Services <span class="count-chip count-chip--small" id="ccSvcCount" style="display:none"></span></span>
+                    <div class="multiselect" id="ccSvcMultiselect">
+                        <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('svc')">
+                            <span id="ccSvcTriggerText" class="multiselect__placeholder">All services</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="multiselect__panel" id="ccSvcPanel" hidden>
+                            <input class="multiselect__search" id="ccSvcSearch" placeholder="Search services..." oninput="ccFilterList('svc')">
+                            <div class="multiselect__actions">
+                                <button class="btn-link" onclick="ccSelectAll('svc')">Select all</button>
+                                <button class="btn-link" onclick="ccDeselectAll('svc')">Clear</button>
                             </div>
+                            <div class="multiselect__options" id="ccSvcList"></div>
                         </div>
                     </div>
+                </div>
 
-                </div><!-- end calc-filters__scroll -->
-
-                <!-- 6. Sticky action bar -->
-                <div class="calc-filters__sticky-actions">
-                    <button class="cp-btn-primary" onclick="ccCalculate()" id="ccCalcBtn" style="justify-content:center;flex:1">
+                <!-- Actions -->
+                <div class="filter-bar__actions">
+                    <button class="cp-btn-primary" onclick="ccCalculate()" id="ccCalcBtn">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                         Calculate
                     </button>
@@ -955,119 +957,107 @@
                     <span id="ccCalcStatus" style="font-size:11px;color:var(--text-tertiary)"></span>
                 </div>
             </div>
+        </div>
 
-            <!-- Right: results -->
-            <div class="calc-results">
+        <!-- Selection preview (below filter bar, before results) -->
+        <div class="selection-preview" id="ccSelectionPreview" style="display:none;margin:10px 0 0">
+            <span class="selection-preview__label">Ready to calculate:</span>
+            <span class="strong" id="ccPreviewSubs">all subs</span>
+            <span>·</span>
+            <span class="strong" id="ccPreviewRgs">all RGs</span>
+            <span>·</span>
+            <span class="strong" id="ccPreviewSvcs">all services</span>
+            <span>·</span>
+            <span class="strong" id="ccPreviewRange">all dates</span>
+        </div>
 
-                <!-- 4. Preset strip (horizontal scrolling) -->
-                <div class="card preset-strip" id="ccSavedSection">
-                    <div class="preset-strip__head">
-                        <span style="font-size:13px;font-weight:500;color:var(--text-primary)">Saved presets</span>
-                        <span class="count-chip" id="ccSavedCount" style="display:none"></span>
+        <!-- Full-width results panel -->
+        <div class="results-panel">
+            <!-- Selection summary (shown after Calculate) -->
+            <div class="selection-summary" id="ccSelectionSummary" style="display:none">
+                <span>Showing </span>
+                <span class="strong" id="ccSummarySubs">all subscriptions</span>
+                <span> · </span>
+                <span class="strong" id="ccSummaryRgs">all RGs</span>
+                <span> · </span>
+                <span class="strong" id="ccSummaryServices">all services</span>
+                <span> · </span>
+                <span class="strong" id="ccSummaryRange">all dates</span>
+                <button class="btn-link" style="margin-left:auto" onclick="document.querySelector('.filter-bar').scrollIntoView({behavior:'smooth'})">Edit ↺</button>
+            </div>
+
+            <!-- Results (hidden until calculated) -->
+            <div id="ccResults" style="display:none">
+                <div class="co-kpi-grid" style="margin-bottom:16px">
+                    <div class="co-kpi">
+                        <div class="co-kpi__label">Total cost</div>
+                        <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccTotalCost">$0.00</span></div>
                     </div>
-                    <div class="preset-strip__list" id="ccSavedList">
-                        <div style="color:var(--text-secondary);font-size:12px;padding:4px 0">No saved presets yet.</div>
+                    <div class="co-kpi">
+                        <div class="co-kpi__label">Records</div>
+                        <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccTotalRecords">0</span></div>
+                    </div>
+                    <div class="co-kpi">
+                        <div class="co-kpi__label">Resource groups</div>
+                        <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccRgTotal">0</span></div>
+                    </div>
+                    <div class="co-kpi">
+                        <div class="co-kpi__label">Services</div>
+                        <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccSvcTotal">0</span></div>
                     </div>
                 </div>
 
-                <!-- 5. Selection summary (shown after Calculate) -->
-                <div class="selection-summary" id="ccSelectionSummary" style="display:none">
-                    <span>Showing </span>
-                    <span class="strong" id="ccSummarySubs">all subscriptions</span>
-                    <span> · </span>
-                    <span class="strong" id="ccSummaryRgs">all RGs</span>
-                    <span> · </span>
-                    <span class="strong" id="ccSummaryServices">all services</span>
-                    <span> · </span>
-                    <span class="strong" id="ccSummaryRange">all dates</span>
-                    <button class="btn-link" style="margin-left:auto" onclick="document.getElementById('ccFiltersPanel').scrollIntoView({behavior:'smooth'})">Edit ↺</button>
-                </div>
-
-                <!-- Results (hidden until calculated) -->
-                <div id="ccResults" style="display:none">
-                    <div class="co-kpi-grid" style="margin-bottom:16px">
-                        <div class="co-kpi">
-                            <div class="co-kpi__label">Total cost</div>
-                            <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccTotalCost">$0.00</span></div>
-                        </div>
-                        <div class="co-kpi">
-                            <div class="co-kpi__label">Records</div>
-                            <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccTotalRecords">0</span></div>
-                        </div>
-                        <div class="co-kpi">
-                            <div class="co-kpi__label">Resource groups</div>
-                            <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccRgTotal">0</span></div>
-                        </div>
-                        <div class="co-kpi">
-                            <div class="co-kpi__label">Services</div>
-                            <div class="co-kpi__value-row"><span class="co-kpi__value" id="ccSvcTotal">0</span></div>
-                        </div>
-                    </div>
-
-                    <div class="charts-grid" style="margin-bottom:16px">
-                        <div class="sub-table-card" style="padding:16px">
-                            <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px"><span class="sub-table-card__title">Cost by resource group</span></div>
-                            <div style="height:220px"><canvas id="ccRgChart"></canvas></div>
-                            <div class="table-container" style="margin-top:12px;max-height:240px;overflow-y:auto">
-                                <table>
-                                    <thead><tr><th>Resource group</th><th>Cost</th><th>Records</th></tr></thead>
-                                    <tbody id="ccRgTableBody"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <div class="sub-table-card" style="padding:16px">
-                            <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px"><span class="sub-table-card__title">Cost by service</span></div>
-                            <div style="height:220px"><canvas id="ccSvcChart"></canvas></div>
-                            <div class="table-container" style="margin-top:12px;max-height:240px;overflow-y:auto">
-                                <table>
-                                    <thead><tr><th>Service</th><th>Cost</th><th>Records</th></tr></thead>
-                                    <tbody id="ccSvcTableBody"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="sub-table-card" style="margin-bottom:16px">
-                        <div class="sub-table-card__head">
-                            <span class="sub-table-card__title">Cost by resource</span>
-                        </div>
-                        <p id="ccResourceTruncNote" style="display:none;font-size:12px;color:var(--accent);margin:8px 16px 0">Showing top 500 resources by cost.</p>
-                        <div class="table-container" style="max-height:360px;overflow-y:auto">
+                <div class="charts-grid" style="margin-bottom:16px">
+                    <div class="sub-table-card" style="padding:16px">
+                        <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px"><span class="sub-table-card__title">Cost by resource group</span></div>
+                        <div style="height:220px"><canvas id="ccRgChart"></canvas></div>
+                        <div class="table-container" style="margin-top:12px;max-height:240px;overflow-y:auto">
                             <table>
-                                <thead><tr><th>Resource</th><th>Type</th><th>Resource group</th><th>Cost</th><th>Lines</th></tr></thead>
-                                <tbody id="ccResourceTableBody"></tbody>
+                                <thead><tr><th>Resource group</th><th>Cost</th><th>Records</th></tr></thead>
+                                <tbody id="ccRgTableBody"></tbody>
                             </table>
                         </div>
                     </div>
-
                     <div class="sub-table-card" style="padding:16px">
-                        <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px"><span class="sub-table-card__title">Daily cost trend</span></div>
-                        <div style="height:220px"><canvas id="ccTrendChart"></canvas></div>
+                        <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px"><span class="sub-table-card__title">Cost by service</span></div>
+                        <div style="height:220px"><canvas id="ccSvcChart"></canvas></div>
+                        <div class="table-container" style="margin-top:12px;max-height:240px;overflow-y:auto">
+                            <table>
+                                <thead><tr><th>Service</th><th>Cost</th><th>Records</th></tr></thead>
+                                <tbody id="ccSvcTableBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Selection preview: shown when filters set but Calculate not yet run -->
-                <div class="selection-preview" id="ccSelectionPreview" style="display:none">
-                    <span class="selection-preview__label">Ready to calculate:</span>
-                    <span class="strong" id="ccPreviewSubs">all subs</span>
-                    <span>·</span>
-                    <span class="strong" id="ccPreviewRgs">all RGs</span>
-                    <span>·</span>
-                    <span class="strong" id="ccPreviewSvcs">all services</span>
-                    <span>·</span>
-                    <span class="strong" id="ccPreviewRange">all dates</span>
+                <div class="sub-table-card" style="margin-bottom:16px">
+                    <div class="sub-table-card__head">
+                        <span class="sub-table-card__title">Cost by resource</span>
+                    </div>
+                    <p id="ccResourceTruncNote" style="display:none;font-size:12px;color:var(--accent);margin:8px 16px 0">Showing top 500 resources by cost.</p>
+                    <div class="table-container" style="max-height:360px;overflow-y:auto">
+                        <table>
+                            <thead><tr><th>Resource</th><th>Type</th><th>Resource group</th><th>Cost</th><th>Lines</th></tr></thead>
+                            <tbody id="ccResourceTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
 
-                <!-- Empty state shown when no results yet -->
-                <div id="ccEmptyState">
-                  <div class="empty-state">
-                    <div class="empty-state__icon empty-state__icon--info">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                    </div>
-                    <div class="empty-state__headline">Build your custom view</div>
-                    <div class="empty-state__sub">Configure filters on the left and click Calculate to see results here.</div>
-                  </div>
+                <div class="sub-table-card" style="padding:16px">
+                    <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px"><span class="sub-table-card__title">Daily cost trend</span></div>
+                    <div style="height:220px"><canvas id="ccTrendChart"></canvas></div>
                 </div>
+            </div>
+
+            <!-- Empty state shown when no results yet -->
+            <div id="ccEmptyState">
+              <div class="empty-state">
+                <div class="empty-state__icon empty-state__icon--info">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                </div>
+                <div class="empty-state__headline">Build your custom view</div>
+                <div class="empty-state__sub">Set your filters above and click Calculate to see costs.</div>
+              </div>
             </div>
         </div>
     </section>
