@@ -3460,39 +3460,147 @@ function showToast(msg, type) {
 // ─── Custom Cost Calculator ───────────────────────────────────────────────
 let ccSubOptions = [];
 let ccSubMap = {};
+let ccSubCloud = {};
 let ccRgOptions = [];
 let ccSvcOptions = [];
 let ccSelectedSubs = new Set();
 let ccSelectedRgs = new Set();
 let ccSelectedSvcs = new Set();
+let ccCloudFilter = 'all';
+let _ccListenersAttached = false;
 
 async function loadCustomCostPage() {
     try {
         const subs = await fetch('/api/subscriptions').then(r => r.json());
         ccSubOptions = subs.filter(s => s.enabled).map(s => s.subscription_id);
         ccSubMap = {};
-        subs.filter(s => s.enabled).forEach(s => { ccSubMap[s.subscription_id] = s.name; });
+        ccSubCloud = {};
+        subs.filter(s => s.enabled).forEach(s => {
+            ccSubMap[s.subscription_id] = s.name;
+            ccSubCloud[s.subscription_id] = (s.cloud || 'azure').toLowerCase();
+        });
     } catch (err) { /* ignore */ }
+
+    // Default date range = This month
+    ccApplyDatePreset('month');
+
+    // Cloud filter buttons
+    document.querySelectorAll('#ccCloudsFilter .seg').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#ccCloudsFilter .seg').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            ccCloudFilter = btn.dataset.cloud;
+            ccSelectedSubs.clear();
+            ccSelectedRgs.clear();
+            ccSelectedSvcs.clear();
+            ccRenderList('sub');
+            ccLoadFilters();
+        });
+    });
+
+    // Date preset buttons
+    document.querySelectorAll('.date-preset').forEach(btn => {
+        btn.addEventListener('click', () => ccApplyDatePreset(btn.dataset.range));
+    });
+
+    // Manual date edits → activate "Custom"
+    ['ccDateFrom', 'ccDateTo'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', () => {
+            document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
+            const c = document.querySelector('.date-preset[data-range="custom"]');
+            if (c) c.classList.add('active');
+        });
+    });
+
+    // Close panels on outside click / ESC (attach once per page load)
+    if (!_ccListenersAttached) {
+        _ccListenersAttached = true;
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.multiselect')) {
+                ['ccSubPanel', 'ccRgPanel', 'ccSvcPanel'].forEach(id => {
+                    const el = document.getElementById(id); if (el) el.hidden = true;
+                });
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                ['ccSubPanel', 'ccRgPanel', 'ccSvcPanel'].forEach(id => {
+                    const el = document.getElementById(id); if (el) el.hidden = true;
+                });
+            }
+        });
+    }
+
     ccRenderList('sub');
     ccUpdateCounts();
     ccLoadFilters();
     ccLoadSavedFilters();
 }
 
+function ccApplyDatePreset(range) {
+    const now = new Date();
+    let from, to;
+    if (range === '7d') {
+        to = new Date(now); from = new Date(now); from.setDate(from.getDate() - 6);
+    } else if (range === '30d') {
+        to = new Date(now); from = new Date(now); from.setDate(from.getDate() - 29);
+    } else if (range === 'month') {
+        from = new Date(now.getFullYear(), now.getMonth(), 1);
+        to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    } else if (range === 'last-month') {
+        from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        to = new Date(now.getFullYear(), now.getMonth(), 0);
+    } else if (range === 'ytd') {
+        from = new Date(now.getFullYear(), 0, 1);
+        to = new Date(now);
+    } else {
+        document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
+        const c = document.querySelector('.date-preset[data-range="custom"]');
+        if (c) c.classList.add('active');
+        return;
+    }
+    const fmt = d => d.toISOString().split('T')[0];
+    const fromEl = document.getElementById('ccDateFrom');
+    const toEl = document.getElementById('ccDateTo');
+    if (fromEl) fromEl.value = fmt(from);
+    if (toEl) toEl.value = fmt(to);
+    document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
+    const active = document.querySelector(`.date-preset[data-range="${range}"]`);
+    if (active) active.classList.add('active');
+}
+
+function ccTogglePanel(type) {
+    const panelId = type === 'sub' ? 'ccSubPanel' : (type === 'rg' ? 'ccRgPanel' : 'ccSvcPanel');
+    const others = ['ccSubPanel', 'ccRgPanel', 'ccSvcPanel'].filter(id => id !== panelId);
+    others.forEach(id => { const el = document.getElementById(id); if (el) el.hidden = true; });
+    const panel = document.getElementById(panelId);
+    if (panel) {
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) {
+            const search = panel.querySelector('.multiselect__search');
+            if (search) search.focus();
+        }
+    }
+}
+
 async function ccLoadFilters() {
     try {
-        if (ccSelectedSubs.size === 1) {
-            const subId = [...ccSelectedSubs][0];
-            const filters = await fetch(`/api/filters?subscription_id=${subId}`).then(r => r.json());
+        const activeSubIds = ccSelectedSubs.size
+            ? [...ccSelectedSubs]
+            : (ccCloudFilter !== 'all'
+                ? ccSubOptions.filter(id => (ccSubCloud[id] || 'azure') === ccCloudFilter)
+                : null);
+
+        if (activeSubIds && activeSubIds.length === 1) {
+            const filters = await fetch(`/api/filters?subscription_id=${activeSubIds[0]}`).then(r => r.json());
             ccRgOptions = filters.resource_groups || [];
             ccSvcOptions = filters.services || [];
-        } else if (ccSelectedSubs.size > 1) {
-            const allRgs = new Set();
-            const allSvcs = new Set();
-            const fetches = [...ccSelectedSubs].map(id =>
+        } else if (activeSubIds && activeSubIds.length > 1) {
+            const allRgs = new Set(), allSvcs = new Set();
+            const results = await Promise.all(activeSubIds.map(id =>
                 fetch(`/api/filters?subscription_id=${id}`).then(r => r.json())
-            );
-            const results = await Promise.all(fetches);
+            ));
             results.forEach(f => {
                 (f.resource_groups || []).forEach(rg => allRgs.add(rg));
                 (f.services || []).forEach(svc => allSvcs.add(svc));
@@ -3514,29 +3622,25 @@ async function ccLoadFilters() {
     }
 }
 
+function ccVisibleSubOptions() {
+    if (ccCloudFilter === 'all') return ccSubOptions;
+    return ccSubOptions.filter(id => (ccSubCloud[id] || 'azure') === ccCloudFilter);
+}
+
 function ccRenderList(type) {
     const listElId = type === 'sub' ? 'ccSubList' : (type === 'rg' ? 'ccRgList' : 'ccSvcList');
     const listEl = document.getElementById(listElId);
+    if (!listEl) return;
     const searchElId = type === 'sub' ? 'ccSubSearch' : (type === 'rg' ? 'ccRgSearch' : 'ccSvcSearch');
 
     let items, selected;
-    if (type === 'sub') {
-        items = ccSubOptions;
-        selected = ccSelectedSubs;
-    } else if (type === 'rg') {
-        items = ccRgOptions;
-        selected = ccSelectedRgs;
-    } else {
-        items = ccSvcOptions;
-        selected = ccSelectedSvcs;
-    }
+    if (type === 'sub') { items = ccVisibleSubOptions(); selected = ccSelectedSubs; }
+    else if (type === 'rg') { items = ccRgOptions; selected = ccSelectedRgs; }
+    else { items = ccSvcOptions; selected = ccSelectedSvcs; }
 
     const searchVal = document.getElementById(searchElId)?.value?.toLowerCase() || '';
     const filtered = searchVal ? items.filter(i => {
-        let label;
-        if (type === 'sub') label = ccSubMap[i] || i;
-        else if (type === 'rg') label = i.trim() ? i : 'reservation';
-        else label = i;
+        let label = (type === 'sub') ? (ccSubMap[i] || i) : (type === 'rg' ? (i.trim() ? i : 'reservation') : i);
         return label.toLowerCase().includes(searchVal);
     }) : items;
 
@@ -3548,15 +3652,8 @@ function ccRenderList(type) {
     listEl.innerHTML = filtered.map(item => {
         const checked = selected.has(item) ? 'checked' : '';
         const escaped = item.replace(/"/g, '&quot;').replace(/'/g, "\\'");
-        let label;
-        if (type === 'sub') {
-            label = ccSubMap[item] || item;
-        } else if (type === 'rg') {
-            label = item.trim() ? item : '🏷 Reservation';
-        } else {
-            label = item;
-        }
-        return `<label class="multi-select-item ${checked ? 'selected' : ''}">
+        let label = (type === 'sub') ? (ccSubMap[item] || item) : (type === 'rg' ? (item.trim() ? item : 'Reservation') : item);
+        return `<label class="multiselect__option">
             <input type="checkbox" ${checked} onchange="ccToggleItem('${type}', '${escaped}', this)">
             <span>${label}</span>
         </label>`;
@@ -3565,27 +3662,19 @@ function ccRenderList(type) {
 
 function ccToggleItem(type, item, checkbox) {
     const selected = type === 'sub' ? ccSelectedSubs : (type === 'rg' ? ccSelectedRgs : ccSelectedSvcs);
-    if (checkbox.checked) {
-        selected.add(item);
-        checkbox.parentElement.classList.add('selected');
-    } else {
-        selected.delete(item);
-        checkbox.parentElement.classList.remove('selected');
-    }
+    if (checkbox.checked) selected.add(item);
+    else selected.delete(item);
     ccUpdateCounts();
     if (type === 'sub') ccLoadFilters();
 }
 
 function ccSelectAll(type) {
-    const items = type === 'sub' ? ccSubOptions : (type === 'rg' ? ccRgOptions : ccSvcOptions);
+    const items = type === 'sub' ? ccVisibleSubOptions() : (type === 'rg' ? ccRgOptions : ccSvcOptions);
     const selected = type === 'sub' ? ccSelectedSubs : (type === 'rg' ? ccSelectedRgs : ccSelectedSvcs);
     const searchElId = type === 'sub' ? 'ccSubSearch' : (type === 'rg' ? 'ccRgSearch' : 'ccSvcSearch');
     const searchVal = document.getElementById(searchElId)?.value?.toLowerCase() || '';
     const filtered = searchVal ? items.filter(i => {
-        let label;
-        if (type === 'sub') label = ccSubMap[i] || i;
-        else if (type === 'rg') label = i.trim() ? i : 'reservation';
-        else label = i;
+        let label = (type === 'sub') ? (ccSubMap[i] || i) : (type === 'rg' ? (i.trim() ? i : 'reservation') : i);
         return label.toLowerCase().includes(searchVal);
     }) : items;
     filtered.forEach(i => selected.add(i));
@@ -3602,14 +3691,26 @@ function ccDeselectAll(type) {
     if (type === 'sub') ccLoadFilters();
 }
 
-function ccFilterList(type) {
-    ccRenderList(type);
-}
+function ccFilterList(type) { ccRenderList(type); }
 
 function ccUpdateCounts() {
-    document.getElementById('ccSubCount').textContent = `(${ccSelectedSubs.size} selected)`;
-    document.getElementById('ccRgCount').textContent = `(${ccSelectedRgs.size} selected)`;
-    document.getElementById('ccSvcCount').textContent = `(${ccSelectedSvcs.size} selected)`;
+    const update = (countId, triggerId, textId, size, placeholder) => {
+        const chip = document.getElementById(countId);
+        const triggerText = document.getElementById(textId);
+        if (chip) { chip.textContent = size; chip.style.display = size > 0 ? '' : 'none'; }
+        if (triggerText) {
+            if (size === 0) {
+                triggerText.textContent = placeholder;
+                triggerText.className = 'multiselect__placeholder';
+            } else {
+                triggerText.textContent = `${size} selected`;
+                triggerText.className = 'multiselect__summary';
+            }
+        }
+    };
+    update('ccSubCount', 'ccSubMultiselect', 'ccSubTriggerText', ccSelectedSubs.size, 'All subscriptions');
+    update('ccRgCount', 'ccRgMultiselect', 'ccRgTriggerText', ccSelectedRgs.size, 'All resource groups');
+    update('ccSvcCount', 'ccSvcMultiselect', 'ccSvcTriggerText', ccSelectedSvcs.size, 'All services');
 }
 
 async function ccCalculate() {
@@ -3646,9 +3747,31 @@ async function ccCalculate() {
     }
 }
 
+function ccShowSelectionSummary() {
+    const sumEl = document.getElementById('ccSelectionSummary');
+    if (!sumEl) return;
+    const subCount = ccSelectedSubs.size;
+    const rgCount = ccSelectedRgs.size;
+    const svcCount = ccSelectedSvcs.size;
+    const dateFrom = document.getElementById('ccDateFrom')?.value || '';
+    const dateTo = document.getElementById('ccDateTo')?.value || '';
+
+    const subsText = subCount ? `${subCount} subscription${subCount > 1 ? 's' : ''}` : 'all subscriptions';
+    const rgsText = rgCount ? `${rgCount} resource group${rgCount > 1 ? 's' : ''}` : 'all RGs';
+    const svcsText = svcCount ? `${svcCount} service${svcCount > 1 ? 's' : ''}` : 'all services';
+    const rangeText = (dateFrom || dateTo) ? `${dateFrom || '…'} → ${dateTo || '…'}` : 'all dates';
+
+    document.getElementById('ccSummarySubs').textContent = subsText;
+    document.getElementById('ccSummaryRgs').textContent = rgsText;
+    document.getElementById('ccSummaryServices').textContent = svcsText;
+    document.getElementById('ccSummaryRange').textContent = rangeText;
+    sumEl.style.display = 'flex';
+}
+
 function ccRenderResults(data) {
     document.getElementById('ccResults').style.display = 'block';
     const emptyState = document.getElementById('ccEmptyState'); if(emptyState) emptyState.style.display = 'none';
+    ccShowSelectionSummary();
 
     document.getElementById('ccTotalCost').textContent =
         `$${data.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
@@ -3656,7 +3779,6 @@ function ccRenderResults(data) {
     document.getElementById('ccRgTotal').textContent = (data.by_rg || []).length;
     document.getElementById('ccSvcTotal').textContent = (data.by_service || []).length;
     const byRes = data.by_resource || [];
-    document.getElementById('ccResourceTotal').textContent = byRes.length.toLocaleString();
 
     const colors = CHART_COLORS();
 
@@ -3724,15 +3846,30 @@ function ccRenderResults(data) {
 }
 
 function ccReset() {
-    document.getElementById('ccDateFrom').value = '';
-    document.getElementById('ccDateTo').value = '';
-    document.getElementById('ccSubSearch').value = '';
-    document.getElementById('ccRgSearch').value = '';
-    document.getElementById('ccSvcSearch').value = '';
+    // Reset cloud filter to All
+    ccCloudFilter = 'all';
+    document.querySelectorAll('#ccCloudsFilter .seg').forEach(b => b.classList.remove('active'));
+    const allBtn = document.querySelector('#ccCloudsFilter .seg[data-cloud="all"]');
+    if (allBtn) allBtn.classList.add('active');
+
+    // Reset dates to This month
+    ccApplyDatePreset('month');
+
+    // Clear selections and searches
+    ['ccSubSearch', 'ccRgSearch', 'ccSvcSearch'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
     ccSelectedSubs.clear();
     ccSelectedRgs.clear();
     ccSelectedSvcs.clear();
+
+    // Close panels
+    ['ccSubPanel', 'ccRgPanel', 'ccSvcPanel'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.hidden = true;
+    });
+
     document.getElementById('ccResults').style.display = 'none';
+    const sumEl = document.getElementById('ccSelectionSummary'); if (sumEl) sumEl.style.display = 'none';
     document.getElementById('ccCalcStatus').textContent = '';
     ccRenderList('sub');
     ccLoadFilters();
@@ -3781,10 +3918,14 @@ async function ccLoadSavedFilters() {
         const filters = await fetch('/api/saved-filters').then(r => r.json());
         const el = document.getElementById('ccSavedList');
         const countEl = document.getElementById('ccSavedCount');
-        countEl.textContent = `${filters.length} saved`;
+
+        if (countEl) {
+            countEl.textContent = filters.length;
+            countEl.style.display = filters.length ? '' : 'none';
+        }
 
         if (!filters.length) {
-            el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:13px">No saved filters yet. Set your filters and click "Save Filter".</div>';
+            el.innerHTML = '<div style="color:var(--text-secondary);font-size:12px;padding:4px 0">No saved presets yet. Configure filters and click Save preset.</div>';
             return;
         }
 
@@ -3793,28 +3934,28 @@ async function ccLoadSavedFilters() {
             const tags = [];
             const subIds = fl.subscription_ids || (fl.subscription_id ? [fl.subscription_id] : []);
             if (subIds.length > 0) {
-                const subNames = subIds.map(id => ccSubMap[id] || id.substring(0, 8) + '...');
-                tags.push(`${subIds.length} sub${subIds.length > 1 ? 's' : ''}: ${subNames.slice(0, 2).join(', ')}${subIds.length > 2 ? '...' : ''}`);
+                const subNames = subIds.map(id => ccSubMap[id] || id.substring(0, 8) + '…');
+                tags.push(`${subIds.length} sub${subIds.length > 1 ? 's' : ''}`);
+                if (subNames.length <= 2) tags.push(subNames.join(', '));
             }
-            if (fl.date_from || fl.date_to) tags.push(`${fl.date_from || '...'} → ${fl.date_to || '...'}`);
+            if (fl.date_from || fl.date_to) tags.push(`${fl.date_from || '…'} → ${fl.date_to || '…'}`);
             if (fl.resource_groups?.length) tags.push(`${fl.resource_groups.length} RG${fl.resource_groups.length > 1 ? 's' : ''}`);
-            if (fl.services?.length) tags.push(`${fl.services.length} service${fl.services.length > 1 ? 's' : ''}`);
-
+            if (fl.services?.length) tags.push(`${fl.services.length} svc${fl.services.length > 1 ? 's' : ''}`);
             const timeAgo = ccTimeAgo(f.created_at);
+            const safeName = f.name.replace(/'/g, "\\'");
 
-            return `<div class="saved-filter-card">
-                <div class="saved-filter-body" onclick="ccApplyFilter(${f.id})" title="Click to load this filter and calculate">
-                    <div class="saved-filter-name">${f.name}</div>
-                    <div class="saved-filter-tags">${tags.map(t => `<span class="sf-tag">${t}</span>`).join('')}</div>
-                    <div class="saved-filter-time">${timeAgo}</div>
-                </div>
-                <div class="saved-filter-actions">
-                    <button class="btn-mini" onclick="event.stopPropagation();ccDeleteFilter(${f.id},'${f.name.replace(/'/g, "\\'")}')" title="Delete">
-                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
-                            <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
-                        </svg>
-                    </button>
+            return `<div class="preset-card" data-preset-id="${f.id}" onclick="if(!event.target.closest('.preset-card__actions'))ccApplyFilter(${f.id})">
+                <div class="preset-card__name" title="${f.name}">${f.name}</div>
+                <div class="preset-card__tags">${tags.map(t => `<span class="badge">${t}</span>`).join('')}</div>
+                <div class="preset-card__foot">
+                    <span>${timeAgo}</span>
+                    <div class="preset-card__actions">
+                        <button class="icon-btn-ghost" title="Delete" onclick="event.stopPropagation();ccDeleteFilter(${f.id},'${safeName}')">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>`;
         }).join('');
@@ -3846,26 +3987,28 @@ async function ccApplyFilter(filterId) {
 async function ccApplyFilterData(saved) {
     const fl = saved.filters;
 
-    document.getElementById('ccDateFrom').value = fl.date_from || '';
-    document.getElementById('ccDateTo').value = fl.date_to || '';
+    // Apply dates and mark Custom preset active
+    const fromEl = document.getElementById('ccDateFrom');
+    const toEl = document.getElementById('ccDateTo');
+    if (fromEl) fromEl.value = fl.date_from || '';
+    if (toEl) toEl.value = fl.date_to || '';
+    if (fl.date_from || fl.date_to) {
+        document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
+        const c = document.querySelector('.date-preset[data-range="custom"]');
+        if (c) c.classList.add('active');
+    }
 
     ccSelectedSubs.clear();
     const subIds = fl.subscription_ids || (fl.subscription_id ? [fl.subscription_id] : []);
-    subIds.forEach(id => {
-        if (ccSubOptions.includes(id)) ccSelectedSubs.add(id);
-    });
+    subIds.forEach(id => { if (ccSubOptions.includes(id)) ccSelectedSubs.add(id); });
     ccRenderList('sub');
 
     await ccLoadFilters();
 
     ccSelectedRgs.clear();
     ccSelectedSvcs.clear();
-    (fl.resource_groups || []).forEach(rg => {
-        if (ccRgOptions.includes(rg)) ccSelectedRgs.add(rg);
-    });
-    (fl.services || []).forEach(svc => {
-        if (ccSvcOptions.includes(svc)) ccSelectedSvcs.add(svc);
-    });
+    (fl.resource_groups || []).forEach(rg => { if (ccRgOptions.includes(rg)) ccSelectedRgs.add(rg); });
+    (fl.services || []).forEach(svc => { if (ccSvcOptions.includes(svc)) ccSelectedSvcs.add(svc); });
 
     ccRenderList('rg');
     ccRenderList('svc');

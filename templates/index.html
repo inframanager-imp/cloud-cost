@@ -848,86 +848,137 @@
 
         <div class="calc-layout">
             <!-- Left: filter panel -->
-            <div class="calc-panel">
-                <div class="sub-table-card__title" style="font-size:13px;font-weight:500;color:var(--text-primary)">Configuration</div>
+            <div class="calc-panel calc-filters" id="ccFiltersPanel">
+                <div style="font-size:13px;font-weight:500;color:var(--text-primary);flex-shrink:0">Configuration</div>
 
-                <div class="calc-field-row">
+                <!-- Scrollable filter fields -->
+                <div class="calc-filters__scroll">
+
+                    <!-- 1. Clouds segmented filter -->
                     <div class="calc-field">
-                        <label class="calc-label">From</label>
-                        <input type="date" class="cost-filter-input" id="ccDateFrom">
+                        <label class="calc-label">Clouds</label>
+                        <div class="segmented-control segmented-control--small" id="ccCloudsFilter">
+                            <button class="seg active" data-cloud="all">All</button>
+                            <button class="seg" data-cloud="azure">Azure</button>
+                            <button class="seg" data-cloud="aws">AWS</button>
+                            <button class="seg" data-cloud="gcp">GCP</button>
+                        </div>
                     </div>
+
+                    <!-- 3. Date range with presets -->
                     <div class="calc-field">
-                        <label class="calc-label">To</label>
-                        <input type="date" class="cost-filter-input" id="ccDateTo">
+                        <label class="calc-label">Date range</label>
+                        <div class="date-presets">
+                            <button class="date-preset" data-range="7d">Last 7 days</button>
+                            <button class="date-preset" data-range="30d">Last 30 days</button>
+                            <button class="date-preset active" data-range="month">This month</button>
+                            <button class="date-preset" data-range="last-month">Last month</button>
+                            <button class="date-preset" data-range="ytd">YTD</button>
+                            <button class="date-preset" data-range="custom">Custom</button>
+                        </div>
+                        <div class="date-inputs">
+                            <input type="date" class="cost-filter-input" id="ccDateFrom">
+                            <span class="date-inputs__arrow">→</span>
+                            <input type="date" class="cost-filter-input" id="ccDateTo">
+                        </div>
                     </div>
-                </div>
 
-                <div class="calc-field">
-                    <label class="calc-label">Subscriptions <span id="ccSubCount" style="color:var(--accent);font-weight:400">(0 selected)</span></label>
-                    <div class="multi-select-box" id="ccSubBox" style="max-height:160px">
-                        <div class="multi-select-search">
-                            <input type="text" placeholder="Search subscriptions…" id="ccSubSearch" oninput="ccFilterList('sub')">
+                    <!-- 2. Subscriptions multi-select combobox -->
+                    <div class="calc-field">
+                        <label class="calc-label">Subscriptions <span class="count-chip count-chip--small" id="ccSubCount" style="display:none"></span></label>
+                        <div class="multiselect" id="ccSubMultiselect">
+                            <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('sub')">
+                                <span id="ccSubTriggerText" class="multiselect__placeholder">All subscriptions</span>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <div class="multiselect__panel" id="ccSubPanel" hidden>
+                                <input class="multiselect__search" id="ccSubSearch" placeholder="Search subscriptions..." oninput="ccFilterList('sub')">
+                                <div class="multiselect__actions">
+                                    <button class="btn-link" onclick="ccSelectAll('sub')">Select all</button>
+                                    <button class="btn-link" onclick="ccDeselectAll('sub')">Clear</button>
+                                </div>
+                                <div class="multiselect__options" id="ccSubList"></div>
+                            </div>
                         </div>
-                        <div class="multi-select-actions">
-                            <button class="btn-mini" onclick="ccSelectAll('sub')">All</button>
-                            <button class="btn-mini" onclick="ccDeselectAll('sub')">Clear</button>
-                        </div>
-                        <div class="multi-select-list" id="ccSubList"></div>
                     </div>
-                </div>
 
-                <div class="calc-field">
-                    <label class="calc-label">Resource groups <span id="ccRgCount" style="color:var(--accent);font-weight:400">(0 selected)</span></label>
-                    <div class="multi-select-box" id="ccRgBox" style="max-height:160px">
-                        <div class="multi-select-search">
-                            <input type="text" placeholder="Search resource groups…" id="ccRgSearch" oninput="ccFilterList('rg')">
+                    <!-- Resource groups multi-select combobox -->
+                    <div class="calc-field">
+                        <label class="calc-label">Resource groups <span class="count-chip count-chip--small" id="ccRgCount" style="display:none"></span></label>
+                        <div class="multiselect" id="ccRgMultiselect">
+                            <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('rg')">
+                                <span id="ccRgTriggerText" class="multiselect__placeholder">All resource groups</span>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <div class="multiselect__panel" id="ccRgPanel" hidden>
+                                <input class="multiselect__search" id="ccRgSearch" placeholder="Search resource groups..." oninput="ccFilterList('rg')">
+                                <div class="multiselect__actions">
+                                    <button class="btn-link" onclick="ccSelectAll('rg')">Select all</button>
+                                    <button class="btn-link" onclick="ccDeselectAll('rg')">Clear</button>
+                                </div>
+                                <div class="multiselect__options" id="ccRgList"></div>
+                            </div>
                         </div>
-                        <div class="multi-select-actions">
-                            <button class="btn-mini" onclick="ccSelectAll('rg')">All</button>
-                            <button class="btn-mini" onclick="ccDeselectAll('rg')">Clear</button>
-                        </div>
-                        <div class="multi-select-list" id="ccRgList"></div>
                     </div>
-                </div>
 
-                <div class="calc-field">
-                    <label class="calc-label">Services <span id="ccSvcCount" style="color:var(--accent);font-weight:400">(0 selected)</span></label>
-                    <div class="multi-select-box" id="ccSvcBox" style="max-height:160px">
-                        <div class="multi-select-search">
-                            <input type="text" placeholder="Search services…" id="ccSvcSearch" oninput="ccFilterList('svc')">
+                    <!-- Services multi-select combobox -->
+                    <div class="calc-field">
+                        <label class="calc-label">Services <span class="count-chip count-chip--small" id="ccSvcCount" style="display:none"></span></label>
+                        <div class="multiselect" id="ccSvcMultiselect">
+                            <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('svc')">
+                                <span id="ccSvcTriggerText" class="multiselect__placeholder">All services</span>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <div class="multiselect__panel" id="ccSvcPanel" hidden>
+                                <input class="multiselect__search" id="ccSvcSearch" placeholder="Search services..." oninput="ccFilterList('svc')">
+                                <div class="multiselect__actions">
+                                    <button class="btn-link" onclick="ccSelectAll('svc')">Select all</button>
+                                    <button class="btn-link" onclick="ccDeselectAll('svc')">Clear</button>
+                                </div>
+                                <div class="multiselect__options" id="ccSvcList"></div>
+                            </div>
                         </div>
-                        <div class="multi-select-actions">
-                            <button class="btn-mini" onclick="ccSelectAll('svc')">All</button>
-                            <button class="btn-mini" onclick="ccDeselectAll('svc')">Clear</button>
-                        </div>
-                        <div class="multi-select-list" id="ccSvcList"></div>
                     </div>
-                </div>
 
-                <div style="display:flex;flex-direction:column;gap:8px">
-                    <button class="cp-btn-primary" onclick="ccCalculate()" id="ccCalcBtn" style="justify-content:center">
-                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path d="M9 7h6m-6 4h6m-4 4h2"/><circle cx="12" cy="12" r="10"/>
-                        </svg>
+                </div><!-- end calc-filters__scroll -->
+
+                <!-- 6. Sticky action bar -->
+                <div class="calc-filters__sticky-actions">
+                    <button class="cp-btn-primary" onclick="ccCalculate()" id="ccCalcBtn" style="justify-content:center;flex:1">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                         Calculate
                     </button>
-                    <button class="cp-btn-secondary" onclick="ccSaveFilterPrompt()" style="justify-content:center">Save preset</button>
-                    <button class="cp-btn-secondary" onclick="ccReset()" style="justify-content:center">Reset</button>
-                    <span id="ccCalcStatus" style="font-size:12px;color:var(--text-tertiary);text-align:center"></span>
+                    <button class="cp-btn-secondary" onclick="ccSaveFilterPrompt()">Save preset</button>
+                    <button class="btn-link" onclick="ccReset()">Reset</button>
+                    <span id="ccCalcStatus" style="font-size:11px;color:var(--text-tertiary)"></span>
                 </div>
             </div>
 
             <!-- Right: results -->
             <div class="calc-results">
-                <!-- Saved presets -->
-                <div id="ccSavedSection" class="sub-table-card">
-                    <div class="sub-table-card__head">
-                        <span class="sub-table-card__title">Saved presets</span>
-                        <span id="ccSavedCount" style="font-size:11px;color:var(--text-tertiary)"></span>
+
+                <!-- 4. Preset strip (horizontal scrolling) -->
+                <div class="card preset-strip" id="ccSavedSection">
+                    <div class="preset-strip__head">
+                        <span style="font-size:13px;font-weight:500;color:var(--text-primary)">Saved presets</span>
+                        <span class="count-chip" id="ccSavedCount" style="display:none"></span>
                     </div>
-                    <div id="ccSavedList" class="saved-filters-grid" style="padding:12px 16px">
-                        <div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:13px">No saved presets yet.</div>
+                    <div class="preset-strip__list" id="ccSavedList">
+                        <div style="color:var(--text-secondary);font-size:12px;padding:4px 0">No saved presets yet.</div>
                     </div>
+                </div>
+
+                <!-- 5. Selection summary (shown after Calculate) -->
+                <div class="selection-summary" id="ccSelectionSummary" style="display:none">
+                    <span>Showing </span>
+                    <span class="strong" id="ccSummarySubs">all subscriptions</span>
+                    <span> · </span>
+                    <span class="strong" id="ccSummaryRgs">all RGs</span>
+                    <span> · </span>
+                    <span class="strong" id="ccSummaryServices">all services</span>
+                    <span> · </span>
+                    <span class="strong" id="ccSummaryRange">all dates</span>
+                    <button class="btn-link" style="margin-left:auto" onclick="document.getElementById('ccFiltersPanel').scrollIntoView({behavior:'smooth'})">Edit ↺</button>
                 </div>
 
                 <!-- Results (hidden until calculated) -->
