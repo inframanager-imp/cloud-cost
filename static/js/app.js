@@ -3481,7 +3481,7 @@ async function loadCustomCostPage() {
         });
     } catch (err) { /* ignore */ }
 
-    // Default date range = This month
+    // Default date range = This month (preview only shows when a filter is selected, not just dates)
     ccApplyDatePreset('month');
 
     // Cloud filter buttons
@@ -3503,13 +3503,12 @@ async function loadCustomCostPage() {
         btn.addEventListener('click', () => ccApplyDatePreset(btn.dataset.range));
     });
 
-    // Manual date edits → activate "Custom"
+    // Manual date edits → clear active preset chip
     ['ccDateFrom', 'ccDateTo'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', () => {
             document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
-            const c = document.querySelector('.date-preset[data-range="custom"]');
-            if (c) c.classList.add('active');
+            ccUpdateSelectionPreview();
         });
     });
 
@@ -3551,13 +3550,7 @@ function ccApplyDatePreset(range) {
     } else if (range === 'last-month') {
         from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         to = new Date(now.getFullYear(), now.getMonth(), 0);
-    } else if (range === 'ytd') {
-        from = new Date(now.getFullYear(), 0, 1);
-        to = new Date(now);
     } else {
-        document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
-        const c = document.querySelector('.date-preset[data-range="custom"]');
-        if (c) c.classList.add('active');
         return;
     }
     const fmt = d => d.toISOString().split('T')[0];
@@ -3568,6 +3561,7 @@ function ccApplyDatePreset(range) {
     document.querySelectorAll('.date-preset').forEach(b => b.classList.remove('active'));
     const active = document.querySelector(`.date-preset[data-range="${range}"]`);
     if (active) active.classList.add('active');
+    ccUpdateSelectionPreview();
 }
 
 function ccTogglePanel(type) {
@@ -3694,7 +3688,7 @@ function ccDeselectAll(type) {
 function ccFilterList(type) { ccRenderList(type); }
 
 function ccUpdateCounts() {
-    const update = (countId, triggerId, textId, size, placeholder) => {
+    const update = (countId, textId, size, placeholder) => {
         const chip = document.getElementById(countId);
         const triggerText = document.getElementById(textId);
         if (chip) { chip.textContent = size; chip.style.display = size > 0 ? '' : 'none'; }
@@ -3708,9 +3702,31 @@ function ccUpdateCounts() {
             }
         }
     };
-    update('ccSubCount', 'ccSubMultiselect', 'ccSubTriggerText', ccSelectedSubs.size, 'All subscriptions');
-    update('ccRgCount', 'ccRgMultiselect', 'ccRgTriggerText', ccSelectedRgs.size, 'All resource groups');
-    update('ccSvcCount', 'ccSvcMultiselect', 'ccSvcTriggerText', ccSelectedSvcs.size, 'All services');
+    update('ccSubCount', 'ccSubTriggerText', ccSelectedSubs.size, 'All subscriptions');
+    update('ccRgCount', 'ccRgTriggerText', ccSelectedRgs.size, 'All resource groups');
+    update('ccSvcCount', 'ccSvcTriggerText', ccSelectedSvcs.size, 'All services');
+    ccUpdateSelectionPreview();
+}
+
+function ccUpdateSelectionPreview() {
+    const preview = document.getElementById('ccSelectionPreview');
+    if (!preview) return;
+    const dateFrom = document.getElementById('ccDateFrom')?.value || '';
+    const dateTo = document.getElementById('ccDateTo')?.value || '';
+    const hasFilters = ccSelectedSubs.size || ccSelectedRgs.size || ccSelectedSvcs.size || dateFrom || dateTo;
+    if (!hasFilters) { preview.style.display = 'none'; return; }
+
+    const subsText = ccSelectedSubs.size ? `${ccSelectedSubs.size} sub${ccSelectedSubs.size > 1 ? 's' : ''}` : 'all subs';
+    const rgsText = ccSelectedRgs.size ? `${ccSelectedRgs.size} RG${ccSelectedRgs.size > 1 ? 's' : ''}` : 'all RGs';
+    const svcsText = ccSelectedSvcs.size ? `${ccSelectedSvcs.size} service${ccSelectedSvcs.size > 1 ? 's' : ''}` : 'all services';
+    const rangeText = (dateFrom || dateTo) ? `${dateFrom || '…'} → ${dateTo || '…'}` : 'all dates';
+
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('ccPreviewSubs', subsText);
+    set('ccPreviewRgs', rgsText);
+    set('ccPreviewSvcs', svcsText);
+    set('ccPreviewRange', rangeText);
+    preview.style.display = 'flex';
 }
 
 async function ccCalculate() {
@@ -3771,6 +3787,7 @@ function ccShowSelectionSummary() {
 function ccRenderResults(data) {
     document.getElementById('ccResults').style.display = 'block';
     const emptyState = document.getElementById('ccEmptyState'); if(emptyState) emptyState.style.display = 'none';
+    const preview = document.getElementById('ccSelectionPreview'); if(preview) preview.style.display = 'none';
     ccShowSelectionSummary();
 
     document.getElementById('ccTotalCost').textContent =
@@ -3870,6 +3887,7 @@ function ccReset() {
 
     document.getElementById('ccResults').style.display = 'none';
     const sumEl = document.getElementById('ccSelectionSummary'); if (sumEl) sumEl.style.display = 'none';
+    const previewEl = document.getElementById('ccSelectionPreview'); if (previewEl) previewEl.style.display = 'none';
     document.getElementById('ccCalcStatus').textContent = '';
     ccRenderList('sub');
     ccLoadFilters();

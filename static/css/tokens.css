@@ -409,7 +409,8 @@ html[data-appearance="light"] .theme-toggle .icon-sun  { display: inline-block; 
 .multiselect__trigger:hover { background: var(--bg-hover); }
 .multiselect__placeholder { color: var(--text-tertiary); flex: 1; text-align: left; }
 .multiselect__summary { color: var(--text-primary); font-weight: 500; flex: 1; text-align: left; }
-.multiselect__panel { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); max-height: 260px; overflow: hidden; display: flex; flex-direction: column; }
+.multiselect__panel { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); max-height: 260px; overflow: hidden; flex-direction: column; }
+.multiselect__panel:not([hidden]) { display: flex; }
 .multiselect__search { font-size: 12px; padding: 8px 10px; border: none; border-bottom: 1px solid var(--border-subtle); background: transparent; color: var(--text-primary); outline: none; flex-shrink: 0; }
 .multiselect__actions { display: flex; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
 .multiselect__options { overflow-y: auto; padding: 4px 0; flex: 1; scrollbar-width: thin; }
@@ -418,13 +419,21 @@ html[data-appearance="light"] .theme-toggle .icon-sun  { display: inline-block; 
 .multiselect__option input[type=checkbox] { flex-shrink: 0; cursor: pointer; }
 
 /* Date range presets */
-.date-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-.date-preset { font-size: 11px; padding: 3px 8px; background: var(--bg-subtle); color: var(--text-secondary); border: 1px solid transparent; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+.date-presets { display: flex; gap: 4px; margin-bottom: 6px; flex-wrap: nowrap; }
+.date-preset { font-size: 11px; padding: 3px 8px; background: var(--bg-subtle); color: var(--text-secondary); border: 1px solid transparent; border-radius: 5px; cursor: pointer; transition: background 0.12s; white-space: nowrap; flex: 1; text-align: center; }
 .date-preset:hover { background: var(--bg-hover); }
 .date-preset.active { background: var(--accent-bg,#EFF6FF); color: var(--accent,#185FA5); border-color: rgba(24,95,165,0.20); font-weight: 500; }
-.date-inputs { display: flex; align-items: center; gap: 6px; }
+.date-inputs { display: flex; align-items: center; gap: 8px; }
 .date-inputs__arrow { color: var(--text-tertiary); font-size: 11px; flex-shrink: 0; }
 .date-inputs input { flex: 1; min-width: 0; }
+
+/* Form helper hint */
+.form-helper { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-tertiary); padding: 8px 10px; background: var(--bg-subtle); border-radius: 6px; }
+
+/* Selection preview (right panel, before Calculate) */
+.selection-preview { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 12px; color: var(--text-tertiary); padding: 10px 14px; background: var(--bg-subtle); border-radius: 7px; margin-bottom: 12px; }
+.selection-preview__label { color: var(--text-secondary); margin-right: 2px; }
+.selection-preview .strong { color: var(--text-primary); font-weight: 500; }
 
 /* Preset strip (horizontal scroll row above results) */
 .preset-strip { padding: 14px 16px; margin-bottom: 12px; }

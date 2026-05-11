@@ -850,6 +850,10 @@
             <!-- Left: filter panel -->
             <div class="calc-panel calc-filters" id="ccFiltersPanel">
                 <div style="font-size:13px;font-weight:500;color:var(--text-primary);flex-shrink:0">Configuration</div>
+                <div class="form-helper">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <span>Pick filters, then hit Calculate to see costs across your selection.</span>
+                </div>
 
                 <!-- Scrollable filter fields -->
                 <div class="calc-filters__scroll">
@@ -869,12 +873,10 @@
                     <div class="calc-field">
                         <label class="calc-label">Date range</label>
                         <div class="date-presets">
-                            <button class="date-preset" data-range="7d">Last 7 days</button>
-                            <button class="date-preset" data-range="30d">Last 30 days</button>
+                            <button class="date-preset" data-range="7d">7 days</button>
+                            <button class="date-preset" data-range="30d">30 days</button>
                             <button class="date-preset active" data-range="month">This month</button>
                             <button class="date-preset" data-range="last-month">Last month</button>
-                            <button class="date-preset" data-range="ytd">YTD</button>
-                            <button class="date-preset" data-range="custom">Custom</button>
                         </div>
                         <div class="date-inputs">
                             <input type="date" class="cost-filter-input" id="ccDateFrom">
@@ -1042,6 +1044,18 @@
                         <div class="sub-table-card__head" style="border-bottom:none;padding:0 0 12px"><span class="sub-table-card__title">Daily cost trend</span></div>
                         <div style="height:220px"><canvas id="ccTrendChart"></canvas></div>
                     </div>
+                </div>
+
+                <!-- Selection preview: shown when filters set but Calculate not yet run -->
+                <div class="selection-preview" id="ccSelectionPreview" style="display:none">
+                    <span class="selection-preview__label">Ready to calculate:</span>
+                    <span class="strong" id="ccPreviewSubs">all subs</span>
+                    <span>·</span>
+                    <span class="strong" id="ccPreviewRgs">all RGs</span>
+                    <span>·</span>
+                    <span class="strong" id="ccPreviewSvcs">all services</span>
+                    <span>·</span>
+                    <span class="strong" id="ccPreviewRange">all dates</span>
                 </div>
 
                 <!-- Empty state shown when no results yet -->
