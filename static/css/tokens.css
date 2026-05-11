@@ -151,7 +151,8 @@ html[data-appearance="light"] .theme-toggle .icon-sun  { display: inline-block; 
 .cp-btn-secondary { background: var(--bg-card); border: 1px solid var(--border-default); color: var(--text-secondary); }
 .cp-btn-secondary:hover { background: var(--bg-hover); }
 .cp-btn-primary { background: var(--text-primary); color: var(--bg-card); border: 1px solid transparent; }
-.cp-btn-primary:hover { opacity: 0.85; }
+.cp-btn-primary:hover { background: #2d2d2d; }
+html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover { background: #d4d4d4; }
 
 .upsell-banner { background: var(--warning-bg); border: 1px solid rgba(186,117,23,0.20); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .upsell-banner__icon { width: 32px; height: 32px; background: rgba(186,117,23,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--warning-text); flex-shrink: 0; }
