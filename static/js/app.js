@@ -3952,47 +3952,29 @@ async function ccLoadSavedFilters() {
     try {
         const filters = await fetch('/api/saved-filters').then(r => r.json());
         const el = document.getElementById('ccSavedList');
-        const countEl = document.getElementById('ccSavedCount');
-
-        if (countEl) {
-            countEl.textContent = filters.length;
-            countEl.style.display = filters.length ? '' : 'none';
-        }
 
         if (!filters.length) {
-            el.innerHTML = '<div style="color:var(--text-secondary);font-size:12px;padding:4px 0">No saved presets yet. Configure filters and click Save preset.</div>';
+            el.innerHTML = '<span class="preset-bar__empty">No saved presets yet</span>';
             return;
         }
 
         el.innerHTML = filters.map(f => {
             const fl = f.filters;
-            const tags = [];
+            const parts = [];
             const subIds = fl.subscription_ids || (fl.subscription_id ? [fl.subscription_id] : []);
-            if (subIds.length > 0) {
-                const subNames = subIds.map(id => ccSubMap[id] || id.substring(0, 8) + '…');
-                tags.push(`${subIds.length} sub${subIds.length > 1 ? 's' : ''}`);
-                if (subNames.length <= 2) tags.push(subNames.join(', '));
-            }
-            if (fl.date_from || fl.date_to) tags.push(`${fl.date_from || '…'} → ${fl.date_to || '…'}`);
-            if (fl.resource_groups?.length) tags.push(`${fl.resource_groups.length} RG${fl.resource_groups.length > 1 ? 's' : ''}`);
-            if (fl.services?.length) tags.push(`${fl.services.length} svc${fl.services.length > 1 ? 's' : ''}`);
-            const timeAgo = ccTimeAgo(f.created_at);
+            if (subIds.length) parts.push(`${subIds.length} sub${subIds.length > 1 ? 's' : ''}`);
+            if (fl.resource_groups?.length) parts.push(`${fl.resource_groups.length} RG${fl.resource_groups.length > 1 ? 's' : ''}`);
+            if (fl.services?.length) parts.push(`${fl.services.length} svc${fl.services.length > 1 ? 's' : ''}`);
+            if (fl.date_from || fl.date_to) parts.push(`${fl.date_from || '…'} → ${fl.date_to || '…'}`);
             const safeName = f.name.replace(/'/g, "\\'");
+            const summary = parts.length ? parts.join(' · ') : 'All data';
 
-            return `<div class="preset-card" data-preset-id="${f.id}" onclick="if(!event.target.closest('.preset-card__actions'))ccApplyFilter(${f.id})">
-                <div class="preset-card__name" title="${f.name}">${f.name}</div>
-                <div class="preset-card__tags">${tags.map(t => `<span class="badge">${t}</span>`).join('')}</div>
-                <div class="preset-card__foot">
-                    <span>${timeAgo}</span>
-                    <div class="preset-card__actions">
-                        <button class="icon-btn-ghost" title="Delete" onclick="event.stopPropagation();ccDeleteFilter(${f.id},'${safeName}')">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </div>`;
+            return `<button class="preset-chip" title="${summary}" onclick="ccApplyFilter(${f.id})">
+                <span class="preset-chip__name">${f.name}</span>
+                <button class="preset-chip__delete" aria-label="Delete preset" onclick="event.stopPropagation();ccDeleteFilter(${f.id},'${safeName}')">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </button>`;
         }).join('');
     } catch (err) {
         console.error('Load saved filters error:', err);
