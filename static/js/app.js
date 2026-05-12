@@ -1671,6 +1671,8 @@ async function loadCompare() {
         populateCompareDropdowns();
         populateCmpRG(filters.resource_groups || []);
         onCompareModeChange();
+        // Auto-run comparison on page load with default fields
+        await runComparison();
     } catch (err) {
         console.error('Compare load error:', err);
     }
