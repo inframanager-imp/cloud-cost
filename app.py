@@ -2410,6 +2410,16 @@ def api_preview_report():
     else:
         sections = settings.get("report_sections", ["summary", "subscriptions", "top_services", "top_rgs", "trend"])
     cloud_provider = request.args.get("cloud_provider", "").strip() or None
+    # Allow URL params to override saved date settings for live preview
+    date_range = request.args.get("date_range", "").strip()
+    if date_range:
+        settings["report_date_range"] = date_range
+    date_from = request.args.get("date_from", "").strip()
+    if date_from:
+        settings["report_date_from"] = date_from
+    date_to = request.args.get("date_to", "").strip()
+    if date_to:
+        settings["report_date_to"] = date_to
     html = _build_report_html(sections, settings=settings, cloud_provider=cloud_provider)
     return Response(html, mimetype="text/html")
 

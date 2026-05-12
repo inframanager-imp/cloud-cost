@@ -4218,6 +4218,14 @@ function previewReport() {
     if (sections.length) params.set('sections', sections.join(','));
     const cp = document.getElementById('emReportCloudProvider')?.value;
     if (cp) params.set('cloud_provider', cp);
+    const dateRange = document.getElementById('emReportDateRange')?.value;
+    if (dateRange) params.set('date_range', dateRange);
+    if (dateRange === 'custom') {
+        const df = document.getElementById('emReportDateFrom')?.value;
+        const dt = document.getElementById('emReportDateTo')?.value;
+        if (df) params.set('date_from', df);
+        if (dt) params.set('date_to', dt);
+    }
     const qs = params.toString() ? '?' + params.toString() : '';
     window.open('/api/email/preview' + qs, '_blank');
 }
