@@ -24,6 +24,9 @@ from database import (
     update_sync_log,
     get_subscriptions,
     update_subscription_sync_time,
+    get_cloud_providers,
+    update_cloud_provider_sync_time,
+    get_db,
 )
 from azure_fetcher import fetch_cost_data
 
@@ -150,6 +153,71 @@ def run_cost_sync_from_payload(payload: dict) -> None:
                             f"{mode_label}: {sub_name} failed: {str(sub_err)[:80]} [{completed}/{total_subs}]",
                             5 + int(90 * completed / total_subs),
                         )
+
+        # Sync AWS/GCP cloud providers (only when not targeting a specific Azure subscription)
+        if not target_sub:
+            try:
+                from aws_fetcher import fetch_aws_costs
+                from gcp_fetcher import fetch_gcp_costs
+                cp_providers = get_cloud_providers(enabled_only=True)
+                cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp")]
+                total_cp = len(cp_providers)
+                for idx, provider in enumerate(cp_providers, start=1):
+                    ptype = provider.get("provider_type")
+                    pid = provider.get("provider_id")
+                    pname = provider.get("name") or pid or ptype
+                    _write_status(True, f"{mode_label}: syncing {ptype.upper()} provider {pname} [{idx}/{total_cp}]", 95)
+                    try:
+                        # Determine date range
+                        conn = get_db()
+                        row = conn.execute(
+                            "SELECT MAX(substr(date,1,10)) AS latest FROM cost_data WHERE cloud_provider=? AND subscription_id=?",
+                            (ptype, pid),
+                        ).fetchone()
+                        conn.close()
+                        latest = row["latest"] if row and row["latest"] else None
+                        if is_full:
+                            p_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
+                        elif latest:
+                            p_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
+                        else:
+                            p_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
+
+                        if ptype == "aws":
+                            records = fetch_aws_costs(provider, p_from, date_to)
+                        else:
+                            records = fetch_gcp_costs(provider, p_from, date_to)
+
+                        conn = get_db()
+                        if ptype == "gcp":
+                            conn.execute(
+                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp'",
+                                (p_from, date_to),
+                            )
+                        else:
+                            conn.execute(
+                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=?",
+                                (p_from, date_to, ptype, pid),
+                            )
+                        if records:
+                            conn.executemany(
+                                """
+                                INSERT INTO cost_data
+                                  (date,resource_group,service_name,resource_type,resource_name,
+                                   meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider)
+                                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                                """,
+                                records,
+                            )
+                        conn.commit()
+                        conn.close()
+                        total_records += len(records or [])
+                        update_cloud_provider_sync_time(provider["id"], error=None)
+                    except Exception as cp_err:
+                        update_cloud_provider_sync_time(provider["id"], error=str(cp_err))
+                        print(f"[cost_sync_runner] {ptype.upper()} provider '{pname}' failed: {cp_err}")
+            except Exception as cp_outer_err:
+                print(f"[cost_sync_runner] Cloud providers sync error (non-fatal): {cp_outer_err}")
 
         _write_status(
             False,

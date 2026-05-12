@@ -616,6 +616,9 @@ def api_sync():
         if not subs_to_sync:
             subs_to_sync = [{"subscription_id": os.getenv("AZURE_SUBSCRIPTION_ID", ""), "name": "Default"}]
 
+    # Capture tenant_id now — current_tenant_id() uses session which is unavailable in background threads
+    tid = current_tenant_id()
+
     try:
         os.unlink(_sync_status_path())
     except OSError:
@@ -728,7 +731,7 @@ def api_sync():
                         # Register billing accounts as subscriptions
                         ba_sub_entries = [{"subscription_id": ba_id, "name": f"Billing: {ba_name}", "state": "Enabled"}
                                           for ba_id, ba_name in ba_ids]
-                        upsert_subscriptions(ba_sub_entries, tenant_id=current_tenant_id())
+                        upsert_subscriptions(ba_sub_entries, tenant_id=tid)
                         ba_count = insert_cost_records(ba_records)
                         total_records += ba_count
                         print(f"[BillingAccount] Inserted {ba_count} billing-account-only records")
@@ -742,7 +745,7 @@ def api_sync():
                 try:
                     from aws_fetcher import fetch_aws_costs
                     from gcp_fetcher import fetch_gcp_costs
-                    cp_providers = get_cloud_providers(enabled_only=True, tenant_id=current_tenant_id())
+                    cp_providers = get_cloud_providers(enabled_only=True, tenant_id=tid)
                     cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp")]
 
                     def _provider_date_from(provider_type, provider_id):
@@ -776,12 +779,12 @@ def api_sync():
                             if ptype == "gcp":
                                 conn.execute(
                                     "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND tenant_id=?",
-                                    (p_from, date_to, current_tenant_id()),
+                                    (p_from, date_to, tid),
                                 )
                             else:
                                 conn.execute(
                                     "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
-                                    (p_from, date_to, ptype, pid, current_tenant_id()),
+                                    (p_from, date_to, ptype, pid, tid),
                                 )
                             if records:
                                 conn.executemany(
