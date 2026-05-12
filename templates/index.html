@@ -634,130 +634,118 @@
             </div>
         </div>
 
-        <!-- Comparison Filters -->
-        <div class="sub-table-card" style="margin-bottom:20px">
-            <div style="padding:18px">
-                <div class="filters-bar" style="margin-bottom:0;overflow:visible">
-                    <div class="filter-group">
-                        <label>Compare By</label>
-                        <select class="filter-input" id="cmpMode" onchange="onCompareModeChange()" style="min-width:140px">
-                            <option value="monthly">Monthly</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="custom">Custom Dates</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Group By</label>
-                        <select class="filter-input" id="cmpGroupBy" style="min-width:160px">
-                            <option value="service_name">Service</option>
-                            <option value="resource_group">Resource Group / Region / Project</option>
-                            <option value="resource_name" selected>Resource Name</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Cloud Provider</label>
-                        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-                            <button class="cloud-pill active" data-cmp-cloud="" onclick="setCmpCloud(this,'')">☁ All</button>
-                            <button class="cloud-pill" data-cmp-cloud="azure" onclick="setCmpCloud(this,'azure')"><img src="/static/img/azure-logo.svg" alt="Azure" style="height:14px;vertical-align:middle"> Azure</button>
-                            <button class="cloud-pill" data-cmp-cloud="aws" onclick="setCmpCloud(this,'aws')"><img src="/static/img/aws-logo.svg" alt="AWS" style="height:12px;vertical-align:middle"> AWS</button>
-                            <button class="cloud-pill" data-cmp-cloud="gcp" onclick="setCmpCloud(this,'gcp')"><img src="/static/img/gcp-logo.svg" alt="GCP" style="height:14px;vertical-align:middle"> GCP</button>
-                        </div>
-                    </div>
-                    <div class="filter-group" style="position:relative">
-                        <label><span id="cmpRGSectionLabel">Resource Groups</span> <span id="cmpRGCount" style="color:var(--accent);font-size:11px"></span></label>
-                        <button class="filter-input" id="cmpRGBtn" onclick="toggleCmpRGDropdown()" style="min-width:180px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-                            <span id="cmpRGLabel">All</span>
-                            <span style="font-size:10px">&#9660;</span>
-                        </button>
-                        <div id="cmpRGDropdown" class="cmp-multi-dropdown" style="display:none">
-                            <div class="multi-select-search"><input type="text" placeholder="Search RGs..." id="cmpRGSearch" oninput="renderCmpRGList()"></div>
-                            <div class="multi-select-actions">
-                                <button class="btn-mini" onclick="cmpRGSelectAll()">Select All</button>
-                                <button class="btn-mini" onclick="cmpRGClearAll()">Clear All</button>
-                            </div>
-                            <div class="multi-select-list" id="cmpRGList" style="max-height:200px"></div>
-                        </div>
-                    </div>
-
-                    <!-- Weekly selectors -->
-                    <div class="filter-group cmp-weekly" style="display:none">
-                        <label>Period 1 (Week)</label>
-                        <select class="filter-input" id="cmpWeek1" style="min-width:180px"></select>
-                    </div>
-                    <div class="filter-group cmp-weekly" style="display:none">
-                        <label>Period 2 (Week)</label>
-                        <select class="filter-input" id="cmpWeek2" style="min-width:180px"></select>
-                    </div>
-
-                    <!-- Custom date selectors -->
-                    <div class="filter-group cmp-custom" style="display:none">
-                        <label>Period 1 From</label>
-                        <input type="date" class="filter-input" id="cmpCustom1From">
-                    </div>
-                    <div class="filter-group cmp-custom" style="display:none">
-                        <label>Period 1 To</label>
-                        <input type="date" class="filter-input" id="cmpCustom1To">
-                    </div>
-                    <div class="filter-group cmp-custom" style="display:none">
-                        <label>Period 2 From</label>
-                        <input type="date" class="filter-input" id="cmpCustom2From">
-                    </div>
-                    <div class="filter-group cmp-custom" style="display:none">
-                        <label>Period 2 To</label>
-                        <input type="date" class="filter-input" id="cmpCustom2To">
-                    </div>
-
-                    <div class="filter-group" style="align-self:flex-end">
-                        <button type="button" class="cp-btn-primary" onclick="runComparison()">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
-                            </svg>
-                            Compare
-                        </button>
+        <!-- Comparison Filters — horizontal filter bar -->
+        <div class="card filter-bar" style="margin-bottom:16px">
+            <!-- Row 1: Compare By | Group By | Cloud | Resource Groups | Compare -->
+            <div class="filter-bar__row">
+                <div class="filter-bar__field">
+                    <span class="micro-label">Compare By</span>
+                    <select class="filter-bar__select" id="cmpMode" onchange="onCompareModeChange()">
+                        <option value="monthly">Monthly</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="custom">Custom Dates</option>
+                    </select>
+                </div>
+                <div class="filter-bar__field">
+                    <span class="micro-label">Group By</span>
+                    <select class="filter-bar__select filter-bar__select--wide" id="cmpGroupBy">
+                        <option value="service_name">Service</option>
+                        <option value="resource_group">Resource Group / Region / Project</option>
+                        <option value="resource_name" selected>Resource Name</option>
+                    </select>
+                </div>
+                <div class="filter-bar__field">
+                    <span class="micro-label">Cloud</span>
+                    <div class="segmented-control segmented-control--small">
+                        <button class="seg active" data-cmp-cloud="" onclick="setCmpCloud(this,'')">All</button>
+                        <button class="seg" data-cmp-cloud="aws" onclick="setCmpCloud(this,'aws')">AWS</button>
+                        <button class="seg" data-cmp-cloud="azure" onclick="setCmpCloud(this,'azure')">Azure</button>
+                        <button class="seg" data-cmp-cloud="gcp" onclick="setCmpCloud(this,'gcp')">GCP</button>
                     </div>
                 </div>
+                <div class="filter-bar__field" style="position:relative">
+                    <span class="micro-label"><span id="cmpRGSectionLabel">Resource Groups</span>&nbsp;<span id="cmpRGCount" style="color:var(--accent)"></span></span>
+                    <button class="filter-bar__select filter-bar__select--btn" id="cmpRGBtn" onclick="toggleCmpRGDropdown()">
+                        <span id="cmpRGLabel">All</span><span style="font-size:10px;margin-left:auto;padding-left:6px">&#9660;</span>
+                    </button>
+                    <div id="cmpRGDropdown" class="cmp-multi-dropdown" style="display:none">
+                        <div class="multi-select-search"><input type="text" placeholder="Search RGs..." id="cmpRGSearch" oninput="renderCmpRGList()"></div>
+                        <div class="multi-select-actions">
+                            <button class="btn-mini" onclick="cmpRGSelectAll()">Select All</button>
+                            <button class="btn-mini" onclick="cmpRGClearAll()">Clear All</button>
+                        </div>
+                        <div class="multi-select-list" id="cmpRGList" style="max-height:200px"></div>
+                    </div>
+                </div>
+                <div class="filter-bar__actions">
+                    <button type="button" class="cp-btn-primary" onclick="runComparison()">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+                        Compare
+                    </button>
+                </div>
+            </div>
 
-                <!-- Monthly periods: own full-width block (not inside filters-bar — avoids flex shrink / clipping) -->
-                <div id="cmpMonthlySection" class="cmp-monthly" style="margin-top:18px;width:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:14px">
-                    <div style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Monthly periods</div>
-                    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;width:100%">
-                        <div class="filter-group" style="margin-bottom:0">
-                            <label>Period 1 (Month)</label>
-                            <select class="filter-input cmp-month-select" id="cmpMonth1" style="min-width:160px"></select>
-                        </div>
-                        <div class="filter-group" style="margin-bottom:0">
-                            <label>Period 2 (Month)</label>
-                            <select class="filter-input cmp-month-select" id="cmpMonth2" style="min-width:160px"></select>
-                        </div>
-                        <div id="cmpMonthWrap3" class="filter-group" style="margin-bottom:0;display:none">
-                            <label>Period 3 (Month)</label>
-                            <select class="filter-input cmp-month-select" id="cmpMonth3" style="min-width:160px"></select>
-                        </div>
-                        <div id="cmpMonthWrap4" class="filter-group" style="margin-bottom:0;display:none">
-                            <label>Period 4 (Month)</label>
-                            <select class="filter-input cmp-month-select" id="cmpMonth4" style="min-width:160px"></select>
-                        </div>
-                        <div id="cmpMonthWrap5" class="filter-group" style="margin-bottom:0;display:none">
-                            <label>Period 5 (Month)</label>
-                            <select class="filter-input cmp-month-select" id="cmpMonth5" style="min-width:160px"></select>
-                        </div>
-                        <div id="cmpMonthWrap6" class="filter-group" style="margin-bottom:0;display:none">
-                            <label>Period 6 (Month)</label>
-                            <select class="filter-input cmp-month-select" id="cmpMonth6" style="min-width:160px"></select>
-                        </div>
-                    </div>
-                    <!-- Add periods 3–6 checkboxes -->
-                    <div id="cmpAdditionalPeriodsRow" class="cmp-add-periods-row">
-                        <div class="cmp-add-periods-inner">
-                            <span class="cmp-add-periods-title">Add periods 3–6 (optional)</span>
-                            <div class="cmp-add-periods-checks">
-                                <label><input type="checkbox" id="cmpEnableMonth3" onchange="onCmpExtraPeriodToggle()"> Period 3</label>
-                                <label><input type="checkbox" id="cmpEnableMonth4" onchange="onCmpExtraPeriodToggle()"> Period 4</label>
-                                <label><input type="checkbox" id="cmpEnableMonth5" onchange="onCmpExtraPeriodToggle()"> Period 5</label>
-                                <label><input type="checkbox" id="cmpEnableMonth6" onchange="onCmpExtraPeriodToggle()"> Period 6</label>
-                            </div>
-                        </div>
-                    </div>
+            <!-- Row 2a: Monthly periods (visible when mode=monthly) -->
+            <div class="filter-bar__row cmp-monthly" id="cmpMonthlySection" style="margin-top:10px;flex-wrap:wrap">
+                <div class="filter-bar__field">
+                    <span class="micro-label">Period 1</span>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth1"></select>
+                </div>
+                <span class="period-arrow">→</span>
+                <div class="filter-bar__field">
+                    <span class="micro-label">Period 2</span>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth2"></select>
+                </div>
+                <div id="cmpMonthWrap3" class="filter-bar__field" style="display:none">
+                    <span class="micro-label">Period 3 <button class="period-remove" onclick="cmpRemovePeriod(3)" title="Remove">×</button></span>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth3"></select>
+                </div>
+                <div id="cmpMonthWrap4" class="filter-bar__field" style="display:none">
+                    <span class="micro-label">Period 4 <button class="period-remove" onclick="cmpRemovePeriod(4)" title="Remove">×</button></span>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth4"></select>
+                </div>
+                <div id="cmpMonthWrap5" class="filter-bar__field" style="display:none">
+                    <span class="micro-label">Period 5 <button class="period-remove" onclick="cmpRemovePeriod(5)" title="Remove">×</button></span>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth5"></select>
+                </div>
+                <div id="cmpMonthWrap6" class="filter-bar__field" style="display:none">
+                    <span class="micro-label">Period 6 <button class="period-remove" onclick="cmpRemovePeriod(6)" title="Remove">×</button></span>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth6"></select>
+                </div>
+                <button class="cmp-add-period-btn" id="cmpAddPeriodBtn" onclick="cmpAddPeriod()">+ Add period</button>
+            </div>
+
+            <!-- Row 2b: Weekly periods (visible when mode=weekly) -->
+            <div class="filter-bar__row cmp-weekly" style="display:none;margin-top:10px">
+                <div class="filter-bar__field">
+                    <span class="micro-label">Period 1 (Week)</span>
+                    <select class="filter-bar__select filter-bar__select--wide" id="cmpWeek1"></select>
+                </div>
+                <span class="period-arrow">→</span>
+                <div class="filter-bar__field">
+                    <span class="micro-label">Period 2 (Week)</span>
+                    <select class="filter-bar__select filter-bar__select--wide" id="cmpWeek2"></select>
+                </div>
+            </div>
+
+            <!-- Row 2c: Custom date ranges (visible when mode=custom) -->
+            <div class="filter-bar__row cmp-custom" style="display:none;margin-top:10px;flex-wrap:wrap">
+                <div class="filter-bar__field">
+                    <span class="micro-label">Period 1 From</span>
+                    <input type="date" class="filter-bar__select" id="cmpCustom1From">
+                </div>
+                <div class="filter-bar__field">
+                    <span class="micro-label">Period 1 To</span>
+                    <input type="date" class="filter-bar__select" id="cmpCustom1To">
+                </div>
+                <span class="period-arrow">→</span>
+                <div class="filter-bar__field">
+                    <span class="micro-label">Period 2 From</span>
+                    <input type="date" class="filter-bar__select" id="cmpCustom2From">
+                </div>
+                <div class="filter-bar__field">
+                    <span class="micro-label">Period 2 To</span>
+                    <input type="date" class="filter-bar__select" id="cmpCustom2To">
                 </div>
             </div>
         </div>

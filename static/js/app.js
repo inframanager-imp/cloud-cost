@@ -1630,29 +1630,43 @@ const CMP_PERIOD_COLORS = CHART_COLORS();
 function getActiveMonthlyPeriodIndices() {
     const indices = [1, 2];
     for (let i = 3; i <= 6; i++) {
-        if (document.getElementById('cmpEnableMonth' + i)?.checked) indices.push(i);
+        const wrap = document.getElementById('cmpMonthWrap' + i);
+        if (wrap && wrap.style.display !== 'none') indices.push(i);
     }
     return indices;
 }
 
 function onCmpExtraPeriodToggle() {
+    // No-op: extra periods now managed via cmpAddPeriod / cmpRemovePeriod buttons
+}
+
+function cmpAddPeriod() {
     const nM = comparePeriods.months.length;
     for (let i = 3; i <= 6; i++) {
-        const cb = document.getElementById('cmpEnableMonth' + i);
         const wrap = document.getElementById('cmpMonthWrap' + i);
-        const sel = document.getElementById('cmpMonth' + i);
-        if (!cb || !wrap) continue;
-        const wasHidden = wrap.style.display === 'none';
-        if (cb.checked) {
+        if (wrap && wrap.style.display === 'none') {
             wrap.style.display = '';
-            if (wasHidden && sel && nM > 0) {
-                const idx = Math.max(0, Math.min(sel.options.length - 1, nM - i));
-                sel.selectedIndex = idx;
+            const sel = document.getElementById('cmpMonth' + i);
+            if (sel && nM > 0) {
+                const idx = Math.max(0, nM - i);
+                sel.selectedIndex = Math.min(idx, sel.options.length - 1);
             }
-        } else {
-            wrap.style.display = 'none';
+            break;
         }
     }
+    const allShown = [3, 4, 5, 6].every(i => {
+        const w = document.getElementById('cmpMonthWrap' + i);
+        return w && w.style.display !== 'none';
+    });
+    const btn = document.getElementById('cmpAddPeriodBtn');
+    if (btn) btn.style.display = allShown ? 'none' : '';
+}
+
+function cmpRemovePeriod(n) {
+    const wrap = document.getElementById('cmpMonthWrap' + n);
+    if (wrap) wrap.style.display = 'none';
+    const btn = document.getElementById('cmpAddPeriodBtn');
+    if (btn) btn.style.display = '';
 }
 
 async function loadCompare() {

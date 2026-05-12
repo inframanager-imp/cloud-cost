@@ -394,6 +394,16 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 /* count-chip small variant */
 .count-chip--small { font-size: 10px; padding: 1px 6px; }
 
+/* Compare filter-bar selects & period helpers */
+.filter-bar__select { background: var(--bg-page); border: 1px solid var(--border-subtle); border-radius: 7px; padding: 6px 10px; font-size: 12px; color: var(--text-primary); min-width: 130px; }
+.filter-bar__select--wide { min-width: 200px; }
+.filter-bar__select--btn { cursor: pointer; display: flex; align-items: center; min-width: 130px; }
+.period-arrow { font-size: 14px; color: var(--text-tertiary); align-self: flex-end; padding-bottom: 8px; flex-shrink: 0; }
+.cmp-add-period-btn { align-self: flex-end; background: transparent; border: 1px dashed var(--border-default); border-radius: 7px; padding: 6px 12px; font-size: 12px; color: var(--accent); cursor: pointer; transition: background 0.12s; white-space: nowrap; }
+.cmp-add-period-btn:hover { background: var(--bg-hover); }
+.period-remove { background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; font-size: 11px; padding: 0 2px; margin-left: 2px; border-radius: 3px; line-height: 1; vertical-align: middle; }
+.period-remove:hover { background: var(--danger-bg); color: var(--danger-text); }
+
 /* Segmented control */
 .segmented-control { display: flex; background: var(--bg-page); border: 1px solid var(--border-subtle); border-radius: 7px; padding: 2px; gap: 2px; }
 .segmented-control--small .seg { font-size: 11px; padding: 3px 8px; }
