@@ -1388,15 +1388,10 @@ async function loadMonthly() {
         }
 
         const colors = CHART_COLORS();
-        const monthLabels = monthlyData.map(m => formatMonth(m.month));
-        const monthlyCosts = monthlyData.map(m => m.total_cost);
-
-        // ── Monthly Bar Chart with change % ──
-        const changeData = monthlyCosts.map((c, i) => {
-            if (i === 0) return 0;
-            const prev = monthlyCosts[i-1];
-            return prev > 0 ? ((c - prev) / prev * 100) : 0;
-        });
+        // Reverse so newest month is on the left
+        const chartData = [...monthlyData].reverse();
+        const monthLabels = chartData.map(m => formatMonth(m.month));
+        const monthlyCosts = chartData.map(m => m.total_cost);
 
         renderChart('monthlyBarChart', 'bar', {
             labels: monthLabels,
@@ -1404,8 +1399,9 @@ async function loadMonthly() {
                 label: 'Monthly Cost ($)',
                 data: monthlyCosts,
                 backgroundColor: monthlyCosts.map((c, i) => {
-                    if (i === 0) return '#4f6ef7';
-                    return c > monthlyCosts[i-1] ? '#e74c3c' : '#2ecc71';
+                    const olderCost = monthlyCosts[i + 1]; // next bar = older month
+                    if (olderCost === undefined) return '#4f6ef7'; // oldest month = neutral
+                    return c > olderCost ? '#e74c3c' : '#2ecc71';
                 }),
                 borderRadius: 8,
                 barPercentage: 0.6,
