@@ -4183,6 +4183,7 @@ async function testEmail() {
         return;
     }
     try {
+        await saveEmailSettings();
         const resp = await fetch('/api/email/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
