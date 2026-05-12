@@ -2585,6 +2585,61 @@ def _run_auto_sync():
                 else:
                     raise
 
+        # --- AWS / GCP provider sync ---
+        try:
+            from aws_fetcher import fetch_aws_costs
+            from gcp_fetcher import fetch_gcp_costs
+            cp_providers = get_cloud_providers(enabled_only=True)
+            cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp")]
+            months = int(os.getenv("COST_HISTORY_MONTHS", 3))
+            for idx, provider in enumerate(cp_providers, start=1):
+                ptype = provider.get("provider_type")
+                pid   = provider.get("provider_id")
+                pname = provider.get("name") or pid or ptype
+                sync_status["message"] = f"Auto-sync: {ptype.upper()} {pname} [{idx}/{len(cp_providers)}]"
+                try:
+                    conn2 = get_db()
+                    row = conn2.execute(
+                        "SELECT MAX(substr(date,1,10)) FROM cost_data WHERE cloud_provider=? AND subscription_id=?",
+                        (ptype, pid),
+                    ).fetchone()
+                    conn2.close()
+                    latest = row[0] if row and row[0] else None
+                    p_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d") if latest \
+                             else (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
+
+                    records = fetch_aws_costs(provider, p_from, date_to) if ptype == "aws" \
+                              else fetch_gcp_costs(provider, p_from, date_to)
+
+                    conn2 = get_db()
+                    if ptype == "gcp":
+                        conn2.execute(
+                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp'",
+                            (p_from, date_to),
+                        )
+                    else:
+                        conn2.execute(
+                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=?",
+                            (p_from, date_to, ptype, pid),
+                        )
+                    if records:
+                        conn2.executemany(
+                            "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
+                            "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider) "
+                            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                            records,
+                        )
+                    conn2.commit()
+                    conn2.close()
+                    total_records += len(records or [])
+                    update_cloud_provider_sync_time(provider["id"], error=None)
+                    print(f"[Auto-Sync] {ptype.upper()} '{pname}': {len(records or [])} records")
+                except Exception as cp_err:
+                    update_cloud_provider_sync_time(provider["id"], error=str(cp_err))
+                    print(f"[Auto-Sync] {ptype.upper()} '{pname}' failed: {cp_err}")
+        except Exception as cp_outer:
+            print(f"[Auto-Sync] AWS/GCP sync error (non-fatal): {cp_outer}")
+
         update_sync_log(sync_id, "success", total_records)
         sync_status = {"running": False, "message": f"Auto-sync costs done: {total_records} records", "progress": 100}
 
