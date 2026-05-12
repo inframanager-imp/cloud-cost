@@ -419,6 +419,13 @@ def init_db():
         cursor.execute("UPDATE cost_data SET cloud_provider='azure' WHERE cloud_provider IS NULL")
         print("[DB] Migrated cost_data: added cloud_provider column")
 
+    # Clean up zombie "running" sync_log entries left by killed/restarted workers
+    cursor.execute("""
+        UPDATE sync_log SET status='abandoned', sync_end=CURRENT_TIMESTAMP,
+               error_message='Process killed or restarted before completion'
+        WHERE status='running'
+    """)
+
     conn.commit()
     conn.close()
     print("[DB] Database initialized successfully.")

@@ -660,12 +660,21 @@ def api_sync():
         update_subscription_sync_time(sub_id, "cost")
         return sub_name, count
 
+    def _write_sync_file(running, message, progress):
+        try:
+            with open(_sync_status_path(), "w") as f:
+                json.dump({"running": running, "message": message, "progress": progress}, f)
+        except OSError:
+            pass
+
     def run_sync():
         global sync_status
         is_full = mode == "full"
         mode_label = "Full sync" if is_full else "Quick sync"
         total_subs = len(subs_to_sync)
-        sync_status = {"running": True, "message": f"{mode_label}: Starting ({total_subs} subscription(s)) in parallel...", "progress": 5}
+        msg_start = f"{mode_label}: Starting ({total_subs} subscription(s)) in parallel..."
+        sync_status = {"running": True, "message": msg_start, "progress": 5}
+        _write_sync_file(True, msg_start, 5)  # visible to all gunicorn workers
         sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to)
         total_records = 0
 
@@ -821,6 +830,7 @@ def api_sync():
             update_sync_log(sync_id, "failed", total_records, str(e))
         finally:
             sync_status["running"] = False
+            _write_sync_file(False, sync_status.get("message", ""), sync_status.get("progress", 0))
 
     if FORCE_SYNC_INLINE and SYNC_SUBPROCESS:
         data_dir = os.path.dirname(os.path.abspath(os.getenv("DB_PATH", "/app/data/azure_costs.db")))
