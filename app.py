@@ -772,6 +772,8 @@ def api_sync():
                         return (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
 
                     for idx, provider in enumerate(cp_providers, start=1):
+                        # Re-fetch with credentials (get_cloud_providers() omits credentials_json)
+                        provider = get_cloud_provider(provider["id"]) or provider
                         ptype = provider.get("provider_type")
                         pid = provider.get("provider_id")
                         pname = provider.get("name") or pid or ptype

@@ -25,6 +25,7 @@ from database import (
     get_subscriptions,
     update_subscription_sync_time,
     get_cloud_providers,
+    get_cloud_provider,
     update_cloud_provider_sync_time,
     get_db,
 )
@@ -163,6 +164,8 @@ def run_cost_sync_from_payload(payload: dict) -> None:
                 cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp")]
                 total_cp = len(cp_providers)
                 for idx, provider in enumerate(cp_providers, start=1):
+                    # Re-fetch with credentials (get_cloud_providers() omits credentials_json)
+                    provider = get_cloud_provider(provider["id"]) or provider
                     ptype = provider.get("provider_type")
                     pid = provider.get("provider_id")
                     pname = provider.get("name") or pid or ptype
