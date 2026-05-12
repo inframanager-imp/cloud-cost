@@ -454,23 +454,59 @@
                     <option value="monthly">Monthly</option>
                 </select>
             </div>
-            <div class="cost-filter-field">
-                <label class="cost-filter-label" id="costRGLabel">Resource Group</label>
-                <select class="cost-filter-input" id="costRG" multiple size="1" onchange="loadCostsTable()" title="Ctrl/Cmd to select multiple">
-                    <option value="">All</option>
-                </select>
+            <div class="cost-filter-field" style="position:relative">
+                <label class="cost-filter-label" id="costRGLabel">Project</label>
+                <div class="multiselect" id="cdRgMultiselect">
+                    <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('rg')">
+                        <span id="cdRgTriggerText" class="multiselect__placeholder">All</span>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="multiselect__panel" id="cdRgPanel" hidden>
+                        <input class="multiselect__search" id="cdRgSearch" placeholder="Search..." oninput="cdFilterList('rg')">
+                        <div class="multiselect__actions">
+                            <button class="btn-link" onclick="cdSelectAll('rg')">Select all</button>
+                            <button class="btn-link" onclick="cdDeselectAll('rg')">Clear</button>
+                        </div>
+                        <div class="multiselect__options" id="cdRgList"></div>
+                    </div>
+                </div>
             </div>
-            <div class="cost-filter-field">
+            <div class="cost-filter-field" style="position:relative">
                 <label class="cost-filter-label">Service</label>
-                <select class="cost-filter-input" id="costService" multiple size="1" onchange="loadCostsTable()" title="Ctrl/Cmd to select multiple">
-                    <option value="">All</option>
-                </select>
+                <div class="multiselect" id="cdSvcMultiselect">
+                    <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('svc')">
+                        <span id="cdSvcTriggerText" class="multiselect__placeholder">All</span>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="multiselect__panel" id="cdSvcPanel" hidden>
+                        <input class="multiselect__search" id="cdSvcSearch" placeholder="Search..." oninput="cdFilterList('svc')">
+                        <div class="multiselect__actions">
+                            <button class="btn-link" onclick="cdSelectAll('svc')">Select all</button>
+                            <button class="btn-link" onclick="cdDeselectAll('svc')">Clear</button>
+                        </div>
+                        <div class="multiselect__options" id="cdSvcList"></div>
+                    </div>
+                </div>
             </div>
-            <div class="cost-filter-field" id="costAccountWrap" style="display:none">
+            <div class="cost-filter-field" id="costAccountWrap" style="display:none;position:relative">
                 <label class="cost-filter-label">AWS Account</label>
-                <select class="cost-filter-input" id="costAccount" multiple size="1" onchange="loadCostsTable()" title="Ctrl/Cmd to select multiple">
-                    <option value="">All Accounts</option>
-                </select>
+                <div class="multiselect" id="cdAccMultiselect">
+                    <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('acc')">
+                        <span id="cdAccTriggerText" class="multiselect__placeholder">All</span>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="multiselect__panel" id="cdAccPanel" hidden>
+                        <input class="multiselect__search" id="cdAccSearch" placeholder="Search accounts..." oninput="cdFilterList('acc')">
+                        <div class="multiselect__actions">
+                            <button class="btn-link" onclick="cdSelectAll('acc')">Select all</button>
+                            <button class="btn-link" onclick="cdDeselectAll('acc')">Clear</button>
+                        </div>
+                        <div class="multiselect__options" id="cdAccList"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="cost-filter-field" style="align-self:flex-end;padding-bottom:1px">
+                <button class="cp-btn-secondary" onclick="resetCostFilters()" style="height:30px;font-size:12px;padding:0 10px">Reset</button>
             </div>
             <div class="cost-filter-field" id="costResourceTypeWrap" style="display:none">
                 <label class="cost-filter-label">Resource Type</label>

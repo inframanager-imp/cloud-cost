@@ -948,6 +948,130 @@ let costPageLimit = 100;
 let costPageTotal = 0;
 let costCompact = false;
 
+// Cost Data multiselect state
+let cdRgOptions  = [];   // string[]
+let cdSvcOptions = [];   // string[]
+let cdAccOptions = [];   // {id, label}[]
+let cdRgSelected  = new Set();
+let cdSvcSelected = new Set();
+let cdAccSelected = new Set(); // stores provider_ids
+
+const CD_MS = {
+    rg:  { panel: 'cdRgPanel',  list: 'cdRgList',  search: 'cdRgSearch',  trigger: 'cdRgTriggerText'  },
+    svc: { panel: 'cdSvcPanel', list: 'cdSvcList', search: 'cdSvcSearch', trigger: 'cdSvcTriggerText' },
+    acc: { panel: 'cdAccPanel', list: 'cdAccList', search: 'cdAccSearch', trigger: 'cdAccTriggerText' },
+};
+
+function cdOpts(key) { return key === 'rg' ? cdRgOptions : key === 'svc' ? cdSvcOptions : cdAccOptions; }
+function cdSel(key)  { return key === 'rg' ? cdRgSelected : key === 'svc' ? cdSvcSelected : cdAccSelected; }
+
+function cdTogglePanel(key) {
+    const cfg = CD_MS[key];
+    const panel = document.getElementById(cfg.panel);
+    if (!panel) return;
+    const wasHidden = panel.hasAttribute('hidden');
+    Object.values(CD_MS).forEach(c => document.getElementById(c.panel)?.setAttribute('hidden', ''));
+    if (wasHidden) { panel.removeAttribute('hidden'); document.getElementById(cfg.search)?.focus(); }
+}
+
+function cdRenderList(key) {
+    const cfg = CD_MS[key];
+    const query = (document.getElementById(cfg.search)?.value || '').toLowerCase();
+    const list = document.getElementById(cfg.list);
+    if (!list) return;
+    const sel = cdSel(key);
+    const opts = cdOpts(key);
+    const items = key === 'acc' ? opts : opts.map(o => ({ id: o, label: o === '__BLANK__' ? '(Blank)' : o }));
+    const filtered = items.filter(o => o.label.toLowerCase().includes(query));
+    list.innerHTML = filtered.map(o => {
+        const checked = sel.has(o.id) ? 'checked' : '';
+        const safeId = o.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `<label class="multiselect__option"><input type="checkbox" ${checked} onchange="cdToggleOpt('${key}','${safeId}',this.checked)"> ${o.label}</label>`;
+    }).join('');
+}
+
+function cdToggleOpt(key, id, checked) {
+    const sel = cdSel(key);
+    if (checked) sel.add(id); else sel.delete(id);
+    cdUpdateTrigger(key);
+    costPageOffset = 0;
+    loadCostsTable();
+}
+
+function cdSelectAll(key) {
+    const sel = cdSel(key);
+    cdOpts(key).forEach(o => sel.add(typeof o === 'object' ? o.id : o));
+    cdRenderList(key);
+    cdUpdateTrigger(key);
+    costPageOffset = 0;
+    loadCostsTable();
+}
+
+function cdDeselectAll(key) {
+    cdSel(key).clear();
+    cdRenderList(key);
+    cdUpdateTrigger(key);
+    costPageOffset = 0;
+    loadCostsTable();
+}
+
+function cdFilterList(key) { cdRenderList(key); }
+
+function cdUpdateTrigger(key) {
+    const sel = cdSel(key);
+    const el = document.getElementById(CD_MS[key].trigger);
+    if (!el) return;
+    if (sel.size === 0) {
+        el.textContent = 'All'; el.className = 'multiselect__placeholder';
+    } else if (sel.size === 1) {
+        const v = [...sel][0];
+        const opt = key === 'acc' ? cdAccOptions.find(o => o.id === v) : null;
+        el.textContent = opt ? opt.label : (v === '__BLANK__' ? '(Blank)' : v);
+        el.className = 'multiselect__summary';
+    } else {
+        el.textContent = `${sel.size} selected`; el.className = 'multiselect__summary';
+    }
+}
+
+function populateCdMultiselect(key, options) {
+    const newOpts = ['__BLANK__', ...options];
+    if (key === 'rg') cdRgOptions = newOpts;
+    else cdSvcOptions = newOpts;
+    const sel = cdSel(key);
+    const allowed = new Set(newOpts);
+    [...sel].forEach(s => { if (!allowed.has(s)) sel.delete(s); });
+    cdRenderList(key);
+    cdUpdateTrigger(key);
+}
+
+function populateCdAccounts(accounts) {
+    cdAccOptions = [{ id: '__BLANK__', label: '(Blank)' }, ...accounts.map(a => ({ id: a.provider_id, label: a.name || a.provider_id }))];
+    const allowed = new Set(cdAccOptions.map(o => o.id));
+    [...cdAccSelected].forEach(s => { if (!allowed.has(s)) cdAccSelected.delete(s); });
+    cdRenderList('acc');
+    cdUpdateTrigger('acc');
+}
+
+function resetCostFilters() {
+    const search = document.getElementById('costSearch');
+    if (search) search.value = '';
+    document.querySelectorAll('[data-costs-cloud]').forEach(b => b.classList.toggle('active', b.dataset.costsCloud === ''));
+    costsSelectedCloud = '';
+    cdRgSelected.clear();  cdUpdateTrigger('rg');
+    cdSvcSelected.clear(); cdUpdateTrigger('svc');
+    cdAccSelected.clear(); cdUpdateTrigger('acc');
+    _updateCostsCloudFilters('');
+    costPageOffset = 0;
+    loadCostsTable();
+}
+
+// Close CD panels when clicking outside
+document.addEventListener('click', e => {
+    if (!e.target.closest('#cdRgMultiselect'))  document.getElementById('cdRgPanel')?.setAttribute('hidden', '');
+    if (!e.target.closest('#cdSvcMultiselect')) document.getElementById('cdSvcPanel')?.setAttribute('hidden', '');
+    if (!e.target.closest('#cdAccMultiselect')) document.getElementById('cdAccPanel')?.setAttribute('hidden', '');
+});
+
 function getMultiSelectValues(id) {
     const sel = document.getElementById(id);
     if (!sel) return [];
@@ -974,14 +1098,10 @@ async function _updateCostsCloudFilters(cloud) {
     if (cloud === 'aws') {
         accountWrap.style.display = '';
         if (resTypeWrap) resTypeWrap.style.display = '';
-        // Populate AWS account dropdown
+        // Populate AWS account multiselect
         const providers = await fetch('/api/cloud-providers').then(r => r.json()).catch(() => []);
         const awsAccounts = providers.filter(p => p.provider_type === 'aws');
-        const sel = document.getElementById('costAccount');
-        if (sel) {
-            sel.innerHTML = '<option value="__BLANK__">(Blank)</option>' +
-                awsAccounts.map(a => `<option value="${a.provider_id}">${a.name || a.provider_id}</option>`).join('');
-        }
+        populateCdAccounts(awsAccounts);
     } else {
         accountWrap.style.display = 'none';
         if (resTypeWrap) resTypeWrap.style.display = 'none';
@@ -1000,10 +1120,10 @@ async function loadCostsTable() {
     if (dateHeader) {
         dateHeader.innerHTML = `${granularity === 'monthly' ? 'Month' : 'Date'} <span id="sort-date" class="sort-indicator">↕</span>`;
     }
-    const rgValues = getMultiSelectValues('costRG');
-    const serviceValues = getMultiSelectValues('costService');
+    const rgValues = [...cdRgSelected];
+    const serviceValues = [...cdSvcSelected];
     // AWS account sub-filter
-    const awsAccounts = (costsSelectedCloud === 'aws') ? getMultiSelectValues('costAccount') : [];
+    const awsAccounts = (costsSelectedCloud === 'aws') ? [...cdAccSelected] : [];
     const resType = (costsSelectedCloud === 'aws') ? (document.getElementById('costResourceType')?.value || '') : '';
     const activeCloud = costsSelectedCloud || '';
     const includeBlankRG = rgValues.includes('__BLANK__');
@@ -1161,8 +1281,8 @@ async function loadCostsTable() {
         else if (selectedSubscription && activeCloud === 'azure') filterParams.set('subscription_id', selectedSubscription);
         const filterQs = filterParams.toString() ? '?' + filterParams.toString() : '';
         const filters = await fetch('/api/filters' + filterQs).then(r => r.json());
-        populateSelect('costRG', filters.resource_groups);
-        populateSelect('costService', filters.services);
+        populateCdMultiselect('rg', filters.resource_groups || []);
+        populateCdMultiselect('svc', filters.services || []);
     } catch (err) {
         console.error('Costs load error:', err);
     }
@@ -1176,6 +1296,9 @@ function clearCostFilters() {
     b.classList.toggle('active', b.dataset.costsCloud === '');
   });
   costsSelectedCloud = '';
+  cdRgSelected.clear();  cdUpdateTrigger('rg');
+  cdSvcSelected.clear(); cdUpdateTrigger('svc');
+  cdAccSelected.clear(); cdUpdateTrigger('acc');
   loadCostsTable();
 }
 
@@ -2283,9 +2406,9 @@ function exportCSV() {
     const dateFrom = document.getElementById('costDateFrom')?.value;
     const dateTo = document.getElementById('costDateTo')?.value;
     const granularity = document.getElementById('costGranularity')?.value || 'daily';
-    const rgValues = getMultiSelectValues('costRG');
-    const serviceValues = getMultiSelectValues('costService');
-    const awsAccounts = (costsSelectedCloud === 'aws') ? getMultiSelectValues('costAccount') : [];
+    const rgValues = [...cdRgSelected];
+    const serviceValues = [...cdSvcSelected];
+    const awsAccounts = (costsSelectedCloud === 'aws') ? [...cdAccSelected] : [];
     const resType = (costsSelectedCloud === 'aws') ? (document.getElementById('costResourceType')?.value || '') : '';
     const activeCloud = costsSelectedCloud || '';
     const includeBlankRG = rgValues.includes('__BLANK__');
