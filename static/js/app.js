@@ -610,7 +610,7 @@ async function loadCloudOverview() {
       );
     }
 
-    ['azure', 'aws', 'gcp'].forEach(cloud => {
+    ['aws', 'azure', 'gcp'].forEach(cloud => {
         const r    = results.find(x => x.cloud === cloud);
         const card = document.createElement('div');
 
