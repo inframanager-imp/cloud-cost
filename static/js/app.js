@@ -543,10 +543,7 @@ async function loadCloudOverview() {
     const lastAll       = results.reduce((s, r) => s + (r.data?.last_month?.total  || 0), 0);
     const activeProvs   = results.filter(r => r.hasData && (r.data?.current_month?.total || 0) > 0).length;
     const totalAccounts = results.reduce((s, r) => s + ((r.data?.subscription_costs || []).filter(x => x.cost > 0).length), 0);
-    // Weighted average of per-provider same-period MoM so total KPI matches individual cards
-    const momAll        = totalAll > 0
-        ? results.reduce((s, r) => s + (r.data?.mom_change_pct || 0) * (r.data?.current_month?.total || 0), 0) / totalAll
-        : 0;
+    const momAll        = lastAll > 0 ? ((totalAll - lastAll) / lastAll * 100) : 0;
     const avgPerDay     = results.reduce((s, r) => s + (r.data?.current_month?.avg_daily || 0), 0);
     const daysTracked   = results.reduce((m, r) => Math.max(m, r.data?.current_month?.days_elapsed || 0), 0);
     const lastMonthLabel = results[0]?.data?.last_month?.label || 'Last month';
@@ -632,7 +629,7 @@ async function loadCloudOverview() {
 
         const cm      = r.data.current_month;
         const lm      = r.data.last_month;
-        const mom     = r.data.mom_change_pct || 0;
+        const mom     = lm.total > 0 ? ((cm.total - lm.total) / lm.total * 100) : 0;
         const subs    = (r.data.subscription_costs || []).filter(s => s.cost > 0);
         const topSubs = subs.slice(0, 3);
         const maxSub  = topSubs[0]?.cost || 1;
