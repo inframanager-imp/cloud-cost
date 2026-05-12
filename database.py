@@ -156,12 +156,25 @@ def init_db():
         )
     """)
 
-    # Migration: add report date range / cloud provider columns if missing
+    # Migration: add any missing email_settings columns (safe to run repeatedly)
     for col, ddl in [
-        ("report_date_range", "ALTER TABLE email_settings ADD COLUMN report_date_range TEXT DEFAULT 'this_month'"),
-        ("report_date_from", "ALTER TABLE email_settings ADD COLUMN report_date_from TEXT DEFAULT ''"),
-        ("report_date_to", "ALTER TABLE email_settings ADD COLUMN report_date_to TEXT DEFAULT ''"),
-        ("report_cloud_provider", "ALTER TABLE email_settings ADD COLUMN report_cloud_provider TEXT DEFAULT ''"),
+        ("smtp_host",     "ALTER TABLE email_settings ADD COLUMN smtp_host TEXT DEFAULT ''"),
+        ("smtp_port",     "ALTER TABLE email_settings ADD COLUMN smtp_port INTEGER DEFAULT 587"),
+        ("smtp_user",     "ALTER TABLE email_settings ADD COLUMN smtp_user TEXT DEFAULT ''"),
+        ("smtp_password", "ALTER TABLE email_settings ADD COLUMN smtp_password TEXT DEFAULT ''"),
+        ("smtp_from",     "ALTER TABLE email_settings ADD COLUMN smtp_from TEXT DEFAULT ''"),
+        ("smtp_use_tls",  "ALTER TABLE email_settings ADD COLUMN smtp_use_tls INTEGER DEFAULT 1"),
+        ("recipients",    "ALTER TABLE email_settings ADD COLUMN recipients TEXT DEFAULT ''"),
+        ("schedule",      "ALTER TABLE email_settings ADD COLUMN schedule TEXT DEFAULT 'weekly'"),
+        ("schedule_day",  "ALTER TABLE email_settings ADD COLUMN schedule_day INTEGER DEFAULT 1"),
+        ("schedule_hour", "ALTER TABLE email_settings ADD COLUMN schedule_hour INTEGER DEFAULT 8"),
+        ("enabled",       "ALTER TABLE email_settings ADD COLUMN enabled INTEGER DEFAULT 0"),
+        ("updated_at",    "ALTER TABLE email_settings ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP"),
+        ("report_sections",      "ALTER TABLE email_settings ADD COLUMN report_sections TEXT DEFAULT '[\"summary\",\"subscriptions\",\"top_services\",\"top_rgs\",\"trend\"]'"),
+        ("report_date_range",    "ALTER TABLE email_settings ADD COLUMN report_date_range TEXT DEFAULT 'this_month'"),
+        ("report_date_from",     "ALTER TABLE email_settings ADD COLUMN report_date_from TEXT DEFAULT ''"),
+        ("report_date_to",       "ALTER TABLE email_settings ADD COLUMN report_date_to TEXT DEFAULT ''"),
+        ("report_cloud_provider","ALTER TABLE email_settings ADD COLUMN report_cloud_provider TEXT DEFAULT ''"),
     ]:
         try:
             cursor.execute(f"SELECT {col} FROM email_settings LIMIT 1")
