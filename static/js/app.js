@@ -543,7 +543,10 @@ async function loadCloudOverview() {
     const lastAll       = results.reduce((s, r) => s + (r.data?.last_month?.total  || 0), 0);
     const activeProvs   = results.filter(r => r.hasData && (r.data?.current_month?.total || 0) > 0).length;
     const totalAccounts = results.reduce((s, r) => s + ((r.data?.subscription_costs || []).filter(x => x.cost > 0).length), 0);
-    const momAll        = lastAll > 0 ? ((totalAll - lastAll) / lastAll * 100) : 0;
+    // Weighted average of per-provider same-period MoM so total KPI matches individual cards
+    const momAll        = totalAll > 0
+        ? results.reduce((s, r) => s + (r.data?.mom_change_pct || 0) * (r.data?.current_month?.total || 0), 0) / totalAll
+        : 0;
     const avgPerDay     = results.reduce((s, r) => s + (r.data?.current_month?.avg_daily || 0), 0);
     const daysTracked   = results.reduce((m, r) => Math.max(m, r.data?.current_month?.days_elapsed || 0), 0);
     const lastMonthLabel = results[0]?.data?.last_month?.label || 'Last month';
@@ -1425,7 +1428,7 @@ async function loadMonthly() {
             const cloudTotal = m.total_cost || 1;
             const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
             const cloudLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
-            const cloudOrder = ['azure', 'aws', 'gcp'];
+            const cloudOrder = ['aws', 'azure', 'gcp'];
             const activeCloudKeys = cloudOrder.filter(c => byCloud[c] > 0);
 
             // Cloud breakdown strip
