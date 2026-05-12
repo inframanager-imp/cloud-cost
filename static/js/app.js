@@ -24,7 +24,7 @@ const CLOUD_LOGOS = {
 };
 const CLOUD_META = {
     azure: { icon: '⊞', logo: CLOUD_LOGOS.azure, label: 'Azure', color: '#0078d4', groupLabel: { sub: 'Subscription', rg: 'Resource Group', service: 'Service' } },
-    aws:   { icon: '⚙', logo: CLOUD_LOGOS.aws,   label: 'AWS',   color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Region',         service: 'Service' } },
+    aws:   { icon: '⚙', logo: CLOUD_LOGOS.aws,   label: 'AWS',   color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Account',        service: 'Service' } },
     gcp:   { icon: '◉', logo: CLOUD_LOGOS.gcp,   label: 'GCP',   color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service' } },
 };
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
