@@ -193,10 +193,13 @@ def run_cost_sync_from_payload(payload: dict) -> None:
 
                         conn = get_db()
                         if ptype == "gcp":
-                            conn.execute(
-                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp'",
-                                (p_from, date_to),
-                            )
+                            # Only delete project IDs returned — never wipe other GCP projects
+                            project_ids = list({r[9] for r in (records or []) if r[9]})
+                            for proj_id in project_ids:
+                                conn.execute(
+                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=?",
+                                    (p_from, date_to, proj_id),
+                                )
                         else:
                             conn.execute(
                                 "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=?",
