@@ -1,7 +1,5 @@
 // ─── State ────────────────────────────────────────────────────────────────
 let currentPage = 'dashboard';
-let _gPressed = false;
-let _gTimer = null;
 let chartInstances = {};
 let syncInterval = null;
 let dashboardCache = null;
@@ -5230,116 +5228,13 @@ function initUiThemeTrial() {
 }
 
 // ─── Event Listeners ─────────────────────────────────────────────────────
-// ─── Premium Sidebar ──────────────────────────────────────────────────────
-
-const CMD_PAGES = [
-    { section: 'Analytics',   page: 'dashboard',      label: 'Dashboard',        icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>' },
-    { section: 'Analytics',   page: 'cloud-overview', label: 'Cloud Overview',   icon: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20"/>' },
-    { section: 'Analytics',   page: 'costs',          label: 'Cost Data',        icon: '<path d="M14 2H6a2 2 0 00-2 2v16h16V8z"/><polyline points="14,2 14,8 20,8"/>' },
-    { section: 'Analytics',   page: 'monthly',        label: 'Monthly Costs',    icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>' },
-    { section: 'Analytics',   page: 'compare',        label: 'Compare',          icon: '<polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>' },
-    { section: 'Analytics',   page: 'custom-cost',    label: 'Custom Cost',      icon: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>' },
-    { section: 'Setup',       page: 'cloud-providers',label: 'Cloud Providers',  icon: '<path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>' },
-    { section: 'Setup',       page: 'budgets',        label: 'Budgets & Alerts', icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>' },
-    { section: 'Operations',  page: 'integrations',   label: 'Integrations',     icon: '<circle cx="12" cy="12" r="3"/>' },
-    { section: 'Operations',  page: 'activity',       label: 'Activity Log',     icon: '<circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>' },
-    { section: 'Operations',  page: 'reports',        label: 'Email Reports',    icon: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>' },
-    { section: 'Operations',  page: 'chat',           label: 'AI Assistant',     icon: '<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>' },
-    { section: 'Operations',  page: 'team',           label: 'Team',             icon: '<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>' },
-];
-
-const G_SHORTCUTS = { d:'dashboard', o:'cloud-overview', c:'costs', m:'monthly', p:'compare', u:'custom-cost', l:'cloud-providers', b:'budgets', i:'integrations', a:'activity', r:'reports', h:'chat', t:'team' };
-
-function initPremiumSidebar() {
-    // ── Cmd+K / Ctrl+K ──────────────────────────────────────────────────
-    document.getElementById('cmdTrigger')?.addEventListener('click', openCommandPalette);
-    document.addEventListener('keydown', (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-            e.preventDefault();
-            openCommandPalette();
-            return;
-        }
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-        if (e.key === 'Escape') { closeCommandPalette(); return; }
-
-        // ── G + key navigation ──────────────────────────────────────────
-        if (e.key.toLowerCase() === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-            _gPressed = true;
-            clearTimeout(_gTimer);
-            _gTimer = setTimeout(() => { _gPressed = false; }, 1000);
-            return;
-        }
-        if (_gPressed) {
-            _gPressed = false;
-            clearTimeout(_gTimer);
-            const target = G_SHORTCUTS[e.key.toLowerCase()];
-            if (target) { e.preventDefault(); navigateTo(target); }
-        }
-    });
-}
-
-// ── Command palette ──────────────────────────────────────────────────────
-let _cmdFocusIdx = -1;
-
-function openCommandPalette() {
-    const overlay = document.getElementById('cmdPaletteOverlay');
-    if (!overlay) return;
-    overlay.style.display = 'flex';
-    const input = document.getElementById('cmdInput');
-    if (input) { input.value = ''; input.focus(); }
-    cmdFilter('');
-}
-
-function closeCommandPalette() {
-    const overlay = document.getElementById('cmdPaletteOverlay');
-    if (overlay) overlay.style.display = 'none';
-}
-
-function cmdFilter(q) {
-    const results = document.getElementById('cmdResults');
-    if (!results) return;
-    _cmdFocusIdx = -1;
-    const lower = q.toLowerCase().trim();
-    const filtered = lower ? CMD_PAGES.filter(p => p.label.toLowerCase().includes(lower) || p.section.toLowerCase().includes(lower)) : CMD_PAGES;
-
-    let html = '';
-    let lastSection = '';
-    filtered.forEach((p, i) => {
-        if (p.section !== lastSection) {
-            html += `<div class="cmd-result-section">${p.section}</div>`;
-            lastSection = p.section;
-        }
-        html += `<div class="cmd-result-item" data-idx="${i}" onclick="navigateTo('${p.page}');closeCommandPalette()">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">${p.icon}</svg>
-            ${_esc(p.label)}
-        </div>`;
-    });
-    results.innerHTML = html || '<div class="cmd-result-section">No results</div>';
-}
-
-function cmdKeyNav(e) {
-    const items = document.querySelectorAll('#cmdResults .cmd-result-item');
-    if (!items.length) return;
-    if (e.key === 'ArrowDown') { e.preventDefault(); _cmdFocusIdx = Math.min(_cmdFocusIdx + 1, items.length - 1); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); _cmdFocusIdx = Math.max(_cmdFocusIdx - 1, 0); }
-    else if (e.key === 'Enter' && _cmdFocusIdx >= 0) { items[_cmdFocusIdx].click(); return; }
-    else return;
-    items.forEach((el, i) => el.classList.toggle('focused', i === _cmdFocusIdx));
-    items[_cmdFocusIdx]?.scrollIntoView({ block: 'nearest' });
-}
-
-function openWorkspaceSwitcher() {
-    document.getElementById('globalSubFilter')?.click();
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     initAppearanceToggle();
     initUiThemeTrial();
     loadSubscriptionDropdown();
-    _scLoadAutoSync();
-    _scLoadStatus();
-    initCloudFilter();
-    initPremiumSidebar();
+    _scLoadAutoSync();   // load auto-sync state into drawer + badge on startup
+    _scLoadStatus();     // update sidebar global status
+    initCloudFilter();   // hide pills for clouds with no data
     navigateTo('dashboard');
     onCompareModeChange();
 
