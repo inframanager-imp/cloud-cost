@@ -910,9 +910,9 @@
                     <input type="date" class="cost-filter-input" id="ccDateTo">
                 </div>
 
-                <!-- Subscriptions -->
-                <div class="filter-bar__field filter-bar__dropdown">
-                    <span class="micro-label">Subscriptions <span class="count-chip count-chip--small" id="ccSubCount" style="display:none"></span></span>
+                <!-- Subscriptions (hidden for GCP/AWS where sub=project/account shown in RG) -->
+                <div class="filter-bar__field filter-bar__dropdown" id="ccSubField">
+                    <span class="micro-label" id="ccSubLabel">Subscriptions <span class="count-chip count-chip--small" id="ccSubCount" style="display:none"></span></span>
                     <div class="multiselect" id="ccSubMultiselect">
                         <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('sub')">
                             <span id="ccSubTriggerText" class="multiselect__placeholder">All subscriptions</span>
@@ -929,9 +929,9 @@
                     </div>
                 </div>
 
-                <!-- Resource groups -->
-                <div class="filter-bar__field filter-bar__dropdown">
-                    <span class="micro-label">Resource groups <span class="count-chip count-chip--small" id="ccRgCount" style="display:none"></span></span>
+                <!-- Resource groups / Projects / Accounts -->
+                <div class="filter-bar__field filter-bar__dropdown" id="ccRgField">
+                    <span class="micro-label" id="ccRgLabel">Resource groups <span class="count-chip count-chip--small" id="ccRgCount" style="display:none"></span></span>
                     <div class="multiselect" id="ccRgMultiselect">
                         <button type="button" class="multiselect__trigger" onclick="ccTogglePanel('rg')">
                             <span id="ccRgTriggerText" class="multiselect__placeholder">All resource groups</span>
@@ -1034,7 +1034,7 @@
                         <div style="height:220px"><canvas id="ccRgChart"></canvas></div>
                         <div class="table-container" style="margin-top:12px;max-height:240px;overflow-y:auto">
                             <table>
-                                <thead><tr><th>Resource group</th><th>Cost</th><th>Records</th></tr></thead>
+                                <thead><tr><th id="ccRgTableHeader">Resource group</th><th>Cost</th><th>Records</th></tr></thead>
                                 <tbody id="ccRgTableBody"></tbody>
                             </table>
                         </div>

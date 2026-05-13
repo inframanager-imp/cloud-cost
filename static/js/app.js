@@ -3628,10 +3628,12 @@ async function loadCustomCostPage() {
             ccSelectedSubs.clear();
             ccSelectedRgs.clear();
             ccSelectedSvcs.clear();
+            ccUpdateCloudLabels(ccCloudFilter);
             ccRenderList('sub');
             ccLoadFilters();
         });
     });
+    ccUpdateCloudLabels('all'); // init labels
 
     // Date range seg buttons
     document.querySelectorAll('#ccDateFilter .seg').forEach(btn => {
@@ -3726,6 +3728,40 @@ function ccTogglePanel(type) {
             if (search) search.focus();
         }
     }
+}
+
+function ccUpdateCloudLabels(cloud) {
+    // Labels per cloud
+    const labels = {
+        all:   { sub: 'Subscriptions', subPh: 'All subscriptions', subSearch: 'Search subscriptions...', rg: 'Resource Groups', rgPh: 'All resource groups', rgSearch: 'Search resource groups...', showSub: true },
+        azure: { sub: 'Subscriptions', subPh: 'All subscriptions', subSearch: 'Search subscriptions...', rg: 'Resource Groups', rgPh: 'All resource groups', rgSearch: 'Search resource groups...', showSub: true },
+        aws:   { sub: 'Accounts',      subPh: 'All accounts',      subSearch: 'Search accounts...',      rg: 'Regions',         rgPh: 'All regions',         rgSearch: 'Search regions...',         showSub: true },
+        gcp:   { sub: 'Projects',      subPh: 'All projects',      subSearch: 'Search projects...',      rg: 'Projects',        rgPh: 'All projects',        rgSearch: 'Search projects...',        showSub: false },
+    };
+    const l = labels[cloud] || labels.all;
+
+    // Update sub field
+    const subField = document.getElementById('ccSubField');
+    const subLabel = document.getElementById('ccSubLabel');
+    const subCount = document.getElementById('ccSubCount');
+    const subTrigger = document.getElementById('ccSubTriggerText');
+    const subSearch = document.getElementById('ccSubSearch');
+    if (subField) subField.style.display = l.showSub ? '' : 'none';
+    if (subLabel) subLabel.childNodes[0].textContent = l.sub + ' ';
+    if (subTrigger && ccSelectedSubs.size === 0) subTrigger.textContent = l.subPh;
+    if (subSearch) subSearch.placeholder = l.subSearch;
+
+    // Update rg field
+    const rgLabel = document.getElementById('ccRgLabel');
+    const rgTrigger = document.getElementById('ccRgTriggerText');
+    const rgSearch = document.getElementById('ccRgSearch');
+    if (rgLabel) rgLabel.childNodes[0].textContent = l.rg + ' ';
+    if (rgTrigger && ccSelectedRgs.size === 0) rgTrigger.textContent = l.rgPh;
+    if (rgSearch) rgSearch.placeholder = l.rgSearch;
+
+    // Update results table header
+    const rgHeader = document.getElementById('ccRgTableHeader');
+    if (rgHeader) rgHeader.textContent = l.rg;
 }
 
 async function ccLoadFilters() {
@@ -3853,8 +3889,10 @@ function ccUpdateCounts() {
             }
         }
     };
-    update('ccSubCount', 'ccSubTriggerText', ccSelectedSubs.size, 'All subscriptions');
-    update('ccRgCount', 'ccRgTriggerText', ccSelectedRgs.size, 'All resource groups');
+    const _ccL = { all:'All subscriptions', azure:'All subscriptions', aws:'All accounts', gcp:'All projects' };
+    const _ccRgL = { all:'All resource groups', azure:'All resource groups', aws:'All regions', gcp:'All projects' };
+    update('ccSubCount', 'ccSubTriggerText', ccSelectedSubs.size, _ccL[ccCloudFilter] || 'All subscriptions');
+    update('ccRgCount', 'ccRgTriggerText', ccSelectedRgs.size, _ccRgL[ccCloudFilter] || 'All resource groups');
     update('ccSvcCount', 'ccSvcTriggerText', ccSelectedSvcs.size, 'All services');
     ccUpdateSelectionPreview();
 }
