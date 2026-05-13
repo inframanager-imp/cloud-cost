@@ -406,7 +406,34 @@ def api_toggle_subscription(sub_id):
 @app.route("/")
 @login_required
 def index():
-    return render_template("index.html", username=session.get("username", ""))
+    tid = current_tenant_id()
+    # Sidebar badge counts
+    try:
+        budgets = get_budgets(enabled_only=True, tenant_id=tid)
+        alerts_count = sum(1 for b in budgets if b.get("current_spend", 0) >= b.get("amount", 1) * 0.8)
+    except Exception:
+        alerts_count = 0
+    try:
+        providers = get_cloud_providers(enabled_only=True, tenant_id=tid)
+        failed_syncs_count = sum(1 for p in providers if p.get("sync_error"))
+    except Exception:
+        failed_syncs_count = 0
+    # Workspace meta
+    try:
+        tenant = get_tenant(tid) or {}
+        workspace_name = tenant.get("name") or session.get("username", "Workspace").split("@")[0].title()
+        plan_label = (tenant.get("plan") or "free").upper()
+    except Exception:
+        workspace_name = session.get("username", "Workspace").split("@")[0].title()
+        plan_label = "FREE"
+    return render_template(
+        "index.html",
+        username=session.get("username", ""),
+        workspace_name=workspace_name,
+        plan_label=plan_label,
+        alerts_count=alerts_count,
+        failed_syncs_count=failed_syncs_count,
+    )
 
 
 @app.route("/drilldown")
