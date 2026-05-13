@@ -3766,21 +3766,27 @@ function ccUpdateCloudLabels(cloud) {
 
 async function ccLoadFilters() {
     try {
-        const cloudParam = ccCloudFilter !== 'all' ? `&cloud_provider=${ccCloudFilter}` : '';
-        const activeSubIds = ccSelectedSubs.size
+        const cloudParam = ccCloudFilter !== 'all' ? `cloud_provider=${ccCloudFilter}` : '';
+
+        // For GCP: resource_group = project_id, so subscription filtering would restrict
+        // to one project only. Always fetch all GCP resource groups by cloud only.
+        // For AWS: same — accounts/regions span subscription boundaries.
+        const skipSubFilter = ccCloudFilter === 'gcp' || ccCloudFilter === 'aws';
+
+        const activeSubIds = (!skipSubFilter && ccSelectedSubs.size)
             ? [...ccSelectedSubs]
-            : (ccCloudFilter !== 'all'
+            : (!skipSubFilter && ccCloudFilter !== 'all'
                 ? ccSubOptions.filter(id => (ccSubCloud[id] || 'azure') === ccCloudFilter)
                 : null);
 
         if (activeSubIds && activeSubIds.length === 1) {
-            const filters = await fetch(`/api/filters?subscription_id=${activeSubIds[0]}${cloudParam}`).then(r => r.json());
+            const filters = await fetch(`/api/filters?subscription_id=${activeSubIds[0]}&${cloudParam}`).then(r => r.json());
             ccRgOptions = filters.resource_groups || [];
             ccSvcOptions = filters.services || [];
         } else if (activeSubIds && activeSubIds.length > 1) {
             const allRgs = new Set(), allSvcs = new Set();
             const results = await Promise.all(activeSubIds.map(id =>
-                fetch(`/api/filters?subscription_id=${id}${cloudParam}`).then(r => r.json())
+                fetch(`/api/filters?subscription_id=${id}&${cloudParam}`).then(r => r.json())
             ));
             results.forEach(f => {
                 (f.resource_groups || []).forEach(rg => allRgs.add(rg));
@@ -3789,7 +3795,7 @@ async function ccLoadFilters() {
             ccRgOptions = [...allRgs].sort();
             ccSvcOptions = [...allSvcs].sort();
         } else {
-            const filters = await fetch(`/api/filters?${cloudParam.slice(1)}`).then(r => r.json());
+            const filters = await fetch(`/api/filters?${cloudParam}`).then(r => r.json());
             ccRgOptions = filters.resource_groups || [];
             ccSvcOptions = filters.services || [];
         }
