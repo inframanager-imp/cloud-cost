@@ -3174,16 +3174,16 @@ def api_cloud_provider_sync(pk):
                 return
 
             if records:
-                # Deduplicate: delete existing rows for this date range + provider.
-                # For GCP, one provider record covers all projects (many subscription_ids),
-                # so we delete by cloud_provider only (not subscription_id).
                 conn = get_db()
                 cloud = provider["provider_type"]
                 if cloud == "gcp":
-                    conn.execute(
-                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp'",
-                        (date_from, date_to)
-                    )
+                    # Delete only the project IDs present in this fetch — avoid wiping other GCP projects
+                    project_ids = list({r[9] for r in records if r[9]})
+                    for proj_id in project_ids:
+                        conn.execute(
+                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=?",
+                            (date_from, date_to, proj_id)
+                        )
                 else:
                     conn.execute(
                         "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=?",
