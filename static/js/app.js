@@ -3730,6 +3730,7 @@ function ccTogglePanel(type) {
 
 async function ccLoadFilters() {
     try {
+        const cloudParam = ccCloudFilter !== 'all' ? `&cloud_provider=${ccCloudFilter}` : '';
         const activeSubIds = ccSelectedSubs.size
             ? [...ccSelectedSubs]
             : (ccCloudFilter !== 'all'
@@ -3737,13 +3738,13 @@ async function ccLoadFilters() {
                 : null);
 
         if (activeSubIds && activeSubIds.length === 1) {
-            const filters = await fetch(`/api/filters?subscription_id=${activeSubIds[0]}`).then(r => r.json());
+            const filters = await fetch(`/api/filters?subscription_id=${activeSubIds[0]}${cloudParam}`).then(r => r.json());
             ccRgOptions = filters.resource_groups || [];
             ccSvcOptions = filters.services || [];
         } else if (activeSubIds && activeSubIds.length > 1) {
             const allRgs = new Set(), allSvcs = new Set();
             const results = await Promise.all(activeSubIds.map(id =>
-                fetch(`/api/filters?subscription_id=${id}`).then(r => r.json())
+                fetch(`/api/filters?subscription_id=${id}${cloudParam}`).then(r => r.json())
             ));
             results.forEach(f => {
                 (f.resource_groups || []).forEach(rg => allRgs.add(rg));
@@ -3752,7 +3753,7 @@ async function ccLoadFilters() {
             ccRgOptions = [...allRgs].sort();
             ccSvcOptions = [...allSvcs].sort();
         } else {
-            const filters = await fetch('/api/filters').then(r => r.json());
+            const filters = await fetch(`/api/filters?${cloudParam.slice(1)}`).then(r => r.json());
             ccRgOptions = filters.resource_groups || [];
             ccSvcOptions = filters.services || [];
         }
@@ -3889,6 +3890,7 @@ async function ccCalculate() {
         services: [...ccSelectedSvcs],
         date_from: dateFrom || null,
         date_to: dateTo || null,
+        cloud_provider: ccCloudFilter !== 'all' ? ccCloudFilter : null,
     };
 
     const btn = document.getElementById('ccCalcBtn');
