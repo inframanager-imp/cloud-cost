@@ -5228,6 +5228,52 @@ function initUiThemeTrial() {
 }
 
 // ─── Event Listeners ─────────────────────────────────────────────────────
+// ─── Nav right-click context menu ────────────────────────────────────────────
+
+function _initNavContextMenu() {
+    const menu = document.createElement('div');
+    menu.id = 'navCtxMenu';
+    menu.className = 'nav-ctx-menu';
+    menu.innerHTML = `
+        <button class="nav-ctx-item" id="navCtxNewTab">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Open in new tab
+        </button>`;
+    document.body.appendChild(menu);
+
+    let _targetPage = null;
+
+    // Attach contextmenu to every nav-item
+    function _attach() {
+        document.querySelectorAll('.nav-item[data-page]').forEach(el => {
+            el.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                _targetPage = el.dataset.page;
+                const x = Math.min(e.clientX, window.innerWidth  - 180);
+                const y = Math.min(e.clientY, window.innerHeight - 60);
+                menu.style.left = x + 'px';
+                menu.style.top  = y + 'px';
+                menu.style.display = 'block';
+            });
+        });
+    }
+
+    document.getElementById('navCtxNewTab')?.addEventListener('click', () => {
+        if (_targetPage) window.open(`${location.origin}/?page=${_targetPage}`, '_blank');
+        menu.style.display = 'none';
+    });
+
+    // Close on any click outside
+    document.addEventListener('click', () => { menu.style.display = 'none'; });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') menu.style.display = 'none'; });
+
+    // Run after nav items are in DOM
+    _attach();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initAppearanceToggle();
     initUiThemeTrial();
@@ -5235,7 +5281,10 @@ document.addEventListener('DOMContentLoaded', () => {
     _scLoadAutoSync();   // load auto-sync state into drawer + badge on startup
     _scLoadStatus();     // update sidebar global status
     initCloudFilter();   // hide pills for clouds with no data
-    navigateTo('dashboard');
+    _initNavContextMenu();
+    // Support opening a specific page in a new tab via ?page= query param
+    const urlPage = new URLSearchParams(location.search).get('page');
+    navigateTo(urlPage || 'dashboard');
     onCompareModeChange();
 
     // Chat enter key
