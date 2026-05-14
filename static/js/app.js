@@ -2043,7 +2043,26 @@ function normalizeCompareApiResponse(data) {
     return { error: 'Unexpected compare response' };
 }
 
+function _cmpSetLoading(on) {
+    const btn     = document.getElementById('cmpRunBtn');
+    const icon    = document.getElementById('cmpBtnIcon');
+    const spinner = document.getElementById('cmpBtnSpinner');
+    const label   = document.getElementById('cmpBtnLabel');
+    if (!btn) return;
+    btn.disabled = on;
+    if (icon)    icon.style.display    = on ? 'none'         : '';
+    if (spinner) spinner.style.display = on ? 'inline-block' : 'none';
+    if (label)   label.textContent     = on ? 'Comparing…'   : 'Compare';
+    // Show skeleton in results area while loading
+    const body = document.getElementById('cmpTableBody');
+    if (on && body) body.innerHTML = `<tr><td colspan="10" style="padding:24px;text-align:center">
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text-tertiary);font-size:13px">
+            <span class="spinner" style="width:16px;height:16px"></span> Loading comparison data…
+        </div></td></tr>`;
+}
+
 async function runComparison() {
+    _cmpSetLoading(true);
     const mode = document.getElementById('cmpMode').value;
     const groupBy = document.getElementById('cmpGroupBy').value;
     /** @type {{from:string,to:string,label:string}[]} */
@@ -2180,6 +2199,8 @@ async function runComparison() {
     } catch (err) {
         console.error('Comparison error:', err);
         showToast('Comparison failed', 'error');
+    } finally {
+        _cmpSetLoading(false);
     }
 }
 
