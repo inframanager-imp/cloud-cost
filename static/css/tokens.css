@@ -510,3 +510,61 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .sc-sync-detail-dot { font-size: 12px; flex-shrink: 0; }
 .sc-sync-detail-name { flex: 1; color: var(--text-primary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sc-sync-detail-count { color: var(--text-tertiary); flex-shrink: 0; }
+
+/* ── Compare page: table-main + charts-sidebar layout ──────────────────── */
+.cmp-results-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.cmp-results-main {
+  flex: 1;
+  min-width: 0;
+}
+.cmp-results-charts {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cmp-chart-card {
+  padding: 12px 14px !important;
+}
+.cmp-chart-title {
+  font-size: 12px !important;
+  font-weight: 500;
+  margin: 0 0 8px !important;
+  color: var(--text-secondary);
+}
+@media (max-width: 900px) {
+  .cmp-results-layout { flex-direction: column; }
+  .cmp-results-charts { width: 100%; flex-direction: row; }
+  .cmp-chart-card { flex: 1; }
+}
+
+/* ── Compare summary cards — compact ────────────────────────────────────── */
+#page-compare #cmpSummaryCards {
+  gap: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+}
+#page-compare #cmpSummaryCards .stat-card {
+  padding: 8px 14px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+  min-width: 130px;
+}
+#page-compare #cmpSummaryCards .stat-label {
+  font-size: 9px;
+  margin-bottom: 2px;
+}
+#page-compare #cmpSummaryCards .stat-value {
+  font-size: 22px;
+  line-height: 1.2;
+}
+#page-compare #cmpSummaryCards div[style*="font-size"] {
+  font-size: 11px !important;
+  margin-top: 2px !important;
+}

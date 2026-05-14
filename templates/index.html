@@ -787,49 +787,56 @@
         </div>
 
         <!-- Comparison Summary Cards -->
-        <div id="cmpSummaryCards" class="stats-grid" style="margin-bottom:20px"></div>
+        <div id="cmpSummaryCards" class="stats-grid" style="margin-bottom:16px"></div>
 
-        <!-- Comparison Charts -->
-        <div class="charts-grid" style="margin-bottom:20px">
-            <div class="chart-card">
-                <h3 id="cmpBarTitle" style="font-size:14px;font-weight:500;margin:0 0 12px">Side-by-side comparison</h3>
-                <div style="height:350px"><canvas id="cmpBarChart"></canvas></div>
-            </div>
-            <div class="chart-card">
-                <h3 style="font-size:14px;font-weight:500;margin:0 0 12px">Change % by item</h3>
-                <div style="height:350px"><canvas id="cmpChangeChart"></canvas></div>
-            </div>
-        </div>
+        <!-- Main layout: Table (left) + Charts (right) -->
+        <div class="cmp-results-layout">
 
-        <!-- Comparison Table -->
-        <div class="table-container">
-            <div class="table-header">
-                <h3 id="cmpTableTitle" style="font-size:14px;font-weight:500;margin:0">Comparison details</h3>
-                <span id="cmpTableCount" style="font-size:13px;color:var(--text-secondary)"></span>
+            <!-- LEFT: Comparison Table -->
+            <div class="cmp-results-main">
+                <div class="table-container" style="margin-bottom:0">
+                    <div class="table-header">
+                        <h3 id="cmpTableTitle" style="font-size:14px;font-weight:500;margin:0">Comparison details</h3>
+                        <span id="cmpTableCount" style="font-size:13px;color:var(--text-secondary)"></span>
+                    </div>
+                    <table>
+                        <thead id="cmpTableHead">
+                            <tr>
+                                <th>Name</th>
+                                <th id="cmpTh1">Period 1</th>
+                                <th id="cmpTh2">Period 2</th>
+                                <th>Difference</th>
+                                <th>Change %</th>
+                                <th>Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cmpTableBody">
+                            <tr><td colspan="10" style="padding:0;border:none">
+                              <div class="empty-state">
+                                <div class="empty-state__icon empty-state__icon--info">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                                </div>
+                                <div class="empty-state__headline">Pick two periods to compare</div>
+                                <div class="empty-state__sub">Select two months, two clouds, or two accounts and click Compare.</div>
+                              </div>
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <table>
-                <thead id="cmpTableHead">
-                    <tr>
-                        <th>Name</th>
-                        <th id="cmpTh1">Period 1</th>
-                        <th id="cmpTh2">Period 2</th>
-                        <th>Difference</th>
-                        <th>Change %</th>
-                        <th>Trend</th>
-                    </tr>
-                </thead>
-                <tbody id="cmpTableBody">
-                    <tr><td colspan="10" style="padding:0;border:none">
-                      <div class="empty-state">
-                        <div class="empty-state__icon empty-state__icon--info">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                        </div>
-                        <div class="empty-state__headline">Pick two periods to compare</div>
-                        <div class="empty-state__sub">Select two months, two clouds, or two accounts and click Compare to see a side-by-side breakdown.</div>
-                      </div>
-                    </td></tr>
-                </tbody>
-            </table>
+
+            <!-- RIGHT: Charts sidebar -->
+            <div class="cmp-results-charts">
+                <div class="chart-card cmp-chart-card">
+                    <h3 id="cmpBarTitle" class="cmp-chart-title">Side-by-side</h3>
+                    <div style="height:200px"><canvas id="cmpBarChart"></canvas></div>
+                </div>
+                <div class="chart-card cmp-chart-card">
+                    <h3 class="cmp-chart-title">Change % by item</h3>
+                    <div style="height:200px"><canvas id="cmpChangeChart"></canvas></div>
+                </div>
+            </div>
+
         </div>
     </section>
 
