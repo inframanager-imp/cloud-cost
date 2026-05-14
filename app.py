@@ -771,24 +771,17 @@ def api_sync():
                             return (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
                         return (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
 
-                    for idx, provider in enumerate(cp_providers, start=1):
-                        # Re-fetch with credentials (get_cloud_providers() omits credentials_json)
+                    def _sync_one_provider(provider):
                         provider = get_cloud_provider(provider["id"]) or provider
                         ptype = provider.get("provider_type")
-                        pid = provider.get("provider_id")
+                        pid   = provider.get("provider_id")
                         pname = provider.get("name") or pid or ptype
                         p_from = _provider_date_from(ptype, pid)
-                        sync_status["message"] = f"{mode_label}: syncing {ptype.upper()} provider {pname} [{idx}/{len(cp_providers)}]"
-                        sync_status["progress"] = 95
                         try:
-                            if ptype == "aws":
-                                records = fetch_aws_costs(provider, p_from, date_to)
-                            else:
-                                records = fetch_gcp_costs(provider, p_from, date_to)
-
+                            records = fetch_aws_costs(provider, p_from, date_to) if ptype == "aws" \
+                                      else fetch_gcp_costs(provider, p_from, date_to)
                             conn = get_db()
                             if ptype == "gcp":
-                                # Only delete the project IDs actually returned — never wipe other GCP projects
                                 project_ids = list({r[9] for r in (records or []) if r[9]})
                                 for proj_id in project_ids:
                                     conn.execute(
@@ -802,21 +795,27 @@ def api_sync():
                                 )
                             if records:
                                 conn.executemany(
-                                    """
-                                    INSERT INTO cost_data
-                                      (date,resource_group,service_name,resource_type,resource_name,
-                                       meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider)
-                                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
-                                    """,
+                                    "INSERT INTO cost_data (date,resource_group,service_name,resource_type,"
+                                    "resource_name,meter_category,meter_subcategory,cost,currency,"
+                                    "subscription_id,tags,cloud_provider) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                                     records,
                                 )
                             conn.commit()
                             conn.close()
-                            total_records += len(records or [])
                             update_cloud_provider_sync_time(provider["id"], error=None)
+                            print(f"[Sync] {ptype.upper()} '{pname}': {len(records or [])} records")
+                            return len(records or [])
                         except Exception as cp_err:
                             update_cloud_provider_sync_time(provider["id"], error=str(cp_err))
-                            print(f"[Sync] {ptype.upper()} provider '{pname}' failed: {cp_err}")
+                            print(f"[Sync] {ptype.upper()} '{pname}' failed: {cp_err}")
+                            return 0
+
+                    sync_status["message"] = f"{mode_label}: syncing {len(cp_providers)} cloud provider(s) in parallel…"
+                    sync_status["progress"] = 95
+                    with ThreadPoolExecutor(max_workers=min(len(cp_providers), 4)) as cp_ex:
+                        cp_futures = {cp_ex.submit(_sync_one_provider, p): p for p in cp_providers}
+                        for f in as_completed(cp_futures):
+                            total_records += f.result() or 0
                 except Exception as cp_outer_err:
                     print(f"[Sync] Cloud providers sync error (non-fatal): {cp_outer_err}")
 
@@ -2604,20 +2603,20 @@ def _run_auto_sync():
                 else:
                     raise
 
-        # --- AWS / GCP provider sync ---
+        # --- AWS / GCP provider sync (parallel) ---
         try:
             from aws_fetcher import fetch_aws_costs
             from gcp_fetcher import fetch_gcp_costs
+            from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed as _ac
             cp_providers = get_cloud_providers(enabled_only=True)
             cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp")]
             months = int(os.getenv("COST_HISTORY_MONTHS", 3))
-            for idx, provider in enumerate(cp_providers, start=1):
-                # Re-fetch with credentials (get_cloud_providers() omits credentials_json)
-                provider = get_cloud_provider(provider["id"]) or provider
-                ptype = provider.get("provider_type")
-                pid   = provider.get("provider_id")
-                pname = provider.get("name") or pid or ptype
-                sync_status["message"] = f"Auto-sync: {ptype.upper()} {pname} [{idx}/{len(cp_providers)}]"
+
+            def _auto_sync_provider(p):
+                p = get_cloud_provider(p["id"]) or p
+                ptype = p.get("provider_type")
+                pid   = p.get("provider_id")
+                pname = p.get("name") or pid or ptype
                 try:
                     conn2 = get_db()
                     row = conn2.execute(
@@ -2628,13 +2627,10 @@ def _run_auto_sync():
                     latest = row[0] if row and row[0] else None
                     p_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d") if latest \
                              else (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
-
-                    records = fetch_aws_costs(provider, p_from, date_to) if ptype == "aws" \
-                              else fetch_gcp_costs(provider, p_from, date_to)
-
+                    records = fetch_aws_costs(p, p_from, date_to) if ptype == "aws" \
+                              else fetch_gcp_costs(p, p_from, date_to)
                     conn2 = get_db()
                     if ptype == "gcp":
-                        # Only delete project IDs returned — never wipe other GCP projects
                         project_ids = list({r[9] for r in (records or []) if r[9]})
                         for proj_id in project_ids:
                             conn2.execute(
@@ -2655,12 +2651,17 @@ def _run_auto_sync():
                         )
                     conn2.commit()
                     conn2.close()
-                    total_records += len(records or [])
-                    update_cloud_provider_sync_time(provider["id"], error=None)
+                    update_cloud_provider_sync_time(p["id"], error=None)
                     print(f"[Auto-Sync] {ptype.upper()} '{pname}': {len(records or [])} records")
+                    return len(records or [])
                 except Exception as cp_err:
-                    update_cloud_provider_sync_time(provider["id"], error=str(cp_err))
+                    update_cloud_provider_sync_time(p["id"], error=str(cp_err))
                     print(f"[Auto-Sync] {ptype.upper()} '{pname}' failed: {cp_err}")
+                    return 0
+
+            with _TPE(max_workers=min(len(cp_providers), 4)) as ex:
+                for count in _ac({ex.submit(_auto_sync_provider, p): p for p in cp_providers}):
+                    total_records += count.result() or 0
         except Exception as cp_outer:
             print(f"[Auto-Sync] AWS/GCP sync error (non-fatal): {cp_outer}")
 
