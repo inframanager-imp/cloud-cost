@@ -795,6 +795,15 @@
 
             <!-- LEFT: Comparison Table -->
             <div class="cmp-results-main">
+                <!-- Skeleton loader — same pattern as Monthly Costs -->
+                <div id="cmpTableLoader" class="skeleton-table-wrap" style="display:none">
+                    <div class="skeleton-row"></div>
+                    <div class="skeleton-row"></div>
+                    <div class="skeleton-row"></div>
+                    <div class="skeleton-row"></div>
+                    <div class="skeleton-row"></div>
+                    <div class="skeleton-row"></div>
+                </div>
                 <div class="table-container" style="margin-bottom:0">
                     <div class="table-header">
                         <h3 id="cmpTableTitle" style="font-size:14px;font-weight:500;margin:0">Comparison details</h3>
@@ -830,11 +839,17 @@
             <div class="cmp-results-charts">
                 <div class="chart-card cmp-chart-card">
                     <h3 id="cmpBarTitle" class="cmp-chart-title">Side-by-side</h3>
-                    <div style="height:200px"><canvas id="cmpBarChart"></canvas></div>
+                    <div style="position:relative;height:200px">
+                        <div id="cmpBarLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
+                        <canvas id="cmpBarChart"></canvas>
+                    </div>
                 </div>
                 <div class="chart-card cmp-chart-card">
                     <h3 class="cmp-chart-title">Change % by item</h3>
-                    <div style="height:200px"><canvas id="cmpChangeChart"></canvas></div>
+                    <div style="position:relative;height:200px">
+                        <div id="cmpChangeLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
+                        <canvas id="cmpChangeChart"></canvas>
+                    </div>
                 </div>
             </div>
 

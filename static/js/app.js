@@ -2048,17 +2048,22 @@ function _cmpSetLoading(on) {
     const icon    = document.getElementById('cmpBtnIcon');
     const spinner = document.getElementById('cmpBtnSpinner');
     const label   = document.getElementById('cmpBtnLabel');
-    if (!btn) return;
-    btn.disabled = on;
-    if (icon)    icon.style.display    = on ? 'none'         : '';
-    if (spinner) spinner.style.display = on ? 'inline-block' : 'none';
-    if (label)   label.textContent     = on ? 'Comparing…'   : 'Compare';
-    // Show skeleton in results area while loading
-    const body = document.getElementById('cmpTableBody');
-    if (on && body) body.innerHTML = `<tr><td colspan="10" style="padding:24px;text-align:center">
-        <div style="display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text-tertiary);font-size:13px">
-            <span class="spinner" style="width:16px;height:16px"></span> Loading comparison data…
-        </div></td></tr>`;
+    if (btn)     btn.disabled              = on;
+    if (icon)    icon.style.display        = on ? 'none'         : '';
+    if (spinner) spinner.style.display     = on ? 'inline-block' : 'none';
+    if (label)   label.textContent         = on ? 'Comparing…'   : 'Compare';
+
+    // Skeleton table loader (same as Monthly Costs)
+    const tableLoader = document.getElementById('cmpTableLoader');
+    const tableWrap   = tableLoader?.nextElementSibling;  // .table-container
+    if (tableLoader) tableLoader.style.display = on ? 'block' : 'none';
+    if (tableWrap)   tableWrap.style.display   = on ? 'none'  : '';
+
+    // Chart loaders
+    ['cmpBarLoader', 'cmpChangeLoader'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('hidden', !on);
+    });
 }
 
 async function runComparison() {
@@ -2311,6 +2316,10 @@ function renderComparisonResults(payload, groupBy) {
     const byChange = [...data].filter(r => (r.costs && r.costs[0] > 0)).sort((a, b) => Math.abs(b.change_pct) - Math.abs(a.change_pct)).slice(0, 15);
     const chTitle = document.querySelector('#page-compare .charts-grid .chart-card:nth-child(2) h3');
     if (chTitle) chTitle.textContent = n > 2 ? 'Change % (last vs first period)' : 'Change % by item';
+    // Hide chart loaders once charts are drawn
+    document.getElementById('cmpBarLoader')?.classList.add('hidden');
+    document.getElementById('cmpChangeLoader')?.classList.add('hidden');
+
     renderChart('cmpChangeChart', 'bar', {
         labels: byChange.map(r => r.name.length > 20 ? r.name.substring(0, 20) + '...' : r.name),
         datasets: [{
