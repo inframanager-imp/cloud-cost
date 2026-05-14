@@ -166,15 +166,15 @@ def fetch_subscriptions():
 def _api_post_with_retry(url, headers, body, max_retries=5):
     """POST request with retry on 429 (rate limit) and 503."""
     for attempt in range(max_retries):
-        resp = requests.post(url, headers=headers, json=body)
+        resp = requests.post(url, headers=headers, json=body, timeout=90)
         if resp.status_code == 429:
-            retry_after = int(resp.headers.get("Retry-After", 30))
+            retry_after = min(int(resp.headers.get("Retry-After", 10)), 15)  # cap at 15s
             print(f"  [Rate limited] Waiting {retry_after}s before retry {attempt+1}/{max_retries}...")
             time.sleep(retry_after)
             continue
         if resp.status_code == 503:
-            print(f"  [Service unavailable] Waiting 10s before retry {attempt+1}/{max_retries}...")
-            time.sleep(10)
+            print(f"  [Service unavailable] Waiting 8s before retry {attempt+1}/{max_retries}...")
+            time.sleep(8)
             continue
         resp.raise_for_status()
         return resp
@@ -527,7 +527,7 @@ def fetch_resource_groups(subscription_id=None):
         f"/resourcegroups?api-version=2022-09-01"
     )
     headers = {"Authorization": f"Bearer {token}"}
-    resp = requests.get(url, headers=headers)
+    resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
     rgs = resp.json().get("value", [])
     return [rg["name"] for rg in rgs]
@@ -558,9 +558,9 @@ def fetch_activity_logs(date_from, date_to, subscription_id=None):
         print(f"  Fetching activity logs page {page}...")
 
         for attempt in range(3):
-            resp = requests.get(url, headers=headers)
+            resp = requests.get(url, headers=headers, timeout=60)
             if resp.status_code == 429:
-                retry_after = int(resp.headers.get("Retry-After", 20))
+                retry_after = min(int(resp.headers.get("Retry-After", 10)), 15)
                 print(f"    Rate limited, waiting {retry_after}s...")
                 time.sleep(retry_after)
                 continue

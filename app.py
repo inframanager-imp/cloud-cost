@@ -694,7 +694,7 @@ def api_sync():
                         sync_status["message"] = f"{mode_label}: {sub_name} failed: {str(sub_err)[:80]} [{completed}/{total_subs}]"
                         sync_status["progress"] = 5 + int(90 * completed / total_subs)
             else:
-                max_workers = min(total_subs, 5)
+                max_workers = min(total_subs, 3)
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     futures = {
                         executor.submit(_fetch_one_subscription, sub, is_full, months, date_to): sub
