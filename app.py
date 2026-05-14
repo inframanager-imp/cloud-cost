@@ -701,17 +701,18 @@ def api_sync():
                         sync_status["progress"] = 5 + int(90 * completed / total_subs)
                         sync_status["details"] = completed_details[:]
             else:
-                max_workers = min(total_subs, 3)
+                max_workers = min(total_subs, 2)  # 2 workers avoids Azure rate limits
+                SUB_TIMEOUT = 300  # 5 min max per subscription
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     futures = {
                         executor.submit(_fetch_one_subscription, sub, is_full, months, date_to): sub
                         for sub in subs_to_sync
                     }
-                    for future in as_completed(futures):
+                    for future in as_completed(futures, timeout=SUB_TIMEOUT * total_subs):
                         sub = futures[future]
                         sub_name = sub.get("name", sub["subscription_id"][:12])
                         try:
-                            name, count = future.result()
+                            name, count = future.result(timeout=SUB_TIMEOUT)
                             total_records += count
                             completed += 1
                             completed_details.append({"name": name, "records": count, "ok": True})
