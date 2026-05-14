@@ -543,7 +543,7 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
   .cmp-chart-card { flex: 1; }
 }
 
-/* ── Compare summary cards — compact ────────────────────────────────────── */
+/* ── Compare summary cards — compact (sizing handled fully in JS) ────────── */
 #page-compare #cmpSummaryCards {
   gap: 8px;
   margin-bottom: 12px;
@@ -551,20 +551,5 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
   flex-wrap: wrap;
 }
 #page-compare #cmpSummaryCards .stat-card {
-  padding: 8px 14px;
-  border-radius: 8px;
   flex: 0 0 auto;
-  min-width: 130px;
-}
-#page-compare #cmpSummaryCards .stat-label {
-  font-size: 9px;
-  margin-bottom: 2px;
-}
-#page-compare #cmpSummaryCards .stat-value {
-  font-size: 22px;
-  line-height: 1.2;
-}
-#page-compare #cmpSummaryCards div[style*="font-size"] {
-  font-size: 11px !important;
-  margin-top: 2px !important;
 }

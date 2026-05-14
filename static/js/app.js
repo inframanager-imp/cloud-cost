@@ -2209,29 +2209,32 @@ function renderComparisonResults(payload, groupBy) {
     const increased = data.filter(r => r.difference > 0).length;
     const decreased = data.filter(r => r.difference < 0).length;
 
+    const _cmpVal  = 'font-size:18px;font-weight:700;line-height:1.2;margin-top:3px';
+    const _cmpSub  = 'font-size:10px;margin-top:3px;';
+
     const periodCards = labels.map((lb, i) => `
-        <div class="stat-card">
-            <div class="stat-label">${lb}</div>
-            <div class="stat-value accent" style="font-size:22px">$${periodTotals[i].toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+        <div class="stat-card" style="padding:8px 12px;border-radius:8px;min-width:120px">
+            <div class="stat-label" style="font-size:9px;margin-bottom:0">${lb}</div>
+            <div style="${_cmpVal};color:var(--accent)">$${periodTotals[i].toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
         </div>
     `).join('');
 
     document.getElementById('cmpSummaryCards').innerHTML = periodCards + `
-        <div class="stat-card">
-            <div class="stat-label">${n > 2 ? 'Last vs first' : 'Difference'}</div>
-            <div class="stat-value" style="font-size:22px;color:${totalDiff > 0 ? 'var(--red)' : 'var(--green)'}">
+        <div class="stat-card" style="padding:8px 12px;border-radius:8px;min-width:120px">
+            <div class="stat-label" style="font-size:9px;margin-bottom:0">${n > 2 ? 'Last vs first' : 'Difference'}</div>
+            <div style="${_cmpVal};color:${totalDiff > 0 ? 'var(--red)' : 'var(--green)'}">
                 ${totalDiff > 0 ? '+' : ''}$${totalDiff.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
             </div>
-            <div style="font-size:13px;color:${totalDiff > 0 ? 'var(--red)' : 'var(--green)'}">${totalDiff > 0 ? '▲' : '▼'} ${Math.abs(totalPct).toFixed(1)}%</div>
+            <div style="${_cmpSub}color:${totalDiff > 0 ? 'var(--red)' : 'var(--green)'}">${totalDiff > 0 ? '▲' : '▼'} ${Math.abs(totalPct).toFixed(1)}%</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-label">Items changed</div>
-            <div style="margin-top:8px">
-                <span style="color:var(--red);font-weight:600;font-size:18px">${increased} ▲</span>
-                <span style="color:var(--text-secondary);margin:0 6px">|</span>
-                <span style="color:var(--green);font-weight:600;font-size:18px">${decreased} ▼</span>
+        <div class="stat-card" style="padding:8px 12px;border-radius:8px;min-width:120px">
+            <div class="stat-label" style="font-size:9px;margin-bottom:0">Items changed</div>
+            <div style="${_cmpVal}">
+                <span style="color:var(--red)">${increased} ▲</span>
+                <span style="color:var(--text-tertiary);margin:0 4px;font-size:13px">|</span>
+                <span style="color:var(--green)">${decreased} ▼</span>
             </div>
-            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">of ${data.length} ${groupLabel}s (last vs first)</div>
+            <div style="${_cmpSub}color:var(--text-tertiary)">of ${data.length.toLocaleString()} ${groupLabel}s</div>
         </div>
     `;
 
