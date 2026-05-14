@@ -499,3 +499,14 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 }
 .nav-ctx-item:hover { background: var(--accent-bg); color: var(--accent-text); }
 .nav-ctx-item svg { flex-shrink: 0; }
+
+/* ── Sync detail rows ───────────────────────────────────────────────────── */
+.sc-sync-detail-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 10px; font-size: 11px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.sc-sync-detail-row:last-child { border-bottom: none; }
+.sc-sync-detail-dot { font-size: 12px; flex-shrink: 0; }
+.sc-sync-detail-name { flex: 1; color: var(--text-primary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-sync-detail-count { color: var(--text-tertiary); flex-shrink: 0; }

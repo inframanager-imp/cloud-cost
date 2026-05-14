@@ -663,7 +663,8 @@ def api_sync():
     def _write_sync_file(running, message, progress):
         try:
             with open(_sync_status_path(), "w") as f:
-                json.dump({"running": running, "message": message, "progress": progress}, f)
+                json.dump({"running": running, "message": message, "progress": progress,
+                           "details": sync_status.get("details", [])}, f)
         except OSError:
             pass
 
@@ -672,11 +673,13 @@ def api_sync():
         is_full = mode == "full"
         mode_label = "Full sync" if is_full else "Quick sync"
         total_subs = len(subs_to_sync)
-        msg_start = f"{mode_label}: Starting ({total_subs} subscription(s)) in parallel..."
-        sync_status = {"running": True, "message": msg_start, "progress": 5}
-        _write_sync_file(True, msg_start, 5)  # visible to all gunicorn workers
+        sub_names_list = [s.get("name", s["subscription_id"][:14]) for s in subs_to_sync]
+        msg_start = f"{mode_label}: Starting {total_subs} subscription(s) — {', '.join(sub_names_list[:4])}{'...' if total_subs > 4 else ''}"
+        sync_status = {"running": True, "message": msg_start, "progress": 5, "details": []}
+        _write_sync_file(True, msg_start, 5)
         sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to)
         total_records = 0
+        completed_details = []  # track per-sub results for UI
 
         try:
             completed = 0
@@ -687,12 +690,16 @@ def api_sync():
                         name, count = _fetch_one_subscription(sub, is_full, months, date_to)
                         total_records += count
                         completed += 1
-                        sync_status["message"] = f"{mode_label}: {name} done ({count} records) [{completed}/{total_subs}]"
+                        completed_details.append({"name": name, "records": count, "ok": True})
+                        sync_status["message"] = f"{mode_label}: {name} ✓ {count:,} records [{completed}/{total_subs}]"
                         sync_status["progress"] = 5 + int(90 * completed / total_subs)
+                        sync_status["details"] = completed_details[:]
                     except Exception as sub_err:
                         completed += 1
-                        sync_status["message"] = f"{mode_label}: {sub_name} failed: {str(sub_err)[:80]} [{completed}/{total_subs}]"
+                        completed_details.append({"name": sub_name, "records": 0, "ok": False, "error": str(sub_err)[:60]})
+                        sync_status["message"] = f"{mode_label}: {sub_name} ✗ failed [{completed}/{total_subs}]"
                         sync_status["progress"] = 5 + int(90 * completed / total_subs)
+                        sync_status["details"] = completed_details[:]
             else:
                 max_workers = min(total_subs, 3)
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -707,12 +714,16 @@ def api_sync():
                             name, count = future.result()
                             total_records += count
                             completed += 1
-                            sync_status["message"] = f"{mode_label}: {name} done ({count} records) [{completed}/{total_subs}]"
+                            completed_details.append({"name": name, "records": count, "ok": True})
+                            sync_status["message"] = f"{mode_label}: {name} ✓ {count:,} records [{completed}/{total_subs}]"
                             sync_status["progress"] = 5 + int(90 * completed / total_subs)
+                            sync_status["details"] = completed_details[:]
                         except Exception as sub_err:
                             completed += 1
-                            sync_status["message"] = f"{mode_label}: {sub_name} failed: {str(sub_err)[:80]} [{completed}/{total_subs}]"
+                            completed_details.append({"name": sub_name, "records": 0, "ok": False, "error": str(sub_err)[:60]})
+                            sync_status["message"] = f"{mode_label}: {sub_name} ✗ failed [{completed}/{total_subs}]"
                             sync_status["progress"] = 5 + int(90 * completed / total_subs)
+                            sync_status["details"] = completed_details[:]
 
             # Attempt billing account-level supplementary fetch
             # (captures Support plans, Marketplace fees billed at account scope)

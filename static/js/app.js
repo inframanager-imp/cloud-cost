@@ -4942,14 +4942,30 @@ function _scMonitorSync() {
     syncInterval = setInterval(async () => {
         try {
             const status = await fetch('/api/sync/status').then(r => r.json());
-            // Update drawer progress
             if (msg)  msg.textContent = status.message;
             if (fill) fill.style.width = `${status.progress}%`;
-            // Update legacy sync-bar too
             const legacyMsg  = document.getElementById('syncMessage');
             const legacyFill = document.getElementById('syncProgress');
             if (legacyMsg)  legacyMsg.textContent   = status.message;
             if (legacyFill) legacyFill.style.width  = `${status.progress}%`;
+
+            // Live per-subscription results
+            const detailsEl = document.getElementById('scSyncDetails');
+            if (detailsEl && status.details && status.details.length) {
+                detailsEl.innerHTML = status.details.map(d => `
+                    <div class="sc-sync-detail-row">
+                        <span class="sc-sync-detail-dot" style="color:${d.ok ? 'var(--green)' : 'var(--red)'}">
+                            ${d.ok ? '✓' : '✗'}
+                        </span>
+                        <span class="sc-sync-detail-name">${_esc(d.name)}</span>
+                        <span class="sc-sync-detail-count">
+                            ${d.ok ? d.records.toLocaleString() + ' records' : (d.error || 'failed')}
+                        </span>
+                    </div>`).join('');
+                detailsEl.style.display = 'block';
+            } else if (detailsEl && !status.running) {
+                detailsEl.style.display = 'none';
+            }
 
             if (!status.running) {
                 clearInterval(syncInterval);
