@@ -12,6 +12,9 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA cache_size=-10000")   # 10 MB page cache
+    conn.execute("PRAGMA temp_store=MEMORY")   # temp tables in RAM
+    conn.execute("PRAGMA synchronous=NORMAL")  # faster writes, still safe
     return conn
 
 
@@ -418,6 +421,16 @@ def init_db():
         cursor.execute("ALTER TABLE cost_data ADD COLUMN cloud_provider TEXT DEFAULT 'azure'")
         cursor.execute("UPDATE cost_data SET cloud_provider='azure' WHERE cloud_provider IS NULL")
         print("[DB] Migrated cost_data: added cloud_provider column")
+
+    # ── Indexes for cost_data (safe to re-run — IF NOT EXISTS) ──────────────
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_date       ON cost_data(date)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_cloud      ON cost_data(cloud_provider)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_sub        ON cost_data(subscription_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_cloud_date ON cost_data(cloud_provider, date)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_sub_date   ON cost_data(subscription_id, date)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_rg         ON cost_data(resource_group)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_service    ON cost_data(service_name)")
+    print("[DB] cost_data indexes ensured.")
 
     # Clean up zombie "running" sync_log entries left by killed/restarted workers
     cursor.execute("""
