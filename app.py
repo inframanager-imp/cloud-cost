@@ -1719,6 +1719,7 @@ def _execute_activity_sync(days=7, target_sub=None, cloud_provider=None):
                 allowed_types = {cloud_provider} if cloud_provider in ("aws", "gcp") else {"aws", "gcp"}
                 aws_gcp = [p for p in cp_providers if p.get("provider_type") in allowed_types]
                 for cp in aws_gcp:
+                    cp = get_cloud_provider(cp["id"]) or cp  # re-fetch with credentials_json
                     cp_type = cp.get("provider_type", "")
                     cp_name = cp.get("name", cp.get("provider_id", ""))
                     activity_sync_status["message"] = f"Syncing {cp_name} ({cp_type.upper()}) activity..."
@@ -2611,6 +2612,8 @@ def _run_auto_sync():
             cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp")]
             months = int(os.getenv("COST_HISTORY_MONTHS", 3))
             for idx, provider in enumerate(cp_providers, start=1):
+                # Re-fetch with credentials (get_cloud_providers() omits credentials_json)
+                provider = get_cloud_provider(provider["id"]) or provider
                 ptype = provider.get("provider_type")
                 pid   = provider.get("provider_id")
                 pname = provider.get("name") or pid or ptype
@@ -2631,10 +2634,13 @@ def _run_auto_sync():
 
                     conn2 = get_db()
                     if ptype == "gcp":
-                        conn2.execute(
-                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp'",
-                            (p_from, date_to),
-                        )
+                        # Only delete project IDs returned — never wipe other GCP projects
+                        project_ids = list({r[9] for r in (records or []) if r[9]})
+                        for proj_id in project_ids:
+                            conn2.execute(
+                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=?",
+                                (p_from, date_to, proj_id),
+                            )
                     else:
                         conn2.execute(
                             "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=?",
