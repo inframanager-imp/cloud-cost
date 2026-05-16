@@ -1858,22 +1858,23 @@ function setCmpCloud(btn, cloud) {
 
     // Reload filter values scoped to the selected cloud
     if (cloud === 'aws') {
-        // Populate from cloud_providers (named AWS accounts)
         fetch('/api/cloud-providers').then(r => r.json()).then(providers => {
             const awsAccounts = providers.filter(p => p.provider_type === 'aws');
             const idMap = {};
             awsAccounts.forEach(a => { idMap[a.name || a.provider_id] = a.provider_id; });
             populateCmpRG(awsAccounts.map(a => a.name || a.provider_id), idMap);
-        }).catch(() => populateCmpRG([]));
+            _populateCmpAccountFilter(awsAccounts, 'aws');
+        }).catch(() => { populateCmpRG([]); _hideCmpAccountFilter(); });
     } else if (cloud === 'gcp') {
         fetch('/api/cloud-providers').then(r => r.json()).then(providers => {
             const gcpProjects = providers.filter(p => p.provider_type === 'gcp');
             const idMap = {};
             gcpProjects.forEach(p => { idMap[p.name || p.provider_id] = p.provider_id; });
             populateCmpRG(gcpProjects.map(p => p.name || p.provider_id), idMap);
-        }).catch(() => populateCmpRG([]));
+            _populateCmpAccountFilter(gcpProjects, 'gcp');
+        }).catch(() => { populateCmpRG([]); _hideCmpAccountFilter(); });
     } else {
-        // Azure or All — use resource groups from /api/filters
+        _hideCmpAccountFilter();
         const filterParams = new URLSearchParams();
         if (cloud) filterParams.set('cloud_provider', cloud);
         else if (selectedCloud) filterParams.set('cloud_provider', selectedCloud);
@@ -1883,6 +1884,36 @@ function setCmpCloud(btn, cloud) {
             populateCmpRG(f.resource_groups || []);
         }).catch(() => populateCmpRG([]));
     }
+}
+
+// ── Account filter for AWS/GCP when grouping by service ──────────────────
+let _cmpAccountFilterMap = {};  // name → provider_id
+
+function _populateCmpAccountFilter(providers, cloudType) {
+    const field  = document.getElementById('cmpAccountFilterField');
+    const sel    = document.getElementById('cmpAccountFilterSelect');
+    const label  = document.getElementById('cmpAccountFilterLabel');
+    if (!field || !sel) return;
+
+    _cmpAccountFilterMap = {};
+    providers.forEach(p => { _cmpAccountFilterMap[p.name || p.provider_id] = p.provider_id; });
+
+    sel.innerHTML = `<option value="">All ${cloudType === 'gcp' ? 'projects' : 'accounts'}</option>` +
+        providers.map(p => `<option value="${p.provider_id}">${_esc(p.name || p.provider_id)}</option>`).join('');
+
+    if (label) label.textContent = cloudType === 'gcp' ? 'Filter by Project' : 'Filter by Account';
+    field.style.display = '';
+}
+
+function _hideCmpAccountFilter() {
+    const field = document.getElementById('cmpAccountFilterField');
+    const sel   = document.getElementById('cmpAccountFilterSelect');
+    if (field) field.style.display = 'none';
+    if (sel)   sel.value = '';
+}
+
+function onCmpAccountFilterChange() {
+    // Nothing needed — value is read at compare time
 }
 
 function populateCmpRG(rgs, idMap) {
@@ -2114,17 +2145,24 @@ async function runComparison() {
     const rgsParam = cmpSelectedRGs.size > 0 ? [...cmpSelectedRGs].join(',') : '';
     cmpContext = { groupBy, periodSpecs, rgsParam };
 
-    // For AWS/GCP, selected "RGs" are actually account names — resolve to provider_ids
     const isAccountCloud = cmpSelectedCloud === 'aws' || cmpSelectedCloud === 'gcp';
     const selectedAccountIds = isAccountCloud && cmpSelectedRGs.size > 0
         ? [...cmpSelectedRGs].map(name => cmpAccountIdMap[name] || name)
         : [];
 
+    // Dedicated account filter (the dropdown shown when grouping by service)
+    const accountFilterSel = document.getElementById('cmpAccountFilterSelect');
+    const accountFilterId  = accountFilterSel?.value || '';  // single provider_id or ''
+
     const subQs = () => {
         const q = new URLSearchParams({ group_by: groupBy });
         if (selectedSubscription) q.set('subscription_id', selectedSubscription);
         if (cmpSelectedCloud) q.set('cloud_provider', cmpSelectedCloud);
-        if (isAccountCloud && selectedAccountIds.length > 0) {
+
+        // Account filter takes priority over the RG multi-select for scoping
+        if (accountFilterId) {
+            q.set('subscription_ids', accountFilterId);
+        } else if (isAccountCloud && selectedAccountIds.length > 0) {
             q.set('subscription_ids', selectedAccountIds.join(','));
         } else if (!isAccountCloud && cmpSelectedRGs.size > 0) {
             q.set('resource_groups', [...cmpSelectedRGs].join(','));

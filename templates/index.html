@@ -699,7 +699,7 @@
                         <button class="seg" data-cmp-cloud="gcp" onclick="setCmpCloud(this,'gcp')">GCP</button>
                     </div>
                 </div>
-                <div class="filter-bar__field" style="position:relative">
+                <div class="filter-bar__field" style="position:relative" id="cmpRGField">
                     <span class="micro-label"><span id="cmpRGSectionLabel">Resource Groups</span>&nbsp;<span id="cmpRGCount" style="color:var(--accent)"></span></span>
                     <button class="filter-bar__select filter-bar__select--btn" id="cmpRGBtn" onclick="toggleCmpRGDropdown()">
                         <span id="cmpRGLabel">All</span><span style="font-size:10px;margin-left:auto;padding-left:6px">&#9660;</span>
@@ -712,6 +712,13 @@
                         </div>
                         <div class="multi-select-list" id="cmpRGList" style="max-height:200px"></div>
                     </div>
+                </div>
+                <!-- Account filter — shown when AWS/GCP selected + Group By ≠ Account/Project -->
+                <div class="filter-bar__field" id="cmpAccountFilterField" style="display:none;position:relative">
+                    <span class="micro-label" id="cmpAccountFilterLabel">Filter by Account</span>
+                    <select class="filter-bar__select filter-bar__select--wide" id="cmpAccountFilterSelect" onchange="onCmpAccountFilterChange()">
+                        <option value="">All accounts</option>
+                    </select>
                 </div>
                 <div class="filter-bar__actions">
                     <button type="button" class="cp-btn-primary" id="cmpRunBtn" onclick="runComparison()">
