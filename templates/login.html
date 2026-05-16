@@ -3,75 +3,350 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign In - Cloud Cost Analyzer</title>
+    <title>Sign In — Cloud Cost Analyzer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root { --bg:#0f1117; --card:#1e2130; --input:#252836; --border:#2d3148; --text:#e4e6f0; --muted:#8b8fa3; --accent:#4f6ef7; --accent-h:#3d5ce5; --red:#e74c3c; }
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:"Inter",-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; }
-        .wrap { width:100%; max-width:440px; padding:20px; }
-        .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:40px 36px; box-shadow:0 8px 32px rgba(0,0,0,.4); }
-        .logo { text-align:center; margin-bottom:32px; }
-        .logo .ic { width:56px; height:56px; background:linear-gradient(135deg,var(--accent),#3d5ce5); border-radius:14px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:14px; }
-        .logo h1 { font-size:22px; font-weight:700; }
-        .logo p { font-size:13px; color:var(--muted); margin-top:5px; }
-        .fg { margin-bottom:18px; }
-        .fg label { display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:7px; }
-        .fg input { width:100%; padding:12px 16px; background:var(--input); border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:14px; font-family:inherit; transition:border-color .2s; }
-        .fg input:focus { outline:none; border-color:var(--accent); }
-        .btn { width:100%; padding:14px; background:var(--accent); color:#fff; border:none; border-radius:10px; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer; transition:background .2s; margin-top:4px; }
-        .btn:hover { background:var(--accent-h); }
-        .err { background:rgba(231,76,60,.12); border:1px solid rgba(231,76,60,.3); color:var(--red); padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:18px; text-align:center; }
-        .divider { display:flex; align-items:center; gap:12px; margin:22px 0; color:var(--muted); font-size:12px; }
-        .divider::before,.divider::after { content:""; flex:1; height:1px; background:var(--border); }
-        .signup-link { display:block; text-align:center; padding:13px; border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:14px; font-weight:500; text-decoration:none; transition:border-color .2s,background .2s; }
-        .signup-link:hover { border-color:var(--accent); background:rgba(79,110,247,.06); }
-        .footer { text-align:center; margin-top:24px; font-size:12px; color:var(--muted); }
-        .badges { display:flex; justify-content:center; gap:8px; margin-top:14px; flex-wrap:wrap; }
-        .badge { font-size:11px; color:var(--muted); background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:20px; padding:4px 12px; }
+        *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+        :root {
+            --bg:       #0d0f14;
+            --panel:    #13151c;
+            --card:     #1a1d28;
+            --input:    #20232f;
+            --border:   #2a2d3e;
+            --text:     #e8eaf2;
+            --muted:    #7c7f96;
+            --accent:   #4f6ef7;
+            --accent-h: #3d5ce5;
+            --green:    #22c55e;
+            --red:      #ef4444;
+        }
+
+        body {
+            font-family: "Inter", -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* ── Left brand panel ───────────────────────────────── */
+        .brand-panel {
+            flex: 1;
+            background: linear-gradient(145deg, #0f1420 0%, #141829 50%, #0d1330 100%);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 48px 56px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* subtle grid background */
+        .brand-panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(79,110,247,.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(79,110,247,.05) 1px, transparent 1px);
+            background-size: 48px 48px;
+            pointer-events: none;
+        }
+
+        /* glow orb */
+        .brand-panel::after {
+            content: '';
+            position: absolute;
+            top: -120px; left: -120px;
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(79,110,247,.15) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .brand-logo .ic {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, var(--accent), #3d5ce5);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 20px rgba(79,110,247,.4);
+        }
+
+        .brand-logo span {
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+        }
+
+        .brand-hero {
+            position: relative;
+            z-index: 1;
+        }
+
+        .brand-hero h2 {
+            font-size: 38px;
+            font-weight: 700;
+            line-height: 1.15;
+            letter-spacing: -0.8px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #e8eaf2 30%, #7c8ab8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .brand-hero p {
+            font-size: 15px;
+            color: var(--muted);
+            line-height: 1.6;
+            max-width: 380px;
+        }
+
+        .brand-features {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .brand-feature {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            color: #9da0b8;
+        }
+
+        .brand-feature .dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+            flex-shrink: 0;
+            box-shadow: 0 0 6px var(--accent);
+        }
+
+        .brand-clouds {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .cloud-chip {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 5px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            background: rgba(255,255,255,.03);
+        }
+
+        /* ── Right form panel ───────────────────────────────── */
+        .form-panel {
+            width: 480px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 56px;
+            background: var(--panel);
+        }
+
+        .form-inner {
+            width: 100%;
+            max-width: 360px;
+        }
+
+        .form-title {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: -0.4px;
+            margin-bottom: 6px;
+        }
+
+        .form-sub {
+            font-size: 14px;
+            color: var(--muted);
+            margin-bottom: 36px;
+        }
+
+        .fg {
+            margin-bottom: 18px;
+        }
+
+        .fg label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .fg input {
+            width: 100%;
+            padding: 13px 16px;
+            background: var(--input);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color .2s, box-shadow .2s;
+        }
+
+        .fg input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(79,110,247,.15);
+        }
+
+        .fg input::placeholder { color: #3a3d52; }
+
+        .btn-signin {
+            width: 100%;
+            padding: 14px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background .2s, transform .1s;
+            margin-top: 6px;
+            letter-spacing: .1px;
+        }
+
+        .btn-signin:hover  { background: var(--accent-h); }
+        .btn-signin:active { transform: scale(.99); }
+
+        .err {
+            background: rgba(239,68,68,.1);
+            border: 1px solid rgba(239,68,68,.25);
+            color: #f87171;
+            padding: 11px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 24px 0;
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .divider::before, .divider::after { content:""; flex:1; height:1px; background:var(--border); }
+
+        .signup-link {
+            display: block;
+            text-align: center;
+            padding: 13px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: border-color .2s, background .2s;
+        }
+        .signup-link:hover { border-color: var(--accent); background: rgba(79,110,247,.06); }
+
+        .form-footer {
+            margin-top: 32px;
+            font-size: 12px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        /* ── Responsive: stack on narrow screens ──────────────── */
+        @media (max-width: 900px) {
+            body { flex-direction: column; }
+            .brand-panel { padding: 32px; min-height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+            .brand-hero h2 { font-size: 26px; }
+            .form-panel { width: 100%; padding: 40px 24px; }
+        }
     </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="card">
-    <div class="logo">
-      <div class="ic">
-        <svg width="28" height="28" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
-          <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
-        </svg>
-      </div>
-      <h1>Cloud Cost Analyzer</h1>
-      <p>Multi-Cloud Cost Management Platform</p>
+
+<!-- ── Left: brand panel ───────────────────────────────── -->
+<div class="brand-panel">
+    <div class="brand-logo">
+        <div class="ic">
+            <svg width="22" height="22" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+            </svg>
+        </div>
+        <span>Cloud Cost Analyzer</span>
     </div>
 
-    {% if error %}<div class="err">{{ error }}</div>{% endif %}
-
-    <form method="POST" action="/login">
-      <div class="fg">
-        <label>Work Email</label>
-        <input type="email" name="username" placeholder="you@company.com" required autofocus>
-      </div>
-      <div class="fg">
-        <label>Password</label>
-        <input type="password" name="password" placeholder="Enter password" required>
-      </div>
-      <button type="submit" class="btn">Sign In</button>
-    </form>
-
-    <div class="divider">or</div>
-    <a href="/signup" class="signup-link">Create a new organisation account</a>
-
-    <div class="badges">
-      <span class="badge">Azure</span>
-      <span class="badge">AWS</span>
-      <span class="badge">GCP</span>
+    <div class="brand-hero">
+        <h2>Full visibility into<br>your cloud spend</h2>
+        <p>Unify Azure, AWS and GCP costs in one dashboard. Track, compare and forecast spend across all your teams and projects.</p>
     </div>
-    <div class="footer">Secure &bull; Multi-tenant &bull; Enterprise ready</div>
-  </div>
+
+    <div class="brand-features">
+        <div class="brand-feature"><div class="dot"></div>Real-time cost sync across all cloud providers</div>
+        <div class="brand-feature"><div class="dot"></div>Budget alerts before you overspend</div>
+        <div class="brand-feature"><div class="dot"></div>AI-powered cost analysis and recommendations</div>
+        <div class="brand-feature"><div class="dot"></div>Multi-tenant with role-based access control</div>
+    </div>
+
+    <div class="brand-clouds">
+        <span class="cloud-chip">Azure</span>
+        <span class="cloud-chip">AWS</span>
+        <span class="cloud-chip">GCP</span>
+        <span style="font-size:11px;color:var(--muted);margin-left:4px">Secure · Enterprise ready</span>
+    </div>
 </div>
+
+<!-- ── Right: form panel ───────────────────────────────── -->
+<div class="form-panel">
+    <div class="form-inner">
+        <h1 class="form-title">Welcome back</h1>
+        <p class="form-sub">Sign in to your account to continue</p>
+
+        {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+        <form method="POST" action="/login">
+            <div class="fg">
+                <label>Work Email</label>
+                <input type="email" name="username" placeholder="you@company.com" required autofocus>
+            </div>
+            <div class="fg">
+                <label>Password</label>
+                <input type="password" name="password" placeholder="Enter password" required>
+            </div>
+            <button type="submit" class="btn-signin">Sign In</button>
+        </form>
+
+        <div class="divider">or</div>
+        <a href="/signup" class="signup-link">Create a new organisation account</a>
+
+        <div class="form-footer">Secure &bull; Multi-tenant &bull; Enterprise ready</div>
+    </div>
+</div>
+
 </body>
 </html>
