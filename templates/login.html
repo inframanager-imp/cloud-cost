@@ -95,7 +95,7 @@
         }
 
         .brand-hero h2 {
-            font-size: 38px;
+            font-size: clamp(32px, 3.5vw, 52px);
             font-weight: 700;
             line-height: 1.15;
             letter-spacing: -0.8px;
@@ -157,31 +157,32 @@
 
         /* ── Right form panel ───────────────────────────────── */
         .form-panel {
-            width: 480px;
+            width: 38%;
+            min-width: 460px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 48px 56px;
+            padding: 56px 64px;
             background: var(--panel);
         }
 
         .form-inner {
             width: 100%;
-            max-width: 360px;
+            max-width: 400px;
         }
 
         .form-title {
-            font-size: 26px;
+            font-size: 30px;
             font-weight: 700;
-            letter-spacing: -0.4px;
-            margin-bottom: 6px;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
         }
 
         .form-sub {
-            font-size: 14px;
+            font-size: 15px;
             color: var(--muted);
-            margin-bottom: 36px;
+            margin-bottom: 40px;
         }
 
         .fg {
@@ -200,12 +201,12 @@
 
         .fg input {
             width: 100%;
-            padding: 13px 16px;
+            padding: 14px 18px;
             background: var(--input);
             border: 1px solid var(--border);
             border-radius: 10px;
             color: var(--text);
-            font-size: 14px;
+            font-size: 15px;
             font-family: inherit;
             transition: border-color .2s, box-shadow .2s;
         }
@@ -220,12 +221,12 @@
 
         .btn-signin {
             width: 100%;
-            padding: 14px;
+            padding: 15px;
             background: var(--accent);
             color: #fff;
             border: none;
             border-radius: 10px;
-            font-size: 15px;
+            font-size: 16px;
             font-weight: 600;
             font-family: inherit;
             cursor: pointer;
