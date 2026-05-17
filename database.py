@@ -391,7 +391,7 @@ def init_db():
             provider_type TEXT DEFAULT 'all',
             provider_id TEXT DEFAULT '',
             amount REAL NOT NULL,
-            period TEXT DEFAULT 'monthly' CHECK(period IN ('monthly','quarterly','annual')),
+            period TEXT DEFAULT 'monthly',
             alert_thresholds TEXT DEFAULT '[80,100]',
             alert_channels TEXT DEFAULT '["email"]',
             enabled INTEGER DEFAULT 1,
@@ -431,6 +431,44 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_rg         ON cost_data(resource_group)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_service    ON cost_data(service_name)")
     print("[DB] cost_data indexes ensured.")
+
+    # ── Remove old CHECK constraint on budgets.period (blocks daily/weekly) ──
+    try:
+        row = cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='budgets'").fetchone()
+        if row and "CHECK" in (row[0] or ""):
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS budgets_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    provider_type TEXT DEFAULT 'all',
+                    provider_id TEXT DEFAULT '',
+                    amount REAL NOT NULL,
+                    period TEXT DEFAULT 'monthly',
+                    alert_thresholds TEXT DEFAULT '[80,100]',
+                    alert_channels TEXT DEFAULT '["email"]',
+                    enabled INTEGER DEFAULT 1,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    resource_group TEXT DEFAULT '',
+                    service_name TEXT DEFAULT '',
+                    scope_label TEXT DEFAULT '',
+                    tenant_id INTEGER DEFAULT 1
+                )
+            """)
+            cursor.execute("""
+                INSERT INTO budgets_new
+                    (id,name,provider_type,provider_id,amount,period,
+                     alert_thresholds,alert_channels,enabled,created_at,updated_at,tenant_id)
+                SELECT id,name,provider_type,provider_id,amount,period,
+                       alert_thresholds,alert_channels,enabled,created_at,updated_at,
+                       COALESCE(tenant_id,1)
+                FROM budgets
+            """)
+            cursor.execute("DROP TABLE budgets")
+            cursor.execute("ALTER TABLE budgets_new RENAME TO budgets")
+            print("[DB] budgets: removed CHECK constraint, added daily/weekly period support")
+    except Exception as e:
+        print(f"[DB] budgets migration: {e}")
 
     # ── Budget granular filters migration ────────────────────────────────────
     for col, ddl in [
