@@ -432,7 +432,22 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_service    ON cost_data(service_name)")
     print("[DB] cost_data indexes ensured.")
 
-    # Clean up zombie "running" sync_log entries left by killed/restarted workers
+    # ── Budget granular filters migration ────────────────────────────────────
+    for col, ddl in [
+        ("resource_group", "ALTER TABLE budgets ADD COLUMN resource_group TEXT DEFAULT ''"),
+        ("service_name",   "ALTER TABLE budgets ADD COLUMN service_name TEXT DEFAULT ''"),
+        ("scope_label",    "ALTER TABLE budgets ADD COLUMN scope_label TEXT DEFAULT ''"),
+    ]:
+        try:
+            cursor.execute(f"SELECT {col} FROM budgets LIMIT 1")
+        except Exception:
+            try:
+                cursor.execute(ddl)
+                print(f"[DB] budgets: added {col} column")
+            except Exception as e2:
+                print(f"[DB] budgets migration skipped {col}: {e2}")
+
+    # ── Clean up zombie "running" sync_log entries left by killed/restarted workers
     cursor.execute("""
         UPDATE sync_log SET status='abandoned', sync_end=CURRENT_TIMESTAMP,
                error_message='Process killed or restarted before completion'
@@ -2261,7 +2276,8 @@ def get_budgets(enabled_only=False, tenant_id=None):
 
 
 def create_budget(name, amount, provider_type="all", provider_id="",
-                  period="monthly", alert_thresholds=None, alert_channels=None, tenant_id=None):
+                  period="monthly", alert_thresholds=None, alert_channels=None,
+                  tenant_id=None, resource_group="", service_name="", scope_label=""):
     if alert_thresholds is None:
         alert_thresholds = [80, 100]
     if alert_channels is None:
@@ -2269,16 +2285,22 @@ def create_budget(name, amount, provider_type="all", provider_id="",
     conn = get_db()
     if tenant_id is not None:
         cur = conn.execute("""
-            INSERT INTO budgets(name,provider_type,provider_id,amount,period,alert_thresholds,alert_channels,tenant_id)
-            VALUES(?,?,?,?,?,?,?,?)
+            INSERT INTO budgets(name,provider_type,provider_id,amount,period,
+                                alert_thresholds,alert_channels,tenant_id,
+                                resource_group,service_name,scope_label)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?)
         """, (name, provider_type, provider_id, amount, period,
-              json.dumps(alert_thresholds), json.dumps(alert_channels), tenant_id))
+              json.dumps(alert_thresholds), json.dumps(alert_channels), tenant_id,
+              resource_group, service_name, scope_label))
     else:
         cur = conn.execute("""
-            INSERT INTO budgets(name,provider_type,provider_id,amount,period,alert_thresholds,alert_channels)
-            VALUES(?,?,?,?,?,?,?)
+            INSERT INTO budgets(name,provider_type,provider_id,amount,period,
+                                alert_thresholds,alert_channels,
+                                resource_group,service_name,scope_label)
+            VALUES(?,?,?,?,?,?,?,?,?,?)
         """, (name, provider_type, provider_id, amount, period,
-              json.dumps(alert_thresholds), json.dumps(alert_channels)))
+              json.dumps(alert_thresholds), json.dumps(alert_channels),
+              resource_group, service_name, scope_label))
     budget_id = cur.lastrowid
     conn.commit()
     conn.close()

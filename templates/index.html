@@ -2147,15 +2147,17 @@
 
         <!-- Budget Modal -->
         <div id="budgetModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
-            <div style="background:var(--bg-card);border-radius:12px;padding:28px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto">
+            <div style="background:var(--bg-card);border-radius:12px;padding:28px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
                     <h3 style="margin:0;color:var(--text-primary)" id="budgetModalTitle">New Budget</h3>
                     <button onclick="hideBudgetModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-secondary)">&times;</button>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:14px">
+
+                    <!-- Name + Amount + Period -->
                     <div>
                         <label class="form-label">Budget Name</label>
-                        <input type="text" id="budgetName" class="filter-input" placeholder="e.g. Q2 AWS Production" style="width:100%">
+                        <input type="text" id="budgetName" class="filter-input" placeholder="e.g. AWS Production Monthly" style="width:100%">
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                         <div>
@@ -2165,27 +2167,75 @@
                         <div>
                             <label class="form-label">Period</label>
                             <select id="budgetPeriod" class="filter-input" style="width:100%">
-                                <option value="monthly">Monthly</option>
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly" selected>Monthly</option>
                                 <option value="quarterly">Quarterly</option>
                                 <option value="annual">Annual</option>
                             </select>
                         </div>
                     </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+                    <!-- Cloud -->
+                    <div>
+                        <label class="form-label">Cloud</label>
+                        <select id="budgetProvider" class="filter-input" style="width:100%" onchange="onBudgetProviderChange()">
+                            <option value="all">All Clouds</option>
+                            <option value="azure">Azure</option>
+                            <option value="aws">AWS</option>
+                            <option value="gcp">GCP</option>
+                        </select>
+                    </div>
+
+                    <!-- AWS: Account selector -->
+                    <div id="bgtAwsFields" style="display:none;flex-direction:column;gap:10px">
                         <div>
-                            <label class="form-label">Cloud Provider</label>
-                            <select id="budgetProvider" class="filter-input" style="width:100%">
-                                <option value="all">All Clouds</option>
-                                <option value="azure">Azure</option>
-                                <option value="aws">AWS</option>
-                                <option value="gcp">GCP</option>
+                            <label class="form-label">AWS Account</label>
+                            <select id="bgtAwsAccount" class="filter-input" style="width:100%">
+                                <option value="">All accounts</option>
                             </select>
                         </div>
                         <div>
-                            <label class="form-label">Account / Sub ID (optional)</label>
-                            <input type="text" id="budgetProviderId" class="filter-input" placeholder="Leave blank for all" style="width:100%">
+                            <label class="form-label">Service (optional)</label>
+                            <input type="text" id="bgtAwsService" class="filter-input" placeholder="e.g. Amazon EC2" style="width:100%">
                         </div>
                     </div>
+
+                    <!-- Azure: Subscription + Resource Group + Service -->
+                    <div id="bgtAzureFields" style="display:none;flex-direction:column;gap:10px">
+                        <div>
+                            <label class="form-label">Subscription</label>
+                            <select id="bgtAzureSub" class="filter-input" style="width:100%">
+                                <option value="">All subscriptions</option>
+                            </select>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                            <div>
+                                <label class="form-label">Resource Group (optional)</label>
+                                <input type="text" id="bgtAzureRG" class="filter-input" placeholder="e.g. prod-rg" style="width:100%">
+                            </div>
+                            <div>
+                                <label class="form-label">Service (optional)</label>
+                                <input type="text" id="bgtAzureService" class="filter-input" placeholder="e.g. Virtual Machines" style="width:100%">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GCP: Project + Service -->
+                    <div id="bgtGcpFields" style="display:none;flex-direction:column;gap:10px">
+                        <div>
+                            <label class="form-label">GCP Project</label>
+                            <select id="bgtGcpProject" class="filter-input" style="width:100%">
+                                <option value="">All projects</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Service (optional)</label>
+                            <input type="text" id="bgtGcpService" class="filter-input" placeholder="e.g. Cloud Storage" style="width:100%">
+                        </div>
+                    </div>
+
+                    <!-- Alert Thresholds -->
                     <div>
                         <label class="form-label">Alert Thresholds (%)</label>
                         <div style="display:flex;gap:8px;flex-wrap:wrap" id="thresholdPills">
@@ -2196,6 +2246,8 @@
                             <label style="display:flex;align-items:center;gap:4px;font-size:13px"><input type="checkbox" value="100" checked onchange="updateThresholds()"> 100%</label>
                         </div>
                     </div>
+
+                    <!-- Alert Channels -->
                     <div>
                         <label class="form-label">Alert Channels</label>
                         <div style="display:flex;gap:16px">
@@ -2203,6 +2255,7 @@
                             <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="chSlack"> Slack</label>
                         </div>
                     </div>
+
                     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
                         <button class="btn btn-secondary" onclick="hideBudgetModal()">Cancel</button>
                         <button class="btn btn-primary" onclick="saveBudget()">Save Budget</button>
@@ -3496,7 +3549,10 @@ function renderBudgetCards(budgets) {
             <div class="budget-card__head">
                 <div class="budget-card__brand">
                     <div class="budget-card__icon" style="background:${bgColors[cp]||'var(--accent)'}">${shortLabels[cp]||cp.substring(0,2).toUpperCase()}</div>
-                    <span class="budget-card__name">${b.name}</span>
+                    <div style="min-width:0">
+                        <span class="budget-card__name">${b.name}</span>
+                        ${b.scope_label ? `<div style="font-size:10px;color:var(--text-tertiary);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(b.scope_label)}</div>` : ''}
+                    </div>
                 </div>
                 <span class="status-pill status-pill--${pillStatus}"><span class="status-pill__dot"></span>${statusLabels[status]}</span>
             </div>
@@ -3591,6 +3647,34 @@ function runBudgetCheck() {
         });
 }
 
+async function onBudgetProviderChange() {
+    const cloud = document.getElementById('budgetProvider').value;
+    document.getElementById('bgtAwsFields').style.display   = cloud === 'aws'   ? 'flex' : 'none';
+    document.getElementById('bgtAzureFields').style.display = cloud === 'azure' ? 'flex' : 'none';
+    document.getElementById('bgtGcpFields').style.display   = cloud === 'gcp'   ? 'flex' : 'none';
+
+    try {
+        const providers = await fetch('/api/cloud-providers').then(r => r.json());
+        if (cloud === 'aws') {
+            const sel = document.getElementById('bgtAwsAccount');
+            sel.innerHTML = '<option value="">All accounts</option>' +
+                providers.filter(p => p.provider_type === 'aws')
+                         .map(p => `<option value="${p.provider_id}">${_esc(p.name || p.provider_id)}</option>`).join('');
+        } else if (cloud === 'gcp') {
+            const sel = document.getElementById('bgtGcpProject');
+            sel.innerHTML = '<option value="">All projects</option>' +
+                providers.filter(p => p.provider_type === 'gcp')
+                         .map(p => `<option value="${p.provider_id}">${_esc(p.name || p.provider_id)}</option>`).join('');
+        } else if (cloud === 'azure') {
+            const subs = await fetch('/api/subscriptions').then(r => r.json()).catch(() => []);
+            const sel = document.getElementById('bgtAzureSub');
+            sel.innerHTML = '<option value="">All subscriptions</option>' +
+                subs.filter(s => s.enabled)
+                    .map(s => `<option value="${s.subscription_id}">${_esc(s.name || s.subscription_id)}</option>`).join('');
+        }
+    } catch(e) {}
+}
+
 function showBudgetModal() {
     _editBudgetId = null;
     document.getElementById('budgetModalTitle').textContent = 'New Budget';
@@ -3598,9 +3682,15 @@ function showBudgetModal() {
     document.getElementById('budgetAmount').value = '';
     document.getElementById('budgetPeriod').value = 'monthly';
     document.getElementById('budgetProvider').value = 'all';
-    document.getElementById('budgetProviderId').value = '';
     document.getElementById('chEmail').checked = true;
     document.getElementById('chSlack').checked = false;
+    // Reset cloud-specific fields
+    ['bgtAwsFields','bgtAzureFields','bgtGcpFields'].forEach(id => {
+        document.getElementById(id).style.display = 'none';
+    });
+    ['bgtAwsService','bgtAzureRG','bgtAzureService','bgtGcpService'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
     _budgetThresholds = [80, 100];
     document.querySelectorAll('#thresholdPills input').forEach(cb => {
         cb.checked = _budgetThresholds.includes(Number(cb.value));
@@ -3620,7 +3710,7 @@ function updateThresholds() {
 }
 
 function saveBudget() {
-    const name = document.getElementById('budgetName').value.trim();
+    const name   = document.getElementById('budgetName').value.trim();
     const amount = parseFloat(document.getElementById('budgetAmount').value);
     if (!name || isNaN(amount) || amount <= 0) {
         alert('Budget name and a positive amount are required.'); return;
@@ -3629,17 +3719,37 @@ function saveBudget() {
     if (document.getElementById('chEmail').checked) channels.push('email');
     if (document.getElementById('chSlack').checked) channels.push('slack');
 
+    const cloud = document.getElementById('budgetProvider').value;
+    let provider_id = '', resource_group = '', service_name = '', scope_label = cloud;
+
+    if (cloud === 'aws') {
+        provider_id  = document.getElementById('bgtAwsAccount').value;
+        service_name = document.getElementById('bgtAwsService').value.trim();
+        const acctName = document.getElementById('bgtAwsAccount').selectedOptions[0]?.text || '';
+        scope_label = [acctName || 'All accounts', service_name].filter(Boolean).join(' › ');
+    } else if (cloud === 'azure') {
+        provider_id    = document.getElementById('bgtAzureSub').value;
+        resource_group = document.getElementById('bgtAzureRG').value.trim();
+        service_name   = document.getElementById('bgtAzureService').value.trim();
+        const subName  = document.getElementById('bgtAzureSub').selectedOptions[0]?.text || '';
+        scope_label = [subName || 'All subs', resource_group, service_name].filter(Boolean).join(' › ');
+    } else if (cloud === 'gcp') {
+        provider_id  = document.getElementById('bgtGcpProject').value;
+        service_name = document.getElementById('bgtGcpService').value.trim();
+        const projName = document.getElementById('bgtGcpProject').selectedOptions[0]?.text || '';
+        scope_label = [projName || 'All projects', service_name].filter(Boolean).join(' › ');
+    }
+
     const body = {
-        name,
-        amount,
+        name, amount,
         period: document.getElementById('budgetPeriod').value,
-        provider_type: document.getElementById('budgetProvider').value,
-        provider_id: document.getElementById('budgetProviderId').value.trim(),
+        provider_type: cloud,
+        provider_id, resource_group, service_name, scope_label,
         alert_thresholds: _budgetThresholds.length ? _budgetThresholds : [80, 100],
         alert_channels: channels.length ? channels : ['email'],
     };
 
-    const url = _editBudgetId ? `/api/budgets/${_editBudgetId}` : '/api/budgets';
+    const url    = _editBudgetId ? `/api/budgets/${_editBudgetId}` : '/api/budgets';
     const method = _editBudgetId ? 'PUT' : 'POST';
     fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(r => r.json()).then(d => {

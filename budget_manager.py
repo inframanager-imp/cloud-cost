@@ -29,7 +29,12 @@ SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
 def _period_dates(period: str):
     """Return (start_date_str, end_date_str) for the budget period."""
     today = datetime.utcnow()
-    if period == "monthly":
+    if period == "daily":
+        start = end = today
+    elif period == "weekly":
+        start = today - timedelta(days=today.weekday())  # Monday
+        end = start + timedelta(days=6)
+    elif period == "monthly":
         start = today.replace(day=1)
         days_in = calendar.monthrange(today.year, today.month)[1]
         end = today.replace(day=days_in)
@@ -52,7 +57,9 @@ def get_current_spend(budget: dict) -> float:
     """Query cost_data for the budget's scope and period."""
     date_from, date_to = _period_dates(budget["period"])
     provider_type = budget.get("provider_type", "all")
-    provider_id = budget.get("provider_id", "")
+    provider_id   = budget.get("provider_id", "")
+    resource_group = budget.get("resource_group", "")
+    service_name   = budget.get("service_name", "")
 
     conn = get_db()
     params = [date_from, date_to]
@@ -65,6 +72,14 @@ def get_current_spend(budget: dict) -> float:
     if provider_id:
         where += " AND subscription_id = ?"
         params.append(provider_id)
+
+    if resource_group:
+        where += " AND LOWER(resource_group) = LOWER(?)"
+        params.append(resource_group)
+
+    if service_name:
+        where += " AND LOWER(service_name) = LOWER(?)"
+        params.append(service_name)
 
     row = conn.execute(
         f"SELECT COALESCE(SUM(cost), 0) AS total FROM cost_data {where}",

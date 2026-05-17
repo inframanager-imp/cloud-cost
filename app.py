@@ -3542,6 +3542,9 @@ def api_budgets_create():
         alert_thresholds=body.get("alert_thresholds", [80, 100]),
         alert_channels=body.get("alert_channels", ["email"]),
         tenant_id=current_tenant_id(),
+        resource_group=body.get("resource_group", ""),
+        service_name=body.get("service_name", ""),
+        scope_label=body.get("scope_label", ""),
     )
     return jsonify({"id": budget_id, "message": "Budget created"})
 
