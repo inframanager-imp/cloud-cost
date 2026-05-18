@@ -3549,6 +3549,16 @@ def api_budgets_create():
     return jsonify({"id": budget_id, "message": "Budget created"})
 
 
+@app.route("/api/budgets/<int:budget_id>", methods=["GET"])
+@login_required
+def api_budget_get(budget_id):
+    budgets = get_budgets(tenant_id=current_tenant_id())
+    b = next((x for x in budgets if x["id"] == budget_id), None)
+    if not b:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(b)
+
+
 @app.route("/api/budgets/<int:budget_id>", methods=["PUT"])
 @login_required
 def api_budgets_update(budget_id):
