@@ -2235,6 +2235,17 @@
                         </div>
                     </div>
 
+                    <!-- Alert Emails -->
+                    <div>
+                        <label class="form-label">Alert Email(s)</label>
+                        <input type="text" id="budgetAlertEmails" class="filter-input"
+                            placeholder="e.g. finance@company.com, team@company.com"
+                            style="width:100%">
+                        <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">
+                            Separate multiple emails with commas. Leave blank to use global Email Reports recipients.
+                        </div>
+                    </div>
+
                     <!-- Alert Thresholds -->
                     <div>
                         <label class="form-label">Alert Thresholds (%)</label>
@@ -3552,6 +3563,7 @@ function renderBudgetCards(budgets) {
                     <div style="min-width:0">
                         <span class="budget-card__name">${b.name}</span>
                         ${b.scope_label ? `<div style="font-size:10px;color:var(--text-tertiary);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(b.scope_label)}</div>` : ''}
+                        ${b.alert_emails ? `<div style="font-size:10px;color:var(--accent-text);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✉ ${_esc(b.alert_emails)}</div>` : ''}
                     </div>
                 </div>
                 <span class="status-pill status-pill--${pillStatus}"><span class="status-pill__dot"></span>${statusLabels[status]}</span>
@@ -3694,6 +3706,7 @@ function showBudgetModal() {
     ['bgtAwsService','bgtAzureRG','bgtAzureService','bgtGcpService'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = '';
     });
+    document.getElementById('budgetAlertEmails').value = '';
     _budgetThresholds = [80, 100];
     document.querySelectorAll('#thresholdPills input').forEach(cb => {
         cb.checked = _budgetThresholds.includes(Number(cb.value));
@@ -3748,6 +3761,7 @@ function saveBudget() {
         period: document.getElementById('budgetPeriod').value,
         provider_type: cloud,
         provider_id, resource_group, service_name, scope_label,
+        alert_emails: document.getElementById('budgetAlertEmails').value.trim(),
         alert_thresholds: _budgetThresholds.length ? _budgetThresholds : [80, 100],
         alert_channels: channels.length ? channels : ['email'],
     };
@@ -3798,6 +3812,7 @@ async function editBudget(id) {
             document.getElementById('bgtGcpService').value  = b.service_name || '';
         }
 
+        document.getElementById('budgetAlertEmails').value = b.alert_emails || '';
         document.getElementById('budgetModal').style.display = 'flex';
     } catch(e) {
         showToast('Failed to load budget', 'error');

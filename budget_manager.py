@@ -107,11 +107,15 @@ def _send_email_alert(budget: dict, threshold_pct: int, current_spend: float):
         smtp_from = os.getenv("SMTP_FROM", smtp_user)
         use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
 
-        # Pull recipients from email_settings table
-        from database import get_email_settings
-        settings = get_email_settings()
-        recipients_raw = settings.get("recipients", "")
-        recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
+        # Per-budget emails override global recipients
+        budget_emails = budget.get("alert_emails", "")
+        if budget_emails and budget_emails.strip():
+            recipients = [r.strip() for r in budget_emails.split(",") if r.strip()]
+        else:
+            from database import get_email_settings
+            settings = get_email_settings()
+            recipients_raw = settings.get("recipients", "")
+            recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
 
         if not smtp_host or not recipients:
             print("[Budget] Email not configured — skipping email alert.")

@@ -3545,6 +3545,7 @@ def api_budgets_create():
         resource_group=body.get("resource_group", ""),
         service_name=body.get("service_name", ""),
         scope_label=body.get("scope_label", ""),
+        alert_emails=body.get("alert_emails", ""),
     )
     return jsonify({"id": budget_id, "message": "Budget created"})
 

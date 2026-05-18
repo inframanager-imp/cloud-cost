@@ -475,6 +475,7 @@ def init_db():
         ("resource_group", "ALTER TABLE budgets ADD COLUMN resource_group TEXT DEFAULT ''"),
         ("service_name",   "ALTER TABLE budgets ADD COLUMN service_name TEXT DEFAULT ''"),
         ("scope_label",    "ALTER TABLE budgets ADD COLUMN scope_label TEXT DEFAULT ''"),
+        ("alert_emails",   "ALTER TABLE budgets ADD COLUMN alert_emails TEXT DEFAULT ''"),
     ]:
         try:
             cursor.execute(f"SELECT {col} FROM budgets LIMIT 1")
@@ -2315,7 +2316,8 @@ def get_budgets(enabled_only=False, tenant_id=None):
 
 def create_budget(name, amount, provider_type="all", provider_id="",
                   period="monthly", alert_thresholds=None, alert_channels=None,
-                  tenant_id=None, resource_group="", service_name="", scope_label=""):
+                  tenant_id=None, resource_group="", service_name="", scope_label="",
+                  alert_emails=""):
     if alert_thresholds is None:
         alert_thresholds = [80, 100]
     if alert_channels is None:
@@ -2325,20 +2327,20 @@ def create_budget(name, amount, provider_type="all", provider_id="",
         cur = conn.execute("""
             INSERT INTO budgets(name,provider_type,provider_id,amount,period,
                                 alert_thresholds,alert_channels,tenant_id,
-                                resource_group,service_name,scope_label)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                                resource_group,service_name,scope_label,alert_emails)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
         """, (name, provider_type, provider_id, amount, period,
               json.dumps(alert_thresholds), json.dumps(alert_channels), tenant_id,
-              resource_group, service_name, scope_label))
+              resource_group, service_name, scope_label, alert_emails))
     else:
         cur = conn.execute("""
             INSERT INTO budgets(name,provider_type,provider_id,amount,period,
                                 alert_thresholds,alert_channels,
-                                resource_group,service_name,scope_label)
-            VALUES(?,?,?,?,?,?,?,?,?,?)
+                                resource_group,service_name,scope_label,alert_emails)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?)
         """, (name, provider_type, provider_id, amount, period,
               json.dumps(alert_thresholds), json.dumps(alert_channels),
-              resource_group, service_name, scope_label))
+              resource_group, service_name, scope_label, alert_emails))
     budget_id = cur.lastrowid
     conn.commit()
     conn.close()
