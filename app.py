@@ -3566,7 +3566,8 @@ def api_budgets_update(budget_id):
     body = request.get_json(silent=True) or {}
     kwargs = {}
     for field in ("name", "amount", "provider_type", "provider_id", "period",
-                  "alert_thresholds", "alert_channels", "enabled"):
+                  "alert_thresholds", "alert_channels", "enabled",
+                  "resource_group", "service_name", "scope_label", "alert_emails"):
         if field in body:
             kwargs[field] = body[field]
     update_budget(budget_id, **kwargs)
@@ -3578,6 +3579,25 @@ def api_budgets_update(budget_id):
 def api_budgets_delete(budget_id):
     delete_budget(budget_id)
     return jsonify({"message": "Deleted"})
+
+
+@app.route("/api/budgets/<int:budget_id>/test-email", methods=["POST"])
+@login_required
+def api_budget_test_email(budget_id):
+    """Send a test alert email for a specific budget."""
+    budgets = get_budgets(tenant_id=current_tenant_id())
+    budget = next((b for b in budgets if b["id"] == budget_id), None)
+    if not budget:
+        return jsonify({"error": "Budget not found"}), 404
+    try:
+        from budget_manager import _send_email_alert
+        ok = _send_email_alert(budget, threshold_pct=budget.get("alert_thresholds", [80])[0],
+                               current_spend=budget.get("spent", 0))
+        if ok:
+            return jsonify({"message": "Test email sent successfully"})
+        return jsonify({"error": "Email not configured or failed to send. Check SMTP settings in Email Reports."}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/budgets/check", methods=["POST"])

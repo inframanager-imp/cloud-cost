@@ -2352,7 +2352,8 @@ def update_budget(budget_id, **kwargs):
     fields = []
     params = []
     for k, v in kwargs.items():
-        if k in ("name", "amount", "provider_type", "provider_id", "period", "enabled"):
+        if k in ("name", "amount", "provider_type", "provider_id", "period", "enabled",
+                 "resource_group", "service_name", "scope_label", "alert_emails"):
             fields.append(f"{k}=?")
             params.append(v)
         elif k in ("alert_thresholds", "alert_channels"):
