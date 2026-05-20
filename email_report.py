@@ -259,36 +259,33 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
     if "trend" in sections and trend:
         recent    = trend[-30:]
         max_val   = max((r["total_cost"] for r in recent), default=1) or 1
-        chart_h   = 60  # total chart height in px
         today_str = now.strftime("%Y-%m-%d")
-        bars = ""
-        for r in recent:
-            bar_h   = max(3, int(r["total_cost"] / max_val * chart_h))
-            spacer  = chart_h - bar_h
+        rows = ""
+        for i, r in enumerate(recent):
+            bg      = "#FFFFFF" if i % 2 == 0 else "#F7F7F5"
+            bar_w   = max(4, int(r["total_cost"] / max_val * 100))
             is_today = r["date"][:10] == today_str
-            bar_col  = "#185FA5" if is_today else "#A3BFDB"
-            bars += (
-                f'<td valign="bottom" style="vertical-align:bottom;padding:0 1px;width:auto">'
-                f'<table role="presentation" cellpadding="0" cellspacing="0" border="0">'
-                f'<tr><td height="{spacer}" style="line-height:{spacer}px;font-size:1px">&nbsp;</td></tr>'
-                f'<tr><td height="{bar_h}" bgcolor="{bar_col}" style="background:{bar_col};border-radius:2px 2px 0 0;line-height:{bar_h}px;font-size:1px;min-width:6px">&nbsp;</td></tr>'
-                f'</table></td>'
-            )
-        first_date = recent[0]["date"][5:] if recent else ""
-        last_date  = recent[-1]["date"][5:] if recent else ""
+            bar_col = "#185FA5" if is_today else ACCENT
+            bold    = "font-weight:700;" if is_today else ""
+            rows += f"""
+<tr style="background:{bg}">
+  <td style="padding:6px 12px;font-size:12px;color:#525252;white-space:nowrap;{bold}">{r["date"][:10]}</td>
+  <td style="padding:6px 8px;font-size:12px;color:#1A1A1A;font-weight:500;text-align:right;white-space:nowrap">${r["total_cost"]:,.2f}</td>
+  <td style="padding:6px 12px;width:40%">
+    <div style="background:{bar_col};height:8px;border-radius:4px;width:{bar_w}%"></div>
+  </td>
+</tr>"""
         html += f"""
     <div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:4px">Daily spend</div>
     <div style="font-size:11px;color:#8A8A8A;margin-bottom:14px">Last 30 days</div>
-    <div style="background:#F7F7F5;border-radius:10px;padding:16px 12px 10px;margin-bottom:28px">
+    <div style="background:#F7F7F5;border-radius:10px;overflow:hidden;margin-bottom:28px">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse">
-        <tr style="height:{chart_h}px;vertical-align:bottom">{bars}</tr>
-      </table>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:8px">
-        <tr>
-          <td style="font-size:10px;color:#8A8A8A">{first_date}</td>
-          <td align="center" style="font-size:10px;color:#8A8A8A">Daily cost</td>
-          <td align="right" style="font-size:10px;color:#8A8A8A">{last_date}</td>
+        <tr style="background:#EEEDE8">
+          <td style="padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A8A8A">Date</td>
+          <td style="padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A8A8A;text-align:right">Cost</td>
+          <td style="padding:7px 12px;font-size:10px;color:#8A8A8A"></td>
         </tr>
+        {rows}
       </table>
     </div>
 """
@@ -1044,32 +1041,31 @@ def _build_custom_report_html(report):
 """
 
     if "trend" in sections and daily_trend:
-        max_cost_t = max((d["cost"] for d in daily_trend), default=1) or 1
         count = min(30, len(daily_trend))
         recent = daily_trend[-count:]
-        chart_h = 60
-        bars = ""
-        for d in recent:
-            bar_h = max(3, int(d["cost"] / max_cost_t * chart_h))
-            spacer = chart_h - bar_h
-            bars += (
-                f'<td valign="bottom" style="vertical-align:bottom;padding:0 1px">'
-                f'<table role="presentation" cellpadding="0" cellspacing="0" border="0">'
-                f'<tr><td height="{spacer}" style="line-height:{spacer}px;font-size:1px">&nbsp;</td></tr>'
-                f'<tr><td height="{bar_h}" bgcolor="{ACCENT}" style="background:{ACCENT};border-radius:2px 2px 0 0;line-height:{bar_h}px;font-size:1px;min-width:6px">&nbsp;</td></tr>'
-                f'</table></td>'
-            )
+        max_cost_t = max((d["cost"] for d in recent), default=1) or 1
+        rows = ""
+        for i, d in enumerate(recent):
+            bg = "#FFFFFF" if i % 2 == 0 else "#F7F7F5"
+            bar_w = max(4, int(d["cost"] / max_cost_t * 100))
+            rows += f"""
+<tr style="background:{bg}">
+  <td style="padding:6px 12px;font-size:12px;color:#525252;white-space:nowrap">{d["date"]}</td>
+  <td style="padding:6px 8px;font-size:12px;color:#1A1A1A;font-weight:500;text-align:right;white-space:nowrap">${d["cost"]:,.2f}</td>
+  <td style="padding:6px 12px;width:40%">
+    <div style="background:{ACCENT};height:8px;border-radius:4px;width:{bar_w}%"></div>
+  </td>
+</tr>"""
         html += f"""
-<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Daily spend trend</div>
-<div style="background:#F7F7F5;border-radius:10px;padding:16px 12px 10px;margin-bottom:24px">
+<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Daily spend</div>
+<div style="background:#F7F7F5;border-radius:10px;overflow:hidden;margin-bottom:24px">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse">
-    <tr style="height:{chart_h}px;vertical-align:bottom">{bars}</tr>
-  </table>
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:8px">
-    <tr>
-      <td style="font-size:10px;color:#8A8A8A">{recent[0]["date"]}</td>
-      <td align="right" style="font-size:10px;color:#8A8A8A">{recent[-1]["date"]}</td>
+    <tr style="background:#EEEDE8">
+      <td style="padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A8A8A">Date</td>
+      <td style="padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A8A8A;text-align:right">Cost</td>
+      <td style="padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A8A8A"></td>
     </tr>
+    {rows}
   </table>
 </div>
 """
