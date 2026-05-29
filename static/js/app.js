@@ -4338,7 +4338,7 @@ async function loadReportsPage() {
         document.getElementById('emReportCloudProvider').value = settings.report_cloud_provider || '';
 
         const sections = settings.report_sections || [];
-        document.querySelectorAll('.report-section-check input').forEach(cb => {
+        document.querySelectorAll('#emSections .report-section-check input').forEach(cb => {
             cb.checked = sections.includes(cb.value);
         });
 
@@ -4386,7 +4386,7 @@ async function saveEmailSettings() {
 
 async function saveReportSettings() {
     const sections = [];
-    document.querySelectorAll('.report-section-check input:checked').forEach(cb => sections.push(cb.value));
+    document.querySelectorAll('#emSections .report-section-check input:checked').forEach(cb => sections.push(cb.value));
 
     const body = {
         recipients: document.getElementById('emRecipients').value.trim(),
@@ -4466,7 +4466,7 @@ async function sendReportNow() {
 
 function previewReport() {
     const sections = [];
-    document.querySelectorAll('.report-section-check input:checked').forEach(cb => sections.push(cb.value));
+    document.querySelectorAll('#emSections .report-section-check input:checked').forEach(cb => sections.push(cb.value));
     const params = new URLSearchParams();
     if (sections.length) params.set('sections', sections.join(','));
     const cp = document.getElementById('emReportCloudProvider')?.value;
