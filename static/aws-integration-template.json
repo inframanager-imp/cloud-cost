@@ -224,20 +224,29 @@
       }
     },
 
-    "CURBucketNotification": {
-      "Type": "AWS::S3::Bucket",
-      "DependsOn": "CURNotificationTopic",
+    "CURNotificationTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
       "Properties": {
-        "BucketName": {"Fn::Sub": "IGNORE-this-is-handled-by-CURBucket"},
-        "NotificationConfiguration": {
-          "TopicConfigurations": [{
-            "Event": "s3:ObjectCreated:*",
-            "Filter": {
-              "S3Key": {
-                "Rules": [{"Name": "suffix", "Value": "Manifest.json"}]
+        "Topics": [{"Ref": "CURNotificationTopic"}],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Sid": "AllowS3Publish",
+            "Effect": "Allow",
+            "Principal": {"Service": "s3.amazonaws.com"},
+            "Action": "SNS:Publish",
+            "Resource": {"Ref": "CURNotificationTopic"},
+            "Condition": {
+              "ArnLike": {
+                "aws:SourceArn": {
+                  "Fn::If": [
+                    "UseDefaultBucketName",
+                    {"Fn::Sub": "arn:aws:s3:::prism-cur-${TenantID}-${ExternalID}"},
+                    {"Fn::Sub": "arn:aws:s3:::${BucketName}"}
+                  ]
+                }
               }
-            },
-            "Topic": {"Ref": "CURNotificationTopic"}
+            }
           }]
         }
       }
