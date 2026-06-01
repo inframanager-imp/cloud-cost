@@ -2067,6 +2067,106 @@
                             <label class="form-label">Region</label>
                             <input type="text" id="awsRegion" class="filter-input" placeholder="us-east-1" value="us-east-1" style="width:100%">
                         </div>
+
+                        <!-- Required IAM Permissions -->
+                        <details style="background:var(--bg);border-radius:8px;overflow:hidden">
+                            <summary style="padding:10px 12px;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-primary);display:flex;align-items:center;gap:6px;list-style:none">
+                                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                What IAM permissions does this access key need?
+                                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-left:auto"><polyline points="6,9 12,15 18,9"/></svg>
+                            </summary>
+                            <div style="padding:12px;border-top:1px solid var(--border)">
+
+                                <!-- Permission table -->
+                                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px">Create an IAM user with the following policy. Paste it directly in <strong>AWS Console → IAM → Policies → Create policy → JSON</strong>.</div>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;font-size:11px">
+                                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:8px">
+                                        <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">📊 Cost &amp; Billing</div>
+                                        <div style="color:var(--text-secondary);display:flex;flex-direction:column;gap:3px">
+                                            <span>✅ ce:* — Cost Explorer full access</span>
+                                            <span>✅ cur:DescribeReportDefinitions</span>
+                                            <span>✅ budgets:ViewBudget</span>
+                                        </div>
+                                    </div>
+                                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:8px">
+                                        <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">🗄️ S3 (for CUR files)</div>
+                                        <div style="color:var(--text-secondary);display:flex;flex-direction:column;gap:3px">
+                                            <span>✅ s3:GetObject</span>
+                                            <span>✅ s3:ListBucket</span>
+                                            <span style="color:var(--text-secondary);font-style:italic">Only on your CUR bucket</span>
+                                        </div>
+                                    </div>
+                                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:8px">
+                                        <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">🖥️ Resource Discovery</div>
+                                        <div style="color:var(--text-secondary);display:flex;flex-direction:column;gap:3px">
+                                            <span>✅ ec2:Describe*</span>
+                                            <span>✅ rds:Describe*</span>
+                                            <span>✅ elasticloadbalancing:Describe*</span>
+                                        </div>
+                                    </div>
+                                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:8px">
+                                        <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">📋 Optional</div>
+                                        <div style="color:var(--text-secondary);display:flex;flex-direction:column;gap:3px">
+                                            <span>☑️ organizations:List*, Describe*</span>
+                                            <span>☑️ savingsplans:Describe*</span>
+                                            <span>☑️ cloudwatch:GetMetricStatistics</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Copyable policy JSON -->
+                                <div style="position:relative">
+                                    <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:4px">IAM Policy JSON — copy and paste into AWS:</div>
+                                    <pre id="awsIAMPolicy" style="background:#1a1a2e;color:#7ec8e3;padding:12px;border-radius:8px;font-size:10px;line-height:1.5;white-space:pre;overflow-x:auto;margin:0;max-height:180px;overflow-y:auto">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CostBillingAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ce:*",
+        "cur:DescribeReportDefinitions",
+        "budgets:ViewBudget"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3CURAccess",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": [
+        "arn:aws:s3:::YOUR-CUR-BUCKET",
+        "arn:aws:s3:::YOUR-CUR-BUCKET/*"
+      ]
+    },
+    {
+      "Sid": "ResourceDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "rds:Describe*",
+        "elasticloadbalancing:Describe*",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "organizations:Describe*",
+        "organizations:List*",
+        "savingsplans:Describe*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}</pre>
+                                    <button onclick="copyAWSPolicy()" style="position:absolute;top:24px;right:8px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer" id="awsPolicyCopyBtn">Copy</button>
+                                </div>
+
+                                <div style="margin-top:10px;font-size:11px;color:var(--text-secondary)">
+                                    💡 <strong>Quick setup:</strong>
+                                    <a href="https://console.aws.amazon.com/iam/home#/users/create" target="_blank" style="color:var(--accent)">Create IAM User →</a>
+                                    &nbsp;·&nbsp;
+                                    <a href="https://console.aws.amazon.com/iam/home#/policies/create" target="_blank" style="color:var(--accent)">Create Policy →</a>
+                                </div>
+                            </div>
+                        </details>
                     </div>
 
                     <!-- GCP Credentials -->
@@ -3467,6 +3567,14 @@ async function curTestConnection() {
     } finally {
         btn.disabled = false;
     }
+}
+
+function copyAWSPolicy() {
+    const text = document.getElementById('awsIAMPolicy')?.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('awsPolicyCopyBtn');
+        if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+    });
 }
 
 // Legacy: keep toggleCurPanel for backward compat
