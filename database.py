@@ -338,6 +338,24 @@ def init_db():
             cursor.execute("DROP INDEX IF EXISTS idx_cp_type_id")
             print("[DB] Migrated cloud_providers: added tenant_id column")
 
+    # ── Migration: AWS CloudFormation connect columns on cloud_providers ──────
+    if _table_exists("cloud_providers"):
+        for col, ddl in [
+            ("external_id",      "ALTER TABLE cloud_providers ADD COLUMN external_id TEXT DEFAULT ''"),
+            ("handshake_status", "ALTER TABLE cloud_providers ADD COLUMN handshake_status TEXT DEFAULT ''"),
+            ("role_arn",         "ALTER TABLE cloud_providers ADD COLUMN role_arn TEXT DEFAULT ''"),
+            ("cur_bucket",       "ALTER TABLE cloud_providers ADD COLUMN cur_bucket TEXT DEFAULT ''"),
+            ("cur_report_name",  "ALTER TABLE cloud_providers ADD COLUMN cur_report_name TEXT DEFAULT ''"),
+        ]:
+            try:
+                cursor.execute(f"SELECT {col} FROM cloud_providers LIMIT 1")
+            except Exception:
+                try:
+                    cursor.execute(ddl)
+                    print(f"[DB] cloud_providers: added {col} column")
+                except Exception as e2:
+                    print(f"[DB] cloud_providers migration skipped {col}: {e2}")
+
     # ── Migration: tenant_id on budgets ──────────────────────────────────────
     if _table_exists("budgets"):
         try:
@@ -492,6 +510,51 @@ def init_db():
                error_message='Process killed or restarted before completion'
         WHERE status='running'
     """)
+
+    # ── Client tagging & cost allocation ────────────────────────────────────
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS clients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id INTEGER NOT NULL DEFAULT 1,
+            name TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_clients_tenant ON clients(tenant_id)")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS client_mappings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            cloud TEXT NOT NULL DEFAULT 'azure',
+            filter_type TEXT NOT NULL,
+            value TEXT NOT NULL
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cm_client ON client_mappings(client_id)")
+
+    # Migration: recreate client_mappings without CHECK constraint if it still has one
+    try:
+        sql = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='client_mappings'"
+        ).fetchone()
+        if sql and "CHECK" in (sql[0] or ""):
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS client_mappings_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+                    cloud TEXT NOT NULL DEFAULT 'azure',
+                    filter_type TEXT NOT NULL,
+                    value TEXT NOT NULL
+                )
+            """)
+            cursor.execute("INSERT INTO client_mappings_new SELECT * FROM client_mappings")
+            cursor.execute("DROP TABLE client_mappings")
+            cursor.execute("ALTER TABLE client_mappings_new RENAME TO client_mappings")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_cm_client ON client_mappings(client_id)")
+            print("[DB] client_mappings: removed CHECK constraint to support service_name filter_type")
+    except Exception as e:
+        print(f"[DB] client_mappings migration: {e}")
 
     conn.commit()
     conn.close()
@@ -695,6 +758,11 @@ def query_costs(filters=None, tenant_id=None):
     if tenant_id is not None:
         where += " AND tenant_id = ?"
         params.append(tenant_id)
+
+    # Support injected client mapping filter (OR-based, built by build_client_sql_filter)
+    if filters and filters.get("_extra_where"):
+        where += " " + filters["_extra_where"]
+        params.extend(filters.get("_extra_params") or [])
 
     query = f"""
         SELECT
@@ -2734,6 +2802,287 @@ def get_data_freshness_for_tenant(tenant_id: int) -> list:
                 d["lag_days"] = None
                 d["is_stale"] = False
         result.append(d)
+    return result
+
+
+# ─── AWS CloudFormation connect helpers ──────────────────────────────────────
+
+def get_or_create_aws_external_id(tenant_id: int, provider_id: str = None) -> str:
+    """Return existing external_id for this tenant's AWS provider, or generate a new one."""
+    import uuid as _uuid
+    conn = get_db()
+    if provider_id:
+        row = conn.execute(
+            "SELECT id, external_id FROM cloud_providers WHERE provider_type='aws' AND provider_id=? AND tenant_id=?",
+            (provider_id, tenant_id)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id, external_id FROM cloud_providers WHERE provider_type='aws' AND tenant_id=? ORDER BY id LIMIT 1",
+            (tenant_id,)
+        ).fetchone()
+
+    if row and row["external_id"]:
+        conn.close()
+        return row["external_id"]
+
+    new_id = str(_uuid.uuid4())
+    if row:
+        conn.execute("UPDATE cloud_providers SET external_id=? WHERE id=?", (new_id, row["id"]))
+        conn.commit()
+    conn.close()
+    return new_id
+
+
+def save_aws_handshake(tenant_id: int, provider_id: str, role_arn: str,
+                       cur_bucket: str, cur_report_name: str, status: str = "connected"):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id FROM cloud_providers WHERE provider_type='aws' AND provider_id=? AND tenant_id=?",
+        (provider_id, tenant_id)
+    ).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE cloud_providers SET role_arn=?, cur_bucket=?, cur_report_name=?, handshake_status=? WHERE id=?",
+            (role_arn, cur_bucket, cur_report_name, status, row["id"])
+        )
+    else:
+        conn.execute(
+            "INSERT INTO cloud_providers(provider_type, name, provider_id, credentials_json, tenant_id, role_arn, cur_bucket, cur_report_name, handshake_status) "
+            "VALUES('aws', ?, ?, '{}', ?, ?, ?, ?, ?)",
+            (f"AWS {provider_id}", provider_id, tenant_id, role_arn, cur_bucket, cur_report_name, status)
+        )
+    conn.commit()
+    conn.close()
+
+
+def get_aws_connection_status(tenant_id: int, provider_id: str = None) -> dict:
+    conn = get_db()
+    if provider_id:
+        row = conn.execute(
+            "SELECT * FROM cloud_providers WHERE provider_type='aws' AND provider_id=? AND tenant_id=?",
+            (provider_id, tenant_id)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM cloud_providers WHERE provider_type='aws' AND tenant_id=? ORDER BY id LIMIT 1",
+            (tenant_id,)
+        ).fetchone()
+    conn.close()
+    if not row:
+        return {"status": "not_connected", "role_arn": "", "cur_bucket": ""}
+    return {
+        "status": row["handshake_status"] or "not_connected",
+        "role_arn": row["role_arn"] or "",
+        "cur_bucket": row["cur_bucket"] or "",
+        "cur_report_name": row["cur_report_name"] or "",
+        "provider_id": row["provider_id"],
+        "external_id": row["external_id"] or "",
+    }
+
+
+# ─── Client tagging & cost allocation ────────────────────────────────────────
+
+def create_client(name: str, tenant_id: int) -> int:
+    conn = get_db()
+    cur = conn.execute(
+        "INSERT INTO clients(tenant_id, name) VALUES(?, ?)",
+        (tenant_id, name.strip())
+    )
+    client_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return client_id
+
+
+def get_clients(tenant_id: int) -> list:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM clients WHERE tenant_id=? ORDER BY name",
+        (tenant_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_client(client_id: int, tenant_id: int) -> dict:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM clients WHERE id=? AND tenant_id=?",
+        (client_id, tenant_id)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_client(client_id: int, name: str, tenant_id: int):
+    conn = get_db()
+    conn.execute(
+        "UPDATE clients SET name=? WHERE id=? AND tenant_id=?",
+        (name.strip(), client_id, tenant_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_client(client_id: int, tenant_id: int):
+    conn = get_db()
+    conn.execute("DELETE FROM client_mappings WHERE client_id=?", (client_id,))
+    conn.execute("DELETE FROM clients WHERE id=? AND tenant_id=?", (client_id, tenant_id))
+    conn.commit()
+    conn.close()
+
+
+def get_client_mappings(client_id: int) -> list:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM client_mappings WHERE client_id=? ORDER BY id",
+        (client_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def upsert_client_mappings(client_id: int, mappings: list):
+    """Replace all mappings for a client. mappings: [{cloud, filter_type, value}]"""
+    conn = get_db()
+    conn.execute("DELETE FROM client_mappings WHERE client_id=?", (client_id,))
+    for m in mappings:
+        cloud = (m.get("cloud") or "azure").strip().lower()
+        filter_type = (m.get("filter_type") or "").strip()
+        value = (m.get("value") or "").strip()
+        if filter_type in ("subscription_id", "resource_group") and value:
+            conn.execute(
+                "INSERT INTO client_mappings(client_id, cloud, filter_type, value) VALUES(?,?,?,?)",
+                (client_id, cloud, filter_type, value)
+            )
+    conn.commit()
+    conn.close()
+
+
+def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: int) -> dict:
+    """Return cost summary for a client based on its mappings."""
+    mappings = get_client_mappings(client_id)
+    if not mappings:
+        return {"total": 0, "by_service": [], "by_subscription": [], "trend": []}
+
+    conn = get_db()
+
+    # Build OR conditions from mappings
+    conditions = []
+    params = []
+    for m in mappings:
+        cond, param = _mapping_condition(m["filter_type"], m["value"])
+        conditions.append(cond)
+        params.append(param)
+
+    mapping_clause = "(" + " OR ".join(conditions) + ")"
+    base_params = [date_from, date_to, tenant_id] + params
+
+    total_row = conn.execute(
+        f"SELECT COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"WHERE date>=? AND date<=? AND tenant_id=? AND {mapping_clause}",
+        base_params
+    ).fetchone()
+
+    by_service = conn.execute(
+        f"SELECT service_name, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"WHERE date>=? AND date<=? AND tenant_id=? AND {mapping_clause} "
+        f"GROUP BY service_name ORDER BY total DESC LIMIT 10",
+        base_params
+    ).fetchall()
+
+    by_subscription = conn.execute(
+        f"SELECT subscription_id, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"WHERE date>=? AND date<=? AND tenant_id=? AND {mapping_clause} "
+        f"GROUP BY subscription_id ORDER BY total DESC",
+        base_params
+    ).fetchall()
+
+    trend = conn.execute(
+        f"SELECT date, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"WHERE date>=? AND date<=? AND tenant_id=? AND {mapping_clause} "
+        f"GROUP BY date ORDER BY date",
+        base_params
+    ).fetchall()
+
+    conn.close()
+    return {
+        "total": round(total_row["total"], 2),
+        "by_service": [{"name": r["service_name"] or "Unknown", "cost": round(r["total"], 2)} for r in by_service],
+        "by_subscription": [{"subscription_id": r["subscription_id"], "cost": round(r["total"], 2)} for r in by_subscription],
+        "trend": [{"date": r["date"], "cost": round(r["total"], 2)} for r in trend],
+    }
+
+
+def _mapping_condition(filter_type: str, value: str) -> tuple:
+    """Return (sql_condition, param) for a single mapping row."""
+    if filter_type == "subscription_id":
+        return ("subscription_id = ?", value)
+    elif filter_type == "service_name":
+        return ("LOWER(service_name) = LOWER(?)", value)
+    else:  # resource_group
+        return ("LOWER(resource_group) = LOWER(?)", value)
+
+
+def build_client_sql_filter(client_id: int) -> tuple:
+    """Return (sql_fragment, params) for injecting into cost_data queries.
+    Returns ('', []) if client has no mappings.
+    """
+    mappings = get_client_mappings(client_id)
+    if not mappings:
+        return ("", [])
+    conditions = []
+    params = []
+    for m in mappings:
+        cond, param = _mapping_condition(m["filter_type"], m["value"])
+        conditions.append(cond)
+        params.append(param)
+    return ("AND (" + " OR ".join(conditions) + ")", params)
+
+
+def get_client_filter_values(cloud: str, filter_type: str, tenant_id: int) -> list:
+    """Return selectable values for a given cloud + filter_type."""
+    conn = get_db()
+    cloud = (cloud or "azure").strip().lower()
+    result = []
+
+    if filter_type == "subscription_id":
+        if cloud == "azure":
+            rows = conn.execute(
+                "SELECT subscription_id as value, name as label FROM subscriptions "
+                "WHERE (tenant_id=? OR tenant_id IS NULL) ORDER BY name",
+                (tenant_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT provider_id as value, name as label FROM cloud_providers "
+                "WHERE provider_type=? AND (tenant_id=? OR tenant_id IS NULL) ORDER BY name",
+                (cloud, tenant_id)
+            ).fetchall()
+        result = [{"value": r["value"], "label": r["label"] or r["value"]} for r in rows if r["value"]]
+
+    elif filter_type == "resource_group":
+        rows = conn.execute(
+            "SELECT DISTINCT resource_group as val FROM cost_data "
+            "WHERE cloud_provider=? AND (tenant_id=? OR tenant_id IS NULL) "
+            "AND resource_group IS NOT NULL AND resource_group!='' "
+            "ORDER BY resource_group LIMIT 500",
+            (cloud, tenant_id)
+        ).fetchall()
+        result = [{"value": r["val"], "label": r["val"]} for r in rows]
+
+    elif filter_type == "service_name":
+        rows = conn.execute(
+            "SELECT DISTINCT service_name as val FROM cost_data "
+            "WHERE cloud_provider=? AND (tenant_id=? OR tenant_id IS NULL) "
+            "AND service_name IS NOT NULL AND service_name!='' "
+            "ORDER BY service_name LIMIT 500",
+            (cloud, tenant_id)
+        ).fetchall()
+        result = [{"value": r["val"], "label": r["val"]} for r in rows]
+
+    conn.close()
     return result
 
 

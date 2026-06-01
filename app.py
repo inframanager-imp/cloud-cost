@@ -49,10 +49,16 @@ from database import (
     get_data_freshness_for_tenant,
     get_cost_by_cloud, get_distinct_cloud_providers_in_data,
     get_integration_settings, update_integration_settings,
+    # Client tagging & cost allocation
+    create_client, get_clients, get_client, update_client, delete_client,
+    get_client_mappings, upsert_client_mappings, get_client_costs,
+    build_client_sql_filter, get_client_filter_values,
+    # AWS CloudFormation connect
+    get_or_create_aws_external_id, save_aws_handshake, get_aws_connection_status,
 )
 from azure_fetcher import (fetch_cost_data, fetch_activity_logs, resolve_caller_names, fetch_subscriptions,
                            fetch_billing_account_costs, filter_billing_only_charges)
-from email_report import send_report_email, send_test_email, _build_report_html, send_custom_report, preview_custom_report
+from email_report import send_report_email, send_test_email, _build_report_html, send_custom_report, preview_custom_report, build_client_report_html
 from chatbot import process_chat_message
 from resource_config_display import build_display_payload, enrich_list_row
 from budget_manager import check_budgets, check_data_freshness
@@ -438,6 +444,15 @@ def api_dashboard():
     tid = current_tenant_id()
     cloud_filter = request.args.get("cloud_provider") or None
 
+    # Client filter: if client_id is provided, scope to that client's mappings
+    client_id_param = request.args.get("client_id")
+    client_sql_frag, client_sql_params = ("", [])
+    if client_id_param:
+        try:
+            client_sql_frag, client_sql_params = build_client_sql_filter(int(client_id_param))
+        except (ValueError, TypeError):
+            pass
+
     cur_trend = get_daily_trend(first_of_month, today_str, subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter)
     cur_total = sum(r["total_cost"] for r in cur_trend)
     days_with_data = len(cur_trend)
@@ -480,9 +495,9 @@ def api_dashboard():
     cloud_sql = f"AND cloud_provider = '{cloud_filter}'" if cloud_filter else ""
     sub_costs = conn.execute(f"""
         SELECT subscription_id, cloud_provider, SUM(cost) as total
-        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cloud_sql}
+        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cloud_sql} {client_sql_frag}
         GROUP BY subscription_id, cloud_provider ORDER BY total DESC
-    """, (first_of_month, today_str)).fetchall()
+    """, [first_of_month, today_str] + client_sql_params).fetchall()
 
     # Last month for comparison
     last_month_end2 = today.replace(day=1) - timedelta(days=1)
@@ -491,9 +506,9 @@ def api_dashboard():
     lm_end_str = last_month_end2.strftime("%Y-%m-%d")
     lm_sub_costs = conn.execute(f"""
         SELECT subscription_id, SUM(cost) as total
-        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cloud_sql}
+        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cloud_sql} {client_sql_frag}
         GROUP BY subscription_id
-    """, (lm_str, lm_end_str)).fetchall()
+    """, [lm_str, lm_end_str] + client_sql_params).fetchall()
     lm_sub_map = {r["subscription_id"]: round(r["total"], 2) for r in lm_sub_costs}
 
     # Cloud breakdown for current month (for the breakdown cards)
@@ -950,6 +965,18 @@ def api_costs():
     }
     # Remove None values
     filters = {k: v for k, v in filters.items() if v is not None}
+
+    # Client filter: scope results to a specific client's mappings
+    client_id_param = request.args.get("client_id")
+    if client_id_param:
+        try:
+            frag, cparams = build_client_sql_filter(int(client_id_param))
+            if frag:
+                filters["_extra_where"] = frag
+                filters["_extra_params"] = cparams
+        except (ValueError, TypeError):
+            pass
+
     data = query_costs(filters, tenant_id=current_tenant_id())
 
     # Replace raw EC2 instance IDs with resolved Name tags where available
@@ -2458,6 +2485,315 @@ def api_preview_report():
 @login_required
 def api_email_log():
     return jsonify(get_email_log(30))
+
+
+# ─── AWS CloudFormation One-Click Connect ────────────────────────────────────
+
+_AWS_ACCOUNT_ID = os.getenv("AWS_ACCOUNT_ID", "")
+_APP_URL = os.getenv("APP_URL", "http://localhost:5000").rstrip("/")
+_CF_TEMPLATE_PATH = "/static/aws-integration-template.json"
+
+
+@app.route("/api/aws/connect-command", methods=["GET"])
+@login_required
+def api_aws_connect_command():
+    tid = current_tenant_id()
+    provider_id = request.args.get("provider_id", "")
+    external_id = get_or_create_aws_external_id(tid, provider_id or None)
+    stack_name  = f"ConnectToPrism-{tid}"
+    template_url = f"{_APP_URL}{_CF_TEMPLATE_PATH}"
+    params = (
+        f"ParameterKey=TenantID,ParameterValue='{tid}' "
+        f"ParameterKey=ExternalID,ParameterValue='{external_id}' "
+        f"ParameterKey=PrismAccountID,ParameterValue='{_AWS_ACCOUNT_ID}' "
+        f"ParameterKey=PrismDomain,ParameterValue='{_APP_URL}'"
+    )
+    cli_command = (
+        f"aws cloudformation create-stack \\\n"
+        f"  --stack-name {stack_name} \\\n"
+        f"  --template-url {template_url} \\\n"
+        f"  --parameters {params} \\\n"
+        f"  --capabilities CAPABILITY_NAMED_IAM \\\n"
+        f"  --region us-east-1"
+    )
+    console_params = (
+        f"&param_TenantID={tid}"
+        f"&param_ExternalID={external_id}"
+        f"&param_PrismAccountID={_AWS_ACCOUNT_ID}"
+        f"&param_PrismDomain={_APP_URL}"
+    )
+    console_url = (
+        f"https://console.aws.amazon.com/cloudformation/home?region=us-east-1"
+        f"#/stacks/create/review?templateURL={template_url}"
+        f"&stackName={stack_name}{console_params}"
+    )
+    # Terraform equivalent
+    terraform_code = f"""provider "aws" {{
+  region = "us-east-1"
+}}
+
+module "cloud_cost_analyzer" {{
+  source  = "hashicorp/cloudformation-stack"
+
+  stack_name    = "{stack_name}"
+  template_url  = "{template_url}"
+  capabilities  = ["CAPABILITY_NAMED_IAM"]
+
+  parameters = {{
+    TenantID       = "{tid}"
+    ExternalID     = "{external_id}"
+    PrismAccountID = "{_AWS_ACCOUNT_ID}"
+    PrismDomain    = "{_APP_URL}"
+  }}
+}}"""
+    return jsonify({
+        "cli_command":   cli_command,
+        "console_url":   console_url,
+        "terraform_code": terraform_code,
+        "external_id":   external_id,
+        "stack_name":    stack_name,
+        "template_url":  template_url,
+        "prism_account_id": _AWS_ACCOUNT_ID,
+    })
+
+
+@app.route("/api/aws/handshake", methods=["POST"])
+@login_required
+def api_aws_handshake():
+    tid  = current_tenant_id()
+    body = request.get_json(silent=True) or {}
+    role_arn        = (body.get("role_arn") or "").strip()
+    cur_bucket      = (body.get("cur_bucket") or "").strip()
+    cur_report_name = (body.get("cur_report_name") or "").strip()
+    provider_id     = (body.get("provider_id") or "").strip()
+
+    if not role_arn:
+        return jsonify({"success": False, "message": "role_arn is required"}), 400
+
+    # Extract account ID from role ARN  arn:aws:iam::ACCOUNT:role/...
+    parts = role_arn.split(":")
+    account_id = parts[4] if len(parts) >= 5 else provider_id
+
+    # Verify by attempting sts:AssumeRole
+    external_id = get_or_create_aws_external_id(tid, account_id or None)
+    verified = False
+    message = ""
+    try:
+        import boto3 as _boto3
+        sts = _boto3.client(
+            "sts",
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            region_name="us-east-1",
+        )
+        sts.assume_role(
+            RoleArn=role_arn,
+            RoleSessionName="handshake-verify",
+            ExternalId=external_id,
+        )
+        verified = True
+        message = "Role assumed successfully — connection verified"
+    except Exception as e:
+        message = f"Role verification failed: {str(e)[:200]}. Saved anyway — retry sync after IAM propagates."
+
+    status = "connected" if verified else "pending"
+    save_aws_handshake(tid, account_id or f"aws-{tid}", role_arn, cur_bucket, cur_report_name, status)
+
+    return jsonify({"success": True, "verified": verified, "message": message, "status": status})
+
+
+@app.route("/api/aws/connection-status", methods=["GET"])
+@login_required
+def api_aws_connection_status():
+    tid = current_tenant_id()
+    provider_id = request.args.get("provider_id")
+    return jsonify(get_aws_connection_status(tid, provider_id))
+
+
+@app.route("/api/aws/cur-uploaded", methods=["POST"])
+def api_aws_cur_uploaded():
+    """SNS webhook called when a new CUR file lands in the S3 bucket."""
+    import hashlib, hmac, base64
+    raw = request.data or b""
+    content_type = request.content_type or ""
+
+    # SNS sends JSON; handle subscription confirmation and notifications
+    try:
+        msg = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        return "", 200
+
+    msg_type = msg.get("Type", "")
+
+    # Auto-confirm SNS subscription
+    if msg_type == "SubscriptionConfirmation":
+        confirm_url = msg.get("SubscribeURL", "")
+        if confirm_url:
+            try:
+                import urllib.request
+                urllib.request.urlopen(confirm_url, timeout=10)
+                print(f"[SNS] Subscription confirmed: {confirm_url[:80]}")
+            except Exception as e:
+                print(f"[SNS] Subscription confirm failed: {e}")
+        return "", 200
+
+    if msg_type != "Notification":
+        return "", 200
+
+    # Extract bucket + key from S3 event notification inside SNS
+    try:
+        s3_event = json.loads(msg.get("Message", "{}"))
+        for record in s3_event.get("Records", []):
+            bucket = record.get("s3", {}).get("bucket", {}).get("name", "")
+            key    = record.get("s3", {}).get("object", {}).get("key", "")
+            if not bucket or not key:
+                continue
+            print(f"[SNS] New CUR file: s3://{bucket}/{key}")
+            # Find matching provider and trigger import in background
+            from database import get_db as _gdb
+            conn = _gdb()
+            providers = conn.execute(
+                "SELECT * FROM cloud_providers WHERE cur_bucket=? AND provider_type='aws'",
+                (bucket,)
+            ).fetchall()
+            conn.close()
+            for p in providers:
+                provider = dict(p)
+                creds = {}
+                try:
+                    creds = json.loads(provider.get("credentials_json") or "{}")
+                except Exception:
+                    pass
+                if provider.get("role_arn"):
+                    creds["role_arn"]   = provider["role_arn"]
+                    creds["external_id"] = provider.get("external_id", "")
+                def _bg_import(prov=provider, cr=creds, bkt=bucket):
+                    try:
+                        from cur_importer import import_from_s3_bucket
+                        import_from_s3_bucket(prov, cr, bkt)
+                    except Exception as ie:
+                        print(f"[SNS] CUR import failed: {ie}")
+                import threading
+                threading.Thread(target=_bg_import, daemon=True).start()
+    except Exception as e:
+        print(f"[SNS] CUR webhook error: {e}")
+
+    return "", 200
+
+
+# ─── Client Tagging & Cost Allocation ────────────────────────────────────────
+
+@app.route("/api/clients", methods=["GET"])
+@login_required
+def api_list_clients():
+    tid = current_tenant_id()
+    clients = get_clients(tid)
+    for c in clients:
+        c["mappings"] = get_client_mappings(c["id"])
+    return jsonify(clients)
+
+
+@app.route("/api/clients/filter-values", methods=["GET"])
+@login_required
+def api_client_filter_values():
+    cloud = (request.args.get("cloud") or "azure").strip().lower()
+    filter_type = (request.args.get("filter_type") or "resource_group").strip()
+    tid = current_tenant_id()
+    values = get_client_filter_values(cloud, filter_type, tid)
+    return jsonify(values)
+
+
+@app.route("/api/clients", methods=["POST"])
+@login_required
+def api_create_client():
+    tid = current_tenant_id()
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    client_id = create_client(name, tid)
+    mappings = body.get("mappings") or []
+    upsert_client_mappings(client_id, mappings)
+    return jsonify({"id": client_id, "name": name, "mappings": get_client_mappings(client_id)}), 201
+
+
+@app.route("/api/clients/<int:client_id>", methods=["PUT"])
+@login_required
+def api_update_client(client_id):
+    tid = current_tenant_id()
+    if not get_client(client_id, tid):
+        return jsonify({"error": "Not found"}), 404
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    update_client(client_id, name, tid)
+    mappings = body.get("mappings") or []
+    upsert_client_mappings(client_id, mappings)
+    return jsonify({"id": client_id, "name": name, "mappings": get_client_mappings(client_id)})
+
+
+@app.route("/api/clients/<int:client_id>", methods=["DELETE"])
+@login_required
+def api_delete_client(client_id):
+    tid = current_tenant_id()
+    if not get_client(client_id, tid):
+        return jsonify({"error": "Not found"}), 404
+    delete_client(client_id, tid)
+    return jsonify({"message": "Deleted"})
+
+
+@app.route("/api/clients/<int:client_id>/costs", methods=["GET"])
+@login_required
+def api_client_costs(client_id):
+    tid = current_tenant_id()
+    if not get_client(client_id, tid):
+        return jsonify({"error": "Not found"}), 404
+    today = datetime.utcnow()
+    date_from = request.args.get("date_from") or today.replace(day=1).strftime("%Y-%m-%d")
+    date_to   = request.args.get("date_to")   or today.strftime("%Y-%m-%d")
+    return jsonify(get_client_costs(client_id, date_from, date_to, tid))
+
+
+@app.route("/api/clients/<int:client_id>/send-report", methods=["POST"])
+@login_required
+def api_client_send_report(client_id):
+    tid = current_tenant_id()
+    client = get_client(client_id, tid)
+    if not client:
+        return jsonify({"error": "Not found"}), 404
+    body = request.get_json(silent=True) or {}
+    recipients = [r.strip() for r in (body.get("recipients") or "").split(",") if r.strip()]
+    if not recipients:
+        return jsonify({"error": "No recipients provided"}), 400
+    today = datetime.utcnow()
+    date_from = body.get("date_from") or today.replace(day=1).strftime("%Y-%m-%d")
+    date_to   = body.get("date_to")   or today.strftime("%Y-%m-%d")
+    client["mappings"] = get_client_mappings(client_id)
+    cost_data = get_client_costs(client_id, date_from, date_to, tid)
+    html = build_client_report_html(client, cost_data, date_from, date_to)
+    subject = f"Client Cost Report — {client['name']} ({date_from} to {date_to})"
+    try:
+        send_report_email(recipients=recipients, subject=subject, html_body=html, report_type="client")
+        return jsonify({"message": f"Report sent to {', '.join(recipients)}"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/clients/<int:client_id>/report-preview", methods=["GET"])
+@login_required
+def api_client_report_preview(client_id):
+    tid = current_tenant_id()
+    client = get_client(client_id, tid)
+    if not client:
+        return jsonify({"error": "Not found"}), 404
+    today = datetime.utcnow()
+    date_from = request.args.get("date_from") or today.replace(day=1).strftime("%Y-%m-%d")
+    date_to   = request.args.get("date_to")   or today.strftime("%Y-%m-%d")
+    client["mappings"] = get_client_mappings(client_id)
+    cost_data = get_client_costs(client_id, date_from, date_to, tid)
+    html = build_client_report_html(client, cost_data, date_from, date_to)
+    return Response(html, mimetype="text/html")
 
 
 # ─── Custom Reports ──────────────────────────────────────────────────────────

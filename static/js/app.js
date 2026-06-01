@@ -5,6 +5,7 @@ let syncInterval = null;
 let dashboardCache = null;
 let selectedSubscription = '';
 let selectedCloud = '';          // '' | 'azure' | 'aws' | 'gcp'
+let selectedClient = '';         // '' | client id string
 let selectedActCloud = '';       // '' | 'azure' | 'aws' | 'gcp' — Activity Log cloud filter
 let costSortBy = 'date';
 let costSortDir = 'desc';
@@ -206,13 +207,44 @@ function navigateTo(page) {
     if (page === 'budgets') loadBudgetsPage();
     if (page === 'cloud-providers') loadCloudProvidersPage();
     if (page === 'team') loadTeamPage();
+    if (page === 'clients') loadClientsPage();
 }
 
 function subParam(prefix = '?') {
     const parts = [];
     if (selectedSubscription) parts.push(`subscription_id=${selectedSubscription}`);
     if (selectedCloud) parts.push(`cloud_provider=${selectedCloud}`);
+    if (selectedClient) parts.push(`client_id=${selectedClient}`);
     return parts.length ? prefix + parts.join('&') : '';
+}
+
+function setClientFilter(clientId) {
+    selectedClient = clientId || '';
+    // Sync both dropdowns
+    const dash = document.getElementById('dashClientFilter');
+    const costs = document.getElementById('costsClientFilter');
+    if (dash && dash.value !== selectedClient) dash.value = selectedClient;
+    if (costs && costs.value !== selectedClient) costs.value = selectedClient;
+    navigateTo(currentPage);
+}
+
+async function populateClientDropdowns() {
+    try {
+        const clients = await fetch('/api/clients').then(r => r.json());
+        ['dashClientFilter', 'costsClientFilter'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const cur = el.value;
+            el.innerHTML = '<option value="">All Clients</option>';
+            clients.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name;
+                el.appendChild(opt);
+            });
+            el.value = cur;
+        });
+    } catch(e) { /* non-fatal */ }
 }
 
 async function loadBudgetsPage() {
@@ -1061,6 +1093,8 @@ function resetCostFilters() {
     cdSvcSelected.clear(); cdUpdateTrigger('svc');
     cdAccSelected.clear(); cdUpdateTrigger('acc');
     _updateCostsCloudFilters('');
+    const costsClient = document.getElementById('costsClientFilter');
+    if (costsClient) costsClient.value = '';
     costPageOffset = 0;
     loadCostsTable();
 }
@@ -1146,6 +1180,8 @@ async function loadCostsTable() {
     if (includeBlankSub) params.set('include_blank_subscription', '1');
     else if (!subs.length && selectedSubscription && activeCloud === 'azure') params.set('subscription_id', selectedSubscription);
     if (costsSelectedCloud) params.set('cloud_provider', costsSelectedCloud);
+    const costsClient = document.getElementById('costsClientFilter')?.value || '';
+    if (costsClient) params.set('client_id', costsClient);
     params.set('limit', String(costPageLimit));
     params.set('offset', String(costPageOffset));
 
@@ -5368,6 +5404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     _scLoadAutoSync();   // load auto-sync state into drawer + badge on startup
     _scLoadStatus();     // update sidebar global status
     initCloudFilter();   // hide pills for clouds with no data
+    populateClientDropdowns();
     _initNavContextMenu();
     // Support opening a specific page in a new tab via ?page= query param
     const urlPage = new URLSearchParams(location.search).get('page');
@@ -5785,6 +5822,707 @@ async function loadConfigsTable() {
         console.error('Error loading configs:', err);
         document.getElementById('configsTableBody').innerHTML =
             `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red)">Failed to load configurations.</td></tr>`;
+    }
+}
+
+// ─── AWS CloudFormation One-Click Connect ────────────────────────────────────
+
+let _awsCFData = null;
+let _awsPollingTimer = null;
+
+function switchAwsTab(tab) {
+    const isCF = tab === 'cf';
+    document.getElementById('awsTabCF').style.cssText    = `flex:1;padding:8px 12px;border:none;cursor:pointer;font-weight:500;background:${isCF ? 'var(--accent)' : 'var(--bg)'};color:${isCF ? '#fff' : 'var(--text-secondary)'}`;
+    document.getElementById('awsTabKeys').style.cssText  = `flex:1;padding:8px 12px;border:none;cursor:pointer;background:${!isCF ? 'var(--accent)' : 'var(--bg)'};color:${!isCF ? '#fff' : 'var(--text-secondary)'}`;
+    document.getElementById('awsPanelCF').style.display   = isCF  ? 'flex' : 'none';
+    document.getElementById('awsPanelKeys').style.display = !isCF ? 'flex' : 'none';
+}
+
+async function loadAWSConnectCommand() {
+    const loading = document.getElementById('awsCFLoading');
+    const buttons = document.getElementById('awsCFButtons');
+    if (!loading) return;
+    loading.style.display = 'block';
+    if (buttons) buttons.style.display = 'none';
+    try {
+        _awsCFData = await fetch('/api/aws/connect-command').then(r => r.json());
+        if (document.getElementById('awsCLICommand'))
+            document.getElementById('awsCLICommand').textContent = _awsCFData.cli_command;
+        if (document.getElementById('awsTerraformCode'))
+            document.getElementById('awsTerraformCode').textContent = _awsCFData.terraform_code;
+        if (loading) loading.style.display = 'none';
+        if (buttons) buttons.style.display = 'flex';
+        checkAWSConnectionStatus();
+    } catch(e) {
+        if (loading) loading.textContent = 'Failed to load connect command.';
+    }
+}
+
+function openAWSConsole() {
+    if (_awsCFData?.console_url) window.open(_awsCFData.console_url, '_blank');
+}
+
+function toggleAwsMoreMenu() {
+    const m = document.getElementById('awsMoreMenu');
+    if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+
+function showAWSCLIModal() {
+    document.getElementById('awsMoreMenu')?.style.setProperty('display','none');
+    const modal = document.getElementById('awsCLIModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function showAWSTerraformModal() {
+    document.getElementById('awsMoreMenu')?.style.setProperty('display','none');
+    const modal = document.getElementById('awsTerraformModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function copyAWSCLICommand() {
+    const text = document.getElementById('awsCLICommand')?.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('awsCopyCLIBtn');
+        if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+    });
+}
+
+function copyTerraformCode() {
+    const text = document.getElementById('awsTerraformCode')?.textContent || '';
+    navigator.clipboard.writeText(text).then(() => showToast('Terraform code copied', 'success'));
+}
+
+async function verifyAWSRole() {
+    const roleArn = document.getElementById('awsCFRoleArn')?.value.trim();
+    const bucket  = document.getElementById('awsCFBucket')?.value.trim();
+    const statusEl = document.getElementById('awsVerifyStatus');
+    if (!roleArn) { showToast('Enter a Role ARN first', 'error'); return; }
+    if (statusEl) statusEl.textContent = 'Verifying…';
+
+    try {
+        const resp = await fetch('/api/aws/handshake', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                role_arn: roleArn,
+                cur_bucket: bucket,
+                cur_report_name: _awsCFData?.stack_name ? `PrismReport-${_awsCFData.stack_name.split('-').pop()}` : '',
+            })
+        });
+        const data = await resp.json();
+        if (statusEl) {
+            statusEl.textContent = data.message || (data.success ? '✅ Connected' : '❌ Failed');
+            statusEl.style.color = data.verified ? 'var(--green)' : 'var(--red)';
+        }
+        if (data.success) showAWSConnectionStatus('connected', roleArn);
+    } catch(e) {
+        if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+    }
+}
+
+async function checkAWSConnectionStatus() {
+    try {
+        const data = await fetch('/api/aws/connection-status').then(r => r.json());
+        if (data.status === 'connected' && data.role_arn) {
+            showAWSConnectionStatus('connected', data.role_arn);
+        } else if (data.status === 'pending') {
+            showAWSConnectionStatus('pending', '');
+            startAWSPolling();
+        }
+    } catch(e) { /* non-fatal */ }
+}
+
+function showAWSConnectionStatus(status, roleArn) {
+    const el = document.getElementById('awsConnectionStatus');
+    if (!el) return;
+    if (status === 'connected') {
+        el.style.display = 'block';
+        el.style.background = 'rgba(39,174,96,.1)';
+        el.style.border = '1px solid rgba(39,174,96,.3)';
+        el.style.color = '#27ae60';
+        el.innerHTML = `✅ <strong>Connected</strong> &nbsp;·&nbsp; ${roleArn || 'Role active'}`;
+        stopAWSPolling();
+    } else if (status === 'pending') {
+        el.style.display = 'block';
+        el.style.background = 'rgba(243,156,18,.1)';
+        el.style.border = '1px solid rgba(243,156,18,.3)';
+        el.style.color = '#e67e22';
+        el.innerHTML = '⏳ <strong>Waiting for CloudFormation stack to complete…</strong> Checking every 5 seconds.';
+    }
+}
+
+function startAWSPolling() {
+    if (_awsPollingTimer) return;
+    let elapsed = 0;
+    _awsPollingTimer = setInterval(async () => {
+        elapsed += 5;
+        try {
+            const data = await fetch('/api/aws/connection-status').then(r => r.json());
+            if (data.status === 'connected') {
+                showAWSConnectionStatus('connected', data.role_arn);
+                stopAWSPolling();
+            } else if (elapsed >= 300) {
+                stopAWSPolling();
+                const el = document.getElementById('awsConnectionStatus');
+                if (el) { el.innerHTML = '⚠️ Stack may still be deploying. Check CloudFormation console, then paste the Role ARN manually above.'; el.style.color = 'var(--text-secondary)'; }
+            }
+        } catch(e) { /* ignore */ }
+    }, 5000);
+}
+
+function stopAWSPolling() {
+    if (_awsPollingTimer) { clearInterval(_awsPollingTimer); _awsPollingTimer = null; }
+}
+
+// Close "More Options" menu when clicking outside
+document.addEventListener('click', e => {
+    if (!e.target.closest('#awsMoreMenu') && !e.target.textContent?.includes('More Options'))
+        document.getElementById('awsMoreMenu')?.style.setProperty('display','none');
+});
+
+// ─── Client Tagging & Cost Allocation ────────────────────────────────────────
+
+let _clientsData = [];
+let _selectedClientId = null;
+let _clientDateFrom = '';
+let _clientDateTo = '';
+
+function _clientDateRange() {
+    if (_clientDateFrom && _clientDateTo) {
+        return { firstDay: _clientDateFrom, todayStr: _clientDateTo };
+    }
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth()+1).padStart(2,'0');
+    const d = String(today.getDate()).padStart(2,'0');
+    return { firstDay: `${y}-${m}-01`, todayStr: `${y}-${m}-${d}` };
+}
+
+function _clientPeriodLabel() {
+    const preset = document.getElementById('clientDatePreset')?.value || 'this_month';
+    const labels = { this_month: 'This Month', last_month: 'Last Month', last_30: 'Last 30 Days', last_90: 'Last 90 Days' };
+    if (preset === 'custom') return `${_clientDateFrom} to ${_clientDateTo}`;
+    return labels[preset] || 'This Month';
+}
+
+function onClientDatePreset() {
+    const preset = document.getElementById('clientDatePreset')?.value;
+    const customWrap = document.getElementById('clientCustomDateWrap');
+    const today = new Date();
+    const fmt = d => d.toISOString().slice(0,10);
+
+    if (preset === 'custom') {
+        if (customWrap) customWrap.style.display = 'flex';
+        return;
+    }
+    if (customWrap) customWrap.style.display = 'none';
+
+    if (preset === 'this_month') {
+        _clientDateFrom = fmt(new Date(today.getFullYear(), today.getMonth(), 1));
+        _clientDateTo   = fmt(today);
+    } else if (preset === 'last_month') {
+        const end = new Date(today.getFullYear(), today.getMonth(), 0);
+        _clientDateFrom = fmt(new Date(end.getFullYear(), end.getMonth(), 1));
+        _clientDateTo   = fmt(end);
+    } else if (preset === 'last_30') {
+        _clientDateFrom = fmt(new Date(today - 30*864e5));
+        _clientDateTo   = fmt(today);
+    } else if (preset === 'last_90') {
+        _clientDateFrom = fmt(new Date(today - 90*864e5));
+        _clientDateTo   = fmt(today);
+    }
+    if (_selectedClientId) selectClient(_selectedClientId);
+}
+
+function applyClientDateFilter() {
+    _clientDateFrom = document.getElementById('clientDateFrom')?.value || '';
+    _clientDateTo   = document.getElementById('clientDateTo')?.value   || '';
+    if (_selectedClientId && _clientDateFrom && _clientDateTo) selectClient(_selectedClientId);
+}
+
+function _fmt$(n) {
+    return '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function loadClientsPage() {
+    // Initialise date range from preset if not already set
+    if (!_clientDateFrom) onClientDatePreset();
+    const panel = document.getElementById('clientListPanel');
+    const countEl = document.getElementById('clientCount');
+    if (panel) panel.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-secondary);font-size:13px">Loading…</div>`;
+    try {
+        _clientsData = await fetch('/api/clients').then(r => r.json());
+        if (countEl) countEl.textContent = `${_clientsData.length} client${_clientsData.length !== 1 ? 's' : ''}`;
+        if (!panel) return;
+        if (!_clientsData.length) {
+            panel.innerHTML = `<div style="text-align:center;padding:40px 16px;color:var(--text-secondary);font-size:13px">No clients yet.<br>Click <strong>+ New Client</strong> to get started.</div>`;
+            return;
+        }
+
+        // Fetch this-month totals for all clients
+        const { firstDay, todayStr } = _clientDateRange();
+        const costResults = await Promise.all(_clientsData.map(c =>
+            fetch(`/api/clients/${c.id}/costs?date_from=${firstDay}&date_to=${todayStr}`)
+                .then(r => r.json()).catch(() => ({ total: 0 }))
+        ));
+
+        panel.innerHTML = _clientsData.map((c, i) => {
+            const cost = costResults[i]?.total ?? 0;
+            const clouds = [...new Set((c.mappings || []).map(m => m.cloud.toUpperCase()))].join(' · ');
+            const isActive = c.id === _selectedClientId;
+            return `<div class="client-list-item${isActive ? ' active' : ''}" onclick="selectClient(${c.id})"
+                        style="padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;${isActive?'background:var(--accent-subtle,rgba(79,110,247,.08));':''}">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="font-size:13px;font-weight:500;color:var(--text-primary)">${_esc(c.name)}</span>
+                    <span style="font-size:13px;font-weight:600;color:var(--accent)">${_fmt$(cost)}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:11px;color:var(--text-secondary)">${clouds || 'No mappings'}</span>
+                    <div style="display:flex;gap:4px">
+                        <button class="btn-mini" onclick="event.stopPropagation();openClientForm(${c.id})" title="Edit">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-mini" onclick="event.stopPropagation();deleteClientById(${c.id},'${_esc(c.name)}')" title="Delete" style="color:var(--red)">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+
+        // Re-select active client if any
+        if (_selectedClientId) selectClient(_selectedClientId);
+        else if (_clientsData.length) selectClient(_clientsData[0].id);
+
+    } catch(e) {
+        if (panel) panel.innerHTML = `<div style="text-align:center;padding:32px;color:var(--red);font-size:13px">Failed to load clients.</div>`;
+    }
+}
+
+function openClientReportModal() {
+    const client = _clientsData.find(c => c.id === _selectedClientId);
+    if (!client) return;
+    const modal = document.getElementById('clientReportModal');
+    const subtitle = document.getElementById('clientReportModalSubtitle');
+    const periodEl = document.getElementById('clientReportPeriodLabel');
+    if (subtitle) subtitle.innerHTML = `Sending cost report for <strong>${_esc(client.name)}</strong>`;
+    if (periodEl) periodEl.textContent = _clientPeriodLabel();
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeClientReportModal() {
+    const modal = document.getElementById('clientReportModal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function sendClientReport() {
+    const client = _clientsData.find(c => c.id === _selectedClientId);
+    if (!client) return;
+    const recipients = (document.getElementById('clientReportRecipients')?.value || '').trim();
+    if (!recipients) { showToast('Enter at least one recipient', 'error'); return; }
+
+    const btn = document.getElementById('clientReportSendBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
+    const { firstDay, todayStr } = _clientDateRange();
+    try {
+        const resp = await fetch(`/api/clients/${_selectedClientId}/send-report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ recipients, date_from: firstDay, date_to: todayStr })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            showToast(data.message || 'Report sent!', 'success');
+            closeClientReportModal();
+        } else {
+            showToast(data.error || 'Send failed', 'error');
+        }
+    } catch(e) {
+        showToast('Send failed: ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>Send'; }
+    }
+}
+
+function previewClientReport() {
+    const { firstDay, todayStr } = _clientDateRange();
+    window.open(`/api/clients/${_selectedClientId}/report-preview?date_from=${firstDay}&date_to=${todayStr}`, '_blank');
+}
+
+async function selectClient(clientId) {
+    _selectedClientId = clientId;
+    // Show action buttons
+    document.getElementById('clientSendReportBtn')?.style.setProperty('display', '');
+    document.getElementById('clientPreviewBtn')?.style.setProperty('display', '');
+    // Highlight active item
+    document.querySelectorAll('.client-list-item').forEach(el => {
+        const isActive = el.getAttribute('onclick') === `selectClient(${clientId})`;
+        el.style.background = isActive ? 'var(--accent-subtle,rgba(79,110,247,.08))' : '';
+    });
+
+    const panel = document.getElementById('clientDetailPanel');
+    if (!panel) return;
+    panel.innerHTML = `<div class="db-card" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading cost data…</div>`;
+
+    const client = _clientsData.find(c => c.id === clientId);
+    if (!client) return;
+
+    const { firstDay, todayStr } = _clientDateRange();
+
+    // Fetch current month + last month in parallel
+    const today = new Date();
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+    const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
+    const lmFrom = lastMonthStart.toISOString().slice(0,10);
+    const lmTo   = lastMonthEnd.toISOString().slice(0,10);
+
+    const [cur, prev] = await Promise.all([
+        fetch(`/api/clients/${clientId}/costs?date_from=${firstDay}&date_to=${todayStr}`).then(r => r.json()).catch(() => ({})),
+        fetch(`/api/clients/${clientId}/costs?date_from=${lmFrom}&date_to=${lmTo}`).then(r => r.json()).catch(() => ({})),
+    ]);
+
+    const total      = cur.total || 0;
+    const lastTotal  = prev.total || 0;
+    const momChange  = lastTotal > 0 ? ((total - lastTotal) / lastTotal * 100) : 0;
+    const trend      = cur.trend || [];
+    const avgDaily   = trend.length ? total / trend.length : 0;
+    const byService  = cur.by_service || [];
+    const bySub      = cur.by_subscription || [];
+    const maxSvc     = byService[0]?.cost || 1;
+    const maxSub     = bySub[0]?.cost || 1;
+    const momColor   = momChange > 0 ? 'var(--red,#c0392b)' : 'var(--green,#27ae60)';
+    const momArrow   = momChange > 0 ? '▲' : '▼';
+    const monthLabel = today.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const CLOUD_COLORS = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
+
+    // Build cloud breakdown from mappings + costs
+    const cloudTotals = {};
+    (client.mappings || []).forEach(m => {
+        const c = m.cloud.toLowerCase();
+        if (!cloudTotals[c]) cloudTotals[c] = 0;
+    });
+    // approximate per-cloud from by_subscription if available
+    bySub.forEach(s => {
+        const m = (client.mappings || []).find(mp => mp.value === s.subscription_id);
+        if (m) {
+            const c = m.cloud.toLowerCase();
+            cloudTotals[c] = (cloudTotals[c] || 0) + s.cost;
+        }
+    });
+
+    // Sparkline for trend
+    const maxT = Math.max(...trend.map(t => t.cost), 1);
+    const sparkPts = trend.map((t, i) => {
+        const x = trend.length > 1 ? (i / (trend.length - 1)) * 120 : 60;
+        const y = 22 - (t.cost / maxT) * 18;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    // Service bars
+    const svcRows = byService.slice(0, 8).map((s, i) => {
+        const barW = Math.max(3, Math.round((s.cost / maxSvc) * 100));
+        const colors = ['#185FA5','#3A77B2','#5E8FC0','#80A7CE','#A3BFDB','#BACFE5'];
+        const col = colors[Math.min(i, colors.length-1)];
+        return `<div style="display:grid;grid-template-columns:1fr 90px 70px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle,rgba(0,0,0,.04))">
+            <span style="font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(s.name)}">${_esc(s.name)}</span>
+            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${barW}%;background:${col};border-radius:3px"></div>
+            </div>
+            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)">${_fmt$(s.cost)}</span>
+        </div>`;
+    }).join('');
+
+    // Subscription bars
+    const subRows = bySub.slice(0, 6).map((s, i) => {
+        const barW = Math.max(3, Math.round((s.cost / maxSub) * 100));
+        const m = (client.mappings || []).find(mp => mp.filter_type === 'subscription_id' && mp.value === s.subscription_id);
+        const cloud = (m?.cloud || 'azure').toLowerCase();
+        const col = CLOUD_COLORS[cloud] || '#888';
+        const label = s.subscription_id || 'Unknown';
+        return `<div style="display:grid;grid-template-columns:1fr 90px 70px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle,rgba(0,0,0,.04))">
+            <div style="display:flex;align-items:center;gap:6px;overflow:hidden">
+                <span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px;background:${col}22;color:${col};flex-shrink:0">${(m?.cloud||'AZ').toUpperCase().slice(0,3)}</span>
+                <span style="font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(label)}">${_esc(label)}</span>
+            </div>
+            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${barW}%;background:${col};border-radius:3px"></div>
+            </div>
+            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)">${_fmt$(s.cost)}</span>
+        </div>`;
+    }).join('');
+
+    // Trend bars (last 14 days)
+    const recent14 = trend.slice(-14);
+    const maxBar = Math.max(...recent14.map(t => t.cost), 1);
+    const trendBars = recent14.map(t => {
+        const h = Math.max(4, Math.round((t.cost / maxBar) * 52));
+        return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">
+            <span style="font-size:9px;color:var(--text-secondary);white-space:nowrap">${_fmt$(t.cost).replace('$','')}</span>
+            <div style="width:100%;background:var(--accent);border-radius:2px 2px 0 0;height:${h}px;min-height:4px;opacity:.8"></div>
+            <span style="font-size:9px;color:var(--text-secondary);white-space:nowrap">${t.date?.slice(5) || ''}</span>
+        </div>`;
+    }).join('');
+
+    const mappingTags = (client.mappings || []).map(m => {
+        const ftLabel = m.filter_type === 'subscription_id' ? 'Sub' : m.filter_type === 'service_name' ? 'Svc' : 'RG';
+        return `<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:var(--accent-subtle,rgba(79,110,247,.1));color:var(--accent)">${m.cloud.toUpperCase()} · ${ftLabel}: ${_esc(m.value)}</span>`;
+    }).join('');
+
+    panel.innerHTML = `
+    <!-- Client header -->
+    <div class="db-card" style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div>
+                <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Client Report · ${_esc(monthLabel)}</div>
+                <div style="font-size:22px;font-weight:600;color:var(--text-primary);letter-spacing:-.02em">${_esc(client.name)}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">${mappingTags || '<span style="font-size:11px;color:var(--text-secondary)">No mappings configured</span>'}</div>
+            </div>
+            <div style="display:flex;gap:8px">
+                <button class="cp-btn-secondary" onclick="openClientForm(${client.id})" style="font-size:12px">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPI strip -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
+        <div class="db-kpi-tile">
+            <div class="db-kpi-label">This Month</div>
+            <div class="db-kpi-value-row">
+                <span class="db-kpi-value">${_fmt$(total)}</span>
+            </div>
+            <svg class="db-sparkline" viewBox="0 0 120 24" preserveAspectRatio="none">
+                ${sparkPts ? `<polyline fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${sparkPts}"/>` : ''}
+            </svg>
+            <div class="db-kpi-sub" style="color:${momColor}">${momArrow} ${Math.abs(momChange).toFixed(1)}% vs last month</div>
+        </div>
+        <div class="db-kpi-tile">
+            <div class="db-kpi-label">Last Month</div>
+            <div class="db-kpi-value-row"><span class="db-kpi-value">${_fmt$(lastTotal)}</span></div>
+            <div class="db-kpi-sub">Reference period</div>
+        </div>
+        <div class="db-kpi-tile">
+            <div class="db-kpi-label">Avg / Day</div>
+            <div class="db-kpi-value-row"><span class="db-kpi-value">${_fmt$(avgDaily)}</span></div>
+            <div class="db-kpi-sub">Based on ${trend.length} day${trend.length!==1?'s':''} with data</div>
+        </div>
+    </div>
+
+    <!-- Service breakdown + subscriptions -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div class="db-card">
+            <div class="db-card-hdr"><span class="db-card-title">Top Services</span><span class="db-card-period">This month</span></div>
+            ${byService.length ? svcRows : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No service data</div>'}
+        </div>
+        <div class="db-card">
+            <div class="db-card-hdr"><span class="db-card-title">By Subscription / Account</span><span class="db-card-period">This month</span></div>
+            ${bySub.length ? subRows : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No subscription data</div>'}
+        </div>
+    </div>
+
+    <!-- Daily trend -->
+    <div class="db-card">
+        <div class="db-card-hdr"><span class="db-card-title">Daily Spend</span><span class="db-card-period">Last ${recent14.length} days</span></div>
+        ${recent14.length ? `
+        <div style="display:flex;gap:3px;align-items:flex-end;padding:12px 0 4px;height:90px;overflow:hidden">
+            ${trendBars}
+        </div>` : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No trend data</div>'}
+    </div>`;
+}
+
+function _esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function openClientForm(clientId) {
+    const wrap = document.getElementById('clientFormWrap');
+    const titleEl = document.getElementById('clientFormTitle');
+    const nameEl = document.getElementById('clientName');
+    const editIdEl = document.getElementById('clientEditId');
+    if (!wrap) return;
+
+    if (clientId) {
+        const client = _clientsData.find(c => c.id === clientId);
+        if (!client) return;
+        titleEl.textContent = 'Edit Client';
+        nameEl.value = client.name;
+        editIdEl.value = clientId;
+        _renderMappingRows(client.mappings || []);
+    } else {
+        titleEl.textContent = 'New Client';
+        nameEl.value = '';
+        editIdEl.value = '';
+        _renderMappingRows([]);
+    }
+    wrap.style.display = '';
+    nameEl.focus();
+}
+
+function closeClientForm() {
+    const wrap = document.getElementById('clientFormWrap');
+    if (wrap) wrap.style.display = 'none';
+}
+
+function _renderMappingRows(mappings) {
+    const container = document.getElementById('clientMappingRows');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!mappings.length) {
+        addClientMappingRow();
+    } else {
+        mappings.forEach(m => addClientMappingRow(m));
+    }
+}
+
+// Labels per cloud + filter_type
+const CLIENT_FILTER_LABELS = {
+    azure: {
+        subscription_id: 'Subscription',
+        resource_group:  'Resource Group',
+        service_name:    'Service',
+    },
+    aws: {
+        subscription_id: 'AWS Account',
+        resource_group:  'Region / Group',
+        service_name:    'Service (EC2, RDS…)',
+    },
+    gcp: {
+        subscription_id: 'Project',
+        resource_group:  'Region / Group',
+        service_name:    'Service',
+    },
+};
+
+let _cmDlCounter = 0; // unique datalist IDs
+
+function addClientMappingRow(data) {
+    const container = document.getElementById('clientMappingRows');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;flex-wrap:nowrap';
+
+    const cloud = data?.cloud || 'azure';
+    const ft    = data?.filter_type || 'resource_group';
+    const savedVal = data?.value || '';
+
+    row.innerHTML = `
+        <select class="filter-input cm-cloud" style="width:90px;font-size:12px;height:32px">
+            <option value="azure" ${cloud==='azure'?'selected':''}>Azure</option>
+            <option value="aws"   ${cloud==='aws'  ?'selected':''}>AWS</option>
+            <option value="gcp"   ${cloud==='gcp'  ?'selected':''}>GCP</option>
+        </select>
+        <select class="filter-input cm-filter-type" style="width:160px;font-size:12px;height:32px">
+            <option value="subscription_id" ${ft==='subscription_id'?'selected':''}>Subscription / Account</option>
+            <option value="resource_group"  ${ft==='resource_group' ?'selected':''}>Resource Group / Region</option>
+            <option value="service_name"    ${ft==='service_name'   ?'selected':''}>Service (VM, EC2, DB…)</option>
+        </select>
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+            <select class="filter-input cm-value-select" style="width:100%;font-size:12px;height:32px">
+                <option value="">— Loading… —</option>
+            </select>
+            <input type="text" class="filter-input cm-value-custom" style="width:100%;font-size:12px;height:32px;display:none" placeholder="Type or paste value…">
+        </div>
+        <button class="btn-mini" style="color:var(--red);flex-shrink:0;margin-top:8px" onclick="this.closest('div').remove()" title="Remove">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>`;
+
+    container.appendChild(row);
+
+    const cloudSel   = row.querySelector('.cm-cloud');
+    const ftSel      = row.querySelector('.cm-filter-type');
+    const valSel     = row.querySelector('.cm-value-select');
+    const valCustom  = row.querySelector('.cm-value-custom');
+
+    async function loadOptions() {
+        const c = cloudSel.value;
+        const f = ftSel.value;
+        valSel.innerHTML = '<option value="">— Loading… —</option>';
+        valCustom.style.display = 'none';
+        try {
+            const items = await fetch(`/api/clients/filter-values?cloud=${c}&filter_type=${f}`).then(r => r.json());
+            if (items.length === 0) {
+                valSel.innerHTML = '<option value="_custom_">— No data yet, type value —</option>';
+                valCustom.style.display = '';
+                return;
+            }
+            valSel.innerHTML =
+                '<option value="">— Select —</option>' +
+                items.map(i => {
+                    const display = i.label && i.label !== i.value
+                        ? `${i.label} (${i.value})`
+                        : i.value;
+                    const sel = i.value === savedVal ? 'selected' : '';
+                    return `<option value="${_esc(i.value)}" ${sel}>${_esc(display)}</option>`;
+                }).join('') +
+                '<option value="_custom_">— Custom value… —</option>';
+        } catch(e) {
+            valSel.innerHTML = '<option value="_custom_">— Type value manually —</option>';
+            valCustom.style.display = '';
+        }
+    }
+
+    valSel.addEventListener('change', () => {
+        if (valSel.value === '_custom_') {
+            valCustom.style.display = '';
+            valCustom.focus();
+        } else {
+            valCustom.style.display = 'none';
+        }
+    });
+
+    cloudSel.addEventListener('change', loadOptions);
+    ftSel.addEventListener('change', loadOptions);
+    loadOptions();
+}
+
+async function saveClient() {
+    const nameEl = document.getElementById('clientName');
+    const editIdEl = document.getElementById('clientEditId');
+    const name = (nameEl?.value || '').trim();
+    if (!name) { showToast('Client name is required', 'error'); return; }
+
+    const mappings = [];
+    document.querySelectorAll('#clientMappingRows > div').forEach(row => {
+        const cloud      = row.querySelector('.cm-cloud')?.value || 'azure';
+        const filterType = row.querySelector('.cm-filter-type')?.value || '';
+        const selVal     = row.querySelector('.cm-value-select')?.value || '';
+        const customVal  = (row.querySelector('.cm-value-custom')?.value || '').trim();
+        const value      = (selVal === '_custom_' || selVal === '') ? customVal : selVal;
+        if (filterType && value) mappings.push({ cloud, filter_type: filterType, value });
+    });
+
+    const editId = editIdEl?.value;
+    const url = editId ? `/api/clients/${editId}` : '/api/clients';
+    const method = editId ? 'PUT' : 'POST';
+
+    try {
+        const resp = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, mappings })
+        });
+        if (!resp.ok) { const e = await resp.json(); showToast(e.error || 'Save failed', 'error'); return; }
+        showToast(`Client "${name}" ${editId ? 'updated' : 'created'}`, 'success');
+        closeClientForm();
+        loadClientsPage();
+        populateClientDropdowns();
+    } catch(e) {
+        showToast('Save failed: ' + e.message, 'error');
+    }
+}
+
+async function deleteClientById(id, name) {
+    if (!confirm(`Delete client "${name}"? This cannot be undone.`)) return;
+    try {
+        const resp = await fetch(`/api/clients/${id}`, { method: 'DELETE' });
+        if (!resp.ok) { showToast('Delete failed', 'error'); return; }
+        showToast(`Client "${name}" deleted`, 'success');
+        loadClientsPage();
+        populateClientDropdowns();
+    } catch(e) {
+        showToast('Delete failed: ' + e.message, 'error');
     }
 }
 

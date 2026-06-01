@@ -3,6 +3,7 @@
 *.env
 *.json
 !detailed-cur-Manifest.json
+!static/aws-integration-template.json
 
 # Python
 __pycache__/

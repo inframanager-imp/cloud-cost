@@ -45,8 +45,10 @@ def _get_ce_client(credentials: dict):
             "RoleArn": role_arn,
             "RoleSessionName": "cloud-cost-analyzer",
         }
-        if credentials.get("external_id"):
-            assume_kwargs["ExternalId"] = credentials["external_id"]
+        # Support both credentials-dict key and provider-record key
+        ext_id = credentials.get("external_id") or credentials.get("ExternalId") or ""
+        if ext_id:
+            assume_kwargs["ExternalId"] = ext_id
         assumed = sts.assume_role(**assume_kwargs)
         creds = assumed["Credentials"]
         return boto3.client(
@@ -171,6 +173,23 @@ def _fetch_resource_level(client, date_from: str, end_exclusive: str, account_id
                                 resource_type = "RDS Instance"
                             elif resource_id.startswith("arn:aws:elasticloadbalancing"):
                                 resource_type = "Load Balancer"
+                            elif resource_id.startswith("arn:aws:s3:::"):
+                                resource_type = "S3 Bucket"
+                                resource_id = resource_id.replace("arn:aws:s3:::", "")
+                            elif resource_id.startswith("arn:aws:lambda"):
+                                resource_type = "Lambda Function"
+                                resource_id = resource_id.split(":")[-1]
+                            elif resource_id.startswith("arn:aws:dynamodb"):
+                                resource_type = "DynamoDB Table"
+                                resource_id = resource_id.split("/")[-1]
+                            elif resource_id.startswith("arn:aws:eks"):
+                                resource_type = "EKS Cluster"
+                                resource_id = resource_id.split("/")[-1]
+                            elif resource_id.startswith("arn:aws:cloudfront"):
+                                resource_type = "CloudFront Distribution"
+                            elif resource_id.startswith("arn:aws:"):
+                                # Generic ARN — extract last segment as friendly name
+                                resource_type = "AWS Resource"
                         records.append((
                             date_str, None, service, resource_type, resource_id,
                             service, None, round(amount, 6), currency,
@@ -500,3 +519,74 @@ def fetch_aws_activity(provider_record: dict, days: int = 7) -> list:
 
     print(f"[AWS CloudTrail] Fetched {len(records)} events for account {account_id}")
     return records
+
+
+# ─── CloudFormation / Cross-Account Role helpers ──────────────────────────────
+
+def build_credentials_for_provider(provider: dict) -> dict:
+    """Build a credentials dict from a cloud_providers row.
+    Prefers role_arn + external_id (CloudFormation connect) over stored access keys.
+    Falls back to stored access keys for backward compatibility.
+    """
+    creds = {}
+    try:
+        raw = provider.get("credentials_json") or "{}"
+        creds = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    except Exception:
+        pass
+
+    # CloudFormation connect: role_arn column takes precedence
+    if provider.get("role_arn"):
+        creds["role_arn"] = provider["role_arn"]
+    if provider.get("external_id"):
+        creds["external_id"] = provider["external_id"]
+
+    return creds
+
+
+def assume_role_and_get_client(service: str, provider: dict, region: str = "us-east-1"):
+    """Return a boto3 client for the given service using the provider's role or keys."""
+    if not BOTO3_AVAILABLE:
+        raise ImportError("boto3 is not installed")
+
+    creds = build_credentials_for_provider(provider)
+    role_arn = creds.get("role_arn")
+    external_id = creds.get("external_id", "")
+
+    base_kwargs = dict(
+        aws_access_key_id=creds.get("access_key_id") or os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=creds.get("secret_access_key") or os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name=region,
+    )
+
+    if role_arn:
+        sts = boto3.client("sts", **base_kwargs)
+        assume_kwargs = {"RoleArn": role_arn, "RoleSessionName": f"cca-{service}"}
+        if external_id:
+            assume_kwargs["ExternalId"] = external_id
+        assumed = sts.assume_role(**assume_kwargs)
+        c = assumed["Credentials"]
+        return boto3.client(
+            service,
+            aws_access_key_id=c["AccessKeyId"],
+            aws_secret_access_key=c["SecretAccessKey"],
+            aws_session_token=c["SessionToken"],
+            region_name=region,
+        )
+
+    return boto3.client(service, **base_kwargs)
+
+
+def verify_role_connection(provider: dict) -> tuple:
+    """Try sts:AssumeRole to verify the cross-account connection.
+    Returns (success: bool, message: str).
+    """
+    if not BOTO3_AVAILABLE:
+        return False, "boto3 not available"
+    try:
+        client = assume_role_and_get_client("sts", provider)
+        identity = client.get_caller_identity()
+        account = identity.get("Account", "unknown")
+        return True, f"Connected to AWS account {account}"
+    except Exception as e:
+        return False, str(e)[:200]

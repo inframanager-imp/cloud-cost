@@ -133,6 +133,14 @@
             <span class="nav-text">Custom Cost</span>
         </div>
 
+        <div class="nav-item" data-page="clients" onclick="navigateTo('clients')">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+                <line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>
+            </svg>
+            <span class="nav-text">Clients</span>
+        </div>
+
         <!-- ── Operations ──────────────────────────── -->
         <div class="nav-section-label" style="border-top:1px solid var(--border)">Operations</div>
 
@@ -283,6 +291,14 @@
                 <button class="db-seg-btn" data-cloud="azure" onclick="setCloudFilter('azure')">Azure</button>
                 <button class="db-seg-btn" data-cloud="aws" onclick="setCloudFilter('aws')">AWS</button>
                 <button class="db-seg-btn" data-cloud="gcp" onclick="setCloudFilter('gcp')">GCP</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-left:10px">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text-secondary);flex-shrink:0">
+                    <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+                </svg>
+                <select id="dashClientFilter" class="filter-input" style="font-size:12px;padding:4px 8px;height:30px" onchange="setClientFilter(this.value)">
+                    <option value="">All Clients</option>
+                </select>
             </div>
         </div>
 
@@ -504,6 +520,12 @@
                         <div class="multiselect__options" id="cdAccList"></div>
                     </div>
                 </div>
+            </div>
+            <div class="cost-filter-field">
+                <label class="cost-filter-label">Client</label>
+                <select id="costsClientFilter" class="cost-filter-input" onchange="loadCostsTable()">
+                    <option value="">All Clients</option>
+                </select>
             </div>
             <div class="cost-filter-field" style="align-self:flex-end;padding-bottom:1px">
                 <button class="cp-btn-secondary" onclick="resetCostFilters()" style="height:30px;font-size:12px;padding:0 10px">Reset</button>
@@ -1121,6 +1143,125 @@
                 <div class="empty-state__sub">Set your filters above and click Calculate to see costs.</div>
               </div>
             </div>
+        </div>
+    </section>
+
+    <!-- ═══ Clients Page ══════════════════════════════════════════════════ -->
+    <section id="page-clients" class="page-section">
+
+        <!-- Header -->
+        <div class="db-header">
+            <div class="db-header-left">
+                <div class="db-breadcrumb">ANALYTICS / CLIENTS</div>
+                <h1 class="db-title">Client Cost Allocation</h1>
+                <div class="db-sync-line">
+                    <span style="font-size:12px;color:var(--text-secondary)">Allocate cloud spend to clients by subscription, resource group, or service</span>
+                </div>
+            </div>
+            <button class="cp-btn-primary" onclick="openClientForm()" style="height:36px">+ New Client</button>
+        </div>
+
+        <!-- Client form modal (hidden by default) -->
+        <div id="clientFormWrap" style="display:none;margin-bottom:16px">
+            <div class="db-card">
+                <div class="db-card-hdr" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:16px">
+                    <span class="db-card-title" id="clientFormTitle">New Client</span>
+                    <button class="btn-mini" onclick="closeClientForm()" style="margin-left:auto">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div style="display:flex;gap:24px;flex-wrap:wrap">
+                    <div style="min-width:200px">
+                        <label class="cost-filter-label" style="display:block;margin-bottom:4px">Client Name</label>
+                        <input type="text" id="clientName" class="filter-input" style="width:260px" placeholder="e.g. Acme Corp">
+                        <input type="hidden" id="clientEditId" value="">
+                    </div>
+                    <div style="flex:1;min-width:400px">
+                        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Cost Mappings</div>
+                        <div id="clientMappingRows"></div>
+                        <button class="cp-btn-secondary" style="margin-top:8px;font-size:12px" onclick="addClientMappingRow()">+ Add Mapping Row</button>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+                    <button class="cp-btn-primary" onclick="saveClient()">Save Client</button>
+                    <button class="cp-btn-secondary" onclick="closeClientForm()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Date filter + Send Report bar -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:8px">
+                <label style="font-size:12px;color:var(--text-secondary);white-space:nowrap">Date range</label>
+                <select id="clientDatePreset" class="filter-input" style="font-size:12px;height:30px" onchange="onClientDatePreset()">
+                    <option value="this_month">This Month</option>
+                    <option value="last_month">Last Month</option>
+                    <option value="last_30">Last 30 Days</option>
+                    <option value="last_90">Last 90 Days</option>
+                    <option value="custom">Custom</option>
+                </select>
+            </div>
+            <div id="clientCustomDateWrap" style="display:none;display:flex;gap:6px;align-items:center">
+                <input type="date" id="clientDateFrom" class="filter-input" style="font-size:12px;height:30px">
+                <span style="font-size:12px;color:var(--text-secondary)">to</span>
+                <input type="date" id="clientDateTo" class="filter-input" style="font-size:12px;height:30px">
+                <button class="cp-btn-secondary" style="height:30px;font-size:12px" onclick="applyClientDateFilter()">Apply</button>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:8px">
+                <button class="cp-btn-secondary" id="clientPreviewBtn" style="height:30px;font-size:12px;display:none" onclick="previewClientReport()">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Preview
+                </button>
+                <button class="cp-btn-primary" id="clientSendReportBtn" style="height:30px;font-size:12px;display:none" onclick="openClientReportModal()">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>Send Report
+                </button>
+            </div>
+        </div>
+
+        <!-- Send Report Modal -->
+        <div id="clientReportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+            <div style="background:var(--bg-card,#fff);border-radius:12px;padding:28px;width:440px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+                <div style="font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Send Client Report</div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:18px" id="clientReportModalSubtitle">Sending cost report for <strong></strong></div>
+                <label style="font-size:12px;font-weight:500;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Recipients</label>
+                <input type="text" id="clientReportRecipients" class="filter-input" style="width:100%;margin-bottom:16px" placeholder="email1@company.com, email2@company.com">
+                <label style="font-size:12px;font-weight:500;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Period</label>
+                <div id="clientReportPeriodLabel" style="font-size:13px;color:var(--text-primary);margin-bottom:20px;padding:6px 10px;background:var(--bg-subtle,#f5f5f5);border-radius:6px"></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                    <button class="cp-btn-secondary" onclick="closeClientReportModal()">Cancel</button>
+                    <button class="cp-btn-primary" id="clientReportSendBtn" onclick="sendClientReport()">
+                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>Send
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Two-panel layout: client list + detail -->
+        <div style="display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start">
+
+            <!-- LEFT: Client list -->
+            <div>
+                <div class="db-card" style="padding:0;overflow:hidden">
+                    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+                        <span style="font-size:13px;font-weight:500;color:var(--text-primary)">All Clients</span>
+                        <span style="font-size:11px;color:var(--text-secondary)" id="clientCount"></span>
+                    </div>
+                    <div id="clientListPanel" style="max-height:600px;overflow-y:auto">
+                        <div style="text-align:center;padding:32px;color:var(--text-secondary);font-size:13px">Loading…</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: Cost detail panel -->
+            <div id="clientDetailPanel">
+                <div class="db-card" style="text-align:center;padding:60px 24px;color:var(--text-secondary)">
+                    <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px;display:block;opacity:.4">
+                        <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+                    </svg>
+                    <div style="font-size:14px;font-weight:500;margin-bottom:4px">Select a client</div>
+                    <div style="font-size:12px">Click a client on the left to see their cost breakdown</div>
+                </div>
+            </div>
+
         </div>
     </section>
 
@@ -1911,20 +2052,131 @@
                         <input type="text" id="providerId" class="filter-input" placeholder="e.g. 123456789012" style="width:100%">
                     </div>
 
-                    <!-- AWS Credentials -->
-                    <div id="awsFields" style="display:none;flex-direction:column;gap:10px">
-                        <div style="background:var(--bg);border-radius:8px;padding:12px">
-                            <p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary)">
-                                Provide IAM credentials or a cross-account Role ARN. Leave blank to use instance profile / environment variables.
-                            </p>
-                            <label class="form-label">Access Key ID</label>
-                            <input type="text" id="awsKeyId" class="filter-input" placeholder="AKIA..." style="width:100%;margin-bottom:8px">
-                            <label class="form-label">Secret Access Key</label>
-                            <input type="password" id="awsSecret" class="filter-input" placeholder="Secret (stored encrypted)" style="width:100%;margin-bottom:8px">
-                            <label class="form-label">Role ARN (cross-account, optional)</label>
-                            <input type="text" id="awsRoleArn" class="filter-input" placeholder="arn:aws:iam::..." style="width:100%;margin-bottom:8px">
-                            <label class="form-label">Region</label>
-                            <input type="text" id="awsRegion" class="filter-input" placeholder="us-east-1" value="us-east-1" style="width:100%">
+                    <!-- AWS Credentials — CloudFormation Connect + legacy fallback -->
+                    <div id="awsFields" style="display:none;flex-direction:column;gap:12px">
+
+                        <!-- ── Tab bar ── -->
+                        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:12px">
+                            <button id="awsTabCF" onclick="switchAwsTab('cf')"
+                                style="flex:1;padding:8px 12px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-weight:500">
+                                🔗 One-Click Connect
+                            </button>
+                            <button id="awsTabKeys" onclick="switchAwsTab('keys')"
+                                style="flex:1;padding:8px 12px;border:none;background:var(--bg);color:var(--text-secondary);cursor:pointer">
+                                🔑 Access Keys (legacy)
+                            </button>
+                        </div>
+
+                        <!-- ── CloudFormation Connect tab ── -->
+                        <div id="awsPanelCF" style="display:flex;flex-direction:column;gap:12px">
+                            <div style="background:var(--bg);border-radius:10px;padding:16px">
+                                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                                    <img src="/static/img/aws-logo.svg" style="height:22px">
+                                    <span style="font-size:14px;font-weight:600;color:var(--text-primary)">Secure Cross-Account Connection</span>
+                                </div>
+                                <p style="margin:0 0 12px;font-size:12px;color:var(--text-secondary);line-height:1.6">
+                                    We create a <strong>read-only IAM role</strong> + <strong>CUR report</strong> in your AWS account via CloudFormation.<br>
+                                    No access keys stored. Connection is secured with a unique ExternalId.
+                                </p>
+                                <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text-secondary);margin-bottom:14px">
+                                    <div>✅ &nbsp;Run the CloudFormation stack below</div>
+                                    <div>✅ &nbsp;Stack creates IAM Role + CUR report + S3 bucket</div>
+                                    <div>✅ &nbsp;Paste the Role ARN and start syncing — takes ~2 min</div>
+                                </div>
+
+                                <!-- Loading state -->
+                                <div id="awsCFLoading" style="text-align:center;padding:16px;color:var(--text-secondary);font-size:12px">
+                                    Generating connect command… <span style="animation:spin 1s linear infinite;display:inline-block">⟳</span>
+                                </div>
+
+                                <!-- Connect buttons -->
+                                <div id="awsCFButtons" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+                                    <button id="awsConsoleBtn" onclick="openAWSConsole()" class="cp-btn-primary" style="height:34px;font-size:12px">
+                                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:5px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                        Connect via AWS Console
+                                    </button>
+                                    <div style="position:relative">
+                                        <button onclick="toggleAwsMoreMenu()" class="cp-btn-secondary" style="height:34px;font-size:12px">
+                                            More Options ▾
+                                        </button>
+                                        <div id="awsMoreMenu" style="display:none;position:absolute;top:38px;left:0;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:180px;z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.15)">
+                                            <button onclick="showAWSCLIModal()" style="display:block;width:100%;padding:8px 12px;text-align:left;background:none;border:none;font-size:12px;color:var(--text-primary);cursor:pointer;border-radius:4px">
+                                                Connect via AWS CLI
+                                            </button>
+                                            <button onclick="showAWSTerraformModal()" style="display:block;width:100%;padding:8px 12px;text-align:left;background:none;border:none;font-size:12px;color:var(--text-primary);cursor:pointer;border-radius:4px">
+                                                Connect via Terraform
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- OR: manual Role ARN entry -->
+                                <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+                                    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;text-align:center;text-transform:uppercase;letter-spacing:.04em">— or enter Role ARN manually after stack creation —</div>
+                                    <label class="form-label">Role ARN</label>
+                                    <input type="text" id="awsCFRoleArn" class="filter-input" placeholder="arn:aws:iam::123456789012:role/CloudCostAnalyzerRole-..." style="width:100%;margin-bottom:8px">
+                                    <label class="form-label">CUR S3 Bucket (optional, auto-detected)</label>
+                                    <input type="text" id="awsCFBucket" class="filter-input" placeholder="prism-cur-{tenant-id}" style="width:100%;margin-bottom:8px">
+                                    <div style="display:flex;gap:8px;align-items:center">
+                                        <button onclick="verifyAWSRole()" class="cp-btn-secondary" style="font-size:12px;height:30px">Verify & Save</button>
+                                        <span id="awsVerifyStatus" style="font-size:12px;color:var(--text-secondary)"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Connection status -->
+                                <div id="awsConnectionStatus" style="display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:12px"></div>
+                            </div>
+                        </div>
+
+                        <!-- ── Legacy access keys tab ── -->
+                        <div id="awsPanelKeys" style="display:none;flex-direction:column;gap:8px">
+                            <div style="background:var(--bg);border-radius:8px;padding:12px">
+                                <p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary)">
+                                    Legacy: IAM credentials stored in the database. Use One-Click Connect for better security.
+                                </p>
+                                <label class="form-label">Access Key ID</label>
+                                <input type="text" id="awsKeyId" class="filter-input" placeholder="AKIA..." style="width:100%;margin-bottom:8px">
+                                <label class="form-label">Secret Access Key</label>
+                                <input type="password" id="awsSecret" class="filter-input" placeholder="Secret (stored encrypted)" style="width:100%;margin-bottom:8px">
+                                <label class="form-label">Role ARN (cross-account, optional)</label>
+                                <input type="text" id="awsRoleArn" class="filter-input" placeholder="arn:aws:iam::..." style="width:100%;margin-bottom:8px">
+                                <label class="form-label">Region</label>
+                                <input type="text" id="awsRegion" class="filter-input" placeholder="us-east-1" value="us-east-1" style="width:100%">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AWS CLI Modal -->
+                    <div id="awsCLIModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center">
+                        <div style="background:#1a1a2e;border-radius:12px;padding:24px;width:640px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,.5)">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                                <div style="font-size:15px;font-weight:600;color:#fff">Connect via AWS CLI</div>
+                                <button onclick="document.getElementById('awsCLIModal').style.display='none'" style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer">&times;</button>
+                            </div>
+                            <div style="font-size:11px;color:#aaa;margin-bottom:10px">
+                                Run this command in your terminal. Must be executed in <strong style="color:#ff9900">us-east-1</strong> regardless of your infrastructure region.
+                            </div>
+                            <div style="position:relative">
+                                <pre id="awsCLICommand" style="background:#0d0d1a;color:#7ec8e3;padding:16px;border-radius:8px;font-size:11px;line-height:1.6;white-space:pre-wrap;word-break:break-all;margin:0;max-height:280px;overflow-y:auto"></pre>
+                                <button onclick="copyAWSCLICommand()" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer" id="awsCopyCLIBtn">Copy</button>
+                            </div>
+                            <div style="margin-top:14px;font-size:11px;color:#aaa">
+                                After the stack is created (~2 min), copy the <strong style="color:#ff9900">RoleARN</strong> from CloudFormation Outputs and paste it into the Role ARN field above.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terraform Modal -->
+                    <div id="awsTerraformModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center">
+                        <div style="background:#1a1a2e;border-radius:12px;padding:24px;width:640px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,.5)">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                                <div style="font-size:15px;font-weight:600;color:#fff">Connect via Terraform</div>
+                                <button onclick="document.getElementById('awsTerraformModal').style.display='none'" style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer">&times;</button>
+                            </div>
+                            <div style="position:relative">
+                                <pre id="awsTerraformCode" style="background:#0d0d1a;color:#a8d8a8;padding:16px;border-radius:8px;font-size:11px;line-height:1.6;white-space:pre-wrap;word-break:break-all;margin:0;max-height:320px;overflow-y:auto"></pre>
+                                <button onclick="copyTerraformCode()" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer">Copy</button>
+                            </div>
                         </div>
                     </div>
 
@@ -3312,6 +3564,8 @@ function onProviderTypeChange() {
     const isSaas = ['jira','bitbucket','cursor','openai'].includes(t);
     // Cloud provider fields
     document.getElementById('awsFields').style.display = t === 'aws' ? 'flex' : 'none';
+    // Load CloudFormation connect command when AWS tab is shown
+    if (t === 'aws') { switchAwsTab('cf'); loadAWSConnectCommand(); }
     document.getElementById('gcpFields').style.display = t === 'gcp' ? 'flex' : 'none';
     document.getElementById('azureFields').style.display = t === 'azure' ? 'block' : 'none';
     // SaaS redirect panel

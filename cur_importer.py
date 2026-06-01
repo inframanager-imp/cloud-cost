@@ -430,3 +430,94 @@ def get_available_manifests(credentials: dict, bucket: str, prefix: str) -> list
             "last_modified": m["last_modified"].isoformat() if hasattr(m["last_modified"], "isoformat") else str(m["last_modified"]),
         })
     return result
+
+
+# ─── CloudFormation auto-connect CUR import ──────────────────────────────────
+
+def import_from_s3_bucket(provider: dict, credentials: dict = None,
+                          bucket: str = None, date_from: str = None,
+                          date_to: str = None, tenant_id: int = None) -> dict:
+    """
+    High-level: assume cross-account role, list CUR manifests in the provider's
+    cur_bucket, download + parse the latest month, insert into cost_data.
+
+    provider: cloud_providers row dict (must have role_arn + external_id or keys)
+    Returns: {"records": N, "skipped": N, "period": "..."}
+    """
+    if not BOTO3_AVAILABLE:
+        raise ImportError("boto3 is not installed")
+
+    # Build credentials from provider record
+    if credentials is None:
+        try:
+            raw = provider.get("credentials_json") or "{}"
+            credentials = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except Exception:
+            credentials = {}
+
+    # Prefer role_arn column over credentials_json
+    if provider.get("role_arn"):
+        credentials["role_arn"]   = provider["role_arn"]
+    if provider.get("external_id"):
+        credentials["external_id"] = provider["external_id"]
+
+    # Determine bucket
+    if not bucket:
+        bucket = provider.get("cur_bucket", "")
+    if not bucket:
+        raise ValueError("No CUR bucket configured for this provider")
+
+    # Determine prefix (CUR delivers to reports/{report-name}/...)
+    report_name = provider.get("cur_report_name", "")
+    prefix = f"reports/{report_name}" if report_name else "reports"
+
+    account_id = provider.get("provider_id", "")
+    tid = tenant_id or provider.get("tenant_id", 1)
+
+    # Default: current month
+    now = datetime.utcnow()
+    if not date_from:
+        date_from = now.replace(day=1).strftime("%Y-%m-%d")
+    if not date_to:
+        date_to = now.strftime("%Y-%m-%d")
+
+    print(f"[CUR] import_from_s3_bucket: s3://{bucket}/{prefix} for {account_id} ({date_from}→{date_to})")
+
+    records, skipped = fetch_cur_records(
+        credentials=credentials,
+        bucket=bucket,
+        prefix=prefix,
+        date_from=date_from,
+        date_to=date_to,
+        account_id=account_id,
+    )
+
+    period = f"{date_from} to {date_to}"
+    if not records:
+        print(f"[CUR] No records found for {period}")
+        return {"records": 0, "skipped": skipped, "period": period}
+
+    # Stamp tenant_id on each record before inserting
+    stamped = []
+    for r in records:
+        row_list = list(r)
+        # schema: (date, rg, svc, rtype, rname, meter_cat, meter_sub, cost, currency, sub_id, tags, cloud_provider)
+        # insert_cost_records_with_tenant expects tenant_id as 13th element
+        stamped.append(tuple(row_list))
+
+    from database import insert_cost_records, get_db
+    conn = get_db()
+    # Use executemany directly so we can inject tenant_id
+    conn.executemany("""
+        INSERT INTO cost_data
+            (date, resource_group, service_name, resource_type, resource_name,
+             meter_category, meter_subcategory, cost, currency, subscription_id,
+             tags, cloud_provider, tenant_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, [r + (tid,) for r in stamped])
+    conn.commit()
+    inserted = len(stamped)
+    conn.close()
+
+    print(f"[CUR] Inserted {inserted} records for {account_id}, period {period}")
+    return {"records": inserted, "skipped": skipped, "period": period}

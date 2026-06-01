@@ -1,0 +1,273 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Cloud Cost Analyzer — Cross-account integration. Creates an IAM role, CUR report, and S3 bucket so Cloud Cost Analyzer can read your billing data without storing credentials.",
+
+  "Parameters": {
+    "TenantID": {
+      "Type": "String",
+      "Description": "Your Cloud Cost Analyzer tenant identifier"
+    },
+    "ExternalID": {
+      "Type": "String",
+      "Description": "Random UUID used as ExternalId in the IAM trust policy (security best practice)"
+    },
+    "PrismAccountID": {
+      "Type": "String",
+      "Description": "AWS Account ID of the Cloud Cost Analyzer server (used in the IAM trust principal)"
+    },
+    "PrismDomain": {
+      "Type": "String",
+      "Description": "Base URL of your Cloud Cost Analyzer instance (e.g. https://finops.example.com)"
+    },
+    "ReportName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "CUR report name (leave blank to auto-generate as PrismReport-{TenantID})"
+    },
+    "BucketName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "S3 bucket name for CUR delivery (leave blank to auto-generate as prism-cur-{TenantID})"
+    }
+  },
+
+  "Conditions": {
+    "UseDefaultReportName": {"Fn::Equals": [{"Ref": "ReportName"}, ""]},
+    "UseDefaultBucketName": {"Fn::Equals": [{"Ref": "BucketName"}, ""]}
+  },
+
+  "Resources": {
+
+    "CURBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::If": [
+            "UseDefaultBucketName",
+            {"Fn::Sub": "prism-cur-${TenantID}"},
+            {"Ref": "BucketName"}
+          ]
+        },
+        "VersioningConfiguration": {"Status": "Suspended"},
+        "LifecycleConfiguration": {
+          "Rules": [{
+            "Id": "ExpireOldReports",
+            "Status": "Enabled",
+            "ExpirationInDays": 365
+          }]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
+
+    "CURBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {"Ref": "CURBucket"},
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowCURServiceGetBucketACL",
+              "Effect": "Allow",
+              "Principal": {"Service": "billingreports.amazonaws.com"},
+              "Action": ["s3:GetBucketAcl", "s3:GetBucketPolicy"],
+              "Resource": {"Fn::GetAtt": ["CURBucket", "Arn"]}
+            },
+            {
+              "Sid": "AllowCURServicePutObject",
+              "Effect": "Allow",
+              "Principal": {"Service": "billingreports.amazonaws.com"},
+              "Action": "s3:PutObject",
+              "Resource": {"Fn::Sub": "${CURBucket.Arn}/*"}
+            },
+            {
+              "Sid": "AllowCrossAccountRoleRead",
+              "Effect": "Allow",
+              "Principal": {"AWS": {"Fn::GetAtt": ["CrossAccountRole", "Arn"]}},
+              "Action": ["s3:GetObject", "s3:ListBucket"],
+              "Resource": [
+                {"Fn::GetAtt": ["CURBucket", "Arn"]},
+                {"Fn::Sub": "${CURBucket.Arn}/*"}
+              ]
+            }
+          ]
+        }
+      }
+    },
+
+    "CURReportDefinition": {
+      "Type": "AWS::CUR::ReportDefinition",
+      "DependsOn": "CURBucketPolicy",
+      "Properties": {
+        "ReportName": {
+          "Fn::If": [
+            "UseDefaultReportName",
+            {"Fn::Sub": "PrismReport-${TenantID}"},
+            {"Ref": "ReportName"}
+          ]
+        },
+        "TimeUnit": "DAILY",
+        "Format": "textORcsv",
+        "Compression": "GZIP",
+        "AdditionalSchemaElements": ["RESOURCES"],
+        "S3Bucket": {"Ref": "CURBucket"},
+        "S3Prefix": "reports",
+        "S3Region": "us-east-1",
+        "RefreshClosedReports": true,
+        "ReportVersioning": "OVERWRITE_REPORT"
+      }
+    },
+
+    "CrossAccountRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "CloudCostAnalyzerRole-${TenantID}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": {
+              "AWS": {"Fn::Sub": "arn:aws:iam::${PrismAccountID}:root"}
+            },
+            "Action": "sts:AssumeRole",
+            "Condition": {
+              "StringEquals": {"sts:ExternalId": {"Ref": "ExternalID"}}
+            }
+          }]
+        },
+        "Policies": [{
+          "PolicyName": "CloudCostAnalyzerReadOnly",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "CostExplorerAccess",
+                "Effect": "Allow",
+                "Action": ["ce:*"],
+                "Resource": "*"
+              },
+              {
+                "Sid": "CURBucketAccess",
+                "Effect": "Allow",
+                "Action": ["s3:GetObject", "s3:ListBucket"],
+                "Resource": [
+                  {"Fn::GetAtt": ["CURBucket", "Arn"]},
+                  {"Fn::Sub": "${CURBucket.Arn}/*"}
+                ]
+              },
+              {
+                "Sid": "EC2ReadAccess",
+                "Effect": "Allow",
+                "Action": ["ec2:Describe*"],
+                "Resource": "*"
+              },
+              {
+                "Sid": "RDSReadAccess",
+                "Effect": "Allow",
+                "Action": ["rds:Describe*"],
+                "Resource": "*"
+              },
+              {
+                "Sid": "ELBReadAccess",
+                "Effect": "Allow",
+                "Action": ["elasticloadbalancing:Describe*"],
+                "Resource": "*"
+              },
+              {
+                "Sid": "CloudWatchReadAccess",
+                "Effect": "Allow",
+                "Action": ["cloudwatch:GetMetricStatistics", "cloudwatch:ListMetrics"],
+                "Resource": "*"
+              },
+              {
+                "Sid": "OrganizationsReadAccess",
+                "Effect": "Allow",
+                "Action": ["organizations:Describe*", "organizations:List*"],
+                "Resource": "*"
+              },
+              {
+                "Sid": "CURDescribeAccess",
+                "Effect": "Allow",
+                "Action": ["cur:DescribeReportDefinitions"],
+                "Resource": "*"
+              },
+              {
+                "Sid": "SavingsPlansAccess",
+                "Effect": "Allow",
+                "Action": ["savingsplans:Describe*"],
+                "Resource": "*"
+              }
+            ]
+          }
+        }],
+        "Tags": [
+          {"Key": "ManagedBy", "Value": "CloudCostAnalyzer"},
+          {"Key": "TenantID", "Value": {"Ref": "TenantID"}}
+        ]
+      }
+    },
+
+    "CURNotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {"Fn::Sub": "prism-cur-notify-${TenantID}"},
+        "Subscription": [{
+          "Protocol": "https",
+          "Endpoint": {"Fn::Sub": "${PrismDomain}/api/aws/cur-uploaded"}
+        }]
+      }
+    },
+
+    "CURBucketNotification": {
+      "Type": "AWS::S3::Bucket",
+      "DependsOn": "CURNotificationTopic",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "IGNORE-this-is-handled-by-CURBucket"},
+        "NotificationConfiguration": {
+          "TopicConfigurations": [{
+            "Event": "s3:ObjectCreated:*",
+            "Filter": {
+              "S3Key": {
+                "Rules": [{"Name": "suffix", "Value": "Manifest.json"}]
+              }
+            },
+            "Topic": {"Ref": "CURNotificationTopic"}
+          }]
+        }
+      }
+    }
+  },
+
+  "Outputs": {
+    "RoleARN": {
+      "Description": "ARN of the cross-account IAM role — paste this into Cloud Cost Analyzer",
+      "Value": {"Fn::GetAtt": ["CrossAccountRole", "Arn"]},
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-RoleARN"}}
+    },
+    "CURBucketName": {
+      "Description": "S3 bucket receiving your CUR exports",
+      "Value": {"Ref": "CURBucket"},
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-CURBucket"}}
+    },
+    "CURReportName": {
+      "Description": "Name of the CUR report definition",
+      "Value": {
+        "Fn::If": [
+          "UseDefaultReportName",
+          {"Fn::Sub": "PrismReport-${TenantID}"},
+          {"Ref": "ReportName"}
+        ]
+      }
+    },
+    "ExternalID": {
+      "Description": "ExternalId used in the IAM trust policy",
+      "Value": {"Ref": "ExternalID"}
+    }
+  }
+}
