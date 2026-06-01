@@ -85,16 +85,6 @@
               "Principal": {"Service": "billingreports.amazonaws.com"},
               "Action": "s3:PutObject",
               "Resource": {"Fn::Sub": "${CURBucket.Arn}/*"}
-            },
-            {
-              "Sid": "AllowCrossAccountRoleRead",
-              "Effect": "Allow",
-              "Principal": {"AWS": {"Fn::GetAtt": ["CrossAccountRole", "Arn"]}},
-              "Action": ["s3:GetObject", "s3:ListBucket"],
-              "Resource": [
-                {"Fn::GetAtt": ["CURBucket", "Arn"]},
-                {"Fn::Sub": "${CURBucket.Arn}/*"}
-              ]
             }
           ]
         }
@@ -216,39 +206,7 @@
     "CURNotificationTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": {"Fn::Sub": "prism-cur-notify-${TenantID}"},
-        "Subscription": [{
-          "Protocol": "https",
-          "Endpoint": {"Fn::Sub": "${PrismDomain}/api/aws/cur-uploaded"}
-        }]
-      }
-    },
-
-    "CURNotificationTopicPolicy": {
-      "Type": "AWS::SNS::TopicPolicy",
-      "Properties": {
-        "Topics": [{"Ref": "CURNotificationTopic"}],
-        "PolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [{
-            "Sid": "AllowS3Publish",
-            "Effect": "Allow",
-            "Principal": {"Service": "s3.amazonaws.com"},
-            "Action": "SNS:Publish",
-            "Resource": {"Ref": "CURNotificationTopic"},
-            "Condition": {
-              "ArnLike": {
-                "aws:SourceArn": {
-                  "Fn::If": [
-                    "UseDefaultBucketName",
-                    {"Fn::Sub": "arn:aws:s3:::prism-cur-${TenantID}-${ExternalID}"},
-                    {"Fn::Sub": "arn:aws:s3:::${BucketName}"}
-                  ]
-                }
-              }
-            }
-          }]
-        }
+        "TopicName": {"Fn::Sub": "prism-cur-notify-${TenantID}"}
       }
     }
   },
