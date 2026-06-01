@@ -2056,23 +2056,38 @@
                     <div id="awsFields" style="display:none;flex-direction:column;gap:10px">
 
                         <!-- Quick Setup Script -->
-                        <div style="background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border)">
+                        <div style="background:var(--bg);border-radius:8px;padding:14px;border:1px solid var(--border)">
                             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                                <span style="font-size:13px">🚀</span>
-                                <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Quick Setup (Recommended)</span>
-                                <span style="font-size:10px;padding:2px 7px;background:var(--accent);color:#fff;border-radius:4px;font-weight:500">1 command</span>
+                                <span style="font-size:14px">🚀</span>
+                                <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Quick Setup</span>
+                                <span style="font-size:10px;padding:2px 7px;background:var(--accent);color:#fff;border-radius:4px;font-weight:500">1 command · auto-saves</span>
                             </div>
                             <p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary);line-height:1.6">
-                                Run this in your customer's AWS CLI — auto-creates IAM user, policy, S3 bucket and CUR report. Then paste the output below.
+                                Run this in the customer's AWS CLI — creates IAM user, S3 bucket &amp; CUR report, then <strong>auto-saves to your tool</strong>.
                             </p>
-                            <div style="position:relative">
-                                <pre id="awsSetupCmd" style="background:#1a1a2e;color:#7ec8e3;padding:12px 40px 12px 12px;border-radius:8px;font-size:11px;margin:0;white-space:pre-wrap;word-break:break-all">curl -sLk https://finops.prismxai.com/static/aws-setup.sh | bash</pre>
-                                <button onclick="copyAwsSetupCmd()" id="awsSetupCopyBtn"
-                                    style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.15);border:none;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer">Copy</button>
+
+                            <!-- Loading state -->
+                            <div id="awsSetupLoading" style="text-align:center;padding:12px;color:var(--text-secondary);font-size:12px">
+                                Generating secure command… ⟳
                             </div>
-                            <div style="margin-top:8px;font-size:11px;color:var(--text-secondary)">
-                                ⬇️ Script outputs credentials — paste them into the fields below
+
+                            <!-- Command block (shown after token loads) -->
+                            <div id="awsSetupCmdWrap" style="display:none">
+                                <div style="position:relative">
+                                    <pre id="awsSetupCmd" style="background:#1a1a2e;color:#7ec8e3;padding:12px 70px 12px 12px;border-radius:8px;font-size:11px;margin:0;white-space:pre-wrap;word-break:break-all;line-height:1.6"></pre>
+                                    <button onclick="copyAwsSetupCmd()" id="awsSetupCopyBtn"
+                                        style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.15);border:none;color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer">Copy</button>
+                                </div>
+
+                                <!-- Timer + status -->
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+                                    <span style="font-size:11px;color:var(--text-secondary)">⏱ Token expires in <span id="awsTokenTimer" style="font-weight:600;color:var(--text-primary)">30:00</span></span>
+                                    <span id="awsSetupPollStatus" style="font-size:11px;color:var(--text-secondary)">⏳ Waiting for script to run…</span>
+                                </div>
                             </div>
+
+                            <!-- Connection status banner -->
+                            <div id="awsAutoConnectStatus" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;font-size:12px"></div>
                         </div>
 
                         <div style="display:flex;align-items:center;gap:8px">
@@ -3595,11 +3610,110 @@ async function curTestConnection() {
 
 function updateAWSPolicy() { /* no-op: policy is static */ }
 
+// ─── AWS Quick Setup Token Flow ───────────────────────────────────────────────
+let _awsSetupToken = null;
+let _awsSetupPollTimer = null;
+let _awsSetupCountdown = null;
+let _awsSetupExpiry = null;
+
+async function loadAwsSetupToken() {
+    const loading = document.getElementById('awsSetupLoading');
+    const cmdWrap = document.getElementById('awsSetupCmdWrap');
+    if (!loading) return;
+
+    try {
+        const data = await fetch('/api/aws/setup-token').then(r => r.json());
+        _awsSetupToken = data.token;
+        _awsSetupExpiry = Date.now() + (data.expires_minutes * 60 * 1000);
+
+        const cmdEl = document.getElementById('awsSetupCmd');
+        if (cmdEl) cmdEl.textContent = data.command;
+
+        loading.style.display = 'none';
+        if (cmdWrap) cmdWrap.style.display = 'block';
+
+        startAwsSetupCountdown();
+        startAwsSetupPolling();
+    } catch(e) {
+        if (loading) loading.textContent = 'Failed to generate command. Refresh and try again.';
+    }
+}
+
+function startAwsSetupCountdown() {
+    if (_awsSetupCountdown) clearInterval(_awsSetupCountdown);
+    _awsSetupCountdown = setInterval(() => {
+        const remaining = Math.max(0, _awsSetupExpiry - Date.now());
+        const mins = String(Math.floor(remaining / 60000)).padStart(2,'0');
+        const secs = String(Math.floor((remaining % 60000) / 1000)).padStart(2,'0');
+        const el = document.getElementById('awsTokenTimer');
+        if (el) el.textContent = `${mins}:${secs}`;
+        if (remaining === 0) {
+            clearInterval(_awsSetupCountdown);
+            stopAwsSetupPolling();
+            const pollEl = document.getElementById('awsSetupPollStatus');
+            if (pollEl) pollEl.textContent = '⏰ Token expired — refresh page to get a new command';
+        }
+    }, 1000);
+}
+
+function startAwsSetupPolling() {
+    if (_awsSetupPollTimer) clearInterval(_awsSetupPollTimer);
+    _awsSetupPollTimer = setInterval(async () => {
+        if (!_awsSetupToken) return;
+        try {
+            const data = await fetch(`/api/aws/setup-status?token=${_awsSetupToken}`).then(r => r.json());
+            if (data.status === 'connected') {
+                stopAwsSetupPolling();
+                showAwsAutoConnectSuccess(data.provider_id);
+                // Reload providers list
+                if (typeof loadCloudProvidersPage === 'function') loadCloudProvidersPage();
+            } else if (data.status === 'failed') {
+                stopAwsSetupPolling();
+                showAwsAutoConnectError();
+            }
+        } catch(e) { /* ignore */ }
+    }, 3000);
+}
+
+function stopAwsSetupPolling() {
+    if (_awsSetupPollTimer) { clearInterval(_awsSetupPollTimer); _awsSetupPollTimer = null; }
+    if (_awsSetupCountdown) { clearInterval(_awsSetupCountdown); _awsSetupCountdown = null; }
+}
+
+function showAwsAutoConnectSuccess(accountId) {
+    const el = document.getElementById('awsAutoConnectStatus');
+    const pollEl = document.getElementById('awsSetupPollStatus');
+    if (pollEl) pollEl.textContent = '✅ Connected!';
+    if (el) {
+        el.style.display = 'block';
+        el.style.background = 'rgba(39,174,96,.1)';
+        el.style.border = '1px solid rgba(39,174,96,.3)';
+        el.innerHTML = `<strong style="color:#27ae60">✅ AWS account connected!</strong><br>
+            <span style="color:var(--text-secondary);font-size:11px">Account: ${accountId} · Cost sync started in background · Data appears in 1-2 min</span>`;
+    }
+    showToast(`AWS ${accountId} connected!`, 'success');
+    setTimeout(() => hideProviderModal(), 3000);
+}
+
+function showAwsAutoConnectError() {
+    const el = document.getElementById('awsAutoConnectStatus');
+    if (el) {
+        el.style.display = 'block';
+        el.style.background = 'rgba(192,57,43,.08)';
+        el.style.border = '1px solid rgba(192,57,43,.3)';
+        el.innerHTML = `<strong style="color:var(--red)">❌ Auto-connect failed</strong><br>
+            <span style="color:var(--text-secondary);font-size:11px">Enter credentials manually in the fields below.</span>`;
+    }
+}
+
 function copyAwsSetupCmd() {
     const text = document.getElementById('awsSetupCmd')?.textContent || '';
     navigator.clipboard.writeText(text).then(() => {
         const btn = document.getElementById('awsSetupCopyBtn');
         if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+        // Update poll status to show waiting
+        const pollEl = document.getElementById('awsSetupPollStatus');
+        if (pollEl) pollEl.textContent = '⏳ Waiting for script to run…';
     });
 }
 
@@ -3757,6 +3871,7 @@ function showProviderModal(id) {
 }
 
 function hideProviderModal() {
+    stopAwsSetupPolling();
     document.getElementById('providerModal').style.display = 'none';
 }
 
@@ -3771,6 +3886,7 @@ function onProviderTypeChange() {
     const isSaas = ['jira','bitbucket','cursor','openai'].includes(t);
     // Cloud provider fields
     document.getElementById('awsFields').style.display = t === 'aws' ? 'flex' : 'none';
+    if (t === 'aws') { stopAwsSetupPolling(); loadAwsSetupToken(); }
     document.getElementById('gcpFields').style.display = t === 'gcp' ? 'flex' : 'none';
     document.getElementById('azureFields').style.display = t === 'azure' ? 'block' : 'none';
     // SaaS redirect panel

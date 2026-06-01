@@ -55,6 +55,9 @@ from database import (
     build_client_sql_filter, get_client_filter_values,
     # AWS CloudFormation connect
     get_or_create_aws_external_id, save_aws_handshake, get_aws_connection_status,
+    # AWS one-click setup tokens
+    create_aws_setup_token, validate_aws_setup_token,
+    consume_aws_setup_token, get_aws_setup_token_status,
 )
 from azure_fetcher import (fetch_cost_data, fetch_activity_logs, resolve_caller_names, fetch_subscriptions,
                            fetch_billing_account_costs, filter_billing_only_charges)
@@ -2683,6 +2686,122 @@ def api_aws_cur_uploaded():
         print(f"[SNS] CUR webhook error: {e}")
 
     return "", 200
+
+
+# ─── AWS One-Click Setup ─────────────────────────────────────────────────────
+
+@app.route("/api/aws/setup-token", methods=["GET"])
+@login_required
+def api_aws_setup_token():
+    """Generate a one-time setup token and return the setup command."""
+    tid = current_tenant_id()
+    token = create_aws_setup_token(tid)
+    app_url = _APP_URL
+    command = (
+        f"curl -sLk {app_url}/static/aws-setup.sh | bash -s -- --token {token} --tool-url {app_url}"
+    )
+    return jsonify({
+        "token": token,
+        "command": command,
+        "expires_minutes": 30,
+    })
+
+
+@app.route("/api/aws/auto-connect", methods=["POST"])
+def api_aws_auto_connect():
+    """Called by aws-setup.sh after creating all AWS resources.
+    No login required — authenticated via one-time token.
+    """
+    body = request.get_json(silent=True) or {}
+    token      = (body.get("token") or "").strip()
+    account_id = (body.get("account_id") or "").strip()
+    access_key = (body.get("access_key") or "").strip()
+    secret_key = (body.get("secret_key") or "").strip()
+    bucket     = (body.get("bucket") or "").strip()
+    prefix     = (body.get("prefix") or "cur").strip()
+    report     = (body.get("report_name") or "finops-daily").strip()
+    region     = (body.get("region") or "us-east-1").strip()
+    name       = (body.get("name") or f"AWS {account_id}").strip()
+
+    if not token:
+        return jsonify({"success": False, "error": "token required"}), 400
+
+    token_row = validate_aws_setup_token(token)
+    if not token_row:
+        return jsonify({"success": False, "error": "Token invalid, expired or already used"}), 401
+
+    if not account_id or not access_key or not secret_key:
+        consume_aws_setup_token(token, "", "failed")
+        return jsonify({"success": False, "error": "Missing credentials"}), 400
+
+    tid = token_row["tenant_id"]
+
+    # Save as cloud provider
+    credentials = json.dumps({
+        "access_key_id": access_key,
+        "secret_access_key": secret_key,
+        "region": region,
+    })
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM cloud_providers WHERE provider_type='aws' AND provider_id=? AND tenant_id=?",
+        (account_id, tid)
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE cloud_providers SET name=?, credentials_json=?, cur_bucket=?, cur_report_name=?, enabled=1 WHERE id=?",
+            (name, credentials, bucket, report, existing["id"])
+        )
+        provider_db_id = existing["id"]
+    else:
+        cur = conn.execute(
+            "INSERT INTO cloud_providers (provider_type, name, provider_id, credentials_json, tenant_id, cur_bucket, cur_report_name, enabled) "
+            "VALUES ('aws', ?, ?, ?, ?, ?, ?, 1)",
+            (name, account_id, credentials, tid, bucket, report)
+        )
+        provider_db_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+
+    consume_aws_setup_token(token, account_id, "connected")
+
+    # Kick off background cost sync
+    def _bg_sync():
+        try:
+            from database import get_cloud_provider
+            provider = get_cloud_provider(provider_db_id)
+            if provider:
+                from aws_fetcher import fetch_aws_costs
+                from database import insert_cost_records
+                creds = json.loads(provider.get("credentials_json") or "{}")
+                today = datetime.utcnow()
+                date_from = (today.replace(day=1)).strftime("%Y-%m-%d")
+                date_to   = today.strftime("%Y-%m-%d")
+                records = fetch_aws_costs(provider, date_from, date_to)
+                if records:
+                    insert_cost_records(records)
+                    print(f"[AutoConnect] Synced {len(records)} records for {account_id}")
+        except Exception as e:
+            print(f"[AutoConnect] Background sync failed: {e}")
+
+    import threading
+    threading.Thread(target=_bg_sync, daemon=True).start()
+
+    return jsonify({
+        "success": True,
+        "message": f"AWS account {account_id} connected and sync started",
+        "account_id": account_id,
+    })
+
+
+@app.route("/api/aws/setup-status", methods=["GET"])
+@login_required
+def api_aws_setup_status():
+    """Poll connection status for a setup token."""
+    token = (request.args.get("token") or "").strip()
+    if not token:
+        return jsonify({"status": "invalid"}), 400
+    return jsonify(get_aws_setup_token_status(token))
 
 
 # ─── Client Tagging & Cost Allocation ────────────────────────────────────────
