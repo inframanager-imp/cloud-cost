@@ -2054,6 +2054,33 @@
 
                     <!-- AWS Credentials -->
                     <div id="awsFields" style="display:none;flex-direction:column;gap:10px">
+
+                        <!-- Quick Setup Script -->
+                        <div style="background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border)">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                                <span style="font-size:13px">🚀</span>
+                                <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Quick Setup (Recommended)</span>
+                                <span style="font-size:10px;padding:2px 7px;background:var(--accent);color:#fff;border-radius:4px;font-weight:500">1 command</span>
+                            </div>
+                            <p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary);line-height:1.6">
+                                Run this in your customer's AWS CLI — auto-creates IAM user, policy, S3 bucket and CUR report. Then paste the output below.
+                            </p>
+                            <div style="position:relative">
+                                <pre id="awsSetupCmd" style="background:#1a1a2e;color:#7ec8e3;padding:12px 40px 12px 12px;border-radius:8px;font-size:11px;margin:0;white-space:pre-wrap;word-break:break-all">curl -sLk https://finops.prismxai.com/static/aws-setup.sh | bash</pre>
+                                <button onclick="copyAwsSetupCmd()" id="awsSetupCopyBtn"
+                                    style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.15);border:none;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer">Copy</button>
+                            </div>
+                            <div style="margin-top:8px;font-size:11px;color:var(--text-secondary)">
+                                ⬇️ Script outputs credentials — paste them into the fields below
+                            </div>
+                        </div>
+
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <div style="flex:1;height:1px;background:var(--border)"></div>
+                            <span style="font-size:11px;color:var(--text-secondary)">or enter manually</span>
+                            <div style="flex:1;height:1px;background:var(--border)"></div>
+                        </div>
+
                         <div style="background:var(--bg);border-radius:8px;padding:12px">
                             <p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary)">
                                 Provide IAM credentials or a cross-account Role ARN. Leave blank to use instance profile / environment variables.
@@ -3567,6 +3594,14 @@ async function curTestConnection() {
 }
 
 function updateAWSPolicy() { /* no-op: policy is static */ }
+
+function copyAwsSetupCmd() {
+    const text = document.getElementById('awsSetupCmd')?.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('awsSetupCopyBtn');
+        if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+    });
+}
 
 function copyAWSPolicy() {
     const text = document.getElementById('awsIAMPolicy')?.textContent || '';
