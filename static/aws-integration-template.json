@@ -48,7 +48,6 @@
             {"Ref": "BucketName"}
           ]
         },
-        "VersioningConfiguration": {"Status": "Suspended"},
         "LifecycleConfiguration": {
           "Rules": [{
             "Id": "ExpireOldReports",
