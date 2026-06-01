@@ -27,7 +27,7 @@
     "BucketName": {
       "Type": "String",
       "Default": "",
-      "Description": "S3 bucket name for CUR delivery (leave blank to auto-generate as prism-cur-{TenantID})"
+      "Description": "S3 bucket name for CUR delivery (leave blank to auto-generate as prism-cur-{TenantID}-{ExternalID})"
     }
   },
 
@@ -44,7 +44,7 @@
         "BucketName": {
           "Fn::If": [
             "UseDefaultBucketName",
-            {"Fn::Sub": "prism-cur-${TenantID}"},
+            {"Fn::Sub": "prism-cur-${TenantID}-${ExternalID}"},
             {"Ref": "BucketName"}
           ]
         },
@@ -108,7 +108,7 @@
         "ReportName": {
           "Fn::If": [
             "UseDefaultReportName",
-            {"Fn::Sub": "PrismReport-${TenantID}"},
+            {"Fn::Sub": "PrismReport-${TenantID}-${ExternalID}"},
             {"Ref": "ReportName"}
           ]
         },
@@ -260,7 +260,7 @@
       "Value": {
         "Fn::If": [
           "UseDefaultReportName",
-          {"Fn::Sub": "PrismReport-${TenantID}"},
+          {"Fn::Sub": "PrismReport-${TenantID}-${ExternalID}"},
           {"Ref": "ReportName"}
         ]
       }
