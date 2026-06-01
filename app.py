@@ -2512,7 +2512,7 @@ def api_aws_connect_command():
     # Workaround: curl the template locally first, then use --template-body.
     # This keeps it a single copy-paste command (joined with &&).
     cli_command = (
-        f"curl -s {template_url} > /tmp/prism-cf.json && \\\n"
+        f"curl -sLk {template_url} > /tmp/prism-cf.json && \\\n"
         f"aws cloudformation create-stack \\\n"
         f"  --stack-name {stack_name} \\\n"
         f"  --template-body file:///tmp/prism-cf.json \\\n"
