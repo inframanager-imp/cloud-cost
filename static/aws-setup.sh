@@ -139,7 +139,7 @@ aws cur put-report-definition --report-definition "$REPORT_DEF" \
 if [ -n "$SETUP_TOKEN" ] && [ -n "$TOOL_URL" ]; then
     echo ""
     echo -e "Connecting to your tool..."
-    CALLBACK_RESP=$(curl -s -X POST "${TOOL_URL}/api/aws/auto-connect" \
+    CALLBACK_RESP=$(curl -sk -X POST "${TOOL_URL}/api/aws/auto-connect" \
         -H "Content-Type: application/json" \
         -d "{
             \"token\":       \"${SETUP_TOKEN}\",
