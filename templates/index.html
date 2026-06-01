@@ -2138,78 +2138,182 @@
             </div>
         </div>
 
-        <!-- CUR Import Section -->
-        <div class="chart-card" style="margin-top:20px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <!-- CUR Setup Wizard -->
+        <div class="chart-card" style="margin-top:20px" id="curWizardCard">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
                 <div>
-                    <h3 style="margin:0;font-size:15px">AWS Cost & Usage Report (CUR) Import</h3>
-                    <p style="margin:4px 0 0;font-size:12px;color:var(--text-secondary)">Import resource-level cost data (per EC2 instance, RDS, etc.) from your S3 CUR export.</p>
+                    <h3 style="margin:0;font-size:15px">AWS Cost &amp; Usage Report (CUR)</h3>
+                    <p style="margin:4px 0 0;font-size:12px;color:var(--text-secondary)">Unlock resource-level costs — per S3 bucket, EC2 instance, RDS, Lambda and more.</p>
                 </div>
-                <button class="btn btn-secondary" onclick="toggleCurPanel()">Configure</button>
+                <button class="btn btn-secondary" onclick="curToggleWizard()" id="curWizardToggleBtn">Set Up CUR</button>
             </div>
-            <div id="curPanel" style="display:none">
 
-                <!-- ── S3 Import ── -->
-                <div style="padding:14px;background:var(--bg);border-radius:8px;margin-bottom:12px">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:10px">Import from S3 Bucket</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
-                        <div>
-                            <label class="form-label">AWS Account</label>
-                            <select class="filter-input" id="curProviderId" style="width:100%" onchange="curProviderChanged()">
-                                <option value="">— Select AWS Account —</option>
+            <div id="curWizard" style="display:none;margin-top:16px">
+
+                <!-- Step indicator -->
+                <div style="display:flex;gap:0;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid var(--border)">
+                    <div class="cur-step-tab active" id="curTab1" onclick="curGoStep(1)" style="flex:1;padding:10px 8px;text-align:center;cursor:pointer;font-size:12px;font-weight:500;background:var(--accent);color:#fff;border-right:1px solid var(--border)">① Enable CUR</div>
+                    <div class="cur-step-tab" id="curTab2" onclick="curGoStep(2)" style="flex:1;padding:10px 8px;text-align:center;cursor:pointer;font-size:12px;color:var(--text-secondary);border-right:1px solid var(--border)">② Create Report</div>
+                    <div class="cur-step-tab" id="curTab3" onclick="curGoStep(3)" style="flex:1;padding:10px 8px;text-align:center;cursor:pointer;font-size:12px;color:var(--text-secondary);border-right:1px solid var(--border)">③ Connect S3</div>
+                    <div class="cur-step-tab" id="curTab4" onclick="curGoStep(4)" style="flex:1;padding:10px 8px;text-align:center;cursor:pointer;font-size:12px;color:var(--text-secondary)">④ Import</div>
+                </div>
+
+                <!-- Step 1: Enable CUR -->
+                <div id="curStep1" style="display:block">
+                    <div style="background:var(--bg);border-radius:10px;padding:18px">
+                        <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:12px">Step 1 — Enable Cost &amp; Usage Reports in AWS</div>
+                        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+                            <div style="display:flex;gap:10px;align-items:flex-start">
+                                <span style="background:var(--accent);color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">1</span>
+                                <span>Go to <strong style="color:var(--text-primary)">AWS Console → Billing &amp; Cost Management → Cost &amp; Usage Reports</strong></span>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:flex-start">
+                                <span style="background:var(--accent);color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">2</span>
+                                <span>Click <strong style="color:var(--text-primary)">"Create report"</strong></span>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:flex-start">
+                                <span style="background:var(--accent);color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">3</span>
+                                <span>If you see "Enable Cost Explorer" banner first — click it and wait ~24h, then come back</span>
+                            </div>
+                        </div>
+                        <a href="https://us-east-1.console.aws.amazon.com/billing/home#/reports" target="_blank" class="cp-btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-size:13px;height:34px;padding:0 14px">
+                            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            Open AWS Billing Console
+                        </a>
+                    </div>
+                    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+                        <button class="cp-btn-primary" onclick="curGoStep(2)">Next: Create Report →</button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Create Report -->
+                <div id="curStep2" style="display:none">
+                    <div style="background:var(--bg);border-radius:10px;padding:18px">
+                        <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:12px">Step 2 — Create the CUR report with these exact settings</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:12px">
+                                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary);margin-bottom:8px">Report Settings</div>
+                                <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+                                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-secondary)">Report name</span><span style="font-weight:500">anything (e.g. <code>cur-daily</code>)</span></div>
+                                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-secondary)">Time unit</span><span style="font-weight:500;color:var(--green)">✅ Daily</span></div>
+                                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-secondary)">Include Resource IDs</span><span style="font-weight:500;color:var(--green)">✅ Enabled ← important!</span></div>
+                                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-secondary)">Data refresh settings</span><span style="font-weight:500">Automatically refresh</span></div>
+                                </div>
+                            </div>
+                            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:12px">
+                                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary);margin-bottom:8px">Delivery Settings</div>
+                                <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+                                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-secondary)">S3 bucket</span><span style="font-weight:500">Create new or use existing</span></div>
+                                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-secondary)">S3 prefix</span><span style="font-weight:500">e.g. <code>cur/</code> (note it down)</span></div>
+                                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-secondary)">Report format</span><span style="font-weight:500;color:var(--green)">✅ text/csv</span></div>
+                                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-secondary)">Compression</span><span style="font-weight:500;color:var(--green)">✅ GZIP</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-top:12px;padding:10px 14px;background:rgba(243,156,18,.08);border:1px solid rgba(243,156,18,.3);border-radius:8px;font-size:12px;color:var(--text-secondary)">
+                            ⏰ <strong>Note:</strong> After creating the report, AWS takes <strong>24–48 hours</strong> to deliver the first file. Come back after that to connect.
+                        </div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-top:12px">
+                        <button class="cp-btn-secondary" onclick="curGoStep(1)">← Back</button>
+                        <button class="cp-btn-primary" onclick="curGoStep(3)">Next: Connect S3 →</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Connect S3 -->
+                <div id="curStep3" style="display:none">
+                    <div style="background:var(--bg);border-radius:10px;padding:18px">
+                        <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:12px">Step 3 — Enter your S3 bucket details</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+                            <div>
+                                <label class="form-label">AWS Account</label>
+                                <select class="filter-input" id="curProviderId" style="width:100%" onchange="curProviderChanged()">
+                                    <option value="">— Select AWS Account —</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">S3 Bucket Name</label>
+                                <input type="text" id="curBucket" class="filter-input" style="width:100%" placeholder="my-cur-bucket">
+                            </div>
+                            <div>
+                                <label class="form-label">S3 Prefix <span style="font-weight:400;color:var(--text-secondary)">(the prefix you set when creating CUR)</span></label>
+                                <input type="text" id="curPrefix" class="filter-input" style="width:100%" placeholder="cur/">
+                            </div>
+                            <div>
+                                <label class="form-label">Report Name <span style="font-weight:400;color:var(--text-secondary)">(the name you gave the report)</span></label>
+                                <input type="text" id="curReportName" class="filter-input" style="width:100%" placeholder="cur-daily">
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:10px;align-items:center">
+                            <button class="cp-btn-secondary" onclick="curTestConnection()" id="curTestBtn" style="font-size:12px">Test Connection</button>
+                            <span id="curTestStatus" style="font-size:12px;color:var(--text-secondary)"></span>
+                        </div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-top:12px">
+                        <button class="cp-btn-secondary" onclick="curGoStep(2)">← Back</button>
+                        <button class="cp-btn-primary" id="curToStep4Btn" onclick="curGoStep(4)" disabled style="opacity:.5">Next: Import Data →</button>
+                    </div>
+                </div>
+
+                <!-- Step 4: Import -->
+                <div id="curStep4" style="display:none">
+                    <div style="background:var(--bg);border-radius:10px;padding:18px">
+                        <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:12px">Step 4 — Import your billing data</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+                            <div>
+                                <label class="form-label">Date From <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>
+                                <input type="date" id="curDateFrom" class="filter-input" style="width:100%">
+                            </div>
+                            <div>
+                                <label class="form-label">Date To <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>
+                                <input type="date" id="curDateTo" class="filter-input" style="width:100%">
+                            </div>
+                        </div>
+                        <!-- Billing period picker -->
+                        <div style="margin-bottom:12px">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                                <span style="font-size:12px;color:var(--text-secondary)">Or pick a specific billing period:</span>
+                                <button class="btn btn-secondary" style="padding:2px 10px;font-size:11px" onclick="curLoadManifests()">Load Periods</button>
+                                <span id="curManifestStatus" style="font-size:11px;color:var(--text-secondary)"></span>
+                            </div>
+                            <select class="filter-input" id="curManifest" style="width:100%">
+                                <option value="">— Latest period (auto) —</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="form-label">S3 Path <span style="font-weight:400;color:var(--text-secondary)">(s3://bucket/prefix/ or bucket/prefix/)</span></label>
-                            <input type="text" id="curS3Path" class="filter-input" style="width:100%"
-                                placeholder="s3://my-cur-bucket/reports/detailed-cur/"
-                                oninput="curParseS3Path(this.value)">
-                        </div>
-                        <div>
-                            <label class="form-label">Date From <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>
-                            <input type="date" id="curDateFrom" class="filter-input" style="width:100%">
-                        </div>
-                        <div>
-                            <label class="form-label">Date To <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>
-                            <input type="date" id="curDateTo" class="filter-input" style="width:100%">
+                        <div style="display:flex;gap:10px;align-items:center">
+                            <button class="cp-btn-primary" id="curImportBtn" onclick="curStartImport()">
+                                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:5px"><polyline points="8,17 12,21 16,17"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+                                Start Import
+                            </button>
+                            <span id="curStatus" style="font-size:12px;color:var(--text-secondary)"></span>
                         </div>
                     </div>
-                    <!-- Advanced: billing period -->
-                    <div style="margin-bottom:10px">
-                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-                            <span style="font-size:12px;color:var(--text-secondary)">Billing Period (optional — defaults to latest)</span>
-                            <button class="btn btn-secondary" style="padding:2px 10px;font-size:11px" onclick="curLoadManifests()">Load Periods</button>
-                            <span id="curManifestStatus" style="font-size:11px;color:var(--text-secondary)"></span>
+                    <!-- Local file import (advanced) -->
+                    <details style="margin-top:12px">
+                        <summary style="font-size:12px;color:var(--text-secondary);cursor:pointer;padding:8px 0">Advanced: Import from local files</summary>
+                        <div style="padding:14px;background:var(--bg);border-radius:8px;margin-top:8px">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+                                <div>
+                                    <label class="form-label">AWS Account ID</label>
+                                    <input type="text" id="curLocalAccount" class="filter-input" style="width:100%" placeholder="e.g. 431657808490">
+                                </div>
+                                <div>
+                                    <label class="form-label">File Paths (one per line, on server)</label>
+                                    <textarea id="curLocalPaths" class="filter-input" style="width:100%;height:56px;resize:vertical;font-size:11px;font-family:monospace"
+                                        placeholder="/app/detailed-cur-00001.csv.gz&#10;/app/detailed-cur-00002.csv.gz"></textarea>
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:center">
+                                <button class="btn btn-primary" id="curLocalImportBtn" onclick="curImportLocal()">Import Local Files</button>
+                                <span id="curLocalStatus" style="font-size:12px;color:var(--text-secondary)"></span>
+                            </div>
                         </div>
-                        <select class="filter-input" id="curManifest" style="width:100%">
-                            <option value="">— Latest period (auto) —</option>
-                        </select>
-                    </div>
-                    <div style="display:flex;gap:10px;align-items:center">
-                        <button class="btn btn-primary" id="curImportBtn" onclick="curStartImport()">Import from S3</button>
-                        <span id="curStatus" style="font-size:12px;color:var(--text-secondary)"></span>
+                    </details>
+                    <div style="display:flex;justify-content:flex-start;margin-top:12px">
+                        <button class="cp-btn-secondary" onclick="curGoStep(3)">← Back</button>
                     </div>
                 </div>
 
-                <!-- ── Local File Import ── -->
-                <div style="padding:14px;background:var(--bg);border-radius:8px">
-                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:10px">Import from Local Files</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
-                        <div>
-                            <label class="form-label">AWS Account ID</label>
-                            <input type="text" id="curLocalAccount" class="filter-input" style="width:100%" placeholder="e.g. 319640437000">
-                        </div>
-                        <div>
-                            <label class="form-label">File Paths <span style="font-weight:400;color:var(--text-secondary)">(one per line, on server)</span></label>
-                            <textarea id="curLocalPaths" class="filter-input" style="width:100%;height:56px;resize:vertical;font-size:11px;font-family:monospace"
-                                placeholder="/app/detailed-cur-00001.csv.gz&#10;/app/detailed-cur-00002.csv.gz"></textarea>
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:10px;align-items:center">
-                        <button class="btn btn-primary" id="curLocalImportBtn" onclick="curImportLocal()">Import Local Files</button>
-                        <span id="curLocalStatus" style="font-size:12px;color:var(--text-secondary)"></span>
-                    </div>
-                </div>
             </div>
         </div>
     </section>
@@ -3270,30 +3374,104 @@ function toggleAzureSub(subId, enabled) {
 }
 
 // ─── CUR Import ───────────────────────────────────────────────────────────────
-function toggleCurPanel() {
-    const p = document.getElementById('curPanel');
-    if (p.style.display === 'none') {
-        p.style.display = 'block';
-        // Populate AWS account selector
-        fetch('/api/cloud-providers').then(r => r.json()).then(providers => {
-            const sel = document.getElementById('curProviderId');
-            const awsProviders = providers.filter(p => p.provider_type === 'aws');
-            sel.innerHTML = '<option value="">— Select AWS Account —</option>' +
-                awsProviders.map(p => `<option value="${p.id}" data-bucket="" data-prefix="">${p.name || p.provider_id} (${p.provider_id})</option>`).join('');
-        });
+// ─── CUR Wizard ──────────────────────────────────────────────────────────────
+
+let _curStep = 1;
+
+function curToggleWizard() {
+    const wizard = document.getElementById('curWizard');
+    const btn = document.getElementById('curWizardToggleBtn');
+    if (wizard.style.display === 'none') {
+        wizard.style.display = 'block';
+        btn.textContent = 'Hide';
+        curPopulateProviders();
+        curGoStep(1);
     } else {
-        p.style.display = 'none';
+        wizard.style.display = 'none';
+        btn.textContent = 'Set Up CUR';
     }
+}
+
+function curGoStep(n) {
+    _curStep = n;
+    [1,2,3,4].forEach(i => {
+        const step = document.getElementById(`curStep${i}`);
+        const tab  = document.getElementById(`curTab${i}`);
+        if (step) step.style.display = i === n ? 'block' : 'none';
+        if (tab) {
+            tab.style.background = i === n ? 'var(--accent)' : 'var(--bg-card,#fff)';
+            tab.style.color = i === n ? '#fff' : 'var(--text-secondary)';
+        }
+    });
+}
+
+function curPopulateProviders() {
+    fetch('/api/cloud-providers').then(r => r.json()).then(providers => {
+        const sel = document.getElementById('curProviderId');
+        if (!sel) return;
+        const awsProviders = providers.filter(p => p.provider_type === 'aws');
+        sel.innerHTML = '<option value="">— Select AWS Account —</option>' +
+            awsProviders.map(p => `<option value="${p.id}">${p.name || p.provider_id} (${p.provider_id})</option>`).join('');
+    }).catch(() => {});
 }
 
 function curProviderChanged() {
     document.getElementById('curManifest').innerHTML = '<option value="">— Latest period (auto) —</option>';
     document.getElementById('curStatus').textContent = '';
     document.getElementById('curManifestStatus').textContent = '';
+    document.getElementById('curTestStatus').textContent = '';
+    const btn = document.getElementById('curToStep4Btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '.5'; }
 }
 
+async function curTestConnection() {
+    const bucket = (document.getElementById('curBucket')?.value || '').trim();
+    const prefix = (document.getElementById('curPrefix')?.value || '').trim();
+    const providerId = document.getElementById('curProviderId')?.value;
+    const statusEl = document.getElementById('curTestStatus');
+    const btn = document.getElementById('curTestBtn');
+    const nextBtn = document.getElementById('curToStep4Btn');
+
+    if (!bucket) { statusEl.textContent = '⚠ Enter S3 bucket name'; return; }
+    if (!providerId) { statusEl.textContent = '⚠ Select an AWS Account'; return; }
+
+    btn.disabled = true;
+    statusEl.textContent = 'Testing connection…';
+    statusEl.style.color = 'var(--text-secondary)';
+
+    try {
+        const resp = await fetch('/api/cur/manifests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider_id: parseInt(providerId), bucket, prefix }),
+        }).then(r => r.json());
+
+        if (resp.error) {
+            statusEl.textContent = '❌ ' + resp.error;
+            statusEl.style.color = 'var(--red,#e74c3c)';
+        } else {
+            const count = (resp.manifests || []).length;
+            if (count > 0) {
+                statusEl.textContent = `✅ Connected — ${count} billing period(s) found`;
+                statusEl.style.color = 'var(--green,#27ae60)';
+                if (nextBtn) { nextBtn.disabled = false; nextBtn.style.opacity = '1'; }
+            } else {
+                statusEl.textContent = '⚠ Bucket reachable but no CUR files yet — AWS takes 24-48h to deliver first report';
+                statusEl.style.color = 'var(--yellow,#e67e22)';
+                if (nextBtn) { nextBtn.disabled = false; nextBtn.style.opacity = '1'; }
+            }
+        }
+    } catch(e) {
+        statusEl.textContent = '❌ ' + e.message;
+        statusEl.style.color = 'var(--red,#e74c3c)';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// Legacy: keep toggleCurPanel for backward compat
+function toggleCurPanel() { curToggleWizard(); }
 function curParseS3Path(val) {
-    // Accept s3://bucket/prefix or bucket/prefix and split into hidden fields
     val = val.trim();
     if (val.startsWith('s3://')) val = val.slice(5);
     const slash = val.indexOf('/');
@@ -3302,10 +3480,9 @@ function curParseS3Path(val) {
 }
 
 async function curLoadManifests() {
-    curParseS3Path(document.getElementById('curS3Path').value);
+    const bucket = (document.getElementById('curBucket')?.value || window._curBucket || '').trim();
+    const prefix = (document.getElementById('curPrefix')?.value || window._curPrefix || '').trim();
     const providerId = document.getElementById('curProviderId').value;
-    const bucket = window._curBucket || '';
-    const prefix = window._curPrefix || '';
     const mStatus = document.getElementById('curManifestStatus');
 
     if (!bucket) { mStatus.textContent = '⚠ Enter S3 path first'; return; }
@@ -3374,10 +3551,9 @@ async function curImportLocal() {
 }
 
 async function curStartImport() {
-    curParseS3Path(document.getElementById('curS3Path').value);
     const providerId = document.getElementById('curProviderId').value;
-    const bucket = window._curBucket || '';
-    const prefix = window._curPrefix || '';
+    const bucket = (document.getElementById('curBucket')?.value || '').trim();
+    const prefix = (document.getElementById('curPrefix')?.value || '').trim();
     const manifestKey = document.getElementById('curManifest').value || null;
     const dateFrom = document.getElementById('curDateFrom').value || null;
     const dateTo = document.getElementById('curDateTo').value || null;
