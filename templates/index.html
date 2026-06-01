@@ -2116,17 +2116,44 @@
 
                                 <!-- Copyable policy JSON -->
                                 <div style="position:relative">
-                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                                        <div style="font-size:11px;font-weight:500;color:var(--text-secondary)">IAM Policy JSON — copy and paste into AWS:</div>
-                                        <div style="display:flex;align-items:center;gap:6px">
-                                            <label style="font-size:10px;color:var(--text-secondary)">CUR bucket (optional):</label>
-                                            <input type="text" id="awsPolicyBucket" placeholder="my-cur-bucket or leave blank"
-                                                style="font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text-primary);width:160px"
-                                                oninput="updateAWSPolicy()">
-                                        </div>
-                                    </div>
-                                    <pre id="awsIAMPolicy" style="background:#1a1a2e;color:#7ec8e3;padding:12px;border-radius:8px;font-size:10px;line-height:1.5;white-space:pre;overflow-x:auto;margin:0;max-height:200px;overflow-y:auto"></pre>
-                                    <button onclick="copyAWSPolicy()" style="position:absolute;top:28px;right:8px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer" id="awsPolicyCopyBtn">Copy</button>
+                                    <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:4px">IAM Policy JSON — copy and paste into AWS:</div>
+                                    <pre id="awsIAMPolicy" style="background:#1a1a2e;color:#7ec8e3;padding:12px;border-radius:8px;font-size:10px;line-height:1.5;white-space:pre;overflow-x:auto;margin:0;max-height:200px;overflow-y:auto">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CostBillingAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ce:*",
+        "cur:DescribeReportDefinitions",
+        "budgets:ViewBudget"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3CURAccess",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ResourceDiscovery",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "rds:Describe*",
+        "elasticloadbalancing:Describe*",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "organizations:Describe*",
+        "organizations:List*",
+        "savingsplans:Describe*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}</pre>
+                                    <button onclick="copyAWSPolicy()" style="position:absolute;top:24px;right:8px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer" id="awsPolicyCopyBtn">Copy</button>
                                 </div>
 
                                 <div style="margin-top:10px;font-size:11px;color:var(--text-secondary)">
@@ -3539,53 +3566,7 @@ async function curTestConnection() {
     }
 }
 
-function _buildAWSPolicy(bucket) {
-    const s3Resource = bucket
-        ? `[\n        "arn:aws:s3:::${bucket}",\n        "arn:aws:s3:::${bucket}/*"\n      ]`
-        : `"*"`;
-    return `{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "CostBillingAccess",
-      "Effect": "Allow",
-      "Action": [
-        "ce:*",
-        "cur:DescribeReportDefinitions",
-        "budgets:ViewBudget"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "S3CURAccess",
-      "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:ListBucket"],
-      "Resource": ${s3Resource}
-    },
-    {
-      "Sid": "ResourceDiscovery",
-      "Effect": "Allow",
-      "Action": [
-        "ec2:Describe*",
-        "rds:Describe*",
-        "elasticloadbalancing:Describe*",
-        "cloudwatch:GetMetricStatistics",
-        "cloudwatch:ListMetrics",
-        "organizations:Describe*",
-        "organizations:List*",
-        "savingsplans:Describe*"
-      ],
-      "Resource": "*"
-    }
-  ]
-}`;
-}
-
-function updateAWSPolicy() {
-    const bucket = (document.getElementById('awsPolicyBucket')?.value || '').trim();
-    const el = document.getElementById('awsIAMPolicy');
-    if (el) el.textContent = _buildAWSPolicy(bucket);
-}
+function updateAWSPolicy() { /* no-op: policy is static */ }
 
 function copyAWSPolicy() {
     const text = document.getElementById('awsIAMPolicy')?.textContent || '';
@@ -3593,16 +3574,6 @@ function copyAWSPolicy() {
         const btn = document.getElementById('awsPolicyCopyBtn');
         if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
     });
-}
-
-// Auto-sync CUR bucket from wizard into the policy input
-function _syncCURBucketToPolicy() {
-    const curBucket = document.getElementById('curBucket')?.value?.trim() || '';
-    const policyInput = document.getElementById('awsPolicyBucket');
-    if (policyInput && curBucket && !policyInput.value) {
-        policyInput.value = curBucket;
-        updateAWSPolicy();
-    }
 }
 
 // Legacy: keep toggleCurPanel for backward compat
@@ -3742,10 +3713,6 @@ function showProviderModal(id) {
     document.getElementById('awsSecret').value = '';
     document.getElementById('awsRoleArn').value = '';
     document.getElementById('awsRegion').value = 'us-east-1';
-    // Initialize IAM policy JSON with wildcard S3 (no bucket yet)
-    const policyInput = document.getElementById('awsPolicyBucket');
-    if (policyInput) policyInput.value = '';
-    updateAWSPolicy();
     document.getElementById('gcpDataset').value = '';
     document.getElementById('gcpTable').value = '';
     document.getElementById('gcpSaJson').value = '';
