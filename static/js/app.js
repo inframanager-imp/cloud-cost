@@ -5893,11 +5893,21 @@ function copyTerraformCode() {
 }
 
 async function verifyAWSRole() {
-    const roleArn = document.getElementById('awsCFRoleArn')?.value.trim();
-    const bucket  = document.getElementById('awsCFBucket')?.value.trim();
+    const roleArn  = document.getElementById('awsCFRoleArn')?.value.trim();
+    const bucket   = document.getElementById('awsCFBucket')?.value.trim();
     const statusEl = document.getElementById('awsVerifyStatus');
     if (!roleArn) { showToast('Enter a Role ARN first', 'error'); return; }
-    if (statusEl) statusEl.textContent = 'Verifying…';
+    if (statusEl) { statusEl.textContent = 'Verifying…'; statusEl.style.color = 'var(--text-secondary)'; }
+
+    // Auto-extract account ID from ARN: arn:aws:iam::ACCOUNT_ID:role/...
+    const arnParts = roleArn.split(':');
+    const accountId = arnParts.length >= 5 ? arnParts[4] : '';
+
+    // Auto-fill the Name + ID fields so "Save Provider" also works
+    const nameEl = document.getElementById('providerName');
+    const idEl   = document.getElementById('providerId');
+    if (nameEl && !nameEl.value) nameEl.value = `AWS ${accountId}`;
+    if (idEl   && !idEl.value)   idEl.value   = accountId;
 
     try {
         const resp = await fetch('/api/aws/handshake', {
@@ -5905,16 +5915,20 @@ async function verifyAWSRole() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 role_arn: roleArn,
-                cur_bucket: bucket,
-                cur_report_name: _awsCFData?.stack_name ? `PrismReport-${_awsCFData.stack_name.split('-').pop()}` : '',
+                cur_bucket: bucket || `prism-cur-1-${_awsCFData?.external_id || ''}`,
+                cur_report_name: `PrismReport-1-${_awsCFData?.external_id || ''}`,
+                provider_id: accountId,
             })
         });
         const data = await resp.json();
         if (statusEl) {
-            statusEl.textContent = data.message || (data.success ? '✅ Connected' : '❌ Failed');
-            statusEl.style.color = data.verified ? 'var(--green)' : 'var(--red)';
+            statusEl.textContent = data.verified ? '✅ ' + data.message : '⚠️ ' + data.message;
+            statusEl.style.color = data.verified ? 'var(--green,#27ae60)' : 'var(--yellow,#e67e22)';
         }
-        if (data.success) showAWSConnectionStatus('connected', roleArn);
+        if (data.success) {
+            showAWSConnectionStatus('connected', roleArn);
+            showToast(`AWS account ${accountId} connected!`, 'success');
+        }
     } catch(e) {
         if (statusEl) statusEl.textContent = 'Error: ' + e.message;
     }
