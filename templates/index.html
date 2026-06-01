@@ -2052,131 +2052,20 @@
                         <input type="text" id="providerId" class="filter-input" placeholder="e.g. 123456789012" style="width:100%">
                     </div>
 
-                    <!-- AWS Credentials — CloudFormation Connect + legacy fallback -->
-                    <div id="awsFields" style="display:none;flex-direction:column;gap:12px">
-
-                        <!-- ── Tab bar ── -->
-                        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:12px">
-                            <button id="awsTabCF" onclick="switchAwsTab('cf')"
-                                style="flex:1;padding:8px 12px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-weight:500">
-                                🔗 One-Click Connect
-                            </button>
-                            <button id="awsTabKeys" onclick="switchAwsTab('keys')"
-                                style="flex:1;padding:8px 12px;border:none;background:var(--bg);color:var(--text-secondary);cursor:pointer">
-                                🔑 Access Keys (legacy)
-                            </button>
-                        </div>
-
-                        <!-- ── CloudFormation Connect tab ── -->
-                        <div id="awsPanelCF" style="display:flex;flex-direction:column;gap:12px">
-                            <div style="background:var(--bg);border-radius:10px;padding:16px">
-                                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-                                    <img src="/static/img/aws-logo.svg" style="height:22px">
-                                    <span style="font-size:14px;font-weight:600;color:var(--text-primary)">Secure Cross-Account Connection</span>
-                                </div>
-                                <p style="margin:0 0 12px;font-size:12px;color:var(--text-secondary);line-height:1.6">
-                                    We create a <strong>read-only IAM role</strong> + <strong>CUR report</strong> in your AWS account via CloudFormation.<br>
-                                    No access keys stored. Connection is secured with a unique ExternalId.
-                                </p>
-                                <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text-secondary);margin-bottom:14px">
-                                    <div>✅ &nbsp;Run the CloudFormation stack below</div>
-                                    <div>✅ &nbsp;Stack creates IAM Role + CUR report + S3 bucket</div>
-                                    <div>✅ &nbsp;Paste the Role ARN and start syncing — takes ~2 min</div>
-                                </div>
-
-                                <!-- Loading state -->
-                                <div id="awsCFLoading" style="text-align:center;padding:16px;color:var(--text-secondary);font-size:12px">
-                                    Generating connect command… <span style="animation:spin 1s linear infinite;display:inline-block">⟳</span>
-                                </div>
-
-                                <!-- Connect buttons -->
-                                <div id="awsCFButtons" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-                                    <button id="awsConsoleBtn" onclick="openAWSConsole()" class="cp-btn-primary" style="height:34px;font-size:12px">
-                                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:5px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                                        Connect via AWS Console
-                                    </button>
-                                    <div style="position:relative">
-                                        <button onclick="toggleAwsMoreMenu()" class="cp-btn-secondary" style="height:34px;font-size:12px">
-                                            More Options ▾
-                                        </button>
-                                        <div id="awsMoreMenu" style="display:none;position:absolute;top:38px;left:0;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:180px;z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.15)">
-                                            <button onclick="showAWSCLIModal()" style="display:block;width:100%;padding:8px 12px;text-align:left;background:none;border:none;font-size:12px;color:var(--text-primary);cursor:pointer;border-radius:4px">
-                                                Connect via AWS CLI
-                                            </button>
-                                            <button onclick="showAWSTerraformModal()" style="display:block;width:100%;padding:8px 12px;text-align:left;background:none;border:none;font-size:12px;color:var(--text-primary);cursor:pointer;border-radius:4px">
-                                                Connect via Terraform
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- OR: manual Role ARN entry -->
-                                <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
-                                    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;text-align:center;text-transform:uppercase;letter-spacing:.04em">— or enter Role ARN manually after stack creation —</div>
-                                    <label class="form-label">Role ARN</label>
-                                    <input type="text" id="awsCFRoleArn" class="filter-input" placeholder="arn:aws:iam::123456789012:role/CloudCostAnalyzerRole-..." style="width:100%;margin-bottom:8px">
-                                    <label class="form-label">CUR S3 Bucket (optional, auto-detected)</label>
-                                    <input type="text" id="awsCFBucket" class="filter-input" placeholder="prism-cur-{tenant-id}" style="width:100%;margin-bottom:8px">
-                                    <div style="display:flex;gap:8px;align-items:center">
-                                        <button onclick="verifyAWSRole()" class="cp-btn-secondary" style="font-size:12px;height:30px">Verify & Save</button>
-                                        <span id="awsVerifyStatus" style="font-size:12px;color:var(--text-secondary)"></span>
-                                    </div>
-                                </div>
-
-                                <!-- Connection status -->
-                                <div id="awsConnectionStatus" style="display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:12px"></div>
-                            </div>
-                        </div>
-
-                        <!-- ── Legacy access keys tab ── -->
-                        <div id="awsPanelKeys" style="display:none;flex-direction:column;gap:8px">
-                            <div style="background:var(--bg);border-radius:8px;padding:12px">
-                                <p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary)">
-                                    Legacy: IAM credentials stored in the database. Use One-Click Connect for better security.
-                                </p>
-                                <label class="form-label">Access Key ID</label>
-                                <input type="text" id="awsKeyId" class="filter-input" placeholder="AKIA..." style="width:100%;margin-bottom:8px">
-                                <label class="form-label">Secret Access Key</label>
-                                <input type="password" id="awsSecret" class="filter-input" placeholder="Secret (stored encrypted)" style="width:100%;margin-bottom:8px">
-                                <label class="form-label">Role ARN (cross-account, optional)</label>
-                                <input type="text" id="awsRoleArn" class="filter-input" placeholder="arn:aws:iam::..." style="width:100%;margin-bottom:8px">
-                                <label class="form-label">Region</label>
-                                <input type="text" id="awsRegion" class="filter-input" placeholder="us-east-1" value="us-east-1" style="width:100%">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- AWS CLI Modal -->
-                    <div id="awsCLIModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center">
-                        <div style="background:#1a1a2e;border-radius:12px;padding:24px;width:640px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,.5)">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                                <div style="font-size:15px;font-weight:600;color:#fff">Connect via AWS CLI</div>
-                                <button onclick="document.getElementById('awsCLIModal').style.display='none'" style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer">&times;</button>
-                            </div>
-                            <div style="font-size:11px;color:#aaa;margin-bottom:10px">
-                                Run this command in your terminal. Must be executed in <strong style="color:#ff9900">us-east-1</strong> regardless of your infrastructure region.
-                            </div>
-                            <div style="position:relative">
-                                <pre id="awsCLICommand" style="background:#0d0d1a;color:#7ec8e3;padding:16px;border-radius:8px;font-size:11px;line-height:1.6;white-space:pre-wrap;word-break:break-all;margin:0;max-height:280px;overflow-y:auto"></pre>
-                                <button onclick="copyAWSCLICommand()" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer" id="awsCopyCLIBtn">Copy</button>
-                            </div>
-                            <div style="margin-top:14px;font-size:11px;color:#aaa">
-                                After the stack is created (~2 min), copy the <strong style="color:#ff9900">RoleARN</strong> from CloudFormation Outputs and paste it into the Role ARN field above.
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Terraform Modal -->
-                    <div id="awsTerraformModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center">
-                        <div style="background:#1a1a2e;border-radius:12px;padding:24px;width:640px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,.5)">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-                                <div style="font-size:15px;font-weight:600;color:#fff">Connect via Terraform</div>
-                                <button onclick="document.getElementById('awsTerraformModal').style.display='none'" style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer">&times;</button>
-                            </div>
-                            <div style="position:relative">
-                                <pre id="awsTerraformCode" style="background:#0d0d1a;color:#a8d8a8;padding:16px;border-radius:8px;font-size:11px;line-height:1.6;white-space:pre-wrap;word-break:break-all;margin:0;max-height:320px;overflow-y:auto"></pre>
-                                <button onclick="copyTerraformCode()" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.1);border:none;color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer">Copy</button>
-                            </div>
+                    <!-- AWS Credentials -->
+                    <div id="awsFields" style="display:none;flex-direction:column;gap:10px">
+                        <div style="background:var(--bg);border-radius:8px;padding:12px">
+                            <p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary)">
+                                Provide IAM credentials or a cross-account Role ARN. Leave blank to use instance profile / environment variables.
+                            </p>
+                            <label class="form-label">Access Key ID</label>
+                            <input type="text" id="awsKeyId" class="filter-input" placeholder="AKIA..." style="width:100%;margin-bottom:8px">
+                            <label class="form-label">Secret Access Key</label>
+                            <input type="password" id="awsSecret" class="filter-input" placeholder="Secret (stored encrypted)" style="width:100%;margin-bottom:8px">
+                            <label class="form-label">Role ARN (cross-account, optional)</label>
+                            <input type="text" id="awsRoleArn" class="filter-input" placeholder="arn:aws:iam::..." style="width:100%;margin-bottom:8px">
+                            <label class="form-label">Region</label>
+                            <input type="text" id="awsRegion" class="filter-input" placeholder="us-east-1" value="us-east-1" style="width:100%">
                         </div>
                     </div>
 
@@ -3564,8 +3453,6 @@ function onProviderTypeChange() {
     const isSaas = ['jira','bitbucket','cursor','openai'].includes(t);
     // Cloud provider fields
     document.getElementById('awsFields').style.display = t === 'aws' ? 'flex' : 'none';
-    // Load CloudFormation connect command when AWS tab is shown
-    if (t === 'aws') { switchAwsTab('cf'); loadAWSConnectCommand(); }
     document.getElementById('gcpFields').style.display = t === 'gcp' ? 'flex' : 'none';
     document.getElementById('azureFields').style.display = t === 'azure' ? 'block' : 'none';
     // SaaS redirect panel
