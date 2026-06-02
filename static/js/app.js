@@ -6385,9 +6385,16 @@ function _renderMappingRows(mappings) {
     container.innerHTML = '';
     if (!mappings.length) {
         addClientMappingRow();
-    } else {
-        mappings.forEach(m => addClientMappingRow(m));
+        return;
     }
+    // Group by cloud + filter_type so multiple values show as one multi-select row
+    const grouped = {};
+    mappings.forEach(m => {
+        const key = `${m.cloud}||${m.filter_type}`;
+        if (!grouped[key]) grouped[key] = { cloud: m.cloud, filter_type: m.filter_type, _values: [] };
+        grouped[key]._values.push(m.value);
+    });
+    Object.values(grouped).forEach(g => addClientMappingRow(g));
 }
 
 // Labels per cloud + filter_type
@@ -6414,82 +6421,152 @@ let _cmDlCounter = 0; // unique datalist IDs
 function addClientMappingRow(data) {
     const container = document.getElementById('clientMappingRows');
     if (!container) return;
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;flex-wrap:nowrap';
 
-    const cloud = data?.cloud || 'azure';
-    const ft    = data?.filter_type || 'resource_group';
-    const savedVal = data?.value || '';
+    // Support array of saved values (for grouping same cloud+filter_type rows)
+    const cloud     = data?.cloud || 'azure';
+    const ft        = data?.filter_type || 'resource_group';
+    const savedVals = Array.isArray(data?._values) ? data._values : (data?.value ? [data.value] : []);
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;flex-wrap:nowrap';
 
     row.innerHTML = `
-        <select class="filter-input cm-cloud" style="width:90px;font-size:12px;height:32px">
+        <select class="filter-input cm-cloud" style="width:90px;font-size:12px;height:32px;flex-shrink:0">
             <option value="azure" ${cloud==='azure'?'selected':''}>Azure</option>
             <option value="aws"   ${cloud==='aws'  ?'selected':''}>AWS</option>
             <option value="gcp"   ${cloud==='gcp'  ?'selected':''}>GCP</option>
         </select>
-        <select class="filter-input cm-filter-type" style="width:160px;font-size:12px;height:32px">
+        <select class="filter-input cm-filter-type" style="width:160px;font-size:12px;height:32px;flex-shrink:0">
             <option value="subscription_id" ${ft==='subscription_id'?'selected':''}>Subscription / Account</option>
             <option value="resource_group"  ${ft==='resource_group' ?'selected':''}>Resource Group / Region</option>
             <option value="service_name"    ${ft==='service_name'   ?'selected':''}>Service (VM, EC2, DB…)</option>
         </select>
-        <div style="flex:1;display:flex;flex-direction:column;gap:4px">
-            <select class="filter-input cm-value-select" style="width:100%;font-size:12px;height:32px">
-                <option value="">— Loading… —</option>
-            </select>
-            <input type="text" class="filter-input cm-value-custom" style="width:100%;font-size:12px;height:32px;display:none" placeholder="Type or paste value…">
+        <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
+            <div class="cm-multiselect-wrap" style="position:relative">
+                <div class="cm-trigger filter-input" style="font-size:12px;min-height:32px;padding:4px 28px 4px 8px;cursor:pointer;display:flex;flex-wrap:wrap;gap:3px;align-items:center"
+                     onclick="toggleCmDropdown(this)">
+                    <span class="cm-placeholder" style="color:var(--text-secondary);font-size:12px">— Loading… —</span>
+                </div>
+                <svg style="position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg>
+                <div class="cm-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;z-index:100;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15);margin-top:2px">
+                    <div style="padding:6px 8px;border-bottom:1px solid var(--border)">
+                        <input type="text" class="cm-search" placeholder="Search…" style="width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--bg)" oninput="filterCmOptions(this)">
+                    </div>
+                    <div class="cm-options" style="padding:4px"></div>
+                    <div style="padding:6px 8px;border-top:1px solid var(--border)">
+                        <input type="text" class="cm-custom-input filter-input" placeholder="+ Type custom value…" style="width:100%;font-size:11px"
+                               onkeydown="if(event.key==='Enter'){addCmCustomValue(this);event.preventDefault()}">
+                    </div>
+                </div>
+            </div>
         </div>
-        <button class="btn-mini" style="color:var(--red);flex-shrink:0;margin-top:8px" onclick="this.closest('div').remove()" title="Remove">
+        <button class="btn-mini" style="color:var(--red);flex-shrink:0;margin-top:8px" onclick="this.closest('div[style]').remove()" title="Remove">
             <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>`;
 
     container.appendChild(row);
 
-    const cloudSel   = row.querySelector('.cm-cloud');
-    const ftSel      = row.querySelector('.cm-filter-type');
-    const valSel     = row.querySelector('.cm-value-select');
-    const valCustom  = row.querySelector('.cm-value-custom');
+    const cloudSel = row.querySelector('.cm-cloud');
+    const ftSel    = row.querySelector('.cm-filter-type');
 
     async function loadOptions() {
         const c = cloudSel.value;
         const f = ftSel.value;
-        valSel.innerHTML = '<option value="">— Loading… —</option>';
-        valCustom.style.display = 'none';
+        const optionsEl = row.querySelector('.cm-options');
+        const trigger   = row.querySelector('.cm-trigger');
+        optionsEl.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-secondary)">Loading…</div>';
+        updateCmTrigger(trigger, []);
         try {
             const items = await fetch(`/api/clients/filter-values?cloud=${c}&filter_type=${f}`).then(r => r.json());
-            if (items.length === 0) {
-                valSel.innerHTML = '<option value="_custom_">— No data yet, type value —</option>';
-                valCustom.style.display = '';
-                return;
-            }
-            valSel.innerHTML =
-                '<option value="">— Select —</option>' +
-                items.map(i => {
-                    const display = i.label && i.label !== i.value
-                        ? `${i.label} (${i.value})`
-                        : i.value;
-                    const sel = i.value === savedVal ? 'selected' : '';
-                    return `<option value="${_esc(i.value)}" ${sel}>${_esc(display)}</option>`;
-                }).join('') +
-                '<option value="_custom_">— Custom value… —</option>';
+            renderCmOptions(row, items, savedVals);
         } catch(e) {
-            valSel.innerHTML = '<option value="_custom_">— Type value manually —</option>';
-            valCustom.style.display = '';
+            optionsEl.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--red)">Failed to load</div>';
         }
     }
-
-    valSel.addEventListener('change', () => {
-        if (valSel.value === '_custom_') {
-            valCustom.style.display = '';
-            valCustom.focus();
-        } else {
-            valCustom.style.display = 'none';
-        }
-    });
 
     cloudSel.addEventListener('change', loadOptions);
     ftSel.addEventListener('change', loadOptions);
     loadOptions();
 }
+
+function renderCmOptions(row, items, selectedVals) {
+    const optionsEl = row.querySelector('.cm-options');
+    const trigger   = row.querySelector('.cm-trigger');
+    if (!items.length) {
+        optionsEl.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-secondary)">No data yet</div>';
+    } else {
+        optionsEl.innerHTML = items.map(i => {
+            const display = i.label && i.label !== i.value ? `${i.label} (${i.value})` : i.value;
+            const checked = selectedVals.includes(i.value);
+            return `<label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:12px;cursor:pointer;border-radius:4px;color:var(--text-primary)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="${_esc(i.value)}" ${checked ? 'checked' : ''} onchange="updateCmTrigger(this.closest('.cm-multiselect-wrap').querySelector('.cm-trigger'))">
+                <span title="${_esc(i.value)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(display)}</span>
+            </label>`;
+        }).join('');
+    }
+    updateCmTrigger(trigger, selectedVals);
+}
+
+function updateCmTrigger(trigger, preselected) {
+    if (!trigger) return;
+    const boxes = trigger.closest('.cm-multiselect-wrap')?.querySelectorAll('.cm-options input[type=checkbox]:checked') || [];
+    const selected = preselected && boxes.length === 0 ? preselected
+        : [...boxes].map(b => b.value);
+    const ph = trigger.querySelector('.cm-placeholder');
+    if (selected.length === 0) {
+        trigger.innerHTML = `<span class="cm-placeholder" style="color:var(--text-secondary);font-size:12px">— Select —</span>`;
+    } else {
+        trigger.innerHTML = selected.map(v =>
+            `<span style="background:var(--accent);color:#fff;border-radius:3px;padding:1px 6px;font-size:11px;white-space:nowrap">${_esc(v)}</span>`
+        ).join('') + '<span class="cm-placeholder" style="display:none"></span>';
+    }
+}
+
+function toggleCmDropdown(trigger) {
+    const wrap = trigger.closest('.cm-multiselect-wrap');
+    const dd   = wrap.querySelector('.cm-dropdown');
+    const isOpen = dd.style.display !== 'none';
+    // Close all other dropdowns
+    document.querySelectorAll('.cm-dropdown').forEach(d => d.style.display = 'none');
+    dd.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) wrap.querySelector('.cm-search')?.focus();
+}
+
+function filterCmOptions(input) {
+    const q = input.value.toLowerCase();
+    input.closest('.cm-dropdown').querySelectorAll('.cm-options label').forEach(l => {
+        l.style.display = l.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+}
+
+function addCmCustomValue(input) {
+    const val = input.value.trim();
+    if (!val) return;
+    const wrap   = input.closest('.cm-multiselect-wrap');
+    const opts   = wrap.querySelector('.cm-options');
+    const trigger = wrap.querySelector('.cm-trigger');
+    // Add checkbox option
+    const label = document.createElement('label');
+    label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:12px;cursor:pointer;border-radius:4px;color:var(--text-primary)';
+    label.innerHTML = `<input type="checkbox" value="${_esc(val)}" checked onchange="updateCmTrigger(this.closest('.cm-multiselect-wrap').querySelector('.cm-trigger'))">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(val)}</span>`;
+    opts.appendChild(label);
+    input.value = '';
+    updateCmTrigger(trigger);
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', e => {
+    if (!e.target.closest('.cm-multiselect-wrap')) {
+        document.querySelectorAll('.cm-dropdown').forEach(d => {
+            d.style.display = 'none';
+            // Update trigger when closing
+            const wrap    = d.closest('.cm-multiselect-wrap');
+            const trigger = wrap?.querySelector('.cm-trigger');
+            if (trigger) updateCmTrigger(trigger);
+        });
+    }
+});
 
 async function saveClient() {
     const nameEl = document.getElementById('clientName');
@@ -6498,13 +6575,19 @@ async function saveClient() {
     if (!name) { showToast('Client name is required', 'error'); return; }
 
     const mappings = [];
-    document.querySelectorAll('#clientMappingRows > div').forEach(row => {
+    document.querySelectorAll('#clientMappingRows > div[style]').forEach(row => {
         const cloud      = row.querySelector('.cm-cloud')?.value || 'azure';
         const filterType = row.querySelector('.cm-filter-type')?.value || '';
-        const selVal     = row.querySelector('.cm-value-select')?.value || '';
-        const customVal  = (row.querySelector('.cm-value-custom')?.value || '').trim();
-        const value      = (selVal === '_custom_' || selVal === '') ? customVal : selVal;
-        if (filterType && value) mappings.push({ cloud, filter_type: filterType, value });
+        if (!filterType) return;
+        // Collect all checked values from multi-select
+        const checked = [...row.querySelectorAll('.cm-options input[type=checkbox]:checked')]
+            .map(cb => cb.value.trim()).filter(Boolean);
+        // Also check custom input
+        const custom = (row.querySelector('.cm-custom-input')?.value || '').trim();
+        const allVals = checked.length ? checked : (custom ? [custom] : []);
+        allVals.forEach(value => {
+            if (value) mappings.push({ cloud, filter_type: filterType, value });
+        });
     });
 
     const editId = editIdEl?.value;
