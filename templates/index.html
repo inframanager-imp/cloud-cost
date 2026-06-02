@@ -141,6 +141,14 @@
             <span class="nav-text">Clients</span>
         </div>
 
+        <div class="nav-item" data-page="tags" onclick="navigateTo('tags')">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+                <line x1="7" y1="7" x2="7.01" y2="7"/>
+            </svg>
+            <span class="nav-text">Virtual Tags</span>
+        </div>
+
         <!-- ── Operations ──────────────────────────── -->
         <div class="nav-section-label" style="border-top:1px solid var(--border)">Operations</div>
 
@@ -526,6 +534,17 @@
                 <select id="costsClientFilter" class="cost-filter-input" onchange="loadCostsTable()">
                     <option value="">All Clients</option>
                 </select>
+            </div>
+            <div class="cost-filter-field">
+                <label class="cost-filter-label">Tag</label>
+                <div style="display:flex;gap:4px">
+                    <select id="costsTagKey" class="cost-filter-input" style="width:90px" onchange="onCostsTagKeyChange()">
+                        <option value="">Key</option>
+                    </select>
+                    <select id="costsTagValue" class="cost-filter-input" style="width:90px" onchange="loadCostsTable()" disabled>
+                        <option value="">Value</option>
+                    </select>
+                </div>
             </div>
             <div class="cost-filter-field" style="align-self:flex-end;padding-bottom:1px">
                 <button class="cp-btn-secondary" onclick="resetCostFilters()" style="height:30px;font-size:12px;padding:0 10px">Reset</button>
@@ -1262,6 +1281,133 @@
                 </div>
             </div>
 
+        </div>
+    </section>
+
+    <!-- ═══ Virtual Tags Page ════════════════════════════════════════════ -->
+    <section id="page-tags" class="page-section">
+
+        <div class="db-header">
+            <div class="db-header-left">
+                <div class="db-breadcrumb">ANALYTICS / VIRTUAL TAGS</div>
+                <h1 class="db-title">Virtual Tags</h1>
+                <div class="db-sync-line">
+                    <span style="font-size:12px;color:var(--text-secondary)">Tag resources across all clouds without touching AWS/Azure/GCP — rule-based, instant</span>
+                </div>
+            </div>
+            <button class="cp-btn-primary" onclick="openTagRuleForm()" style="height:36px">+ New Tag Rule</button>
+        </div>
+
+        <!-- How it works banner -->
+        <div style="background:rgba(79,110,247,.06);border:1px solid rgba(79,110,247,.2);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;gap:24px;flex-wrap:wrap">
+            <div style="font-size:12px;color:var(--text-secondary)">
+                <strong style="color:var(--text-primary)">How it works:</strong>
+                Create a rule like <code style="background:var(--bg);padding:2px 6px;border-radius:4px">IF resource_group CONTAINS "prod" → environment = production</code>
+                — your tool automatically groups and filters costs by that tag across all clouds.
+            </div>
+        </div>
+
+        <!-- Tag Rule Form (hidden by default) -->
+        <div id="tagRuleFormWrap" style="display:none;margin-bottom:16px">
+            <div class="db-card">
+                <div class="db-card-hdr" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:16px">
+                    <span class="db-card-title" id="tagRuleFormTitle">New Tag Rule</span>
+                    <button class="btn-mini" onclick="closeTagRuleForm()" style="margin-left:auto">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <input type="hidden" id="tagRuleEditId" value="">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+                    <div>
+                        <label class="cost-filter-label" style="display:block;margin-bottom:4px">Tag Key <span style="color:var(--text-secondary);font-weight:400">(e.g. environment, team, project)</span></label>
+                        <input type="text" id="tagRuleKey" class="filter-input" style="width:100%" placeholder="environment">
+                    </div>
+                    <div>
+                        <label class="cost-filter-label" style="display:block;margin-bottom:4px">Tag Value <span style="color:var(--text-secondary);font-weight:400">(e.g. production, backend)</span></label>
+                        <input type="text" id="tagRuleValue" class="filter-input" style="width:100%" placeholder="production">
+                    </div>
+                </div>
+                <div style="background:var(--bg);border-radius:8px;padding:14px;margin-bottom:16px">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Condition — when does this tag apply?</div>
+                    <div style="display:grid;grid-template-columns:1fr 180px 1fr 120px;gap:10px;align-items:end">
+                        <div>
+                            <label class="cost-filter-label" style="display:block;margin-bottom:4px">Field</label>
+                            <select id="tagRuleField" class="filter-input" style="width:100%">
+                                <option value="resource_group">Resource Group / Region</option>
+                                <option value="service_name">Service Name</option>
+                                <option value="subscription_id">Subscription / Account</option>
+                                <option value="resource_name">Resource Name</option>
+                                <option value="resource_type">Resource Type</option>
+                                <option value="cloud_provider">Cloud Provider</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="cost-filter-label" style="display:block;margin-bottom:4px">Operator</label>
+                            <select id="tagRuleOperator" class="filter-input" style="width:100%">
+                                <option value="contains">contains</option>
+                                <option value="equals">equals</option>
+                                <option value="starts_with">starts with</option>
+                                <option value="ends_with">ends with</option>
+                                <option value="not_contains">not contains</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="cost-filter-label" style="display:block;margin-bottom:4px">Value</label>
+                            <input type="text" id="tagRuleCondValue" class="filter-input" style="width:100%" placeholder="e.g. prod, Amazon EC2, azure">
+                        </div>
+                        <div>
+                            <label class="cost-filter-label" style="display:block;margin-bottom:4px">Cloud (optional)</label>
+                            <select id="tagRuleCloud" class="filter-input" style="width:100%">
+                                <option value="">All clouds</option>
+                                <option value="azure">Azure</option>
+                                <option value="aws">AWS</option>
+                                <option value="gcp">GCP</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px;font-size:11px;color:var(--text-secondary)" id="tagRulePreview"></div>
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button class="cp-btn-primary" onclick="saveTagRule()">Save Rule</button>
+                    <button class="cp-btn-secondary" onclick="closeTagRuleForm()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Two-panel layout -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+
+            <!-- Left: Rules list -->
+            <div class="db-card" style="padding:0;overflow:hidden">
+                <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:13px;font-weight:500">Tag Rules</span>
+                    <span style="font-size:11px;color:var(--text-secondary)" id="tagRulesCount"></span>
+                </div>
+                <div id="tagRulesList" style="max-height:500px;overflow-y:auto">
+                    <div style="text-align:center;padding:32px;color:var(--text-secondary);font-size:13px">Loading…</div>
+                </div>
+            </div>
+
+            <!-- Right: Cost breakdown by tag -->
+            <div>
+                <div class="db-card" style="margin-bottom:14px">
+                    <div class="db-card-hdr"><span class="db-card-title">Preview Cost by Tag</span></div>
+                    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+                        <select id="tagPreviewKey" class="filter-input" style="flex:1;font-size:12px" onchange="loadTagCostBreakdown()">
+                            <option value="">— Select tag key —</option>
+                        </select>
+                        <select id="tagPreviewCloud" class="filter-input" style="width:100px;font-size:12px" onchange="loadTagCostBreakdown()">
+                            <option value="">All clouds</option>
+                            <option value="azure">Azure</option>
+                            <option value="aws">AWS</option>
+                            <option value="gcp">GCP</option>
+                        </select>
+                    </div>
+                    <div id="tagCostBreakdown">
+                        <div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:12px">Select a tag key to see cost breakdown</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
 

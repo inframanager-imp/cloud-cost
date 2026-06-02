@@ -208,6 +208,7 @@ function navigateTo(page) {
     if (page === 'cloud-providers') loadCloudProvidersPage();
     if (page === 'team') loadTeamPage();
     if (page === 'clients') loadClientsPage();
+    if (page === 'tags') loadTagsPage();
 }
 
 function subParam(prefix = '?') {
@@ -226,6 +227,32 @@ function setClientFilter(clientId) {
     if (dash && dash.value !== selectedClient) dash.value = selectedClient;
     if (costs && costs.value !== selectedClient) costs.value = selectedClient;
     navigateTo(currentPage);
+}
+
+async function populateTagFilters() {
+    try {
+        const keys = await fetch('/api/tags/keys').then(r => r.json());
+        const sel = document.getElementById('costsTagKey');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">Key</option>' +
+            keys.map(k => `<option value="${_esc(k)}">${_esc(k)}</option>`).join('');
+    } catch(e) {}
+}
+
+async function onCostsTagKeyChange() {
+    const key = document.getElementById('costsTagKey')?.value || '';
+    const valSel = document.getElementById('costsTagValue');
+    if (!valSel) return;
+    valSel.innerHTML = '<option value="">Value</option>';
+    valSel.disabled = !key;
+    if (!key) { loadCostsTable(); return; }
+    try {
+        const vals = await fetch(`/api/tags/values?key=${encodeURIComponent(key)}`).then(r => r.json());
+        valSel.innerHTML = '<option value="">All values</option>' +
+            vals.map(v => `<option value="${_esc(v)}">${_esc(v)}</option>`).join('');
+        valSel.disabled = false;
+    } catch(e) {}
+    loadCostsTable();
 }
 
 async function populateClientDropdowns() {
@@ -1095,6 +1122,10 @@ function resetCostFilters() {
     _updateCostsCloudFilters('');
     const costsClient = document.getElementById('costsClientFilter');
     if (costsClient) costsClient.value = '';
+    const tagKey = document.getElementById('costsTagKey');
+    const tagVal = document.getElementById('costsTagValue');
+    if (tagKey) tagKey.value = '';
+    if (tagVal) { tagVal.value = ''; tagVal.disabled = true; }
     costPageOffset = 0;
     loadCostsTable();
 }
@@ -1182,6 +1213,9 @@ async function loadCostsTable() {
     if (costsSelectedCloud) params.set('cloud_provider', costsSelectedCloud);
     const costsClient = document.getElementById('costsClientFilter')?.value || '';
     if (costsClient) params.set('client_id', costsClient);
+    const tagKey = document.getElementById('costsTagKey')?.value || '';
+    const tagVal = document.getElementById('costsTagValue')?.value || '';
+    if (tagKey && tagVal) { params.set('tag_key', tagKey); params.set('tag_value', tagVal); }
     params.set('limit', String(costPageLimit));
     params.set('offset', String(costPageOffset));
 
@@ -5405,6 +5439,7 @@ document.addEventListener('DOMContentLoaded', () => {
     _scLoadStatus();     // update sidebar global status
     initCloudFilter();   // hide pills for clouds with no data
     populateClientDropdowns();
+    populateTagFilters();
     _initNavContextMenu();
     // Support opening a specific page in a new tab via ?page= query param
     const urlPage = new URLSearchParams(location.search).get('page');
@@ -6538,5 +6573,217 @@ async function deleteClientById(id, name) {
     } catch(e) {
         showToast('Delete failed: ' + e.message, 'error');
     }
+}
+
+// ─── Virtual Tags ─────────────────────────────────────────────────────────────
+
+let _tagRulesData = [];
+
+async function loadTagsPage() {
+    await loadTagRules();
+    await loadTagKeys();
+}
+
+async function loadTagRules() {
+    const listEl  = document.getElementById('tagRulesList');
+    const countEl = document.getElementById('tagRulesCount');
+    if (listEl) listEl.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-secondary);font-size:13px">Loading…</div>`;
+    try {
+        _tagRulesData = await fetch('/api/tags/rules').then(r => r.json());
+        if (countEl) countEl.textContent = `${_tagRulesData.length} rule${_tagRulesData.length !== 1 ? 's' : ''}`;
+        if (!listEl) return;
+        if (!_tagRulesData.length) {
+            listEl.innerHTML = `<div style="text-align:center;padding:40px 16px;color:var(--text-secondary);font-size:13px">
+                No tag rules yet.<br>Click <strong>+ New Tag Rule</strong> to create one.
+            </div>`;
+            return;
+        }
+
+        // Group by tag key
+        const grouped = {};
+        _tagRulesData.forEach(r => {
+            if (!grouped[r.tag_key]) grouped[r.tag_key] = [];
+            grouped[r.tag_key].push(r);
+        });
+
+        const OPERATOR_LABELS = { contains: 'contains', equals: '=', starts_with: 'starts with', ends_with: 'ends with', not_contains: 'not contains' };
+        const FIELD_LABELS = { resource_group: 'Resource Group', service_name: 'Service', subscription_id: 'Subscription', resource_name: 'Resource Name', resource_type: 'Resource Type', cloud_provider: 'Cloud' };
+
+        listEl.innerHTML = Object.entries(grouped).map(([key, rules]) => `
+            <div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                    <svg width="12" height="12" fill="none" stroke="var(--accent)" stroke-width="2" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                    <span style="font-size:13px;font-weight:600;color:var(--accent)">${_esc(key)}</span>
+                </div>
+                ${rules.map(r => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0 5px 18px;border-left:2px solid var(--border)">
+                    <div style="font-size:12px;color:var(--text-secondary);flex:1">
+                        <span style="color:var(--text-primary);font-weight:500">${_esc(r.tag_value)}</span>
+                        &nbsp;←&nbsp; IF ${FIELD_LABELS[r.condition_field] || r.condition_field}
+                        <em>${OPERATOR_LABELS[r.condition_operator] || r.condition_operator}</em>
+                        "<strong>${_esc(r.condition_value)}</strong>"
+                        ${r.cloud ? `<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:var(--bg);margin-left:4px">${r.cloud.toUpperCase()}</span>` : ''}
+                        ${!r.enabled ? '<span style="font-size:10px;color:var(--red);margin-left:4px">disabled</span>' : ''}
+                    </div>
+                    <div style="display:flex;gap:4px;flex-shrink:0">
+                        <button class="btn-mini" onclick="toggleTagRule(${r.id},${r.enabled})" title="${r.enabled ? 'Disable' : 'Enable'}" style="color:${r.enabled ? 'var(--green)' : 'var(--text-secondary)'}">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+                        </button>
+                        <button class="btn-mini" onclick="editTagRule(${r.id})" title="Edit">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-mini" onclick="deleteTagRule(${r.id})" title="Delete" style="color:var(--red)">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                        </button>
+                    </div>
+                </div>`).join('')}
+            </div>`).join('');
+    } catch(e) {
+        if (listEl) listEl.innerHTML = `<div style="text-align:center;padding:32px;color:var(--red);font-size:13px">Failed to load rules.</div>`;
+    }
+}
+
+async function loadTagKeys() {
+    try {
+        const keys = await fetch('/api/tags/keys').then(r => r.json());
+        const sel = document.getElementById('tagPreviewKey');
+        if (!sel) return;
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">— Select tag key —</option>' +
+            keys.map(k => `<option value="${_esc(k)}" ${k === cur ? 'selected' : ''}>${_esc(k)}</option>`).join('');
+        if (cur) loadTagCostBreakdown();
+    } catch(e) {}
+}
+
+async function loadTagCostBreakdown() {
+    const key   = document.getElementById('tagPreviewKey')?.value || '';
+    const cloud = document.getElementById('tagPreviewCloud')?.value || '';
+    const el    = document.getElementById('tagCostBreakdown');
+    if (!key || !el) return;
+    el.innerHTML = `<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:12px">Loading…</div>`;
+    try {
+        const data = await fetch(`/api/tags/cost-breakdown?tag_key=${encodeURIComponent(key)}&cloud_provider=${cloud}`).then(r => r.json());
+        const breakdown = data.breakdown || [];
+        if (!breakdown.length) {
+            el.innerHTML = `<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:12px">No cost data for tag "${key}" yet.<br>Rules apply to future queries.</div>`;
+            return;
+        }
+        const maxCost = breakdown[0]?.total || 1;
+        const total = breakdown.reduce((s, b) => s + b.total, 0);
+        el.innerHTML = breakdown.map((b, i) => {
+            const bar = Math.max(3, Math.round(b.total / maxCost * 100));
+            const pct = total > 0 ? (b.total / total * 100).toFixed(1) : 0;
+            const colors = ['#185FA5','#3A77B2','#5E8FC0','#80A7CE','#A3BFDB'];
+            const col = colors[Math.min(i, colors.length-1)];
+            return `<div style="display:grid;grid-template-columns:120px 1fr 70px 40px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle,rgba(0,0,0,.04))">
+                <span style="font-size:12px;font-weight:500;color:var(--accent)">${_esc(b.tag_value)}</span>
+                <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+                    <div style="height:100%;width:${bar}%;background:${col};border-radius:3px"></div>
+                </div>
+                <span style="font-size:12px;font-weight:500;text-align:right">${_fmt$(b.total)}</span>
+                <span style="font-size:11px;color:var(--text-secondary);text-align:right">${pct}%</span>
+            </div>`;
+        }).join('') + `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--text-secondary)">Total</span>
+            <strong>${_fmt$(total)}</strong>
+        </div>`;
+    } catch(e) {
+        el.innerHTML = `<div style="color:var(--red);font-size:12px">Failed to load breakdown.</div>`;
+    }
+}
+
+function openTagRuleForm(ruleId) {
+    const wrap = document.getElementById('tagRuleFormWrap');
+    const titleEl = document.getElementById('tagRuleFormTitle');
+    const editIdEl = document.getElementById('tagRuleEditId');
+    if (!wrap) return;
+
+    if (ruleId) {
+        const rule = _tagRulesData.find(r => r.id === ruleId);
+        if (!rule) return;
+        titleEl.textContent = 'Edit Tag Rule';
+        editIdEl.value = ruleId;
+        document.getElementById('tagRuleKey').value       = rule.tag_key;
+        document.getElementById('tagRuleValue').value     = rule.tag_value;
+        document.getElementById('tagRuleField').value     = rule.condition_field;
+        document.getElementById('tagRuleOperator').value  = rule.condition_operator;
+        document.getElementById('tagRuleCondValue').value = rule.condition_value;
+        document.getElementById('tagRuleCloud').value     = rule.cloud || '';
+    } else {
+        titleEl.textContent = 'New Tag Rule';
+        editIdEl.value = '';
+        ['tagRuleKey','tagRuleValue','tagRuleCondValue'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+        document.getElementById('tagRuleField').value    = 'resource_group';
+        document.getElementById('tagRuleOperator').value = 'contains';
+        document.getElementById('tagRuleCloud').value    = '';
+    }
+    wrap.style.display = '';
+    document.getElementById('tagRuleKey')?.focus();
+    updateTagRulePreview();
+}
+
+function closeTagRuleForm() {
+    const wrap = document.getElementById('tagRuleFormWrap');
+    if (wrap) wrap.style.display = 'none';
+}
+
+function updateTagRulePreview() {
+    const key   = document.getElementById('tagRuleKey')?.value || '...';
+    const val   = document.getElementById('tagRuleValue')?.value || '...';
+    const field = document.getElementById('tagRuleField')?.value || '';
+    const op    = document.getElementById('tagRuleOperator')?.value || '';
+    const cval  = document.getElementById('tagRuleCondValue')?.value || '...';
+    const cloud = document.getElementById('tagRuleCloud')?.value || '';
+    const el    = document.getElementById('tagRulePreview');
+    if (el) el.innerHTML = `Preview: IF <strong>${field}</strong> ${op} "<strong>${_esc(cval)}</strong>"${cloud ? ` [${cloud.toUpperCase()}]` : ''} → tag <strong>${_esc(key)}</strong> = <strong style="color:var(--accent)">${_esc(val)}</strong>`;
+}
+
+// Wire up preview updates
+['tagRuleKey','tagRuleValue','tagRuleField','tagRuleOperator','tagRuleCondValue','tagRuleCloud'].forEach(id => {
+    document.addEventListener('input', e => { if (e.target?.id === id) updateTagRulePreview(); });
+    document.addEventListener('change', e => { if (e.target?.id === id) updateTagRulePreview(); });
+});
+
+async function saveTagRule() {
+    const editId  = document.getElementById('tagRuleEditId')?.value;
+    const payload = {
+        tag_key:            (document.getElementById('tagRuleKey')?.value || '').trim(),
+        tag_value:          (document.getElementById('tagRuleValue')?.value || '').trim(),
+        condition_field:    document.getElementById('tagRuleField')?.value || '',
+        condition_operator: document.getElementById('tagRuleOperator')?.value || 'contains',
+        condition_value:    (document.getElementById('tagRuleCondValue')?.value || '').trim(),
+        cloud:              document.getElementById('tagRuleCloud')?.value || '',
+    };
+    if (!payload.tag_key || !payload.tag_value || !payload.condition_value) {
+        showToast('Tag key, tag value and condition value are required', 'error'); return;
+    }
+    try {
+        const url    = editId ? `/api/tags/rules/${editId}` : '/api/tags/rules';
+        const method = editId ? 'PUT' : 'POST';
+        const resp   = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        if (!resp.ok) { const e = await resp.json(); showToast(e.error || 'Save failed', 'error'); return; }
+        showToast(`Rule ${editId ? 'updated' : 'created'}`, 'success');
+        closeTagRuleForm();
+        await loadTagRules();
+        await loadTagKeys();
+    } catch(e) { showToast('Save failed: ' + e.message, 'error'); }
+}
+
+function editTagRule(id) { openTagRuleForm(id); }
+
+async function deleteTagRule(id) {
+    if (!confirm('Delete this tag rule?')) return;
+    await fetch(`/api/tags/rules/${id}`, { method: 'DELETE' });
+    showToast('Rule deleted', 'success');
+    await loadTagRules();
+    await loadTagKeys();
+}
+
+async function toggleTagRule(id, currentEnabled) {
+    await fetch(`/api/tags/rules/${id}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ enabled: currentEnabled ? 0 : 1 })
+    });
+    await loadTagRules();
 }
 
