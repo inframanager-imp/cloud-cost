@@ -58,10 +58,6 @@ from database import (
     # AWS one-click setup tokens
     create_aws_setup_token, validate_aws_setup_token,
     consume_aws_setup_token, get_aws_setup_token_status,
-    # Virtual tags
-    get_virtual_tag_rules, create_virtual_tag_rule, update_virtual_tag_rule,
-    delete_virtual_tag_rule, get_distinct_virtual_tag_keys, get_virtual_tag_values,
-    get_cost_by_virtual_tag, build_virtual_tag_sql_filter,
 )
 from azure_fetcher import (fetch_cost_data, fetch_activity_logs, resolve_caller_names, fetch_subscriptions,
                            fetch_billing_account_costs, filter_billing_only_charges)
@@ -973,7 +969,7 @@ def api_costs():
     # Remove None values
     filters = {k: v for k, v in filters.items() if v is not None}
 
-    # Client filter
+    # Client filter: scope results to a specific client's mappings
     client_id_param = request.args.get("client_id")
     if client_id_param:
         try:
@@ -983,18 +979,6 @@ def api_costs():
                 filters["_extra_params"] = cparams
         except (ValueError, TypeError):
             pass
-
-    # Virtual tag filter
-    tag_key_param   = request.args.get("tag_key", "").strip()
-    tag_value_param = request.args.get("tag_value", "").strip()
-    if tag_key_param and tag_value_param and not filters.get("_extra_where"):
-        frag, tparams = build_virtual_tag_sql_filter(
-            tag_key_param, tag_value_param, current_tenant_id(),
-            filters.get("cloud_provider", "")
-        )
-        if frag and frag != "1=0":
-            filters["_extra_where"] = "AND " + frag
-            filters["_extra_params"] = tparams
 
     data = query_costs(filters, tenant_id=current_tenant_id())
 
@@ -2702,77 +2686,6 @@ def api_aws_cur_uploaded():
         print(f"[SNS] CUR webhook error: {e}")
 
     return "", 200
-
-
-# ─── Virtual Tags ────────────────────────────────────────────────────────────
-
-@app.route("/api/tags/rules", methods=["GET"])
-@login_required
-def api_get_tag_rules():
-    return jsonify(get_virtual_tag_rules(current_tenant_id()))
-
-
-@app.route("/api/tags/rules", methods=["POST"])
-@login_required
-def api_create_tag_rule():
-    body = request.get_json(silent=True) or {}
-    tid = current_tenant_id()
-    tag_key    = (body.get("tag_key")    or "").strip()
-    tag_value  = (body.get("tag_value")  or "").strip()
-    cond_field = (body.get("condition_field") or "").strip()
-    cond_op    = (body.get("condition_operator") or "contains").strip()
-    cond_val   = (body.get("condition_value") or "").strip()
-    cloud      = (body.get("cloud") or "").strip().lower()
-    priority   = int(body.get("priority") or 0)
-
-    if not tag_key or not tag_value or not cond_field or not cond_val:
-        return jsonify({"error": "tag_key, tag_value, condition_field, condition_value are required"}), 400
-
-    rule_id = create_virtual_tag_rule(tid, tag_key, tag_value, cond_field,
-                                      cond_op, cond_val, cloud, priority)
-    return jsonify({"id": rule_id, "message": "Rule created"}), 201
-
-
-@app.route("/api/tags/rules/<int:rule_id>", methods=["PUT"])
-@login_required
-def api_update_tag_rule(rule_id):
-    body = request.get_json(silent=True) or {}
-    update_virtual_tag_rule(rule_id, current_tenant_id(), **body)
-    return jsonify({"message": "Updated"})
-
-
-@app.route("/api/tags/rules/<int:rule_id>", methods=["DELETE"])
-@login_required
-def api_delete_tag_rule(rule_id):
-    delete_virtual_tag_rule(rule_id, current_tenant_id())
-    return jsonify({"message": "Deleted"})
-
-
-@app.route("/api/tags/keys", methods=["GET"])
-@login_required
-def api_tag_keys():
-    return jsonify(get_distinct_virtual_tag_keys(current_tenant_id()))
-
-
-@app.route("/api/tags/values", methods=["GET"])
-@login_required
-def api_tag_values():
-    key = request.args.get("key", "")
-    return jsonify(get_virtual_tag_values(current_tenant_id(), key))
-
-
-@app.route("/api/tags/cost-breakdown", methods=["GET"])
-@login_required
-def api_tag_cost_breakdown():
-    tag_key  = request.args.get("tag_key", "")
-    cloud    = request.args.get("cloud_provider", "")
-    today    = datetime.utcnow()
-    date_from = request.args.get("date_from") or today.replace(day=1).strftime("%Y-%m-%d")
-    date_to   = request.args.get("date_to")   or today.strftime("%Y-%m-%d")
-    if not tag_key:
-        return jsonify({"error": "tag_key required"}), 400
-    data = get_cost_by_virtual_tag(tag_key, current_tenant_id(), date_from, date_to, cloud)
-    return jsonify({"tag_key": tag_key, "breakdown": data, "date_from": date_from, "date_to": date_to})
 
 
 # ─── AWS One-Click Setup ─────────────────────────────────────────────────────
