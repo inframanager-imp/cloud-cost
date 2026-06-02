@@ -6330,16 +6330,16 @@ async function selectClient(clientId) {
             <div class="db-kpi-sub">Based on ${trend.length} day${trend.length!==1?'s':''} with data</div>
         </div>
 
-    <!-- Service breakdown + subscriptions -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-        <div class="db-card">
-            <div class="db-card-hdr"><span class="db-card-title">Top Services</span><span class="db-card-period">This month</span></div>
-            ${byService.length ? svcRows : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No service data</div>'}
-        </div>
-        <div class="db-card">
-            <div class="db-card-hdr"><span class="db-card-title">By Subscription / Account</span><span class="db-card-period">This month</span></div>
-            ${bySub.length ? subRows : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No subscription data</div>'}
-        </div>
+    <!-- Top Services full width -->
+    <div class="db-card" style="margin-bottom:14px">
+        <div class="db-card-hdr"><span class="db-card-title">Top Services</span><span class="db-card-period">This month</span></div>
+        ${byService.length ? svcRows : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No service data</div>'}
+    </div>
+
+    <!-- By Cloud full width -->
+    <div class="db-card" style="margin-bottom:14px">
+        <div class="db-card-hdr"><span class="db-card-title">By Cloud Provider</span><span class="db-card-period">This month</span></div>
+        ${cloudGroupedArr.length ? subRows : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No data</div>'}
     </div>
 
     `;
