@@ -1333,18 +1333,24 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             <td style="padding:9px 14px;font-size:13px;font-weight:500;text-align:right">${s['cost']:,.2f}</td>
         </tr>"""
 
-    # Sub/account rows
-    sub_rows = ""
+    # Sub/account rows — grouped by cloud provider
     sub_map = {m.get("value",""): m for m in mappings if m.get("filter_type") == "subscription_id"}
-    for i, s in enumerate(by_sub[:6]):
-        bar = max(3, int(s["cost"] / max_sub * 55))
+    cloud_totals_sub = {}
+    for s in by_sub:
         m = sub_map.get(s.get("subscription_id",""), {})
         cloud = (m.get("cloud") or "azure").lower()
+        cloud_totals_sub[cloud] = cloud_totals_sub.get(cloud, 0) + s["cost"]
+    cloud_totals_sub = sorted(cloud_totals_sub.items(), key=lambda x: x[1], reverse=True)
+    max_sub_cloud = cloud_totals_sub[0][1] if cloud_totals_sub else 1
+    CLOUD_LABELS = {"azure": "Microsoft Azure", "aws": "Amazon AWS", "gcp": "Google Cloud"}
+    sub_rows = ""
+    for i, (cloud, cost) in enumerate(cloud_totals_sub):
+        bar = max(3, int(cost / max_sub_cloud * 55))
         col = CLOUD_COLORS.get(cloud, RANK_COLS[min(i, len(RANK_COLS)-1)])
         bg_b = CLOUD_BADGE_BG.get(cloud, "#F0F0F0")
         fg_b = CLOUD_BADGE_FG.get(cloud, "#333")
         bg = "#F7F7F5" if i % 2 == 0 else "#FFFFFF"
-        label = s.get("subscription_id") or "Unknown"
+        label = CLOUD_LABELS.get(cloud, cloud.upper())
         sub_rows += f"""<tr style="background:{bg}">
             <td style="padding:9px 14px">
                 <span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px;background:{bg_b};color:{fg_b};margin-right:6px">{cloud.upper()[:3]}</span>
@@ -1356,7 +1362,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
                     <td bgcolor="#EBEBEB" height="7" style="background:#EBEBEB;border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
                 </tr></table>
             </td>
-            <td style="padding:9px 14px;font-size:13px;font-weight:500;text-align:right">${s['cost']:,.2f}</td>
+            <td style="padding:9px 14px;font-size:13px;font-weight:500;text-align:right">${cost:,.2f}</td>
         </tr>"""
 
     # Trend rows (last 14)
@@ -1405,13 +1411,9 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         <div style="font-size:28px;color:#185FA5;font-weight:600;letter-spacing:-0.02em;margin-top:6px">${total:,.2f}</div>
         <div style="font-size:11px;color:#8A8A8A;margin-top:4px">{date_from} → {date_to}</div>
       </td>
-      <td width="25%" style="padding:18px 16px;border-right:1px solid #F0F0EE;text-align:center">
+      <td width="50%" style="padding:18px 20px;text-align:center">
         <div style="font-size:10px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">Avg / Day</div>
         <div style="font-size:22px;color:#1A1A1A;font-weight:500;margin-top:6px">${(total / max(len(trend),1)):,.2f}</div>
-      </td>
-      <td width="25%" style="padding:18px 16px;text-align:center">
-        <div style="font-size:10px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">Services</div>
-        <div style="font-size:22px;color:#1A1A1A;font-weight:500;margin-top:6px">{len(by_service)}</div>
       </td>
     </tr>
   </table>

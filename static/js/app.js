@@ -6248,21 +6248,29 @@ async function selectClient(clientId) {
     }).join('');
 
     // Subscription bars
-    const subRows = bySub.slice(0, 6).map((s, i) => {
-        const barW = Math.max(3, Math.round((s.cost / maxSub) * 100));
+    // Group bySub by cloud provider
+    const cloudGrouped = {};
+    const CLOUD_FULL = { azure: 'Microsoft Azure', aws: 'Amazon AWS', gcp: 'Google Cloud' };
+    bySub.forEach(s => {
         const m = (client.mappings || []).find(mp => mp.filter_type === 'subscription_id' && mp.value === s.subscription_id);
         const cloud = (m?.cloud || 'azure').toLowerCase();
-        const col = CLOUD_COLORS[cloud] || '#888';
-        const label = s.subscription_id || 'Unknown';
+        cloudGrouped[cloud] = (cloudGrouped[cloud] || 0) + s.cost;
+    });
+    const cloudGroupedArr = Object.entries(cloudGrouped).sort((a,b) => b[1]-a[1]);
+    const maxSubCloud = cloudGroupedArr[0]?.[1] || 1;
+    const subRows = cloudGroupedArr.map(([cloud, cost], i) => {
+        const barW = Math.max(3, Math.round((cost / maxSubCloud) * 100));
+        const col   = CLOUD_COLORS[cloud] || '#888';
+        const label = CLOUD_FULL[cloud] || cloud.toUpperCase();
         return `<div style="display:grid;grid-template-columns:1fr 90px 70px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle,rgba(0,0,0,.04))">
             <div style="display:flex;align-items:center;gap:6px;overflow:hidden">
-                <span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px;background:${col}22;color:${col};flex-shrink:0">${(m?.cloud||'AZ').toUpperCase().slice(0,3)}</span>
-                <span style="font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(label)}">${_esc(label)}</span>
+                <span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px;background:${col}22;color:${col};flex-shrink:0">${cloud.toUpperCase().slice(0,3)}</span>
+                <span style="font-size:12px;color:var(--text-primary)">${_esc(label)}</span>
             </div>
             <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
                 <div style="height:100%;width:${barW}%;background:${col};border-radius:3px"></div>
             </div>
-            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)">${_fmt$(s.cost)}</span>
+            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)">${_fmt$(cost)}</span>
         </div>`;
     }).join('');
 
@@ -6321,7 +6329,6 @@ async function selectClient(clientId) {
             <div class="db-kpi-value-row"><span class="db-kpi-value">${_fmt$(avgDaily)}</span></div>
             <div class="db-kpi-sub">Based on ${trend.length} day${trend.length!==1?'s':''} with data</div>
         </div>
-    </div>
 
     <!-- Service breakdown + subscriptions -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
