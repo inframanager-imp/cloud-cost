@@ -1391,7 +1391,6 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
       <div style="font-size:11px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">Client Cost Report</div>
       <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:3px">{client.get('name','')}</div>
       <div style="font-size:12px;color:#8A8A8A;margin-top:5px">Period: {date_from} to {date_to} · Generated {now.strftime('%-d %B %Y at %H:%M UTC')}</div>
-      <div style="margin-top:10px">{mapping_tags}</div>
     </td></tr>
   </table>
 </td></tr>
@@ -1430,8 +1429,6 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
 <!-- By subscription/account -->
 {'<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">By Subscription / Account</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:28px"><tr style="background:#F0F0EE"><th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:left">Account</th><th style="padding:9px 8px;font-size:11px;font-weight:500;color:#525252;text-align:left">Share</th><th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th></tr>' + sub_rows + '</table>' if sub_rows else ''}
 
-<!-- Daily trend -->
-{'<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:4px">Daily Spend</div><div style="font-size:11px;color:#8A8A8A;margin-bottom:14px">Last ' + str(len(recent)) + ' days</div><div style="background:#F7F7F5;border-radius:10px;overflow:hidden;margin-bottom:8px"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse"><tr style="background:#EEEDE8"><td style="padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A8A8A">Date</td><td style="padding:7px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:#8A8A8A;text-align:right">Cost</td><td></td></tr>' + trend_rows + '</table></div>' if trend_rows else ''}
 
 </td></tr></table></td></tr>
 

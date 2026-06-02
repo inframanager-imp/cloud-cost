@@ -6290,7 +6290,6 @@ async function selectClient(clientId) {
             <div>
                 <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Client Report · ${_esc(monthLabel)}</div>
                 <div style="font-size:22px;font-weight:600;color:var(--text-primary);letter-spacing:-.02em">${_esc(client.name)}</div>
-                <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">${mappingTags || '<span style="font-size:11px;color:var(--text-secondary)">No mappings configured</span>'}</div>
             </div>
             <div style="display:flex;gap:8px">
                 <button class="cp-btn-secondary" onclick="openClientForm(${client.id})" style="font-size:12px">
@@ -6336,14 +6335,7 @@ async function selectClient(clientId) {
         </div>
     </div>
 
-    <!-- Daily trend -->
-    <div class="db-card">
-        <div class="db-card-hdr"><span class="db-card-title">Daily Spend</span><span class="db-card-period">Last ${recent14.length} days</span></div>
-        ${recent14.length ? `
-        <div style="display:flex;gap:3px;align-items:flex-end;padding:12px 0 4px;height:90px;overflow:hidden">
-            ${trendBars}
-        </div>` : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No trend data</div>'}
-    </div>`;
+    `;
 }
 
 function _esc(str) {
