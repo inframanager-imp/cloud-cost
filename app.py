@@ -79,6 +79,22 @@ ADMIN_PASSWORD_HASH = generate_password_hash(os.getenv("ADMIN_PASSWORD", "admin"
 # Initialize database
 init_db()
 
+# Clear stale sync status on startup (prevents stuck "running" state after restart)
+try:
+    _status_file = os.path.join(os.path.dirname(os.path.abspath(
+        os.getenv("DB_PATH", "/app/data/azure_costs.db"))), ".cost_sync_status.json")
+    if os.path.exists(_status_file):
+        with open(_status_file) as _f:
+            _st = json.load(_f)
+        if _st.get("running"):
+            _st["running"] = False
+            _st["message"] = "Interrupted (server restarted)"
+            with open(_status_file, "w") as _f:
+                json.dump(_st, _f)
+            print("[Startup] Cleared stale sync status (was running=true)")
+except Exception:
+    pass
+
 # Track sync status
 sync_status = {"running": False, "message": "", "progress": 0}
 
