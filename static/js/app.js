@@ -5045,21 +5045,86 @@ function _scMonitorSync() {
     const fill = document.getElementById('scProgressFill');
     if (wrap) wrap.style.display = 'block';
 
+    let _syncStart = Date.now();
+    let _lastDoneCount = 0;
+
     if (syncInterval) clearInterval(syncInterval);
     syncInterval = setInterval(async () => {
         try {
             const status = await fetch('/api/sync/status').then(r => r.json());
-            if (msg)  msg.textContent = status.message;
-            if (fill) fill.style.width = `${status.progress}%`;
-            const legacyMsg  = document.getElementById('syncMessage');
-            const legacyFill = document.getElementById('syncProgress');
-            if (legacyMsg)  legacyMsg.textContent   = status.message;
-            if (legacyFill) legacyFill.style.width  = `${status.progress}%`;
+            const pct = status.progress || 0;
 
-            // Live per-subscription results
-            const detailsEl = document.getElementById('scSyncDetails');
-            if (detailsEl && status.details && status.details.length) {
-                detailsEl.innerHTML = status.details.map(d => `
+            // ── Sync Center panel ──
+            if (msg)  msg.textContent = status.message;
+            if (fill) fill.style.width = `${pct}%`;
+
+            // ── Top sync bar ──
+            const barMsg  = document.getElementById('syncMessage');
+            const barFill = document.getElementById('syncProgress');
+            const barPct  = document.getElementById('syncPct');
+            const barETA  = document.getElementById('syncETA');
+            const barList = document.getElementById('syncDetailsList');
+
+            const details = status.details || [];
+            const total   = details.length || 1;
+            const done    = details.filter(d => d.ok !== undefined).length;
+
+            if (barMsg)  barMsg.textContent  = status.message || 'Syncing…';
+            if (barFill) barFill.style.width = `${pct}%`;
+            if (barPct)  barPct.textContent  = `${pct}%`;
+
+            // ETA calculation
+            if (barETA && done > 0 && status.running) {
+                const elapsed = (Date.now() - _syncStart) / 1000;
+                const secPerSub = elapsed / done;
+                const remaining = Math.max(0, (total - done) * secPerSub);
+                if (remaining > 60) {
+                    barETA.textContent = `~${Math.ceil(remaining/60)} min remaining`;
+                } else if (remaining > 0) {
+                    barETA.textContent = `~${Math.ceil(remaining)} sec remaining`;
+                } else {
+                    barETA.textContent = '';
+                }
+            } else if (barETA) {
+                barETA.textContent = '';
+            }
+
+            // Per-subscription status list
+            if (barList && details.length) {
+                barList.style.display = 'block';
+                barList.innerHTML = details.map(d => {
+                    const isDone    = d.ok !== undefined;
+                    const isCurrent = !isDone && d === details.find(x => x.ok === undefined);
+                    let icon, color, info;
+                    if (d.ok === true) {
+                        icon  = '✅'; color = 'var(--green,#27ae60)';
+                        info  = `${(d.records||0).toLocaleString()} records`;
+                    } else if (d.ok === false) {
+                        icon  = '❌'; color = 'var(--red,#e74c3c)';
+                        info  = d.error ? d.error.slice(0,40) + '…' : 'failed';
+                    } else if (isCurrent) {
+                        icon  = '⏳'; color = 'var(--accent)';
+                        info  = 'syncing…';
+                    } else {
+                        icon  = '○'; color = 'var(--text-secondary)';
+                        info  = 'waiting';
+                    }
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 8px;font-size:11px;${isCurrent?'background:rgba(79,110,247,.07);border-radius:4px':''}">
+                        <span style="display:flex;align-items:center;gap:5px">
+                            <span>${icon}</span>
+                            <span style="color:${color};font-weight:${isCurrent?'600':'400'}">${_esc(d.name)}</span>
+                        </span>
+                        <span style="color:var(--text-secondary)">${info}</span>
+                    </div>`;
+                }).join('');
+            } else if (barList && !status.running) {
+                barList.style.display = 'none';
+            }
+
+            // Sync Center per-sub panel
+            const scDetails = document.getElementById('scSyncDetails');
+            if (scDetails && details.length) {
+                scDetails.innerHTML = details.map(d => `
                     <div class="sc-sync-detail-row">
                         <span class="sc-sync-detail-dot" style="color:${d.ok ? 'var(--green)' : 'var(--red)'}">
                             ${d.ok ? '✓' : '✗'}
@@ -5069,25 +5134,31 @@ function _scMonitorSync() {
                             ${d.ok ? d.records.toLocaleString() + ' records' : (d.error || 'failed')}
                         </span>
                     </div>`).join('');
-                detailsEl.style.display = 'block';
-            } else if (detailsEl && !status.running) {
-                detailsEl.style.display = 'none';
+                scDetails.style.display = 'block';
+            } else if (scDetails && !status.running) {
+                scDetails.style.display = 'none';
             }
 
             if (!status.running) {
                 clearInterval(syncInterval);
                 syncInterval = null;
+                if (barPct) barPct.textContent = '100%';
+                if (barETA) barETA.textContent = '';
                 if (wrap) setTimeout(() => { wrap.style.display = 'none'; if (fill) fill.style.width = '0%'; }, 2000);
                 if (status.progress === 100) {
                     showToast(status.message, 'success');
                     setTimeout(() => {
-                        document.querySelector('.sync-bar').classList.remove('active');
+                        const sb = document.querySelector('.sync-bar');
+                        if (sb) sb.classList.remove('active');
+                        if (barList) barList.style.display = 'none';
+                        if (barPct) barPct.textContent = '';
                         loadSyncCenter();
                         if (currentPage === 'dashboard') loadDashboard();
                     }, 2000);
                 } else {
                     showToast(status.message, 'error');
-                    document.querySelector('.sync-bar').classList.remove('active');
+                    const sb = document.querySelector('.sync-bar');
+                    if (sb) sb.classList.remove('active');
                 }
             }
         } catch(e) { clearInterval(syncInterval); }

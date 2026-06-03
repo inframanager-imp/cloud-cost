@@ -242,13 +242,21 @@
 
     <!-- Sync Progress Bar -->
     <div class="sync-bar" id="syncBar">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-            <span id="syncMessage" style="font-size:14px">Syncing...</span>
-            <span class="spinner"></span>
+        <!-- Row 1: message + % + spinner -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span id="syncMessage" style="font-size:13px;font-weight:500">Syncing...</span>
+            <div style="display:flex;align-items:center;gap:10px">
+                <span id="syncETA" style="font-size:11px;color:var(--text-secondary)"></span>
+                <span id="syncPct" style="font-size:13px;font-weight:600;color:var(--accent)">0%</span>
+                <span class="spinner"></span>
+            </div>
         </div>
-        <div class="progress-bar">
-            <div class="fill" id="syncProgress" style="width:0%"></div>
+        <!-- Row 2: progress bar -->
+        <div class="progress-bar" style="height:6px;border-radius:3px;margin-bottom:6px">
+            <div class="fill" id="syncProgress" style="width:0%;border-radius:3px;transition:width .4s ease"></div>
         </div>
+        <!-- Row 3: per-subscription status list -->
+        <div id="syncDetailsList" style="display:none;margin-top:4px;max-height:120px;overflow-y:auto"></div>
     </div>
 
     <!-- ═══ Cloud Overview Page ══════════════════════════════════════════ -->
