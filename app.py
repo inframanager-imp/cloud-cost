@@ -659,18 +659,19 @@ def api_sync():
         pass
 
     def _fetch_one_subscription(sub, is_full, months, date_to):
-        """Fetch cost data for a single subscription. Runs in a thread."""
+        """Fetch cost data for a single subscription. Runs in a thread.
+        Fetch-first, delete-after: existing data is only removed AFTER
+        a successful fetch so a 429/network error never wipes history.
+        """
         sub_id = sub["subscription_id"]
         sub_name = sub.get("name", sub_id[:12])
 
         if is_full:
             date_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
-            clear_cost_data(subscription_id=sub_id)
         else:
             latest = get_latest_cost_date(subscription_id=sub_id)
             if latest:
                 date_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
-                delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
             else:
                 date_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
 
@@ -690,7 +691,18 @@ def api_sync():
             all_records.extend(records)
             current_from = chunk_to + timedelta(days=1)
 
-        count = insert_cost_records(all_records)
+        # Only delete old records AFTER successful fetch
+        if all_records:
+            if is_full:
+                clear_cost_data(subscription_id=sub_id)
+            else:
+                latest = get_latest_cost_date(subscription_id=sub_id)
+                if latest:
+                    delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
+            count = insert_cost_records(all_records)
+        else:
+            count = 0  # Nothing fetched — keep existing data intact
+
         update_subscription_sync_time(sub_id, "cost")
         return sub_name, count
 
@@ -3025,7 +3037,6 @@ def _run_auto_sync():
             latest = get_latest_cost_date(subscription_id=sub_id)
             if latest:
                 date_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
-                delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
             else:
                 date_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
 
@@ -3045,7 +3056,14 @@ def _run_auto_sync():
                 all_records.extend(records)
                 current_from = chunk_to + timedelta(days=1)
 
-            count = insert_cost_records(all_records)
+            # Only delete + replace AFTER successful fetch
+            if all_records:
+                if latest:
+                    delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
+                count = insert_cost_records(all_records)
+            else:
+                count = 0  # 429 or empty — keep existing data intact
+
             update_subscription_sync_time(sub_id, "cost")
             return count
 
