@@ -3430,17 +3430,25 @@ function loadProviders() {
         const azureSubs = subs.filter(s => s.cloud === 'azure');
         const azureRows = azureSubs.map(s => {
             const status = s.enabled ? 'fresh' : 'paused';
-            return `<tr data-cloud="azure" id="cp-row-az-${s.subscription_id.replace(/[^a-z0-9]/gi,'_')}">
+            const safeId = s.subscription_id.replace(/[^a-z0-9]/gi,'_');
+            return `<tr data-cloud="azure" id="cp-row-az-${safeId}">
                 <td><div class="acct-cell">
                     <div class="provider-icon-sm" style="background:var(--azure)">Az</div>
                     <span class="acct-name">${s.name || s.subscription_id}</span>
                 </div></td>
                 <td class="mono">${_cpTruncateId(s.subscription_id)}</td>
                 <td><span class="status-pill status-pill--${status}"><span class="status-pill__dot"></span>${s.enabled ? 'Active' : 'Paused'}</span></td>
-                <td class="muted">${_cpRelativeSync(azureLastSync)}</td>
+                <td class="muted" id="cp-az-lastsync-${safeId}">${_cpRelativeSync(azureLastSync)}</td>
                 <td class="actions-cell">
-                    <button class="icon-btn-ghost" onclick="openSyncCenter()" title="Sync">
+                    <button class="icon-btn-ghost" id="cp-az-sync-${safeId}"
+                        onclick="syncSingleAzureSub('${s.subscription_id}', '${(s.name||s.subscription_id).replace(/'/g,'')}', this)"
+                        title="Quick Sync this subscription">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
+                    <button class="icon-btn-ghost"
+                        onclick="syncSingleAzureSub('${s.subscription_id}', '${(s.name||s.subscription_id).replace(/'/g,'')}', this, 'full')"
+                        title="Full Re-sync this subscription" style="font-size:10px;padding:3px 6px">
+                        Full
                     </button>
                 </td>
             </tr>`;
@@ -3458,7 +3466,8 @@ function loadProviders() {
                 <td><span class="status-pill status-pill--${status}"><span class="status-pill__dot"></span>${p.enabled ? 'Active' : 'Paused'}</span></td>
                 <td id="cp-lastsync-${p.id}" class="muted">${_cpRelativeSync(p.last_sync)}</td>
                 <td class="actions-cell">
-                    <button class="icon-btn-ghost" onclick="openSyncCenter()" title="Sync">
+                    <button class="icon-btn-ghost" id="sc-sync-btn-${p.id}"
+                        onclick="scSyncProvider(${p.id}, '${p.name.replace(/'/g,"\\'")}')" title="Quick Sync">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                     </button>
                     <button class="icon-btn-ghost" onclick="renameProvider(${p.id}, '${p.name.replace(/'/g,"\\'")}');" title="Rename">
@@ -3510,6 +3519,55 @@ function _cpUpdateSubtitle(providers, subs) {
     const provCount = new Set((providers||[]).map(p=>p.provider_type).concat((subs||[]).filter(s=>s.cloud==='azure').length > 0 ? ['azure'] : [])).size;
     const accCount = (providers||[]).length + (subs||[]).filter(s=>s.cloud==='azure').length;
     el.textContent = `${provCount} provider${provCount!==1?'s':''} connected · ${accCount} account${accCount!==1?'s':''} · Last synced recently`;
+}
+
+async function syncSingleAzureSub(subId, name, btn, mode = 'incremental') {
+    if (!btn) return;
+    const safeId = subId.replace(/[^a-z0-9]/gi,'_');
+    const lastSyncEl = document.getElementById(`cp-az-lastsync-${safeId}`);
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span style="animation:spin 1s linear infinite;display:inline-block;font-size:12px">⟳</span>';
+    if (lastSyncEl) lastSyncEl.innerHTML = '<span style="color:var(--accent)">⟳ Syncing…</span>';
+
+    try {
+        const resp = await fetch('/api/sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ subscription_id: subId, mode })
+        });
+        const d = await resp.json();
+        if (d.error) {
+            showToast(`${name}: ${d.error}`, 'error');
+            if (lastSyncEl) lastSyncEl.innerHTML = '<span style="color:var(--red)">✗ Failed</span>';
+        } else {
+            showToast(`Syncing ${name}…`, 'info');
+            // Poll until done
+            let attempts = 0;
+            const poll = setInterval(async () => {
+                attempts++;
+                try {
+                    const st = await fetch('/api/sync/status').then(r => r.json());
+                    if (!st.running || attempts >= 60) {
+                        clearInterval(poll);
+                        btn.disabled = false;
+                        btn.innerHTML = origHtml;
+                        if (st.progress === 100) {
+                            if (lastSyncEl) lastSyncEl.innerHTML = '<span style="color:var(--green)">✓</span> just now';
+                            showToast(`${name} synced!`, 'success');
+                        } else {
+                            if (lastSyncEl) lastSyncEl.innerHTML = '<span style="color:var(--red)">✗ Failed</span>';
+                        }
+                    }
+                } catch(e) { clearInterval(poll); btn.disabled = false; btn.innerHTML = origHtml; }
+            }, 3000);
+        }
+    } catch(e) {
+        showToast('Sync error: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+        if (lastSyncEl) lastSyncEl.innerHTML = '<span style="color:var(--red)">✗ Error</span>';
+    }
 }
 
 function toggleAzureSub(subId, enabled) {
