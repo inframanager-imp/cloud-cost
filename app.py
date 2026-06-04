@@ -730,7 +730,7 @@ def api_sync():
         try:
             completed = 0
             if SYNC_SEQUENTIAL:
-                for sub in subs_to_sync:
+                for idx, sub in enumerate(subs_to_sync):
                     sub_name = sub.get("name", sub["subscription_id"][:12])
                     try:
                         name, count = _fetch_one_subscription(sub, is_full, months, date_to)
@@ -746,6 +746,10 @@ def api_sync():
                         sync_status["message"] = f"{mode_label}: {sub_name} ✗ failed [{completed}/{total_subs}]"
                         sync_status["progress"] = 5 + int(90 * completed / total_subs)
                         sync_status["details"] = completed_details[:]
+                    # Pause between subscriptions to avoid Azure Cost Management rate limits
+                    if idx < len(subs_to_sync) - 1:
+                        import time as _time
+                        _time.sleep(30)
             else:
                 max_workers = min(total_subs, 2)  # 2 workers avoids Azure rate limits
                 SUB_TIMEOUT = 300  # 5 min max per subscription
