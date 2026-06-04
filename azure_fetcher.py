@@ -164,17 +164,21 @@ def fetch_subscriptions():
 
 
 def _api_post_with_retry(url, headers, body, max_retries=5):
-    """POST request with retry on 429 (rate limit) and 503."""
+    """POST request with retry on 429 (rate limit) and 503.
+    Respects Azure's Retry-After header fully — never cap below what Azure says.
+    """
     for attempt in range(max_retries):
         resp = requests.post(url, headers=headers, json=body, timeout=90)
         if resp.status_code == 429:
-            retry_after = min(int(resp.headers.get("Retry-After", 10)), 15)  # cap at 15s
+            # Respect Azure's Retry-After header — do not cap it
+            retry_after = int(resp.headers.get("Retry-After", 60))
+            retry_after = max(retry_after, 30)  # minimum 30s wait on 429
             print(f"  [Rate limited] Waiting {retry_after}s before retry {attempt+1}/{max_retries}...")
             time.sleep(retry_after)
             continue
         if resp.status_code == 503:
-            print(f"  [Service unavailable] Waiting 8s before retry {attempt+1}/{max_retries}...")
-            time.sleep(8)
+            print(f"  [Service unavailable] Waiting 15s before retry {attempt+1}/{max_retries}...")
+            time.sleep(15)
             continue
         resp.raise_for_status()
         return resp
@@ -215,11 +219,18 @@ def fetch_cost_data(date_from, date_to, granularity="Daily", subscription_id=Non
     records_q1 = _fetch_all_pages(url, headers, body1)
     print(f"    -> {len(records_q1['rows'])} rows from query 1")
 
-    time.sleep(2)
+    # Wait 30s between Query 1 and Query 2 to avoid rate limiting
+    time.sleep(30)
 
     print(f"  Fetching cost data (Query 2: ResourceGroup + ResourceId)...")
-    records_q2 = _fetch_all_pages(url, headers, body2)
-    print(f"    -> {len(records_q2['rows'])} rows from query 2")
+    try:
+        records_q2 = _fetch_all_pages(url, headers, body2)
+        print(f"    -> {len(records_q2['rows'])} rows from query 2")
+    except Exception as e:
+        # Query 2 failure (rate limit exhausted) is non-fatal
+        # Return Query 1 results so we don't lose service-level data
+        print(f"  [Query 2 failed, using Query 1 only] {e}")
+        records_q2 = {"rows": [], "columns": records_q1.get("columns", [])}
 
     all_records = _merge_records(records_q1, records_q2, sub_id)
     return all_records
