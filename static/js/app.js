@@ -5304,7 +5304,7 @@ async function scSaveAutoSync() {
 }
 
 async function scStartSync(mode = 'incremental') {
-    if (mode === 'full' && !confirm('Full Re-sync deletes all cost data and re-fetches the entire history. This may take several minutes.\n\nContinue?')) return;
+    if (mode === 'full' && !confirm('Full Re-sync fetches the entire cost history (12 months). Existing data is only replaced after a successful fetch — safe to run.\n\nThis may take 30-45 minutes for multiple subscriptions.\n\nContinue?')) return;
     try {
         await fetch('/api/sync', {
             method: 'POST',
