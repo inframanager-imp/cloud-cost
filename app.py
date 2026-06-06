@@ -629,12 +629,25 @@ def api_dashboard():
 @app.route("/api/executive-summary")
 @login_required
 def api_executive_summary():
-    today = datetime.utcnow()
+    now = datetime.utcnow()
     tid = current_tenant_id()
+
+    try:
+        req_year  = int(request.args.get("year",  now.year))
+        req_month = int(request.args.get("month", now.month))
+    except ValueError:
+        req_year, req_month = now.year, now.month
+
+    req_year  = max(2000, min(req_year,  now.year))
+    req_month = max(1,    min(req_month, 12))
+
+    days_in_month = calendar.monthrange(req_year, req_month)[1]
+    is_current = (req_year == now.year and req_month == now.month)
+    day_of_month = now.day if is_current else days_in_month
+
+    today = datetime(req_year, req_month, day_of_month)
     first_of_month = today.replace(day=1).strftime("%Y-%m-%d")
     today_str = today.strftime("%Y-%m-%d")
-    days_in_month = calendar.monthrange(today.year, today.month)[1]
-    day_of_month = today.day
 
     conn = get_db()
     tid_filter = f"AND tenant_id = {tid}" if tid is not None else ""
@@ -719,21 +732,63 @@ def api_executive_summary():
     """, (first_of_month, today_str)).fetchall()
 
     # Budget utilization
-    budgets = conn.execute(
-        "SELECT name, amount, cloud_provider FROM budgets WHERE (tenant_id = ? OR tenant_id IS NULL) AND is_active = 1", (tid,)
-    ).fetchall() if tid else conn.execute(
-        "SELECT name, amount, cloud_provider FROM budgets WHERE is_active = 1"
-    ).fetchall()
-    total_budget = sum(b["amount"] for b in budgets) if budgets else 0
+    try:
+        budgets = conn.execute(
+            "SELECT name, amount FROM budgets WHERE (tenant_id = ? OR tenant_id IS NULL) AND is_active = 1", (tid,)
+        ).fetchall() if tid else conn.execute(
+            "SELECT name, amount FROM budgets WHERE is_active = 1"
+        ).fetchall()
+        total_budget = sum(b["amount"] for b in budgets) if budgets else 0
+    except Exception:
+        total_budget = 0
 
     # Projected EOM
     avg_daily = total_cur / day_of_month if day_of_month > 0 else 0
     projected = round(avg_daily * days_in_month, 2)
 
+    # Governance metrics
+    untagged = conn.execute(f"""
+        SELECT COUNT(DISTINCT resource_name) as cnt FROM cost_data
+        WHERE date >= ? AND date <= ? {tid_filter}
+        AND (tags IS NULL OR tags = '' OR tags = '{{}}')
+        AND resource_name IS NOT NULL AND resource_name != ''
+    """, (first_of_month, today_str)).fetchone()
+    untagged_count = untagged["cnt"] if untagged else 0
+
+    total_resources = conn.execute(f"""
+        SELECT COUNT(DISTINCT resource_name) as cnt FROM cost_data
+        WHERE date >= ? AND date <= ? {tid_filter}
+        AND resource_name IS NOT NULL AND resource_name != ''
+    """, (first_of_month, today_str)).fetchone()
+    total_res_count = total_resources["cnt"] if total_resources else 0
+    tag_compliance = round((1 - untagged_count / total_res_count) * 100, 1) if total_res_count > 0 else 0
+
+    # Cost by service category (group service_name into categories)
+    svc_cats = conn.execute(f"""
+        SELECT service_name, SUM(cost) as total FROM cost_data
+        WHERE date >= ? AND date <= ? {tid_filter}
+        GROUP BY service_name ORDER BY total DESC LIMIT 20
+    """, (first_of_month, today_str)).fetchall()
+
+    def categorize(name):
+        n = (name or "").lower()
+        if any(x in n for x in ["virtual machine", "compute", "ec2", "container", "kubernetes", "aks", "gke"]): return "Compute"
+        if any(x in n for x in ["storage", "blob", "s3", "disk", "backup"]): return "Storage"
+        if any(x in n for x in ["sql", "database", "cosmos", "rds", "dynamo", "redis", "postgres"]): return "Database"
+        if any(x in n for x in ["network", "bandwidth", "vpn", "dns", "load balancer", "gateway", "cdn"]): return "Networking"
+        if any(x in n for x in ["monitor", "log", "insight", "security", "defender", "sentinel"]): return "Monitoring"
+        return "Other"
+
+    cat_map = {}
+    for r in svc_cats:
+        cat = categorize(r["service_name"])
+        cat_map[cat] = round(cat_map.get(cat, 0) + r["total"], 2)
+
     conn.close()
 
     return jsonify({
-        "period": today.strftime("%B %Y"),
+        "period": today.strftime("%b %Y"),
+        "compare_period": lm_start.strftime("%b %Y"),
         "kpis": {
             "total": round(total_cur, 2),
             "total_lm": round(total_lm, 2),
@@ -748,6 +803,7 @@ def api_executive_summary():
             "gcp_lm": cloud_lm_map.get("gcp", 0),
             "gcp_mom_pct": mom_pct(cloud_cur_map.get("gcp", 0), lm_partial_map.get("gcp", 0)),
             "projected": projected,
+            "avg_daily": round(avg_daily, 2),
             "days_elapsed": day_of_month,
             "days_in_month": days_in_month,
         },
@@ -755,6 +811,7 @@ def api_executive_summary():
             "total": round(total_budget, 2),
             "utilized": round(total_cur, 2),
             "pct": round(total_cur / total_budget * 100, 1) if total_budget > 0 else None,
+            "remaining": round(total_budget - total_cur, 2) if total_budget > 0 else None,
         },
         "monthly_trend": months_trend,
         "top_services": [{"name": r["service_name"] or "Unknown", "cost": round(r["total"], 2)} for r in top_services],
@@ -765,6 +822,18 @@ def api_executive_summary():
                 "cloud": r["cloud_provider"] or "azure",
                 "cost": round(r["total"], 2),
             } for r in top_accounts if r["total"] and r["total"] > 0
+        ],
+        "governance": {
+            "untagged_resources": untagged_count,
+            "total_resources": total_res_count,
+            "tag_compliance_pct": tag_compliance,
+        },
+        "service_categories": [{"name": k, "cost": v} for k, v in sorted(cat_map.items(), key=lambda x: -x[1])],
+        "savings_opportunities": [
+            {"label": "Rightsizing (est. 15% Compute)", "amount": round(cloud_cur_map.get("azure", 0) * 0.15, 0), "icon": "resize"},
+            {"label": "Reserved Instances / Savings Plans", "amount": round((cloud_cur_map.get("azure", 0) + cloud_cur_map.get("aws", 0)) * 0.12, 0), "icon": "savings"},
+            {"label": "Idle / Unused Resources", "amount": round(total_cur * 0.05, 0), "icon": "idle"},
+            {"label": "Storage Optimization", "amount": round(total_cur * 0.03, 0), "icon": "storage"},
         ],
     })
 
