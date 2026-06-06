@@ -166,6 +166,7 @@ function navigateTo(page) {
     document.getElementById(`page-${page}`)?.classList.add('active');
     document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
 
+    if (page === 'executive') loadExecutiveSummary();
     if (page === 'cloud-overview') loadCloudOverview();
     if (page === 'dashboard') loadDashboard();
     if (page === 'costs') {
@@ -542,6 +543,182 @@ function _computeSparkPoints(trend, width, height) {
         const y = Math.round((height - 2 - ((d.cost - minC) / range) * (height - 6)) * 10) / 10;
         return `${x},${y}`;
     }).join(' ');
+}
+
+// ── Executive Summary ────────────────────────────────────────────────────────
+let _exTrendChart = null;
+let _exDonutChart = null;
+
+async function loadExecutiveSummary() {
+    try {
+        const d = await fetch('/api/executive-summary').then(r => r.json());
+        const $fmt = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
+        const $fmt2 = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+
+        // Period label
+        const periodEl = document.getElementById('exPeriodLabel');
+        if (periodEl) periodEl.textContent = d.period || '';
+
+        const kpi = d.kpis || {};
+
+        // Helper: render MoM delta badge
+        function momBadge(pct) {
+            if (pct === null || pct === undefined) return '';
+            const up = pct >= 0;
+            const color = up ? '#ef4444' : '#10b981';
+            const arrow = up ? '▲' : '▼';
+            return `<span style="font-size:11px;font-weight:600;color:${color};margin-left:6px">${arrow} ${Math.abs(pct)}%</span>`;
+        }
+
+        // KPI cards
+        const setKpi = (idVal, idMom, idSub, val, mom, sub) => {
+            const el = document.getElementById(idVal);
+            if (el) el.textContent = $fmt(val);
+            const mel = document.getElementById(idMom);
+            if (mel) mel.innerHTML = momBadge(mom);
+            const sel = document.getElementById(idSub);
+            if (sel) sel.textContent = sub || '';
+        };
+
+        setKpi('exTotalSpend', 'exTotalMom', 'exTotalSub', kpi.total, kpi.total_mom_pct, `vs last month ${$fmt2(kpi.total_lm)}`);
+        setKpi('exAzureSpend', 'exAzureMom', 'exAzureSub', kpi.azure, kpi.azure_mom_pct, kpi.azure > 0 ? `${Math.round(kpi.azure / (kpi.total||1) * 100)}% of total` : 'No data');
+        setKpi('exAwsSpend', 'exAwsMom', 'exAwsSub', kpi.aws, kpi.aws_mom_pct, kpi.aws > 0 ? `${Math.round(kpi.aws / (kpi.total||1) * 100)}% of total` : 'No data');
+        setKpi('exGcpSpend', 'exGcpMom', 'exGcpSub', kpi.gcp, kpi.gcp_mom_pct, kpi.gcp > 0 ? `${Math.round(kpi.gcp / (kpi.total||1) * 100)}% of total` : 'No data');
+
+        const projEl = document.getElementById('exProjected');
+        if (projEl) projEl.textContent = $fmt2(kpi.projected);
+
+        // Budget bar
+        const budget = d.budget || {};
+        const budgetPctEl = document.getElementById('exBudgetPct');
+        const budgetBarEl = document.getElementById('exBudgetBar');
+        if (budget.pct !== null && budget.pct !== undefined) {
+            if (budgetPctEl) budgetPctEl.textContent = budget.pct.toFixed(1) + '%';
+            if (budgetBarEl) {
+                const pct = Math.min(budget.pct, 100);
+                budgetBarEl.style.width = pct + '%';
+                budgetBarEl.style.background = pct > 90 ? '#ef4444' : pct > 75 ? '#f59e0b' : '#10b981';
+            }
+        } else {
+            if (budgetPctEl) budgetPctEl.textContent = 'No budget set';
+        }
+
+        // Monthly Trend Chart
+        const trendData = d.monthly_trend || [];
+        const trendLabels = trendData.map(t => t.label);
+        const isDark = document.body.classList.contains('dark') || document.documentElement.getAttribute('data-theme') === 'dark';
+        const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+        const textColor = isDark ? '#9ca3af' : '#6b7280';
+
+        if (_exTrendChart) { _exTrendChart.destroy(); _exTrendChart = null; }
+        const trendCtx = document.getElementById('exTrendChart');
+        if (trendCtx) {
+            _exTrendChart = new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: trendLabels,
+                    datasets: [
+                        { label: 'Total', data: trendData.map(t => t.total), borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', tension: 0.4, fill: true, borderWidth: 2, pointRadius: 3 },
+                        { label: 'Azure', data: trendData.map(t => t.azure), borderColor: '#0089D6', backgroundColor: 'transparent', tension: 0.4, fill: false, borderWidth: 1.5, pointRadius: 2, borderDash: [4,3] },
+                        { label: 'AWS', data: trendData.map(t => t.aws), borderColor: '#FF9900', backgroundColor: 'transparent', tension: 0.4, fill: false, borderWidth: 1.5, pointRadius: 2, borderDash: [4,3] },
+                        { label: 'GCP', data: trendData.map(t => t.gcp), borderColor: '#34A853', backgroundColor: 'transparent', tension: 0.4, fill: false, borderWidth: 1.5, pointRadius: 2, borderDash: [4,3] },
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: textColor, font: { size: 11 }, boxWidth: 20 } } },
+                    scales: {
+                        x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 } } },
+                        y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 }, callback: v => '$' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) } }
+                    }
+                }
+            });
+        }
+
+        // Top Cost Drivers
+        const drivers = d.top_services || [];
+        const maxCost = drivers[0]?.cost || 1;
+        const driversList = document.getElementById('exTopDriversList');
+        if (driversList) {
+            const cloudColors = { 'Virtual Machines': '#0089D6', 'EC2': '#FF9900', 'Storage': '#10b981' };
+            driversList.innerHTML = drivers.map((s, i) => {
+                const pct = Math.round(s.cost / maxCost * 100);
+                const colors = ['#6366f1','#0089D6','#FF9900','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316'];
+                return `<div style="display:flex;align-items:center;gap:8px">
+                    <span style="font-size:11px;color:var(--text-secondary);width:14px;text-align:right;flex-shrink:0">${i+1}</span>
+                    <div style="flex:1;min-width:0">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+                            <span style="font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px" title="${s.name}">${s.name}</span>
+                            <span style="font-size:12px;font-weight:600;color:var(--text-primary);flex-shrink:0;margin-left:8px">${$fmt2(s.cost)}</span>
+                        </div>
+                        <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+                            <div style="height:100%;width:${pct}%;background:${colors[i % colors.length]};border-radius:2px"></div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // Cloud Donut
+        const cloudColors = ['#0089D6','#FF9900','#34A853','#6366f1','#f59e0b'];
+        const cloudLabels = ['Azure','AWS','GCP'];
+        const cloudVals = [kpi.azure||0, kpi.aws||0, kpi.gcp||0].filter((v,i) => v > 0);
+        const activeLabels = ['Azure','AWS','GCP'].filter((_,i) => [kpi.azure||0,kpi.aws||0,kpi.gcp||0][i] > 0);
+        const activeColors = ['#0089D6','#FF9900','#34A853'].filter((_,i) => [kpi.azure||0,kpi.aws||0,kpi.gcp||0][i] > 0);
+
+        if (_exDonutChart) { _exDonutChart.destroy(); _exDonutChart = null; }
+        const donutCtx = document.getElementById('exCloudDonut');
+        if (donutCtx && cloudVals.length > 0) {
+            _exDonutChart = new Chart(donutCtx, {
+                type: 'doughnut',
+                data: { labels: activeLabels, datasets: [{ data: cloudVals, backgroundColor: activeColors, borderWidth: 2, borderColor: isDark ? '#1f2937' : '#fff', hoverOffset: 6 }] },
+                options: { responsive: true, maintainAspectRatio: true, cutout: '70%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${$fmt2(ctx.parsed)}` } } } }
+            });
+        }
+        const donutTotalEl = document.getElementById('exDonutTotal');
+        if (donutTotalEl) donutTotalEl.textContent = $fmt(kpi.total);
+
+        // Cloud legend
+        const legendEl = document.getElementById('exCloudLegend');
+        if (legendEl) {
+            const pairs = [['Azure', kpi.azure||0, '#0089D6'], ['AWS', kpi.aws||0, '#FF9900'], ['GCP', kpi.gcp||0, '#34A853']].filter(p => p[1] > 0);
+            legendEl.innerHTML = pairs.map(([label, val, color]) => `
+                <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
+                        <span style="color:var(--text-secondary)">${label}</span>
+                    </div>
+                    <span style="font-weight:600;color:var(--text-primary)">${$fmt2(val)}</span>
+                </div>`).join('');
+        }
+
+        // Top Accounts
+        const accounts = d.top_accounts || [];
+        const maxAccCost = accounts[0]?.cost || 1;
+        const cloudIconMap = { azure: '⊞', aws: '⚙', gcp: '◉' };
+        const cloudColMap = { azure: '#0089D6', aws: '#FF9900', gcp: '#34A853' };
+        const accountsList = document.getElementById('exAccountsList');
+        if (accountsList) {
+            accountsList.innerHTML = accounts.map(a => {
+                const pct = Math.round(a.cost / maxAccCost * 100);
+                return `<div class="db-ranked-item" style="padding:6px 0;border-bottom:1px solid var(--border)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                        <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                            <span style="color:${cloudColMap[a.cloud]||'#6366f1'};font-size:13px;flex-shrink:0">${cloudIconMap[a.cloud]||'☁'}</span>
+                            <span style="font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>
+                        </div>
+                        <span style="font-size:13px;font-weight:700;color:var(--text-primary);flex-shrink:0;margin-left:12px">${$fmt2(a.cost)}</span>
+                    </div>
+                    <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden">
+                        <div style="height:100%;width:${pct}%;background:${cloudColMap[a.cloud]||'#6366f1'};border-radius:2px;opacity:0.7"></div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+    } catch(e) {
+        console.error('Executive summary error:', e);
+    }
 }
 
 async function loadCloudOverview() {
@@ -5479,7 +5656,7 @@ document.addEventListener('DOMContentLoaded', () => {
     _initNavContextMenu();
     // Support opening a specific page in a new tab via ?page= query param
     const urlPage = new URLSearchParams(location.search).get('page');
-    navigateTo(urlPage || 'dashboard');
+    navigateTo(urlPage || 'executive');
     onCompareModeChange();
 
     // Chat enter key
