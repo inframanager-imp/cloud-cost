@@ -617,6 +617,7 @@ async function loadExecutiveSummary() {
             total: toSparkPoints(trend.map(t => t.total)),
             azure: toSparkPoints(trend.map(t => t.azure)),
             aws:   toSparkPoints(trend.map(t => t.aws)),
+            gcp:   toSparkPoints(trend.map(t => t.gcp)),
             avg:   toSparkPoints(trend.map(t => t.total / 30)),
         };
 
@@ -635,6 +636,11 @@ async function loadExecutiveSummary() {
         if (el('exAwsMom'))     el('exAwsMom').innerHTML = momBadge(kpi.aws_mom_pct);
         if (el('exAwsSub'))     el('exAwsSub').textContent = kpi.aws > 0 ? `${Math.round(kpi.aws/(kpi.total||1)*100)}% of total` : '';
         if (el('exSparkAws'))   el('exSparkAws').setAttribute('points', sparkPoints.aws);
+
+        if (el('exGcpSpend'))   el('exGcpSpend').textContent = $fmt(kpi.gcp);
+        if (el('exGcpMom'))     el('exGcpMom').innerHTML = momBadge(kpi.gcp_mom_pct);
+        if (el('exGcpSub'))     el('exGcpSub').textContent = kpi.gcp > 0 ? `${Math.round(kpi.gcp/(kpi.total||1)*100)}% of total` : '';
+        if (el('exSparkGcp'))   el('exSparkGcp').setAttribute('points', sparkPoints.gcp);
 
         if (el('exAvgDay'))  el('exAvgDay').textContent = $fmt2(kpi.avg_daily);
         if (el('exAvgMom'))  el('exAvgMom').innerHTML  = momBadge(kpi.total_mom_pct);
