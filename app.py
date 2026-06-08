@@ -4169,6 +4169,123 @@ def api_cur_import():
     return jsonify({"message": "CUR import started", "bucket": bucket, "prefix": prefix})
 
 
+# ─── CUR Auto-Import Scheduler ────────────────────────────────────────────────
+# Periodically pulls the latest CUR (Cost & Usage Report) files from S3 for
+# every connected AWS account that has a CUR bucket configured, so
+# resource-level costs (lineItem/ResourceId) populate without requiring the
+# AWS-console "Resource-level data at daily granularity" opt-in.
+
+_cur_import_timer = None
+CUR_IMPORT_INTERVAL_HOURS = int(os.getenv("CUR_IMPORT_INTERVAL_HOURS", 24))
+
+cur_import_state = {
+    "enabled": True,
+    "running": False,
+    "last_run": None,
+    "next_run": None,
+}
+
+
+def _run_cur_auto_import():
+    """Fetch the latest CUR manifest for each AWS account with a CUR bucket
+    configured and import its resource-level rows into cost_data."""
+    global cur_import_state
+
+    if cur_import_state["running"]:
+        print("[CUR Auto-Import] Skipped — already running.")
+        _schedule_next_cur_import()
+        return
+
+    cur_import_state["running"] = True
+    cur_import_state["last_run"] = datetime.utcnow().isoformat()
+    print(f"[CUR Auto-Import] Starting at {cur_import_state['last_run']}")
+
+    try:
+        from cur_importer import fetch_cur_records, list_cur_manifests, _s3_client
+        from database import insert_cost_records, delete_cost_data_by_date, get_db
+
+        conn = get_db()
+        providers = [dict(r) for r in conn.execute(
+            "SELECT * FROM cloud_providers WHERE provider_type='aws' AND cur_bucket IS NOT NULL AND cur_bucket != ''"
+        ).fetchall()]
+        conn.close()
+
+        for prov in providers:
+            bucket = prov.get("cur_bucket")
+            prefix = prov.get("cur_report_prefix") or "cur"
+            account_id = prov.get("provider_id")
+            try:
+                credentials = json.loads(prov["credentials_json"]) if prov.get("credentials_json") else {}
+            except Exception:
+                credentials = {}
+
+            try:
+                s3 = _s3_client(credentials)
+                manifests = list_cur_manifests(s3, bucket, prefix.rstrip("/") + "/")
+                if not manifests:
+                    print(f"[CUR Auto-Import] {account_id}: no manifests yet in s3://{bucket}/{prefix}")
+                    continue
+
+                latest = manifests[0]
+                period = latest["period"].replace("/", "")
+                parts = period.split("-")
+                date_from = date_to = None
+                if len(parts) >= 2:
+                    p_start, p_end = parts[0][:8], parts[1][:8]
+                    date_from = f"{p_start[:4]}-{p_start[4:6]}-{p_start[6:8]}"
+                    date_to   = f"{p_end[:4]}-{p_end[4:6]}-{p_end[6:8]}"
+
+                records, skipped = fetch_cur_records(
+                    credentials=credentials,
+                    bucket=bucket,
+                    prefix=prefix,
+                    date_from=date_from,
+                    date_to=date_to,
+                    manifest_key=latest["key"],
+                    account_id=account_id,
+                )
+
+                if records and date_from and date_to:
+                    delete_cost_data_by_date(date_from, date_to, subscription_id=account_id)
+
+                inserted = insert_cost_records(records)
+                print(f"[CUR Auto-Import] {account_id}: {inserted} inserted, {skipped} skipped ({date_from} → {date_to})")
+            except Exception as e:
+                print(f"[CUR Auto-Import] {account_id}: error — {e}")
+
+    except Exception as e:
+        import traceback
+        print(f"[CUR Auto-Import] Fatal error: {e}\n{traceback.format_exc()}")
+    finally:
+        cur_import_state["running"] = False
+        _schedule_next_cur_import()
+
+
+def _schedule_next_cur_import():
+    """Schedule the next CUR auto-import run."""
+    global _cur_import_timer
+    if _cur_import_timer:
+        _cur_import_timer.cancel()
+
+    if not cur_import_state["enabled"]:
+        cur_import_state["next_run"] = None
+        return
+
+    interval_secs = CUR_IMPORT_INTERVAL_HOURS * 3600
+    next_time = datetime.utcnow() + timedelta(seconds=interval_secs)
+    cur_import_state["next_run"] = next_time.isoformat()
+
+    try:
+        _cur_import_timer = threading.Timer(interval_secs, _run_cur_auto_import)
+        _cur_import_timer.daemon = True
+        _cur_import_timer.start()
+        print(f"[CUR Auto-Import] Next run scheduled at {cur_import_state['next_run']} ({CUR_IMPORT_INTERVAL_HOURS}h)")
+    except RuntimeError as e:
+        cur_import_state["enabled"] = False
+        cur_import_state["next_run"] = None
+        print(f"[CUR Auto-Import] Disabled (could not start timer thread): {e}")
+
+
 # ─── Jinja template filters ───────────────────────────────────────────────────
 
 @app.template_filter('relative_time')
@@ -4935,6 +5052,8 @@ if __name__ == "__main__":
         _schedule_email_check()
     else:
         print("[Email Report] Scheduler disabled by EMAIL_SCHEDULER_ENABLED=false")
+    if cur_import_state["enabled"]:
+        _schedule_next_cur_import()
     
     # One-shot Resource Graph sync at startup (uses AZURE_* client credentials)
     _cfg_runner = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config_sync_runner.py")
