@@ -86,6 +86,13 @@
         <!-- ── Analytics ───────────────────────────── -->
         <div class="nav-section-label" style="border-top:1px solid var(--border)">Analytics</div>
 
+        <div class="nav-item active" data-page="executive" onclick="navigateTo('executive')">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M3 3h18v18H3zM3 9h18M9 21V9"/>
+            </svg>
+            <span class="nav-text">Executive Summary</span>
+        </div>
+
         <div class="nav-item" data-page="cloud-overview" onclick="navigateTo('cloud-overview')">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
@@ -94,7 +101,7 @@
             <span class="nav-text">Cloud Overview</span>
         </div>
 
-        <div class="nav-item active" data-page="dashboard" onclick="navigateTo('dashboard')">
+        <div class="nav-item" data-page="dashboard" onclick="navigateTo('dashboard')">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
                 <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
@@ -282,7 +289,225 @@
     </section>
 
     <!-- ═══ Dashboard Page ══════════════════════════════════════════ -->
-    <section id="page-dashboard" class="page-section active">
+    <!-- ═══ Executive Summary Page ══════════════════════════════════════ -->
+    <section id="page-executive" class="page-section active">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+            <div>
+                <div class="db-breadcrumb">ANALYTICS / EXECUTIVE SUMMARY</div>
+                <h1 style="font-size:22px;font-weight:700;color:var(--text-primary);margin:3px 0 6px">FinOps Command Center</h1>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                    <div style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:rgba(0,120,212,0.1);border:1px solid rgba(0,120,212,0.25)">
+                        <img src="/static/azure-logo.svg" width="13" height="13" alt="Azure" style="object-fit:contain;display:block">
+                        <span style="font-size:11px;font-weight:600;color:#0078d4">Azure</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:rgba(255,153,0,0.1);border:1px solid rgba(255,153,0,0.25)">
+                        <img src="/static/aws-logo.svg" width="18" height="10" alt="AWS" style="object-fit:contain;display:block">
+                        <span style="font-size:11px;font-weight:600;color:#FF9900">AWS</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:rgba(66,133,244,0.1);border:1px solid rgba(66,133,244,0.25)">
+                        <img src="/static/gcp-logo.svg" width="13" height="13" alt="GCP" style="object-fit:contain;display:block">
+                        <span style="font-size:11px;font-weight:600;color:#4285F4">GCP</span>
+                    </div>
+                    <span style="font-size:11px;color:var(--text-secondary)">· Optimize Today. Save Tomorrow. Scale Intelligently.</span>
+                </div>
+            </div>
+            <!-- Date nav + controls -->
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                <!-- Month navigator -->
+                <div style="display:flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:var(--card-bg)">
+                    <button onclick="exNavMonth(-1)" style="padding:5px 10px;border:none;background:transparent;cursor:pointer;color:var(--text-secondary);font-size:14px;line-height:1;display:flex;align-items:center" title="Previous month">&#8249;</button>
+                    <div style="padding:5px 12px;border-left:1px solid var(--border);border-right:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text-primary);min-width:110px;text-align:center" id="exPeriodLabel">—</div>
+                    <button onclick="exNavMonth(1)" id="exNextBtn" style="padding:5px 10px;border:none;background:transparent;cursor:pointer;color:var(--text-secondary);font-size:14px;line-height:1;display:flex;align-items:center" title="Next month">&#8250;</button>
+                </div>
+                <!-- Compare label -->
+                <div style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--card-bg);color:var(--text-secondary);white-space:nowrap">
+                    vs <span id="exComparePeriod" style="color:var(--text-primary);font-weight:500">—</span>
+                </div>
+                <button onclick="loadExecutiveSummary()" style="display:flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border);border-radius:7px;background:var(--card-bg);font-size:12px;color:var(--text-secondary);cursor:pointer">
+                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI Row: 6 cards -->
+        <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;margin-bottom:14px;align-items:stretch">
+
+            <div style="background:var(--card-bg);border:1px solid var(--border);border-top:3px solid #6366f1;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
+                <div style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">Total Spend</div>
+                <div style="font-size:22px;font-weight:700;color:var(--text-primary);line-height:1.1" id="exTotalSpend">$—</div>
+                <div id="exTotalMom"></div>
+                <svg viewBox="0 0 80 20" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><polyline id="exSparkTotal" fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,16 80,16"/></svg>
+                <div style="font-size:10px;color:var(--text-secondary)" id="exTotalSub"></div>
+            </div>
+
+            <div style="background:var(--card-bg);border:1px solid rgba(0,120,212,0.3);border-top:3px solid #0078d4;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
+                <div style="display:flex;align-items:center;gap:5px">
+                    <img src="/static/azure-logo.svg" width="14" height="14" alt="Azure" style="object-fit:contain;flex-shrink:0">
+                    <span style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">Azure Spend</span>
+                </div>
+                <div style="font-size:22px;font-weight:700;color:#0078d4;line-height:1.1" id="exAzureSpend">$—</div>
+                <div id="exAzureMom"></div>
+                <svg viewBox="0 0 80 20" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><polyline id="exSparkAzure" fill="none" stroke="#0078d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,16 80,16"/></svg>
+                <div style="font-size:10px;color:var(--text-secondary)" id="exAzureSub"></div>
+            </div>
+
+            <div style="background:var(--card-bg);border:1px solid rgba(255,153,0,0.3);border-top:3px solid #FF9900;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
+                <div style="display:flex;align-items:center;gap:5px">
+                    <img src="/static/aws-logo.svg" width="18" height="11" alt="AWS" style="object-fit:contain;flex-shrink:0">
+                    <span style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">AWS Spend</span>
+                </div>
+                <div style="font-size:22px;font-weight:700;color:#FF9900;line-height:1.1" id="exAwsSpend">$—</div>
+                <div id="exAwsMom"></div>
+                <svg viewBox="0 0 80 20" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><polyline id="exSparkAws" fill="none" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,16 80,16"/></svg>
+                <div style="font-size:10px;color:var(--text-secondary)" id="exAwsSub"></div>
+            </div>
+
+            <div style="background:var(--card-bg);border:1px solid rgba(66,133,244,0.3);border-top:3px solid #4285F4;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
+                <div style="display:flex;align-items:center;gap:5px">
+                    <img src="/static/gcp-logo.svg" width="14" height="14" alt="GCP" style="object-fit:contain;flex-shrink:0">
+                    <span style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">GCP Spend</span>
+                </div>
+                <div style="font-size:22px;font-weight:700;color:#4285F4;line-height:1.1" id="exGcpSpend">$—</div>
+                <div id="exGcpMom"></div>
+                <svg viewBox="0 0 80 20" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><polyline id="exSparkGcp" fill="none" stroke="#4285F4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,16 80,16"/></svg>
+                <div style="font-size:10px;color:var(--text-secondary)" id="exGcpSub"></div>
+            </div>
+
+            <div style="background:var(--card-bg);border:1px solid rgba(16,185,129,0.3);border-top:3px solid #10b981;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
+                <div style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">Budget vs Actual</div>
+                <div style="font-size:22px;font-weight:700;color:var(--text-primary);line-height:1.1" id="exBudgetActual">$—</div>
+                <div style="font-size:10px;color:var(--text-secondary)" id="exBudgetOf"></div>
+                <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:6px">
+                    <div id="exBudgetBar" style="height:100%;width:0%;background:#10b981;border-radius:3px;transition:width .8s"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-secondary);margin-top:2px">
+                    <span id="exBudgetPct">—</span><span id="exBudgetRemain"></span>
+                </div>
+            </div>
+
+            <div style="background:var(--card-bg);border:1px solid rgba(245,158,11,0.3);border-top:3px solid #f59e0b;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
+                <div style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">Forecasted EOM</div>
+                <div style="font-size:22px;font-weight:700;color:var(--text-primary);line-height:1.1" id="exProjected">$—</div>
+                <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:8px">
+                    <div id="exMonthProgress" style="height:100%;width:0%;background:#f59e0b;border-radius:3px;transition:width .8s"></div>
+                </div>
+                <div style="font-size:10px;color:var(--text-secondary);margin-top:2px" id="exMonthProgressLabel">Day — of —</div>
+            </div>
+
+            <div style="background:var(--card-bg);border:1px solid rgba(139,92,246,0.3);border-top:3px solid #8b5cf6;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
+                <div style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">Avg / Day</div>
+                <div style="font-size:22px;font-weight:700;color:var(--text-primary);line-height:1.1" id="exAvgDay">$—</div>
+                <div id="exAvgMom"></div>
+                <svg viewBox="0 0 80 20" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><polyline id="exSparkAvg" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,16 80,16"/></svg>
+                <div style="font-size:10px;color:var(--text-secondary)" id="exAvgSub"></div>
+            </div>
+
+        </div>
+
+        <!-- Row 2: Donut | Trend (wide) | Top Drivers -->
+        <div style="display:grid;grid-template-columns:230px 1fr 270px;gap:12px;margin-bottom:12px;align-items:stretch">
+
+            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                    <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Cost by Cloud</span>
+                    <span style="font-size:11px;color:var(--text-secondary)" id="exDonutPeriod">This month</span>
+                </div>
+                <div style="position:relative;width:140px;height:140px;margin:0 auto 14px;flex-shrink:0">
+                    <canvas id="exCloudDonut"></canvas>
+                    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+                        <div style="font-size:9px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Total</div>
+                        <div style="font-size:14px;font-weight:700;color:var(--text-primary)" id="exDonutTotal">—</div>
+                    </div>
+                </div>
+                <div id="exCloudLegend" style="display:flex;flex-direction:column;gap:7px"></div>
+            </div>
+
+            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Monthly Spend Trend</span>
+                    <span style="font-size:11px;color:var(--text-secondary)">Last 6 months</span>
+                </div>
+                <div style="position:relative;flex:1;min-height:190px">
+                    <canvas id="exTrendChart"></canvas>
+                </div>
+            </div>
+
+            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Top 10 Cost Drivers</span>
+                    <span style="font-size:11px;color:var(--text-secondary)" id="exDriversPeriod">This month</span>
+                </div>
+                <div id="exTopDriversList" style="display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1"></div>
+            </div>
+
+        </div>
+
+        <!-- Row 3: Accounts | Savings | Governance -->
+        <div style="display:grid;grid-template-columns:1fr 260px 280px;gap:12px;margin-bottom:16px;align-items:stretch">
+
+            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Cost by Account / Subscription</span>
+                    <span style="font-size:11px;color:var(--text-secondary)" id="exAccountsPeriod">This month</span>
+                </div>
+                <div id="exAccountsList" style="display:flex;flex-direction:column;gap:6px;flex:1"></div>
+            </div>
+
+            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                    <span style="font-size:13px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:5px">
+                        <svg width="13" height="13" fill="none" stroke="#10b981" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                        Savings Opportunities
+                    </span>
+                    <span style="font-size:10px;color:var(--text-secondary)">Est. monthly</span>
+                </div>
+                <div id="exSavingsList" style="display:flex;flex-direction:column;gap:10px;flex:1"></div>
+                <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:11px;font-weight:600;color:var(--text-secondary)">Total Potential</span>
+                    <span style="font-size:15px;font-weight:700;color:#10b981" id="exSavingsTotal">$—</span>
+                </div>
+            </div>
+
+            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <span style="font-size:13px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:5px">
+                        <svg width="13" height="13" fill="none" stroke="#6366f1" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        Governance
+                    </span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+                    <div style="text-align:center;padding:10px 6px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:8px">
+                        <div style="font-size:24px;font-weight:700;color:#ef4444;line-height:1" id="exUntagged">—</div>
+                        <div style="font-size:10px;color:var(--text-secondary);margin-top:4px">Untagged</div>
+                    </div>
+                    <div style="text-align:center;padding:10px 6px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:8px">
+                        <div style="font-size:24px;font-weight:700;color:#6366f1;line-height:1" id="exTotalRes">—</div>
+                        <div style="font-size:10px;color:var(--text-secondary);margin-top:4px">Resources</div>
+                    </div>
+                </div>
+                <div style="margin-bottom:14px">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px">
+                        <span style="color:var(--text-secondary)">Tag Compliance Score</span>
+                        <span style="font-weight:700;color:var(--text-primary)" id="exTagPct">—%</span>
+                    </div>
+                    <div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden">
+                        <div id="exTagBar" style="height:100%;width:0%;border-radius:4px;background:#10b981;transition:width .8s"></div>
+                    </div>
+                </div>
+                <div style="border-top:1px solid var(--border);padding-top:12px;flex:1">
+                    <div style="font-size:10px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cost by Category</div>
+                    <div id="exCatList" style="display:flex;flex-direction:column;gap:5px"></div>
+                </div>
+            </div>
+
+        </div>
+
+    </section>
+
+    <section id="page-dashboard" class="page-section">
 
         <!-- DB Header -->
         <div class="db-header">
