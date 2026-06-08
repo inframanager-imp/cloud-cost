@@ -65,6 +65,9 @@ def post_fork(server, worker):
             if _app.EMAIL_SCHEDULER_ENABLED:
                 _app._schedule_email_check()
                 print(f"[Scheduler] Email scheduler started (worker {os.getpid()})")
+            if _app.cur_import_state.get("enabled"):
+                _app._schedule_next_cur_import()
+                print(f"[Scheduler] CUR auto-import timer started (worker {os.getpid()})")
         except Exception as exc:
             print(f"[Scheduler] Startup error in worker {os.getpid()}: {exc}")
 
