@@ -6471,12 +6471,63 @@ function openClientReportModal() {
     const periodEl = document.getElementById('clientReportPeriodLabel');
     if (subtitle) subtitle.innerHTML = `Sending cost report for <strong>${_esc(client.name)}</strong>`;
     if (periodEl) periodEl.textContent = _clientPeriodLabel();
+
+    const recipientsEl = document.getElementById('clientReportRecipients');
+    if (recipientsEl && !recipientsEl.value) recipientsEl.value = client.recipients || '';
+    document.getElementById('clientReportSchedule').value = client.schedule || 'none';
+    document.getElementById('clientReportScheduleDay').value = client.schedule_day ?? 1;
+    document.getElementById('clientReportScheduleHour').value = client.schedule_hour ?? 8;
+    onClientScheduleChange();
+
+    const lastSentEl = document.getElementById('clientScheduleLastSent');
+    if (lastSentEl) lastSentEl.textContent = client.last_sent ? `Last sent: ${new Date(client.last_sent).toLocaleString()}` : '';
+
     if (modal) modal.style.display = 'flex';
 }
 
 function closeClientReportModal() {
     const modal = document.getElementById('clientReportModal');
     if (modal) modal.style.display = 'none';
+}
+
+function onClientScheduleChange() {
+    const sched = document.getElementById('clientReportSchedule').value;
+    document.getElementById('clientScheduleDayGroup').style.display = sched === 'weekly' ? '' : 'none';
+    document.getElementById('clientScheduleHourGroup').style.display = sched !== 'none' ? '' : 'none';
+}
+
+async function saveClientReportSchedule() {
+    if (!_selectedClientId) return;
+    const recipients = (document.getElementById('clientReportRecipients')?.value || '').trim();
+    const schedule = document.getElementById('clientReportSchedule').value;
+    if (schedule !== 'none' && !recipients) { showToast('Enter at least one recipient to enable a schedule', 'error'); return; }
+
+    const btn = document.getElementById('clientReportScheduleSaveBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+        const resp = await fetch(`/api/clients/${_selectedClientId}/schedule`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                recipients,
+                schedule,
+                schedule_day: parseInt(document.getElementById('clientReportScheduleDay').value),
+                schedule_hour: parseInt(document.getElementById('clientReportScheduleHour').value)
+            })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            showToast(data.message || 'Schedule saved', 'success');
+            const client = _clientsData.find(c => c.id === _selectedClientId);
+            if (client) { client.recipients = recipients; client.schedule = schedule; client.schedule_day = parseInt(document.getElementById('clientReportScheduleDay').value); client.schedule_hour = parseInt(document.getElementById('clientReportScheduleHour').value); }
+        } else {
+            showToast(data.error || 'Save failed', 'error');
+        }
+    } catch(e) {
+        showToast('Save failed: ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Save Schedule'; }
+    }
 }
 
 async function sendClientReport() {
