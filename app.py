@@ -4689,6 +4689,154 @@ def api_test_integration(tool):
     return jsonify({"error": "Unknown integration"}), 404
 
 
+# ── OpenAI Usage Sync ────────────────────────────────────────────────────────
+
+def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
+    """Fetch OpenAI usage costs and store them in cost_data. Returns summary dict."""
+    import requests as _req, time as _time
+
+    s = get_integration_settings()
+    api_key = s.get("openai_api_key", "")
+    if not api_key:
+        raise ValueError("OpenAI API key not configured")
+
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    now = datetime.utcnow()
+    date_to = now.date()
+    date_from = date_to - timedelta(days=days)
+
+    records = []
+
+    # Try newer /v1/organization/costs API first (requires usage.read permission)
+    start_ts = int(_time.mktime(date_from.timetuple()))
+    end_ts   = int(_time.mktime(date_to.timetuple())) + 86400
+    try:
+        r = _req.get(
+            "https://api.openai.com/v1/organization/costs",
+            headers=headers,
+            params={"start_time": start_ts, "end_time": end_ts, "bucket_width": "1d", "limit": 180},
+            timeout=15
+        )
+        if r.status_code == 200:
+            data = r.json()
+            for bucket in data.get("data", []):
+                bucket_date = datetime.utcfromtimestamp(bucket["start_time"]).strftime("%Y-%m-%d")
+                for result in bucket.get("results", []):
+                    cost_val = result.get("amount", {}).get("value", 0) or 0
+                    if cost_val <= 0:
+                        continue
+                    line_item = result.get("line_item") or "API Usage"
+                    records.append((
+                        bucket_date, None,          # date, resource_group
+                        "OpenAI",                   # service_name
+                        "AI API",                   # resource_type
+                        line_item,                  # resource_name
+                        "Token Usage",              # meter_category
+                        line_item,                  # meter_subcategory
+                        float(cost_val),            # cost
+                        "USD",                      # currency
+                        s.get("openai_org_id") or "openai",  # subscription_id
+                        None,                       # tags
+                        "openai",                   # cloud_provider
+                        tenant_id,                  # tenant_id
+                    ))
+    except Exception:
+        pass  # fall through to billing API
+
+    # Fall back to legacy /dashboard/billing/usage API
+    if not records:
+        r = _req.get(
+            "https://api.openai.com/dashboard/billing/usage",
+            headers=headers,
+            params={"start_date": str(date_from), "end_date": str(date_to)},
+            timeout=15
+        )
+        if r.status_code != 200:
+            raise ValueError(f"OpenAI API returned HTTP {r.status_code}: {r.text[:200]}")
+        data = r.json()
+        for day_entry in data.get("daily_costs", []):
+            bucket_date = datetime.utcfromtimestamp(day_entry["timestamp"]).strftime("%Y-%m-%d")
+            for item in day_entry.get("line_items", []):
+                cost_cents = item.get("cost", 0) or 0
+                if cost_cents <= 0:
+                    continue
+                model_name = item.get("name") or "OpenAI API"
+                records.append((
+                    bucket_date, None,
+                    "OpenAI",
+                    "AI API",
+                    model_name,
+                    "Token Usage",
+                    model_name,
+                    round(cost_cents / 100, 6),
+                    "USD",
+                    s.get("openai_org_id") or "openai",
+                    None,
+                    "openai",
+                    tenant_id,
+                ))
+
+    if not records:
+        return {"inserted": 0, "date_from": str(date_from), "date_to": str(date_to)}
+
+    conn = get_db()
+    # Remove old OpenAI records for this date range to avoid duplicates
+    conn.execute(
+        "DELETE FROM cost_data WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ?",
+        (tenant_id, str(date_from), str(date_to))
+    )
+    conn.executemany("""
+        INSERT INTO cost_data
+          (date,resource_group,service_name,resource_type,resource_name,
+           meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, records)
+    conn.commit()
+    conn.close()
+    return {"inserted": len(records), "date_from": str(date_from), "date_to": str(date_to)}
+
+
+@app.route("/api/integrations/openai/sync", methods=["POST"])
+@login_required
+def api_openai_sync():
+    tid = current_tenant_id()
+    try:
+        result = _fetch_openai_costs(tid)
+        return jsonify({"ok": True, "message": f"Synced {result['inserted']} records ({result['date_from']} → {result['date_to']})", **result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/integrations/openai/summary", methods=["GET"])
+@login_required
+def api_openai_summary():
+    """Return OpenAI cost totals for current month and last sync info."""
+    tid = current_tenant_id()
+    now = datetime.utcnow()
+    month_start = now.replace(day=1).strftime("%Y-%m-%d")
+    today = now.strftime("%Y-%m-%d")
+    conn = get_db()
+    row = conn.execute(
+        "SELECT COALESCE(SUM(cost),0) as total, MAX(created_at) as last_sync, COUNT(*) as records "
+        "FROM cost_data WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ?",
+        (tid, month_start, today)
+    ).fetchone()
+    # Top models this month
+    models = conn.execute(
+        "SELECT resource_name, COALESCE(SUM(cost),0) as total FROM cost_data "
+        "WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ? "
+        "GROUP BY resource_name ORDER BY total DESC LIMIT 5",
+        (tid, month_start, today)
+    ).fetchall()
+    conn.close()
+    return jsonify({
+        "total_this_month": round(row["total"], 4),
+        "last_sync": row["last_sync"],
+        "records": row["records"],
+        "top_models": [{"name": m["resource_name"], "cost": round(m["total"], 4)} for m in models]
+    })
+
+
 @app.route("/api/integrations/jira/users", methods=["GET"])
 @login_required
 def api_jira_users():

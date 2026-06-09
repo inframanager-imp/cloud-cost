@@ -3047,6 +3047,16 @@
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('openai')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('openai')">Test</button>
+                        <button class="btn btn-secondary" id="openai-sync-btn" style="font-size:12px;padding:6px 14px;display:none" onclick="syncOpenAIUsage()">&#8635; Sync Usage</button>
+                    </div>
+                    <!-- Usage summary shown after sync -->
+                    <div id="openai-usage-summary" style="display:none;margin-top:14px;padding:10px 12px;background:var(--bg-subtle,#f5f5f5);border-radius:8px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                            <span style="font-size:12px;font-weight:600;color:var(--text)">This Month</span>
+                            <span style="font-size:16px;font-weight:700;color:#10a37f" id="openai-total-cost">$0.00</span>
+                        </div>
+                        <div id="openai-top-models" style="font-size:11px;color:var(--text-muted)"></div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-top:4px" id="openai-last-sync"></div>
                     </div>
                 </div>
                 <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
@@ -4930,7 +4940,50 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (dash) dash.style.display = 'none';
                 if (hint) hint.style.display = 'block';
             }
+            // Show OpenAI sync button + load summary if API key is configured
+            const oaiCfg = data.openai || {};
+            const oaiSyncBtn = document.getElementById('openai-sync-btn');
+            if (oaiCfg.api_key) {
+                if (oaiSyncBtn) oaiSyncBtn.style.display = '';
+                loadOpenAISummary();
+            } else {
+                if (oaiSyncBtn) oaiSyncBtn.style.display = 'none';
+            }
         }).catch(() => {});
+    };
+
+    window.loadOpenAISummary = function() {
+        fetch('/api/integrations/openai/summary').then(r => r.json()).then(data => {
+            const summary = document.getElementById('openai-usage-summary');
+            if (!summary) return;
+            if (!data.records) { summary.style.display = 'none'; return; }
+            summary.style.display = 'block';
+            const total = document.getElementById('openai-total-cost');
+            if (total) total.textContent = '$' + (data.total_this_month || 0).toFixed(4);
+            const modelsEl = document.getElementById('openai-top-models');
+            if (modelsEl && data.top_models && data.top_models.length) {
+                modelsEl.innerHTML = data.top_models.map(m =>
+                    `<span style="margin-right:10px">${m.name}: <strong>$${m.cost.toFixed(4)}</strong></span>`
+                ).join('');
+            }
+            const lastSyncEl = document.getElementById('openai-last-sync');
+            if (lastSyncEl) lastSyncEl.textContent = data.last_sync ? 'Last synced: ' + new Date(data.last_sync).toLocaleString() : '';
+        }).catch(() => {});
+    };
+
+    window.syncOpenAIUsage = function() {
+        const btn = document.getElementById('openai-sync-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Syncing…'; }
+        fetch('/api/integrations/openai/sync', { method: 'POST' })
+            .then(r => r.json()).then(data => {
+                if (data.ok) {
+                    _showToast('✓ ' + data.message, true);
+                    loadOpenAISummary();
+                } else {
+                    _showToast('✗ ' + (data.error || 'Sync failed'), false);
+                }
+            }).catch(e => _showToast('✗ Sync failed: ' + e.message, false))
+            .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Sync Usage'; } });
     };
 
     window.loadJiraUsers = function() {
