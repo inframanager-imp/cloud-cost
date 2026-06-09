@@ -536,6 +536,20 @@ def init_db():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_clients_tenant ON clients(tenant_id)")
 
+    # Migration: add report-scheduling columns to clients if missing
+    for col, ddl in [
+        ("recipients",    "ALTER TABLE clients ADD COLUMN recipients TEXT DEFAULT ''"),
+        ("schedule",      "ALTER TABLE clients ADD COLUMN schedule TEXT DEFAULT 'none'"),
+        ("schedule_day",  "ALTER TABLE clients ADD COLUMN schedule_day INTEGER DEFAULT 1"),
+        ("schedule_hour", "ALTER TABLE clients ADD COLUMN schedule_hour INTEGER DEFAULT 8"),
+        ("last_sent",     "ALTER TABLE clients ADD COLUMN last_sent TEXT"),
+    ]:
+        try:
+            cursor.execute(f"SELECT {col} FROM clients LIMIT 1")
+        except Exception:
+            cursor.execute(ddl)
+            print(f"[DB] Migrated clients: added {col} column")
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS client_mappings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2976,6 +2990,16 @@ def get_clients(tenant_id: int) -> list:
     return [dict(r) for r in rows]
 
 
+def get_scheduled_clients() -> list:
+    """Return clients (any tenant) that have a recurring report schedule configured."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM clients WHERE schedule IS NOT NULL AND schedule != 'none' ORDER BY id"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_client(client_id: int, tenant_id: int) -> dict:
     conn = get_db()
     row = conn.execute(
@@ -2991,6 +3015,28 @@ def update_client(client_id: int, name: str, tenant_id: int):
     conn.execute(
         "UPDATE clients SET name=? WHERE id=? AND tenant_id=?",
         (name.strip(), client_id, tenant_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_client_schedule(client_id: int, recipients: str, schedule: str,
+                           schedule_day: int, schedule_hour: int, tenant_id: int):
+    conn = get_db()
+    conn.execute(
+        "UPDATE clients SET recipients=?, schedule=?, schedule_day=?, schedule_hour=? "
+        "WHERE id=? AND tenant_id=?",
+        (recipients.strip(), schedule, schedule_day, schedule_hour, client_id, tenant_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def mark_client_report_sent(client_id: int):
+    conn = get_db()
+    conn.execute(
+        "UPDATE clients SET last_sent=? WHERE id=?",
+        (datetime.now().isoformat(), client_id)
     )
     conn.commit()
     conn.close()
