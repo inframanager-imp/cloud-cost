@@ -4692,8 +4692,8 @@ def api_test_integration(tool):
 # ── OpenAI Usage Sync ────────────────────────────────────────────────────────
 
 def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
-    """Fetch OpenAI usage costs and store them in cost_data. Returns summary dict."""
-    import requests as _req, time as _time
+    """Fetch OpenAI usage costs via /v1/organization/costs and store in cost_data."""
+    import requests as _req, calendar as _cal
 
     s = get_integration_settings()
     api_key = s.get("openai_api_key", "")
@@ -4705,76 +4705,45 @@ def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
     date_to = now.date()
     date_from = date_to - timedelta(days=days)
 
+    # Use UTC-based timestamps to avoid local timezone shifts
+    start_ts = int(_cal.timegm(date_from.timetuple()))
+    end_ts   = int(_cal.timegm(date_to.timetuple())) + 86400
+
+    r = _req.get(
+        "https://api.openai.com/v1/organization/costs",
+        headers=headers,
+        params={"start_time": start_ts, "end_time": end_ts, "bucket_width": "1d", "limit": 180},
+        timeout=15
+    )
+
+    if r.status_code == 403:
+        raise ValueError(
+            "API key lacks 'usage.read' permission. "
+            "Go to platform.openai.com/api-keys → create a new key → "
+            "enable 'Read' under Usage, then re-save it here."
+        )
+    if r.status_code == 401:
+        raise ValueError("Invalid OpenAI API key. Please reconfigure in Integrations.")
+    if r.status_code != 200:
+        raise ValueError(f"OpenAI API returned HTTP {r.status_code}: {r.text[:300]}")
+
+    data = r.json()
     records = []
-
-    # Try newer /v1/organization/costs API first (requires usage.read permission)
-    start_ts = int(_time.mktime(date_from.timetuple()))
-    end_ts   = int(_time.mktime(date_to.timetuple())) + 86400
-    try:
-        r = _req.get(
-            "https://api.openai.com/v1/organization/costs",
-            headers=headers,
-            params={"start_time": start_ts, "end_time": end_ts, "bucket_width": "1d", "limit": 180},
-            timeout=15
-        )
-        if r.status_code == 200:
-            data = r.json()
-            for bucket in data.get("data", []):
-                bucket_date = datetime.utcfromtimestamp(bucket["start_time"]).strftime("%Y-%m-%d")
-                for result in bucket.get("results", []):
-                    cost_val = result.get("amount", {}).get("value", 0) or 0
-                    if cost_val <= 0:
-                        continue
-                    line_item = result.get("line_item") or "API Usage"
-                    records.append((
-                        bucket_date, None,          # date, resource_group
-                        "OpenAI",                   # service_name
-                        "AI API",                   # resource_type
-                        line_item,                  # resource_name
-                        "Token Usage",              # meter_category
-                        line_item,                  # meter_subcategory
-                        float(cost_val),            # cost
-                        "USD",                      # currency
-                        s.get("openai_org_id") or "openai",  # subscription_id
-                        None,                       # tags
-                        "openai",                   # cloud_provider
-                        tenant_id,                  # tenant_id
-                    ))
-    except Exception:
-        pass  # fall through to billing API
-
-    # Fall back to legacy /dashboard/billing/usage API
-    if not records:
-        r = _req.get(
-            "https://api.openai.com/dashboard/billing/usage",
-            headers=headers,
-            params={"start_date": str(date_from), "end_date": str(date_to)},
-            timeout=15
-        )
-        if r.status_code != 200:
-            raise ValueError(f"OpenAI API returned HTTP {r.status_code}: {r.text[:200]}")
-        data = r.json()
-        for day_entry in data.get("daily_costs", []):
-            bucket_date = datetime.utcfromtimestamp(day_entry["timestamp"]).strftime("%Y-%m-%d")
-            for item in day_entry.get("line_items", []):
-                cost_cents = item.get("cost", 0) or 0
-                if cost_cents <= 0:
-                    continue
-                model_name = item.get("name") or "OpenAI API"
-                records.append((
-                    bucket_date, None,
-                    "OpenAI",
-                    "AI API",
-                    model_name,
-                    "Token Usage",
-                    model_name,
-                    round(cost_cents / 100, 6),
-                    "USD",
-                    s.get("openai_org_id") or "openai",
-                    None,
-                    "openai",
-                    tenant_id,
-                ))
+    for bucket in data.get("data", []):
+        bucket_date = datetime.utcfromtimestamp(bucket["start_time"]).strftime("%Y-%m-%d")
+        for result in bucket.get("results", []):
+            cost_val = result.get("amount", {}).get("value", 0) or 0
+            if cost_val <= 0:
+                continue
+            line_item = result.get("line_item") or "API Usage"
+            records.append((
+                bucket_date, None,
+                "OpenAI", "AI API", line_item,
+                "Token Usage", line_item,
+                float(cost_val), "USD",
+                s.get("openai_org_id") or "openai",
+                None, "openai", tenant_id,
+            ))
 
     if not records:
         return {"inserted": 0, "date_from": str(date_from), "date_to": str(date_to)}
