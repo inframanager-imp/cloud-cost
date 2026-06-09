@@ -161,6 +161,8 @@ async function initCloudFilter() {
 // ─── Navigation ──────────────────────────────────────────────────────────
 function navigateTo(page) {
     currentPage = page;
+    // Persist active page in URL hash so browser refresh restores position
+    history.replaceState(null, '', '#' + page);
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById(`page-${page}`)?.classList.add('active');
@@ -5756,8 +5758,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initCloudFilter();   // hide pills for clouds with no data
     populateClientDropdowns();
     _initNavContextMenu();
-    // Support opening a specific page in a new tab via ?page= query param
-    const urlPage = new URLSearchParams(location.search).get('page');
+    // Restore page from URL hash (refresh) or ?page= query param, else default to executive
+    const hashPage = location.hash ? location.hash.slice(1) : '';
+    const urlPage = hashPage || new URLSearchParams(location.search).get('page');
     navigateTo(urlPage || 'executive');
     onCompareModeChange();
 
