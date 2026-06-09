@@ -68,6 +68,9 @@ def post_fork(server, worker):
             if _app.cur_import_state.get("enabled"):
                 _app._schedule_next_cur_import()
                 print(f"[Scheduler] CUR auto-import timer started (worker {os.getpid()})")
+            if _app.openai_auto_sync_state.get("enabled"):
+                _app._schedule_next_openai_auto_sync()
+                print(f"[Scheduler] OpenAI auto-sync timer started (worker {os.getpid()})")
         except Exception as exc:
             print(f"[Scheduler] Startup error in worker {os.getpid()}: {exc}")
 
