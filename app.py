@@ -4691,59 +4691,114 @@ def api_test_integration(tool):
 
 # ── OpenAI Usage Sync ────────────────────────────────────────────────────────
 
+# Cost per 1k tokens (input, output) in USD — used when org/costs API is unavailable
+_OPENAI_PRICING = {
+    "gpt-4o":              {"in": 0.005,    "out": 0.015},
+    "gpt-4o-mini":         {"in": 0.00015,  "out": 0.0006},
+    "gpt-4-turbo":         {"in": 0.01,     "out": 0.03},
+    "gpt-4":               {"in": 0.03,     "out": 0.06},
+    "gpt-3.5-turbo":       {"in": 0.0005,   "out": 0.0015},
+    "o1":                  {"in": 0.015,    "out": 0.06},
+    "o1-mini":             {"in": 0.003,    "out": 0.012},
+    "o3-mini":             {"in": 0.0011,   "out": 0.0044},
+    "default":             {"in": 0.002,    "out": 0.002},
+}
+
+
 def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
-    """Fetch OpenAI usage costs via /v1/organization/costs and store in cost_data."""
+    """Fetch OpenAI usage costs and store in cost_data.
+    Tries /v1/organization/costs (org owner) first, falls back to
+    /v1/usage?date= per day (works for any API key).
+    """
     import requests as _req, calendar as _cal
+    from datetime import date as _date, timedelta as _td
 
     s = get_integration_settings()
     api_key = s.get("openai_api_key", "")
     if not api_key:
         raise ValueError("OpenAI API key not configured")
 
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {api_key}"}
     now = datetime.utcnow()
     date_to = now.date()
     date_from = date_to - timedelta(days=days)
+    sub_id = s.get("openai_org_id") or "openai"
 
-    # Use UTC-based timestamps to avoid local timezone shifts
+    records = []
+
+    # ── Method 1: /v1/organization/costs (requires org owner) ────────────────
     start_ts = int(_cal.timegm(date_from.timetuple()))
     end_ts   = int(_cal.timegm(date_to.timetuple())) + 86400
-
-    r = _req.get(
-        "https://api.openai.com/v1/organization/costs",
-        headers=headers,
-        params={"start_time": start_ts, "end_time": end_ts, "bucket_width": "1d", "limit": 180},
-        timeout=15
-    )
-
-    if r.status_code == 403:
-        raise ValueError(
-            "API key lacks 'usage.read' permission. "
-            "Go to platform.openai.com/api-keys → create a new key → "
-            "enable 'Read' under Usage, then re-save it here."
+    try:
+        r = _req.get(
+            "https://api.openai.com/v1/organization/costs",
+            headers=headers,
+            params={"start_time": start_ts, "end_time": end_ts, "bucket_width": "1d", "limit": 180},
+            timeout=15
         )
-    if r.status_code == 401:
-        raise ValueError("Invalid OpenAI API key. Please reconfigure in Integrations.")
-    if r.status_code != 200:
-        raise ValueError(f"OpenAI API returned HTTP {r.status_code}: {r.text[:300]}")
+        if r.status_code == 200:
+            for bucket in r.json().get("data", []):
+                bucket_date = datetime.utcfromtimestamp(bucket["start_time"]).strftime("%Y-%m-%d")
+                for result in bucket.get("results", []):
+                    cost_val = float(result.get("amount", {}).get("value", 0) or 0)
+                    if cost_val <= 0:
+                        continue
+                    line_item = result.get("line_item") or "API Usage"
+                    records.append((bucket_date, None, "OpenAI", "AI API", line_item,
+                                    "Token Usage", line_item, cost_val, "USD",
+                                    sub_id, None, "openai", tenant_id))
+    except Exception:
+        pass
 
-    data = r.json()
-    records = []
-    for bucket in data.get("data", []):
-        bucket_date = datetime.utcfromtimestamp(bucket["start_time"]).strftime("%Y-%m-%d")
-        for result in bucket.get("results", []):
-            cost_val = result.get("amount", {}).get("value", 0) or 0
-            if cost_val <= 0:
-                continue
-            line_item = result.get("line_item") or "API Usage"
-            records.append((
-                bucket_date, None,
-                "OpenAI", "AI API", line_item,
-                "Token Usage", line_item,
-                float(cost_val), "USD",
-                s.get("openai_org_id") or "openai",
-                None, "openai", tenant_id,
-            ))
+    # ── Method 2: /v1/usage?date= per day (works for any user key) ───────────
+    if not records:
+        cur = date_from
+        while cur <= date_to:
+            try:
+                r = _req.get(
+                    "https://api.openai.com/v1/usage",
+                    headers=headers,
+                    params={"date": str(cur)},
+                    timeout=10
+                )
+                if r.status_code == 401:
+                    raise ValueError("Invalid OpenAI API key. Please reconfigure in Integrations.")
+                if r.status_code != 200:
+                    cur += _td(days=1)
+                    continue
+                d = r.json()
+                day_str = str(cur)
+                # Aggregate cost from completions
+                model_costs = {}
+                for item in d.get("data", []):
+                    model = item.get("snapshot_id") or "gpt-unknown"
+                    in_tok  = item.get("n_context_tokens_total", 0) or 0
+                    out_tok = item.get("n_generated_tokens_total", 0) or 0
+                    # Use rough pricing per 1k tokens
+                    price = _OPENAI_PRICING.get(model) or _OPENAI_PRICING.get(
+                        next((k for k in _OPENAI_PRICING if model.startswith(k)), "default"))
+                    if not price:
+                        price = _OPENAI_PRICING["default"]
+                    cost = round((in_tok * price["in"] + out_tok * price["out"]) / 1000, 6)
+                    model_costs[model] = model_costs.get(model, 0) + cost
+                # Also add DALL-E, Whisper, TTS if present
+                for item in d.get("dalle_api_data", []):
+                    model_costs["DALL-E"] = model_costs.get("DALL-E", 0) + (item.get("num_images", 0) * 0.04)
+                for item in d.get("whisper_api_data", []):
+                    model_costs["Whisper"] = model_costs.get("Whisper", 0) + round((item.get("num_seconds", 0) / 60) * 0.006, 6)
+                for item in d.get("tts_api_data", []):
+                    model_costs["TTS"] = model_costs.get("TTS", 0) + round((item.get("num_characters", 0) / 1000) * 0.015, 6)
+                for model, cost in model_costs.items():
+                    if cost <= 0:
+                        continue
+                    records.append((day_str, None, "OpenAI", "AI API", model,
+                                    "Token Usage", model, cost, "USD",
+                                    sub_id, None, "openai", tenant_id))
+            except ValueError:
+                raise
+            except Exception:
+                pass
+            cur += _td(days=1)
 
     if not records:
         return {"inserted": 0, "date_from": str(date_from), "date_to": str(date_to)}
