@@ -52,6 +52,7 @@ from database import (
     # Client tagging & cost allocation
     create_client, get_clients, get_client, update_client, delete_client,
     get_client_mappings, upsert_client_mappings, get_client_costs,
+    update_client_schedule, mark_client_report_sent, get_scheduled_clients,
     build_client_sql_filter, get_client_filter_values,
     # AWS CloudFormation connect
     get_or_create_aws_external_id, save_aws_handshake, get_aws_connection_status,
@@ -3124,6 +3125,20 @@ def api_client_costs(client_id):
     return jsonify(get_client_costs(client_id, date_from, date_to, tid))
 
 
+def _send_client_cost_report(client, tenant_id, recipients, date_from=None, date_to=None, report_type="client"):
+    """Build and email a client cost report. Returns the email subject on success."""
+    today = datetime.utcnow()
+    date_from = date_from or today.replace(day=1).strftime("%Y-%m-%d")
+    date_to   = date_to   or today.strftime("%Y-%m-%d")
+    client = dict(client)
+    client["mappings"] = get_client_mappings(client["id"])
+    cost_data = get_client_costs(client["id"], date_from, date_to, tenant_id)
+    html = build_client_report_html(client, cost_data, date_from, date_to)
+    subject = f"Client Cost Report — {client['name']} ({date_from} to {date_to})"
+    send_report_email(recipients=recipients, subject=subject, html_body=html, report_type=report_type)
+    return subject
+
+
 @app.route("/api/clients/<int:client_id>/send-report", methods=["POST"])
 @login_required
 def api_client_send_report(client_id):
@@ -3135,18 +3150,39 @@ def api_client_send_report(client_id):
     recipients = [r.strip() for r in (body.get("recipients") or "").split(",") if r.strip()]
     if not recipients:
         return jsonify({"error": "No recipients provided"}), 400
-    today = datetime.utcnow()
-    date_from = body.get("date_from") or today.replace(day=1).strftime("%Y-%m-%d")
-    date_to   = body.get("date_to")   or today.strftime("%Y-%m-%d")
-    client["mappings"] = get_client_mappings(client_id)
-    cost_data = get_client_costs(client_id, date_from, date_to, tid)
-    html = build_client_report_html(client, cost_data, date_from, date_to)
-    subject = f"Client Cost Report — {client['name']} ({date_from} to {date_to})"
+    date_from = body.get("date_from")
+    date_to   = body.get("date_to")
     try:
-        send_report_email(recipients=recipients, subject=subject, html_body=html, report_type="client")
+        _send_client_cost_report(client, tid, recipients, date_from, date_to)
         return jsonify({"message": f"Report sent to {', '.join(recipients)}"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/clients/<int:client_id>/schedule", methods=["PUT"])
+@login_required
+def api_client_update_schedule(client_id):
+    tid = current_tenant_id()
+    if not get_client(client_id, tid):
+        return jsonify({"error": "Not found"}), 404
+    body = request.get_json(silent=True) or {}
+    recipients = (body.get("recipients") or "").strip()
+    schedule = (body.get("schedule") or "none").strip().lower()
+    if schedule not in ("none", "daily", "weekly", "monthly"):
+        schedule = "none"
+    try:
+        schedule_day = int(body.get("schedule_day") or 1)
+    except (TypeError, ValueError):
+        schedule_day = 1
+    try:
+        schedule_hour = int(body.get("schedule_hour") or 8)
+    except (TypeError, ValueError):
+        schedule_hour = 8
+    schedule_hour = max(0, min(23, schedule_hour))
+    if schedule != "none" and not recipients:
+        return jsonify({"error": "Recipients are required to enable a schedule"}), 400
+    update_client_schedule(client_id, recipients, schedule, schedule_day, schedule_hour, tid)
+    return jsonify({"message": "Schedule saved"})
 
 
 @app.route("/api/clients/<int:client_id>/report-preview", methods=["GET"])
@@ -3609,6 +3645,31 @@ def _check_email_schedule():
                     print(f"[Email Report] Custom report '{cr['name']}' sent.")
                 except Exception as e:
                     print(f"[Email Report] Custom report '{cr['name']}' failed: {e}")
+
+        # Check client report schedules
+        for client in get_scheduled_clients():
+            cl_schedule = client.get("schedule", "none")
+            cl_recipients = [r.strip() for r in (client.get("recipients") or "").split(",") if r.strip()]
+            if cl_schedule == "none" or not cl_recipients:
+                continue
+            cl_hour = client.get("schedule_hour", 8)
+            cl_day = client.get("schedule_day", 1)
+            cl_should_send = False
+            if now.hour == cl_hour:
+                if cl_schedule == "daily":
+                    cl_should_send = True
+                elif cl_schedule == "weekly" and now.weekday() == cl_day:
+                    cl_should_send = True
+                elif cl_schedule == "monthly" and now.day == 1:
+                    cl_should_send = True
+            if cl_should_send:
+                try:
+                    print(f"[Email Report] Sending client report '{client['name']}'...")
+                    _send_client_cost_report(client, client["tenant_id"], cl_recipients, report_type="scheduled")
+                    mark_client_report_sent(client["id"])
+                    print(f"[Email Report] Client report '{client['name']}' sent.")
+                except Exception as e:
+                    print(f"[Email Report] Client report '{client['name']}' failed: {e}")
 
     except Exception as e:
         print(f"[Email Report] Scheduler error: {e}")

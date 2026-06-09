@@ -1431,6 +1431,9 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
 <!-- By subscription/account -->
 {'<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">By Subscription / Account</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:28px"><tr style="background:#F0F0EE"><th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:left">Account</th><th style="padding:9px 8px;font-size:11px;font-weight:500;color:#525252;text-align:left">Share</th><th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th></tr>' + sub_rows + '</table>' if sub_rows else ''}
 
+<!-- Daily cost -->
+{'<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Daily Cost <span style="font-size:11px;font-weight:400;color:#8A8A8A">(last 14 days)</span></div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:28px"><tr style="background:#F0F0EE"><th style="padding:9px 12px;font-size:11px;font-weight:500;color:#525252;text-align:left">Date</th><th style="padding:9px 8px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th><th style="padding:9px 12px;font-size:11px;font-weight:500;color:#525252;text-align:left">Trend</th></tr>' + trend_rows + '</table>' if trend_rows else ''}
+
 
 </td></tr></table></td></tr>
 
