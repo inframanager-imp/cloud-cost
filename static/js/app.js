@@ -19,14 +19,16 @@ let _cfgSelectedRGs  = new Set();
 
 // ─── Cloud Provider Filter ────────────────────────────────────────────────
 const CLOUD_LOGOS = {
-    aws:   '<img src="/static/img/aws-logo.svg"   alt="AWS"   style="height:22px;vertical-align:middle">',
-    azure: '<img src="/static/img/azure-logo.svg" alt="Azure" style="height:22px;vertical-align:middle">',
-    gcp:   '<img src="/static/img/gcp-logo.svg"   alt="GCP"   style="height:22px;vertical-align:middle">',
+    aws:    '<img src="/static/img/aws-logo.svg"   alt="AWS"   style="height:22px;vertical-align:middle">',
+    azure:  '<img src="/static/img/azure-logo.svg" alt="Azure" style="height:22px;vertical-align:middle">',
+    gcp:    '<img src="/static/img/gcp-logo.svg"   alt="GCP"   style="height:22px;vertical-align:middle">',
+    openai: '<svg width="20" height="20" viewBox="0 0 24 24" fill="#10a37f" style="vertical-align:middle"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073z"/></svg>',
 };
 const CLOUD_META = {
-    azure: { icon: '⊞', logo: CLOUD_LOGOS.azure, label: 'Azure', color: '#0078d4', groupLabel: { sub: 'Subscription', rg: 'Resource Group', service: 'Service' } },
-    aws:   { icon: '⚙', logo: CLOUD_LOGOS.aws,   label: 'AWS',   color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Account',        service: 'Service' } },
-    gcp:   { icon: '◉', logo: CLOUD_LOGOS.gcp,   label: 'GCP',   color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service' } },
+    azure:  { icon: '⊞', logo: CLOUD_LOGOS.azure,  label: 'Azure',  color: '#0078d4', groupLabel: { sub: 'Subscription', rg: 'Resource Group', service: 'Service' } },
+    aws:    { icon: '⚙', logo: CLOUD_LOGOS.aws,    label: 'AWS',    color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Account',        service: 'Service' } },
+    gcp:    { icon: '◉', logo: CLOUD_LOGOS.gcp,    label: 'GCP',    color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service' } },
+    openai: { icon: '◈', logo: CLOUD_LOGOS.openai, label: 'OpenAI', color: '#10a37f', groupLabel: { sub: 'Org',          rg: 'Model',          service: 'AI API'   } },
 };
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const CHART_COLORS = () => [
@@ -1859,9 +1861,9 @@ async function loadMonthly() {
             const subs = m.by_subscription || [];
             const byCloud = m.by_cloud || {};
             const cloudTotal = m.total_cost || 1;
-            const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
-            const cloudLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
-            const cloudOrder = ['aws', 'azure', 'gcp'];
+            const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f' };
+            const cloudLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI' };
+            const cloudOrder = ['aws', 'azure', 'gcp', 'openai'];
             const activeCloudKeys = cloudOrder.filter(c => byCloud[c] > 0);
 
             // Cloud breakdown strip

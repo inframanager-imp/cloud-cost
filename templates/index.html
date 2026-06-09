@@ -29,6 +29,14 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/clusterize.js/0.19.0/clusterize.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <style>
+        .flatpickr-calendar { font-family: inherit; }
+        .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange { background:#10a37f!important; border-color:#10a37f!important; }
+        .flatpickr-day.inRange { background:rgba(16,163,127,.15)!important; border-color:transparent!important; box-shadow:-5px 0 0 rgba(16,163,127,.15),5px 0 0 rgba(16,163,127,.15)!important; }
+        #oai-range-display { cursor:pointer; font-size:11px; padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); white-space:nowrap; min-width:170px; text-align:center; }
+    </style>
 </head>
 <body>
 
@@ -524,6 +532,7 @@
                 <button class="db-seg-btn" data-cloud="azure" onclick="setCloudFilter('azure')">Azure</button>
                 <button class="db-seg-btn" data-cloud="aws" onclick="setCloudFilter('aws')">AWS</button>
                 <button class="db-seg-btn" data-cloud="gcp" onclick="setCloudFilter('gcp')">GCP</button>
+                <button class="db-seg-btn" data-cloud="openai" onclick="setCloudFilter('openai')">OpenAI</button>
             </div>
             <div style="display:flex;align-items:center;gap:6px;margin-left:10px">
                 <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text-secondary);flex-shrink:0">
@@ -685,6 +694,9 @@
                     </button>
                     <button class="cp-seg" data-costs-cloud="gcp" onclick="setCostsCloud(this,'gcp')">
                         <img src="/static/img/gcp-logo.svg" alt="" style="height:12px;vertical-align:middle;margin-right:3px">GCP
+                    </button>
+                    <button class="cp-seg" data-costs-cloud="openai" onclick="setCostsCloud(this,'openai')">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:3px;color:#10a37f"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0L4.06 14.2A4.501 4.501 0 0 1 2.34 7.895zm16.597 3.855l-5.843-3.369 2.02-1.168a.076.076 0 0 1 .071 0l4.757 2.746a4.494 4.494 0 0 1-.695 8.104v-5.678a.79.79 0 0 0-.31-.635zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.756-2.746a4.5 4.5 0 0 1 6.679 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.392.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>OpenAI
                     </button>
                 </div>
             </div>
@@ -938,6 +950,7 @@
                         <button class="seg" data-cmp-cloud="aws" onclick="setCmpCloud(this,'aws')">AWS</button>
                         <button class="seg" data-cmp-cloud="azure" onclick="setCmpCloud(this,'azure')">Azure</button>
                         <button class="seg" data-cmp-cloud="gcp" onclick="setCmpCloud(this,'gcp')">GCP</button>
+                        <button class="seg" data-cmp-cloud="openai" onclick="setCmpCloud(this,'openai')">OpenAI</button>
                     </div>
                 </div>
 
@@ -1184,6 +1197,7 @@
                         <button class="seg" data-cloud="azure">Azure</button>
                         <button class="seg" data-cloud="aws">AWS</button>
                         <button class="seg" data-cloud="gcp">GCP</button>
+                        <button class="seg" data-cloud="openai">OpenAI</button>
                     </div>
                 </div>
 
@@ -1615,6 +1629,9 @@
                 <button class="cp-seg" data-act-cloud="gcp" onclick="setActCloud(this,'gcp')">
                     <img src="/static/img/gcp-logo.svg" alt="" style="height:12px;vertical-align:middle;margin-right:3px">GCP
                 </button>
+                <button class="cp-seg" data-act-cloud="openai" onclick="setActCloud(this,'openai')">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#10a37f" style="vertical-align:middle;margin-right:3px"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073z"/></svg>OpenAI
+                </button>
             </div>
         </div>
 
@@ -1933,6 +1950,7 @@
                             <option value="azure">Azure</option>
                             <option value="aws">AWS</option>
                             <option value="gcp">GCP</option>
+                            <option value="openai">OpenAI</option>
                         </select>
                     </div>
                     <div class="email-field">
@@ -2375,6 +2393,21 @@
                             <input type="text" id="awsRoleArn" class="filter-input" placeholder="arn:aws:iam::..." style="width:100%;margin-bottom:8px">
                             <label class="form-label">Region</label>
                             <input type="text" id="awsRegion" class="filter-input" placeholder="us-east-1" value="us-east-1" style="width:100%">
+                        </div>
+
+                        <!-- CUR Settings -->
+                        <div style="background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border)">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+                                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                                <span style="font-size:12px;font-weight:600;color:var(--text-primary)">Cost & Usage Report (CUR) — optional</span>
+                            </div>
+                            <p style="margin:0 0 10px;font-size:11px;color:var(--text-secondary);line-height:1.5">Configure to get full resource-level cost data. Leave blank to use Cost Explorer API only.</p>
+                            <label class="form-label">CUR S3 Bucket</label>
+                            <input type="text" id="awsCurBucket" class="filter-input" placeholder="e.g. finops-cur-905418007892" style="width:100%;margin-bottom:8px">
+                            <label class="form-label">CUR Report Name</label>
+                            <input type="text" id="awsCurReportName" class="filter-input" placeholder="e.g. finops-daily" style="width:100%;margin-bottom:8px">
+                            <label class="form-label">S3 Prefix <span style="font-weight:400;color:var(--text-muted);font-size:10px">(folder before report name, default: cur)</span></label>
+                            <input type="text" id="awsCurPrefix" class="filter-input" placeholder="e.g. cost-usage-report" style="width:100%">
                         </div>
 
                         <!-- Required IAM Permissions -->
@@ -3047,6 +3080,15 @@
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('openai')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('openai')">Test</button>
+                        <button class="btn btn-secondary" id="openai-sync-btn" style="font-size:12px;padding:6px 14px;display:none" onclick="syncOpenAIUsage()">&#8635; Sync Usage</button>
+                    </div>
+                    <!-- Usage summary shown after sync -->
+                    <div id="openai-usage-summary" style="display:none;margin-top:10px;padding:8px 10px;background:var(--bg-subtle,#f5f5f5);border-radius:8px">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <span style="font-size:12px;font-weight:600;color:var(--text)">This Month</span>
+                            <span style="font-size:16px;font-weight:700;color:#10a37f" id="openai-total-cost">$0.00</span>
+                        </div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-top:3px" id="openai-last-sync"></div>
                     </div>
                 </div>
                 <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
@@ -3151,6 +3193,159 @@
             <div style="font-weight:600;color:var(--text);margin-bottom:6px">Jira not connected</div>
             <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Connect your Jira account to see users, licenses, and activity.</div>
             <button class="btn btn-primary" style="font-size:13px" onclick="openIntgModal('jira')">Configure Jira →</button>
+        </div>
+
+        <!-- ── OpenAI Usage Dashboard ── -->
+        <div id="openai-dashboard" style="display:none;margin-bottom:32px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+                <div style="display:flex;align-items:center;gap:10px">
+                    <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#10a37f,#0e8f6f);display:flex;align-items:center;justify-content:center">
+                        <svg width="20" height="20" viewBox="0 0 41 41" fill="white"><path d="M37.532 16.87a9.963 9.963 0 00-.856-8.184 10.078 10.078 0 00-10.855-4.835 9.964 9.964 0 00-7.504-3.357 10.079 10.079 0 00-9.617 6.977 9.967 9.967 0 00-6.663 4.834 10.079 10.079 0 001.24 11.817 9.965 9.965 0 00.856 8.185 10.079 10.079 0 0010.855 4.835 9.965 9.965 0 007.504 3.357 10.078 10.078 0 009.617-6.981 9.967 9.967 0 006.663-4.834 10.079 10.079 0 00-1.24-11.813zM22.498 37.886a7.474 7.474 0 01-4.799-1.735c.061-.033.168-.091.237-.134l7.964-4.6a1.294 1.294 0 00.655-1.134V19.054l3.366 1.944a.12.12 0 01.066.092v9.299a7.505 7.505 0 01-7.49 7.496zM6.392 31.006a7.471 7.471 0 01-.894-5.023c.06.036.162.099.237.141l7.964 4.6a1.297 1.297 0 001.308 0l9.724-5.614v3.888a.12.12 0 01-.048.103l-8.051 4.649a7.504 7.504 0 01-10.24-2.744zM4.297 13.62A7.469 7.469 0 018.2 10.333c0 .068-.004.19-.004.274v9.201a1.294 1.294 0 00.654 1.132l9.723 5.614-3.366 1.944a.12.12 0 01-.114.012L7.044 23.86a7.504 7.504 0 01-2.747-10.24zm27.658 6.437l-9.724-5.615 3.367-1.943a.121.121 0 01.114-.012l8.048 4.648a7.498 7.498 0 01-1.158 13.528v-9.476a1.293 1.293 0 00-.647-1.13zm3.35-5.043c-.059-.037-.162-.099-.236-.141l-7.965-4.6a1.298 1.298 0 00-1.308 0l-9.723 5.614v-3.888a.12.12 0 01.048-.103l8.05-4.645a7.497 7.497 0 0111.135 7.763zm-21.063 6.929l-3.367-1.944a.12.12 0 01-.065-.092v-9.299a7.497 7.497 0 0112.293-5.756 6.94 6.94 0 00-.236.134l-7.965 4.6a1.294 1.294 0 00-.654 1.132l-.006 11.225zm1.829-3.943l4.33-2.501 4.332 2.5v4.999l-4.331 2.5-4.331-2.5V18z"/></svg>
+                    </div>
+                    <div>
+                        <div style="font-weight:700;font-size:15px;color:var(--text)">OpenAI / ChatGPT Usage</div>
+                        <div style="font-size:12px;color:var(--text-muted)" id="openai-dash-subtitle">Loading...</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="syncOpenAIUsage(30)">
+                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                        Sync Usage
+                    </button>
+                    <div style="position:relative;display:inline-block" id="oai-history-dropdown">
+                        <button class="btn btn-secondary" style="font-size:12px;padding:6px 10px" onclick="document.getElementById('oai-history-menu').style.display=document.getElementById('oai-history-menu').style.display==='block'?'none':'block'">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div id="oai-history-menu" style="display:none;position:absolute;right:0;top:34px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;min-width:170px;padding:6px 0">
+                            <div style="padding:6px 14px;font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.5px;text-transform:uppercase">Fetch History</div>
+                            <button onclick="syncOpenAIUsage(30);document.getElementById('oai-history-menu').style.display='none'" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text)">Last 30 days</button>
+                            <button onclick="syncOpenAIUsage(60);document.getElementById('oai-history-menu').style.display='none'" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text)">Last 60 days</button>
+                            <button onclick="syncOpenAIUsage(90);document.getElementById('oai-history-menu').style.display='none'" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text)">Last 90 days</button>
+                            <button onclick="syncOpenAIUsage(180);document.getElementById('oai-history-menu').style.display='none'" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text)">Last 6 months</button>
+                            <button onclick="syncOpenAIUsage(365);document.getElementById('oai-history-menu').style.display='none'" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--text)">Last 1 year</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Date range picker -->
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding:10px 14px;background:var(--bg-subtle,#f5f5f5);border-radius:10px;border:1px solid var(--border)">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text-muted);flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <span style="font-size:12px;color:var(--text-muted);margin-right:4px">Date range:</span>
+                <button onclick="oaiSetRange('this_month')" id="oai-range-this_month" class="oai-range-btn oai-range-active" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #10a37f;background:#10a37f;color:#fff;cursor:pointer;font-weight:600">This Month</button>
+                <button onclick="oaiSetRange('last_month')" id="oai-range-last_month" class="oai-range-btn" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);cursor:pointer">Last Month</button>
+                <button onclick="oaiSetRange('last_30')" id="oai-range-last_30" class="oai-range-btn" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);cursor:pointer">Last 30 Days</button>
+                <button onclick="oaiSetRange('last_90')" id="oai-range-last_90" class="oai-range-btn" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);cursor:pointer">Last 90 Days</button>
+                <button onclick="oaiSetRange('last_6m')" id="oai-range-last_6m" class="oai-range-btn" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);cursor:pointer">Last 6 Months</button>
+                <button onclick="oaiSetRange('last_1y')" id="oai-range-last_1y" class="oai-range-btn" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card-bg);color:var(--text);cursor:pointer">Last 1 Year</button>
+                <div style="display:flex;align-items:center;gap:6px;margin-left:4px">
+                    <!-- Hidden inputs — used by existing JS (oaiSetRange / loadOpenAIBreakdown) -->
+                    <input type="hidden" id="oai-date-from">
+                    <input type="hidden" id="oai-date-to">
+                    <!-- Single calendar range trigger -->
+                    <input id="oai-range-display" readonly placeholder="Pick date range…">
+                </div>
+            </div>
+
+            <!-- Stat tiles -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px">
+                <div style="background:linear-gradient(135deg,#0a7c59,#10a37f);border-radius:12px;padding:18px 16px;color:#fff;text-align:center">
+                    <div style="font-size:11px;font-weight:700;letter-spacing:1px;opacity:.8;text-transform:uppercase;margin-bottom:6px" id="oai-stat-month-label">This Month</div>
+                    <div style="font-size:28px;font-weight:800" id="oai-stat-month">$—</div>
+                    <div style="font-size:11px;opacity:.7;margin-top:4px">API spend</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#0052cc,#0065ff);border-radius:12px;padding:18px 16px;color:#fff;text-align:center">
+                    <div style="font-size:11px;font-weight:700;letter-spacing:1px;opacity:.8;text-transform:uppercase;margin-bottom:6px">Today</div>
+                    <div style="font-size:28px;font-weight:800" id="oai-stat-today">$—</div>
+                    <div style="font-size:11px;opacity:.7;margin-top:4px">Latest day</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#6b46c1,#9f7aea);border-radius:12px;padding:18px 16px;color:#fff;text-align:center">
+                    <div style="font-size:11px;font-weight:700;letter-spacing:1px;opacity:.8;text-transform:uppercase;margin-bottom:6px">Top Model</div>
+                    <div style="font-size:16px;font-weight:800;word-break:break-all" id="oai-stat-topmodel">—</div>
+                    <div style="font-size:11px;opacity:.7;margin-top:4px">Highest spend</div>
+                </div>
+                <div style="background:linear-gradient(135deg,#c05621,#ed8936);border-radius:12px;padding:18px 16px;color:#fff;text-align:center">
+                    <div style="font-size:11px;font-weight:700;letter-spacing:1px;opacity:.8;text-transform:uppercase;margin-bottom:6px">Records</div>
+                    <div style="font-size:28px;font-weight:800" id="oai-stat-records">—</div>
+                    <div style="font-size:11px;opacity:.7;margin-top:4px">Data points</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="table-container" style="padding:0;overflow:hidden">
+                <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px;background:var(--card-bg)">
+                    <button onclick="oaiDashTab('daily')" id="oai-dtab-daily" class="oai-dtab oai-dtab-active" style="font-size:12px;padding:10px 16px;border:none;background:none;cursor:pointer;border-bottom:2px solid #10a37f;color:#10a37f;font-weight:600">Daily Cost</button>
+                    <button onclick="oaiDashTab('model')" id="oai-dtab-model" class="oai-dtab" style="font-size:12px;padding:10px 16px;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-muted)">By Model</button>
+                    <button onclick="oaiDashTab('capability')" id="oai-dtab-capability" class="oai-dtab" style="font-size:12px;padding:10px 16px;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-muted)">API Capabilities</button>
+                    <button onclick="oaiDashTab('key')" id="oai-dtab-key" class="oai-dtab" style="font-size:12px;padding:10px 16px;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-muted)">By Key</button>
+                    <button onclick="oaiDashTab('spend')" id="oai-dtab-spend" class="oai-dtab" style="font-size:12px;padding:10px 16px;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-muted)">Spend Categories</button>
+                </div>
+
+                <!-- Daily -->
+                <div id="oai-dpanel-daily" style="padding:0">
+                    <table style="width:100%;border-collapse:collapse">
+                        <thead><tr style="background:var(--bg-subtle,#f5f5f5);text-align:left">
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">Date</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right">Cost</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">Spend Bar</th>
+                        </tr></thead>
+                        <tbody id="oai-ddaily-rows"><tr><td colspan="3" style="padding:24px;text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+
+                <!-- By Model -->
+                <div id="oai-dpanel-model" style="display:none;padding:0">
+                    <table style="width:100%;border-collapse:collapse">
+                        <thead><tr style="background:var(--bg-subtle,#f5f5f5);text-align:left">
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">Model</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right" id="oai-model-period-hdr">Cost (Selected Period)</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right">% of Total</th>
+                        </tr></thead>
+                        <tbody id="oai-dmodel-rows"><tr><td colspan="3" style="padding:24px;text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+
+                <!-- API Capabilities -->
+                <div id="oai-dpanel-capability" style="display:none;padding:0">
+                    <table style="width:100%;border-collapse:collapse">
+                        <thead><tr style="background:var(--bg-subtle,#f5f5f5);text-align:left">
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">API Capability</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right">Cost (This Month)</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">Spend Bar</th>
+                        </tr></thead>
+                        <tbody id="oai-dcap-rows"><tr><td colspan="3" style="padding:24px;text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+
+                <!-- By Key -->
+                <div id="oai-dpanel-key" style="display:none;padding:0">
+                    <table style="width:100%;border-collapse:collapse">
+                        <thead><tr style="background:var(--bg-subtle,#f5f5f5);text-align:left">
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">API Key ID</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right">Requests</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right">Tokens</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right">Est. Cost</th>
+                        </tr></thead>
+                        <tbody id="oai-dkey-rows"><tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+
+                <!-- Spend Categories -->
+                <div id="oai-dpanel-spend" style="display:none;padding:0">
+                    <table style="width:100%;border-collapse:collapse">
+                        <thead><tr style="background:var(--bg-subtle,#f5f5f5);text-align:left">
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">Model</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">Token Type</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right">Input Tokens</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right">Output Tokens</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right">Cached</th>
+                            <th style="padding:10px 16px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:right">Cost</th>
+                        </tr></thead>
+                        <tbody id="oai-dspend-rows"><tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-muted)">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);padding:8px 4px" id="openai-dash-lastsync"></div>
         </div>
 
         <!-- ── Toast notification ── -->
@@ -3729,7 +3924,7 @@ function loadProviders() {
                         onclick="scSyncProvider(${p.id}, '${p.name.replace(/'/g,"\\'")}')" title="Quick Sync">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                     </button>
-                    <button class="icon-btn-ghost" onclick="renameProvider(${p.id}, '${p.name.replace(/'/g,"\\'")}');" title="Rename">
+                    <button class="icon-btn-ghost" onclick="editProviderFull(${p.id});" title="Edit">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
                     <button class="icon-btn-ghost" onclick="deleteProvider(${p.id}, '${p.name}');" title="Delete" style="color:var(--danger)">
@@ -4187,6 +4382,8 @@ function showProviderModal(id) {
     document.getElementById('awsSecret').value = '';
     document.getElementById('awsRoleArn').value = '';
     document.getElementById('awsRegion').value = 'us-east-1';
+    document.getElementById('awsCurBucket').value = '';
+    document.getElementById('awsCurReportName').value = '';
     document.getElementById('gcpDataset').value = '';
     document.getElementById('gcpTable').value = '';
     document.getElementById('gcpSaJson').value = '';
@@ -4264,10 +4461,15 @@ function saveProvider() {
         };
     }
 
+    const payload = { provider_type: type, name, provider_id: pid, credentials };
+    if (type === 'aws') {
+        payload.cur_bucket      = (document.getElementById('awsCurBucket')?.value || '').trim();
+        payload.cur_report_name = (document.getElementById('awsCurReportName')?.value || '').trim();
+    }
     fetch('/api/cloud-providers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider_type: type, name, provider_id: pid, credentials }),
+        body: JSON.stringify(payload),
     }).then(r => r.json()).then(d => {
         if (d.error) { alert('Error: ' + d.error); return; }
         hideProviderModal();
@@ -4372,6 +4574,79 @@ function saveProviderName() {
         if (d.error) { alert('Error: ' + d.error); return; }
         document.getElementById('renameProviderModal').style.display = 'none';
         loadProviders();
+    });
+}
+
+function editProviderFull(id) {
+    fetch(`/api/cloud-providers/${id}`)
+        .then(r => r.json())
+        .then(p => {
+            if (p.error) { alert(p.error); return; }
+            // Only AWS supports CUR edit for now — show a targeted modal
+            const isAws = p.provider_type === 'aws';
+            const cur = isAws ? `
+                <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+                    <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:8px">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:4px"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                        CUR (Cost & Usage Report)
+                    </div>
+                    <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">S3 Bucket</label>
+                    <input id="epCurBucket" class="filter-input" style="width:100%;margin-bottom:8px" placeholder="e.g. finops-cur-905418007892" value="${p.cur_bucket || ''}">
+                    <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Report Name</label>
+                    <input id="epCurReportName" class="filter-input" style="width:100%;margin-bottom:8px" placeholder="e.g. finops-daily" value="${p.cur_report_name || ''}">
+                    <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">S3 Prefix <span style="font-weight:400;font-size:10px">(folder before report name, default: cur)</span></label>
+                    <input id="epCurPrefix" class="filter-input" style="width:100%" placeholder="e.g. cost-usage-report" value="${p.cur_report_prefix || ''}">
+                </div>` : '';
+
+            const html = `<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center" id="epOverlay">
+                <div style="background:var(--card-bg);border-radius:12px;padding:24px;width:440px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                        <span style="font-size:15px;font-weight:700">Edit ${p.name}</span>
+                        <button onclick="document.getElementById('epOverlay').remove()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-muted)">×</button>
+                    </div>
+                    <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Name</label>
+                    <input id="epName" class="filter-input" style="width:100%;margin-bottom:12px" value="${p.name}">
+                    ${isAws ? `
+                    <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Region</label>
+                    <input id="epRegion" class="filter-input" style="width:100%;margin-bottom:8px" placeholder="us-east-1" value="${p.region || 'us-east-1'}">
+                    <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Access Key ID</label>
+                    <input id="epKeyId" class="filter-input" style="width:100%;margin-bottom:8px" placeholder="AKIA… (leave blank to keep current)" value="">
+                    <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Secret Access Key</label>
+                    <input id="epSecret" type="password" class="filter-input" style="width:100%;margin-bottom:8px" placeholder="Leave blank to keep current" value="">
+                    ` : ''}
+                    ${cur}
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+                        <button class="btn btn-secondary" style="font-size:12px" onclick="document.getElementById('epOverlay').remove()">Cancel</button>
+                        <button class="btn btn-primary" style="font-size:12px;background:#10a37f;border-color:#10a37f" onclick="_saveEditProvider(${id},'${p.provider_type}')">Save</button>
+                    </div>
+                </div>
+            </div>`;
+            document.body.insertAdjacentHTML('beforeend', html);
+        });
+}
+
+function _saveEditProvider(id, type) {
+    const name = document.getElementById('epName')?.value.trim();
+    const body = { name };
+    if (type === 'aws') {
+        const keyId  = document.getElementById('epKeyId')?.value.trim();
+        const secret = document.getElementById('epSecret')?.value.trim();
+        const region = document.getElementById('epRegion')?.value.trim() || 'us-east-1';
+        if (keyId && secret) body.credentials = { access_key_id: keyId, secret_access_key: secret, region };
+        else if (keyId || secret) { alert('Provide both Access Key ID and Secret, or leave both blank.'); return; }
+        body.cur_bucket        = document.getElementById('epCurBucket')?.value.trim() || '';
+        body.cur_report_name   = document.getElementById('epCurReportName')?.value.trim() || '';
+        body.cur_report_prefix = document.getElementById('epCurPrefix')?.value.trim() || '';
+    }
+    fetch(`/api/cloud-providers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    }).then(r => r.json()).then(d => {
+        if (d.error) { alert('Error: ' + d.error); return; }
+        document.getElementById('epOverlay')?.remove();
+        loadProviders();
+        if (typeof _showToast === 'function') _showToast('Provider updated', true);
     });
 }
 
@@ -4918,6 +5193,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     badge.className = 'intg-badge ' + (on ? 'intg-badge-on' : 'intg-badge-off');
                 }
             });
+            // Show OpenAI sync button + dashboard if API key is configured
+            const oaiCfg = data.openai || {};
+            const oaiSyncBtn = document.getElementById('openai-sync-btn');
+            const oaiDashEl  = document.getElementById('openai-dashboard');
+            if (oaiCfg.api_key) {
+                if (oaiSyncBtn) oaiSyncBtn.style.display = '';
+                if (oaiDashEl) oaiDashEl.style.display = 'block';  // show immediately
+                // Keep OpenAI dashboard above Jira in DOM
+                const jiraDashEl = document.getElementById('jira-dashboard');
+                if (oaiDashEl && jiraDashEl && jiraDashEl.compareDocumentPosition(oaiDashEl) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                    jiraDashEl.parentNode.insertBefore(oaiDashEl, jiraDashEl);
+                }
+                loadOpenAISummary();
+            } else {
+                if (oaiSyncBtn) oaiSyncBtn.style.display = 'none';
+                if (oaiDashEl) oaiDashEl.style.display = 'none';
+            }
             // Show Jira dashboard whenever Jira URL is configured (enabled flag is for automation only)
             const jiraCfg = data.jira || {};
             const dash = document.getElementById('jira-dashboard');
@@ -4932,6 +5224,280 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }).catch(() => {});
     };
+
+    function _oaiBar(val, max, color) {
+        const w = max > 0 ? Math.max(4, Math.round((val / max) * 160)) : 4;
+        return `<div style="display:inline-block;width:${w}px;height:10px;background:${color};border-radius:3px;vertical-align:middle"></div>`;
+    }
+
+    // ── flatpickr range calendar ──────────────────────────────────────────────
+    var _oaiFp = null;
+    (function initOaiFlatpickr() {
+        const dispEl = document.getElementById('oai-range-display');
+        if (!dispEl || typeof flatpickr === 'undefined') return;
+        const toStr = d => { const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; };
+        const now = new Date();
+        const defFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+        const defTo   = now;
+
+        _oaiFp = flatpickr(dispEl, {
+            mode: 'range',
+            dateFormat: 'd-m-Y',
+            defaultDate: [defFrom, defTo],
+            showMonths: 2,
+            onChange: function(selectedDates) {
+                if (selectedDates.length === 2) {
+                    const fromEl = document.getElementById('oai-date-from');
+                    const toEl   = document.getElementById('oai-date-to');
+                    if (fromEl) fromEl.value = toStr(selectedDates[0]);
+                    if (toEl)   toEl.value   = toStr(selectedDates[1]);
+                    // Deactivate preset buttons, update label
+                    document.querySelectorAll('.oai-range-btn').forEach(b => {
+                        b.style.background  = 'var(--card-bg)';
+                        b.style.color       = 'var(--text)';
+                        b.style.borderColor = 'var(--border)';
+                        b.style.fontWeight  = '400';
+                    });
+                    const lbl = document.getElementById('oai-stat-month-label');
+                    if (lbl) lbl.textContent = 'Selected Period';
+                    loadOpenAIBreakdown();
+                }
+            }
+        });
+
+        // Set initial hidden values
+        const fromEl = document.getElementById('oai-date-from');
+        const toEl   = document.getElementById('oai-date-to');
+        if (fromEl) fromEl.value = toStr(defFrom);
+        if (toEl)   toEl.value   = toStr(defTo);
+    })();
+
+    window.oaiSetRange = function(preset) {
+        const now = new Date();
+        const toStr = d => { const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; };
+        const fromEl = document.getElementById('oai-date-from');
+        const toEl   = document.getElementById('oai-date-to');
+        if (!fromEl || !toEl) return;
+
+        let dFrom, dTo = now;
+        if (preset === 'this_month') {
+            dFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+        } else if (preset === 'last_month') {
+            dFrom = new Date(now.getFullYear(), now.getMonth()-1, 1);
+            dTo   = new Date(now.getFullYear(), now.getMonth(), 0);
+        } else if (preset === 'last_30') {
+            dFrom = new Date(now); dFrom.setDate(dFrom.getDate() - 30);
+        } else if (preset === 'last_90') {
+            dFrom = new Date(now); dFrom.setDate(dFrom.getDate() - 90);
+        } else if (preset === 'last_6m') {
+            dFrom = new Date(now); dFrom.setMonth(dFrom.getMonth() - 6);
+        } else if (preset === 'last_1y') {
+            dFrom = new Date(now); dFrom.setFullYear(dFrom.getFullYear() - 1);
+        }
+        if (dFrom) {
+            fromEl.value = toStr(dFrom);
+            toEl.value   = toStr(dTo);
+            // Sync flatpickr display
+            if (_oaiFp) _oaiFp.setDate([dFrom, dTo], false);
+        }
+        // Update tile label
+        const labelMap = { this_month: 'This Month', last_month: 'Last Month', last_30: 'Last 30 Days', last_90: 'Last 90 Days', last_6m: 'Last 6 Months', last_1y: 'Last 1 Year', custom: 'Selected Period' };
+        const lbl = document.getElementById('oai-stat-month-label');
+        if (lbl) lbl.textContent = labelMap[preset] || 'Selected Period';
+        // Update active preset button styling
+        document.querySelectorAll('.oai-range-btn').forEach(b => {
+            const isActive = b.id === 'oai-range-' + preset;
+            b.style.background  = isActive ? '#10a37f' : 'var(--card-bg)';
+            b.style.color       = isActive ? '#fff' : 'var(--text)';
+            b.style.borderColor = isActive ? '#10a37f' : 'var(--border)';
+            b.style.fontWeight  = isActive ? '600' : '400';
+        });
+        loadOpenAIBreakdown();
+    };
+
+    window.oaiDashTab = function(tab) {
+        ['daily','model','capability','key','spend'].forEach(t => {
+            const panel = document.getElementById('oai-dpanel-' + t);
+            const btn   = document.getElementById('oai-dtab-' + t);
+            if (panel) panel.style.display = t === tab ? '' : 'none';
+            if (btn) {
+                btn.style.borderBottomColor = t === tab ? '#10a37f' : 'transparent';
+                btn.style.color = t === tab ? '#10a37f' : 'var(--text-muted)';
+                btn.style.fontWeight = t === tab ? '600' : '400';
+            }
+        });
+    };
+
+    window.loadOpenAIBreakdown = function() {
+        const fromEl = document.getElementById('oai-date-from');
+        const toEl   = document.getElementById('oai-date-to');
+        const params = new URLSearchParams();
+        if (fromEl && fromEl.value) params.set('date_from', fromEl.value);
+        if (toEl   && toEl.value)   params.set('date_to',   toEl.value);
+        const url = '/api/integrations/openai/breakdown?' + params.toString();
+        // Show loading in all tab bodies
+        ['oai-ddaily-rows','oai-dmodel-rows','oai-dcap-rows','oai-dspend-rows'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-muted)">Loading…</td></tr>';
+        });
+        fetch(url).then(r => r.json()).then(bd => {
+            // Daily tab
+            const dailyTbody = document.getElementById('oai-ddaily-rows');
+            {
+                const rows = bd.daily || [];
+                // Always update stat tiles so they reflect the selected range (not stale from previous range)
+                const totalAll = rows.reduce((s, d) => s + d.cost, 0);
+                const statMonth = document.getElementById('oai-stat-month');
+                if (statMonth) statMonth.textContent = '$' + totalAll.toFixed(2);
+                const todayEl = document.getElementById('oai-stat-today');
+                const today = new Date().toISOString().slice(0,10);
+                const todayRow = rows.find(d => d.date === today);
+                if (todayEl) todayEl.textContent = '$' + (todayRow ? todayRow.cost.toFixed(4) : '0.0000');
+                const statRec = document.getElementById('oai-stat-records');
+                if (statRec) statRec.textContent = rows.length;
+                if (dailyTbody) {
+                    if (!rows.length) { dailyTbody.innerHTML = '<tr><td colspan="3" style="padding:24px;text-align:center;color:var(--text-muted)">No daily data yet — click Sync Usage</td></tr>'; }
+                    else {
+                        const maxD = Math.max(...rows.map(d => d.cost));
+                        dailyTbody.innerHTML = rows.slice().reverse().map(d => `<tr style="border-top:1px solid var(--border)">
+                            <td style="padding:10px 16px">${d.date}</td>
+                            <td style="padding:10px 16px;text-align:right;font-weight:600;color:#10a37f">$${d.cost.toFixed(4)}</td>
+                            <td style="padding:10px 16px">${_oaiBar(d.cost, maxD, '#10a37f')}</td>
+                        </tr>`).join('');
+                    }
+                }
+            }
+            // Model tab
+            const modelTbody = document.getElementById('oai-dmodel-rows');
+            if (modelTbody) {
+                const models = bd.by_model || [];
+                if (!models.length) { modelTbody.innerHTML = '<tr><td colspan="3" style="padding:24px;text-align:center;color:var(--text-muted)">No model data yet</td></tr>'; }
+                else {
+                    const totalM = models.reduce((s,m) => s+m.cost, 0);
+                    const topM = document.getElementById('oai-stat-topmodel');
+                    if (topM && models[0]) topM.textContent = models[0].name;
+                    modelTbody.innerHTML = models.map(m => `<tr style="border-top:1px solid var(--border)">
+                        <td style="padding:10px 16px">${m.name}</td>
+                        <td style="padding:10px 16px;text-align:right;font-weight:600;color:#10a37f">$${m.cost.toFixed(4)}</td>
+                        <td style="padding:10px 16px;text-align:right;color:var(--text-muted)">${totalM>0?(m.cost/totalM*100).toFixed(1)+'%':'—'}</td>
+                    </tr>`).join('');
+                }
+            }
+            // Capability tab
+            const capTbody = document.getElementById('oai-dcap-rows');
+            if (capTbody) {
+                const caps = bd.by_capability || [];
+                if (!caps.length) { capTbody.innerHTML = '<tr><td colspan="3" style="padding:24px;text-align:center;color:var(--text-muted)">No capability data yet</td></tr>'; }
+                else {
+                    const maxC = Math.max(...caps.map(c => c.cost));
+                    capTbody.innerHTML = caps.map(c => `<tr style="border-top:1px solid var(--border)">
+                        <td style="padding:10px 16px">${c.name}</td>
+                        <td style="padding:10px 16px;text-align:right;font-weight:600;color:#10a37f">$${c.cost.toFixed(4)}</td>
+                        <td style="padding:10px 16px">${_oaiBar(c.cost, maxC, '#6366f1')}</td>
+                    </tr>`).join('');
+                }
+            }
+            // Key tab
+            const keyTbody = document.getElementById('oai-dkey-rows');
+            if (keyTbody) {
+                const keys = bd.by_key || [];
+                if (!keys.length) { keyTbody.innerHTML = '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted)">No per-key data — requires Admin key with usage read access</td></tr>'; }
+                else {
+                    keyTbody.innerHTML = keys.map(k => {
+                        const shortId = (k.key_id||'').length > 20 ? k.key_id.slice(0,10)+'…'+k.key_id.slice(-8) : (k.key_id||'unknown');
+                        return `<tr style="border-top:1px solid var(--border)">
+                            <td style="padding:10px 16px;font-family:monospace;font-size:12px">${shortId}</td>
+                            <td style="padding:10px 16px;text-align:right">${(k.requests||0).toLocaleString()}</td>
+                            <td style="padding:10px 16px;text-align:right">${((k.tokens||0)/1000).toFixed(1)}K</td>
+                            <td style="padding:10px 16px;text-align:right;font-weight:600;color:#10a37f">$${(k.cost||0).toFixed(4)}</td>
+                        </tr>`;
+                    }).join('');
+                }
+            }
+            // Spend Categories tab
+            const spendTbody = document.getElementById('oai-dspend-rows');
+            if (spendTbody) {
+                const cats = bd.spend_categories || [];
+                if (!cats.length) { spendTbody.innerHTML = '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-muted)">No spend category data yet — click Sync Usage</td></tr>'; }
+                else {
+                    const rows = [];
+                    cats.forEach(m => {
+                        const hasTokens = m.input_tokens > 0 || m.output_tokens > 0;
+                        m.types.forEach((t, i) => {
+                            rows.push(`<tr style="border-top:1px solid var(--border);${i===0?'background:var(--bg-subtle,#f9f9f9)':''}">
+                                <td style="padding:8px 16px;font-weight:${i===0?'600':'400'};font-size:${i===0?'13':'12'}px">${i===0 ? m.model : ''}</td>
+                                <td style="padding:8px 16px;font-size:12px;color:var(--text-muted);text-transform:capitalize">${t.type}</td>
+                                <td style="padding:8px 16px;text-align:right;font-size:12px;color:var(--text-muted)">${i===0 && hasTokens ? ((m.input_tokens||0)/1e6).toFixed(3)+'M' : '—'}</td>
+                                <td style="padding:8px 16px;text-align:right;font-size:12px;color:var(--text-muted)">${i===0 && hasTokens ? ((m.output_tokens||0)/1e6).toFixed(3)+'M' : '—'}</td>
+                                <td style="padding:8px 16px;text-align:right;font-size:12px;color:var(--text-muted)">${i===0 && m.cached_tokens>0 ? ((m.cached_tokens||0)/1e6).toFixed(3)+'M' : '—'}</td>
+                                <td style="padding:8px 16px;text-align:right;font-weight:600;color:#10a37f">$${t.cost.toFixed(4)}</td>
+                            </tr>`);
+                        });
+                        // Total row for model
+                        rows.push(`<tr style="border-top:1px solid var(--border)">
+                            <td style="padding:6px 16px;font-size:11px;color:var(--text-muted)" colspan="5">Total — ${m.model}</td>
+                            <td style="padding:6px 16px;text-align:right;font-weight:700;color:#10a37f">$${m.total.toFixed(4)}</td>
+                        </tr>`);
+                    });
+                    spendTbody.innerHTML = rows.join('');
+                }
+            }
+        }).catch(() => {});
+    };
+
+    window.loadOpenAISummary = function() {
+        fetch('/api/integrations/openai/summary').then(r => r.json()).then(data => {
+            const summary = document.getElementById('openai-usage-summary');
+            const subtitle = document.getElementById('openai-dash-subtitle');
+            if (!data.records) {
+                if (summary) summary.style.display = 'none';
+                if (subtitle) subtitle.textContent = 'No usage data yet — click Sync Usage';
+                return;
+            }
+            if (summary) summary.style.display = 'block';
+            const total = document.getElementById('openai-total-cost');
+            if (total) total.textContent = '$' + (data.total_this_month || 0).toFixed(4);
+            const statMonth = document.getElementById('oai-stat-month');
+            if (statMonth) statMonth.textContent = '$' + (data.total_this_month || 0).toFixed(2);
+            const statRec = document.getElementById('oai-stat-records');
+            if (statRec) statRec.textContent = data.records || 0;
+            const lastSyncEl = document.getElementById('openai-last-sync');
+            if (lastSyncEl) lastSyncEl.textContent = data.last_sync ? 'Last synced: ' + new Date(data.last_sync).toLocaleString() : '';
+            const dashLastSync = document.getElementById('openai-dash-lastsync');
+            if (dashLastSync) dashLastSync.textContent = data.last_sync ? 'Last synced: ' + new Date(data.last_sync).toLocaleString() : '';
+            if (subtitle && data.top_models && data.top_models.length)
+                subtitle.textContent = 'Top model: ' + data.top_models[0].name + ' · $' + data.top_models[0].cost.toFixed(2) + ' this month';
+            loadOpenAIBreakdown();
+        }).catch(() => {});
+    };
+
+    window.syncOpenAIUsage = function(days) {
+        days = days || 30;
+        const allSyncBtns = document.querySelectorAll('[onclick^="syncOpenAIUsage"]');
+        allSyncBtns.forEach(b => { b.disabled = true; });
+        const mainBtn = document.querySelector('[onclick="syncOpenAIUsage(30)"]');
+        if (mainBtn) mainBtn.innerHTML = '&#8635; Syncing…';
+        fetch('/api/integrations/openai/sync?days=' + days, { method: 'POST' })
+            .then(r => r.json()).then(data => {
+                if (data.ok) {
+                    _showToast('✓ ' + data.message, true);
+                    loadOpenAISummary();
+                } else {
+                    _showToast('✗ ' + (data.error || 'Sync failed'), false);
+                }
+            }).catch(e => _showToast('✗ Sync failed: ' + e.message, false))
+            .finally(() => {
+                allSyncBtns.forEach(b => { b.disabled = false; });
+                if (mainBtn) mainBtn.innerHTML = '&#8635; Sync Usage';
+            });
+    };
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        const dd = document.getElementById('oai-history-dropdown');
+        const menu = document.getElementById('oai-history-menu');
+        if (dd && menu && !dd.contains(e.target)) menu.style.display = 'none';
+    });
 
     window.loadJiraUsers = function() {
         const tbody = document.getElementById('jira-users-tbody');

@@ -3814,6 +3814,14 @@ def api_cloud_providers_create():
         return jsonify({"error": "name and provider_id are required"}), 400
 
     row_id = upsert_cloud_provider(provider_type, name, provider_id, credentials, enabled, tenant_id=current_tenant_id())
+    cur_bucket      = (body.get("cur_bucket") or "").strip()
+    cur_report_name = (body.get("cur_report_name") or "").strip()
+    if cur_bucket and row_id:
+        conn = get_db()
+        conn.execute("UPDATE cloud_providers SET cur_bucket=?, cur_report_name=? WHERE id=?",
+                     (cur_bucket, cur_report_name, row_id))
+        conn.commit()
+        conn.close()
     return jsonify({"id": row_id, "message": "Cloud provider saved"})
 
 
@@ -3823,8 +3831,17 @@ def api_cloud_provider_get(pk):
     p = get_cloud_provider(pk)
     if not p:
         return jsonify({"error": "Not found"}), 404
-    # Never expose raw credentials in API response
+    creds = p.get("credentials_json") or {}
+    if isinstance(creds, str):
+        try: creds = json.loads(creds)
+        except Exception: creds = {}
     p.pop("credentials_json", None)
+    p["region"]          = creds.get("region", "us-east-1")
+    p["role_arn"]        = creds.get("role_arn", "")
+    p["access_key_id"]   = creds.get("access_key_id", "")
+    p["cur_bucket"]        = p.get("cur_bucket") or ""
+    p["cur_report_name"]   = p.get("cur_report_name") or ""
+    p["cur_report_prefix"] = p.get("cur_report_prefix") or ""
     return jsonify(p)
 
 
@@ -3835,12 +3852,14 @@ def api_cloud_provider_update(pk):
     name = body.get("name", "").strip()
     credentials = body.get("credentials")
     enabled = body.get("enabled")
+    cur_bucket = body.get("cur_bucket")
+    cur_report_name = body.get("cur_report_name")
+    cur_report_prefix = body.get("cur_report_prefix")
 
     existing = get_cloud_provider(pk)
     if not existing:
         return jsonify({"error": "Not found"}), 404
 
-    import json as _json
     creds_to_save = credentials if credentials is not None else existing.get("credentials_json", {})
     enabled_val = bool(enabled) if enabled is not None else bool(existing.get("enabled", True))
     name_val = name or existing.get("name", "")
@@ -3850,6 +3869,15 @@ def api_cloud_provider_update(pk):
         existing["provider_id"], creds_to_save, enabled_val,
         tenant_id=current_tenant_id()
     )
+    # Update CUR fields if provided
+    if cur_bucket is not None or cur_report_name is not None or cur_report_prefix is not None:
+        conn = get_db()
+        conn.execute(
+            "UPDATE cloud_providers SET cur_bucket=?, cur_report_name=?, cur_report_prefix=? WHERE id=?",
+            (cur_bucket or "", cur_report_name or "", cur_report_prefix or "", pk)
+        )
+        conn.commit()
+        conn.close()
     return jsonify({"message": "Updated"})
 
 
@@ -4347,6 +4375,79 @@ def _schedule_next_cur_import():
         print(f"[CUR Auto-Import] Disabled (could not start timer thread): {e}")
 
 
+# ─── OpenAI Daily Auto-Sync Scheduler ────────────────────────────────────────
+# Runs every 24h and fetches the last 2 days of OpenAI costs for every tenant
+# that has an OpenAI API key configured, so daily costs appear without manual sync.
+
+_openai_auto_sync_timer = None
+OPENAI_AUTO_SYNC_INTERVAL_HOURS = int(os.getenv("OPENAI_AUTO_SYNC_INTERVAL_HOURS", 6))
+
+openai_auto_sync_state = {
+    "enabled": True,
+    "running": False,
+    "last_run": None,
+    "next_run": None,
+}
+
+
+def _run_openai_auto_sync():
+    """Fetch the last 2 days of OpenAI costs for all configured tenants."""
+    global openai_auto_sync_state
+
+    if openai_auto_sync_state["running"]:
+        print("[OpenAI Auto-Sync] Skipped — already running.")
+        _schedule_next_openai_auto_sync()
+        return
+
+    openai_auto_sync_state["running"] = True
+    openai_auto_sync_state["last_run"] = datetime.utcnow().isoformat()
+    print(f"[OpenAI Auto-Sync] Starting at {openai_auto_sync_state['last_run']}")
+
+    try:
+        conn = get_db()
+        tenants = [dict(r) for r in conn.execute("SELECT id FROM tenants").fetchall()]
+        conn.close()
+        for t in tenants:
+            tid = t["id"]
+            try:
+                result = _fetch_openai_costs(tid, days=2)
+                if result.get("inserted", 0) > 0:
+                    print(f"[OpenAI Auto-Sync] tenant={tid}: {result['inserted']} records inserted")
+            except Exception as e:
+                # Silently skip tenants without OpenAI configured
+                if "not configured" not in str(e).lower():
+                    print(f"[OpenAI Auto-Sync] tenant={tid}: {e}")
+    except Exception as e:
+        print(f"[OpenAI Auto-Sync] Fatal: {e}")
+    finally:
+        openai_auto_sync_state["running"] = False
+        _schedule_next_openai_auto_sync()
+
+
+def _schedule_next_openai_auto_sync():
+    """Schedule the next OpenAI auto-sync run."""
+    global _openai_auto_sync_timer
+    if _openai_auto_sync_timer:
+        _openai_auto_sync_timer.cancel()
+
+    if not openai_auto_sync_state["enabled"]:
+        openai_auto_sync_state["next_run"] = None
+        return
+
+    interval_secs = OPENAI_AUTO_SYNC_INTERVAL_HOURS * 3600
+    next_time = datetime.utcnow() + timedelta(seconds=interval_secs)
+    openai_auto_sync_state["next_run"] = next_time.isoformat()
+
+    try:
+        _openai_auto_sync_timer = threading.Timer(interval_secs, _run_openai_auto_sync)
+        _openai_auto_sync_timer.daemon = True
+        _openai_auto_sync_timer.start()
+        print(f"[OpenAI Auto-Sync] Next run scheduled at {openai_auto_sync_state['next_run']} ({OPENAI_AUTO_SYNC_INTERVAL_HOURS}h)")
+    except RuntimeError as e:
+        openai_auto_sync_state["enabled"] = False
+        print(f"[OpenAI Auto-Sync] Disabled (could not start timer): {e}")
+
+
 # ─── Jinja template filters ───────────────────────────────────────────────────
 
 @app.template_filter('relative_time')
@@ -4672,10 +4773,22 @@ def api_test_integration(tool):
         if not key:
             return jsonify({"error": "Missing OpenAI API key"}), 400
         try:
-            r = _req.get("https://api.openai.com/v1/models",
-                         headers={"Authorization": f"Bearer {key}"}, timeout=8)
+            headers = {"Authorization": f"Bearer {key}"}
+            # Try regular API key endpoint first
+            r = _req.get("https://api.openai.com/v1/models", headers=headers, timeout=8)
             if r.status_code == 200:
                 return jsonify({"ok": True, "message": "OpenAI API key is valid"})
+            # Admin keys return 403 on /v1/models — try org costs endpoint instead
+            if r.status_code == 403:
+                import time as _time
+                ts_end = int(_time.time())
+                ts_start = ts_end - 86400
+                r2 = _req.get(
+                    f"https://api.openai.com/v1/organization/costs?start_time={ts_start}&end_time={ts_end}&limit=1",
+                    headers=headers, timeout=8)
+                if r2.status_code in (200, 400):
+                    return jsonify({"ok": True, "message": "OpenAI Admin key is valid"})
+                return jsonify({"error": f"OpenAI returned HTTP {r2.status_code}"}), 502
             return jsonify({"error": f"OpenAI returned HTTP {r.status_code}"}), 502
         except Exception as e:
             return jsonify({"error": str(e)}), 502
@@ -4687,6 +4800,359 @@ def api_test_integration(tool):
         return jsonify({"ok": True, "message": "Cursor API key saved (usage sync coming soon)"})
 
     return jsonify({"error": "Unknown integration"}), 404
+
+
+# ── OpenAI Usage Sync ────────────────────────────────────────────────────────
+
+# Cost per 1k tokens (input, output) in USD — used when org/costs API is unavailable
+_OPENAI_PRICING = {
+    "gpt-4o":              {"in": 0.005,    "out": 0.015},
+    "gpt-4o-mini":         {"in": 0.00015,  "out": 0.0006},
+    "gpt-4-turbo":         {"in": 0.01,     "out": 0.03},
+    "gpt-4":               {"in": 0.03,     "out": 0.06},
+    "gpt-3.5-turbo":       {"in": 0.0005,   "out": 0.0015},
+    "o1":                  {"in": 0.015,    "out": 0.06},
+    "o1-mini":             {"in": 0.003,    "out": 0.012},
+    "o3-mini":             {"in": 0.0011,   "out": 0.0044},
+    "default":             {"in": 0.002,    "out": 0.002},
+}
+
+
+def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
+    """Fetch OpenAI usage costs and store in cost_data.
+    Tries /v1/organization/costs (org owner) first, falls back to
+    /v1/usage?date= per day (works for any API key).
+    """
+    import requests as _req, calendar as _cal
+    from datetime import date as _date, timedelta as _td
+
+    s = get_integration_settings()
+    api_key = s.get("openai_api_key", "")
+    if not api_key:
+        raise ValueError("OpenAI API key not configured")
+
+    headers = {"Authorization": f"Bearer {api_key}"}
+    now = datetime.utcnow()
+    date_to = now.date()
+    date_from = date_to - timedelta(days=days)
+    sub_id = s.get("openai_org_id") or "openai"
+
+    records = []
+
+    # ── Method 1: /v1/organization/costs (requires org owner) ────────────────
+    # Chunk into 30-day windows to avoid API timeouts on large date ranges
+    CHUNK_DAYS = 30
+    total_buckets = 0
+    chunk_errors = 0
+    cur_chunk_end = date_to
+    while cur_chunk_end >= date_from:
+        # Move start back by CHUNK_DAYS-1 so chunks don't overlap on boundary dates
+        cur_chunk_start = max(cur_chunk_end - timedelta(days=CHUNK_DAYS - 1), date_from)
+        chunk_start_ts = int(_cal.timegm(cur_chunk_start.timetuple()))
+        chunk_end_ts   = int(_cal.timegm(cur_chunk_end.timetuple())) + 86400
+        try:
+            costs_url = (
+                f"https://api.openai.com/v1/organization/costs"
+                f"?start_time={chunk_start_ts}&end_time={chunk_end_ts}"
+                f"&bucket_width=1d&limit=31&group_by[]=line_item"
+            )
+            r = _req.get(costs_url, headers=headers, timeout=20)
+            if r.status_code == 200:
+                payload = r.json()
+                buckets = payload.get("data", [])
+                total_buckets += len(buckets)
+                for bucket in buckets:
+                    bucket_date = datetime.utcfromtimestamp(bucket["start_time"]).strftime("%Y-%m-%d")
+                    for result in bucket.get("results", []):
+                        cost_val = float(result.get("amount", {}).get("value", 0) or 0)
+                        if cost_val <= 0:
+                            continue
+                        line_item = result.get("line_item") or "API Usage"
+                        records.append((bucket_date, None, "OpenAI", "AI API", line_item,
+                                        "Token Usage", line_item, cost_val, "USD",
+                                        sub_id, None, "openai", tenant_id))
+            else:
+                chunk_errors += 1
+                print(f"[OpenAI sync] chunk {cur_chunk_start}→{cur_chunk_end} status={r.status_code}")
+        except Exception as ce:
+            chunk_errors += 1
+            print(f"[OpenAI sync] chunk {cur_chunk_start}→{cur_chunk_end} error: {ce}")
+        if cur_chunk_start <= date_from:
+            break
+        cur_chunk_end = cur_chunk_start - timedelta(days=1)  # step back 1 day, no overlap
+    print(f"[OpenAI sync] costs API: {total_buckets} buckets, {len(records)} records, {chunk_errors} chunk errors, sample: {list({r[4] for r in records})[:3]}")
+
+    # ── Method 2: /v1/usage?date= per day (works for any user key) ───────────
+    if not records:
+        cur = date_from
+        while cur <= date_to:
+            try:
+                r = _req.get(
+                    "https://api.openai.com/v1/usage",
+                    headers=headers,
+                    params={"date": str(cur)},
+                    timeout=10
+                )
+                if r.status_code == 401:
+                    raise ValueError("Invalid OpenAI API key. Please reconfigure in Integrations.")
+                if r.status_code != 200:
+                    cur += _td(days=1)
+                    continue
+                d = r.json()
+                day_str = str(cur)
+                # Aggregate cost from completions
+                model_costs = {}
+                for item in d.get("data", []):
+                    model = item.get("snapshot_id") or "gpt-unknown"
+                    in_tok  = item.get("n_context_tokens_total", 0) or 0
+                    out_tok = item.get("n_generated_tokens_total", 0) or 0
+                    # Use rough pricing per 1k tokens
+                    price = _OPENAI_PRICING.get(model) or _OPENAI_PRICING.get(
+                        next((k for k in _OPENAI_PRICING if model.startswith(k)), "default"))
+                    if not price:
+                        price = _OPENAI_PRICING["default"]
+                    cost = round((in_tok * price["in"] + out_tok * price["out"]) / 1000, 6)
+                    model_costs[model] = model_costs.get(model, 0) + cost
+                # Also add DALL-E, Whisper, TTS if present
+                for item in d.get("dalle_api_data", []):
+                    model_costs["DALL-E"] = model_costs.get("DALL-E", 0) + (item.get("num_images", 0) * 0.04)
+                for item in d.get("whisper_api_data", []):
+                    model_costs["Whisper"] = model_costs.get("Whisper", 0) + round((item.get("num_seconds", 0) / 60) * 0.006, 6)
+                for item in d.get("tts_api_data", []):
+                    model_costs["TTS"] = model_costs.get("TTS", 0) + round((item.get("num_characters", 0) / 1000) * 0.015, 6)
+                for model, cost in model_costs.items():
+                    if cost <= 0:
+                        continue
+                    records.append((day_str, None, "OpenAI", "AI API", model,
+                                    "Token Usage", model, cost, "USD",
+                                    sub_id, None, "openai", tenant_id))
+            except ValueError:
+                raise
+            except Exception:
+                pass
+            cur += _td(days=1)
+
+    if not records:
+        return {"inserted": 0, "date_from": str(date_from), "date_to": str(date_to)}
+
+    conn = get_db()
+    # Remove old OpenAI records for this date range to avoid duplicates
+    conn.execute(
+        "DELETE FROM cost_data WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ?",
+        (tenant_id, str(date_from), str(date_to))
+    )
+    conn.executemany("""
+        INSERT INTO cost_data
+          (date,resource_group,service_name,resource_type,resource_name,
+           meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, records)
+    conn.commit()
+    conn.close()
+    return {"inserted": len(records), "date_from": str(date_from), "date_to": str(date_to)}
+
+
+@app.route("/api/integrations/openai/sync", methods=["POST"])
+@login_required
+def api_openai_sync():
+    tid = current_tenant_id()
+    try:
+        days = int(request.args.get("days", 30))
+        days = min(max(days, 1), 365)  # clamp 1–365
+        result = _fetch_openai_costs(tid, days=days)
+        return jsonify({"ok": True, "message": f"Synced {result['inserted']} records ({result['date_from']} → {result['date_to']})", **result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/integrations/openai/summary", methods=["GET"])
+@login_required
+def api_openai_summary():
+    """Return OpenAI cost totals for current month and last sync info."""
+    tid = current_tenant_id()
+    now = datetime.utcnow()
+    month_start = now.replace(day=1).strftime("%Y-%m-%d")
+    today = now.strftime("%Y-%m-%d")
+    conn = get_db()
+    row = conn.execute(
+        "SELECT COALESCE(SUM(cost),0) as total, MAX(created_at) as last_sync, COUNT(*) as records "
+        "FROM cost_data WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ?",
+        (tid, month_start, today)
+    ).fetchone()
+    models = conn.execute(
+        "SELECT resource_name, COALESCE(SUM(cost),0) as total FROM cost_data "
+        "WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ? "
+        "GROUP BY resource_name ORDER BY total DESC LIMIT 5",
+        (tid, month_start, today)
+    ).fetchall()
+    conn.close()
+    return jsonify({
+        "total_this_month": round(row["total"], 4),
+        "last_sync": row["last_sync"],
+        "records": row["records"],
+        "top_models": [{"name": m["resource_name"], "cost": round(m["total"], 4)} for m in models]
+    })
+
+
+def _openai_capability(name):
+    m = (name or "").lower()
+    if any(x in m for x in ["gpt-", "o1", "o3", "o4", "chatgpt", "model_requests", "api usage"]):
+        return "Chat Completions"
+    if "embedding" in m:
+        return "Embeddings"
+    if "whisper" in m or "transcription" in m or "audio_transcription" in m:
+        return "Audio Transcription"
+    if "tts" in m or "speech" in m or "audio_speech" in m:
+        return "Audio Speech"
+    if "dall" in m or "image" in m or "image_generation" in m:
+        return "Image Generation"
+    if "fine" in m or "ft-" in m:
+        return "Fine-tuning"
+    return "Other"
+
+
+@app.route("/api/integrations/openai/breakdown", methods=["GET"])
+@login_required
+def api_openai_breakdown():
+    """Return daily costs, per-model, per-capability, and per-key breakdown."""
+    import requests as _req, calendar as _cal, json as _json
+    tid = current_tenant_id()
+    now = datetime.utcnow()
+    today = now.strftime("%Y-%m-%d")
+
+    # Accept custom date range from query params, default to this month / last 30d
+    date_from = request.args.get("date_from") or (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    date_to   = request.args.get("date_to")   or today
+
+    conn = get_db()
+
+    # Daily costs for the selected range
+    daily_rows = conn.execute(
+        "SELECT date, COALESCE(SUM(cost),0) as total FROM cost_data "
+        "WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ? "
+        "GROUP BY date ORDER BY date",
+        (tid, date_from, date_to)
+    ).fetchall()
+
+    # By model for the selected range
+    model_rows = conn.execute(
+        "SELECT resource_name, COALESCE(SUM(cost),0) as total FROM cost_data "
+        "WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ? "
+        "GROUP BY resource_name ORDER BY total DESC LIMIT 50",
+        (tid, date_from, date_to)
+    ).fetchall()
+    conn.close()
+
+    # Aggregate by base model name (strip ", token_type" suffix)
+    model_totals = {}
+    for r in model_rows:
+        name = r["resource_name"] or "API Usage"
+        base = name.split(", ")[0] if ", " in name else name
+        model_totals[base] = model_totals.get(base, 0) + r["total"]
+
+    # Roll up capability
+    cap_totals = {}
+    for base, total in model_totals.items():
+        cap = _openai_capability(base)
+        cap_totals[cap] = cap_totals.get(cap, 0) + total
+
+    # Spend categories: parse "model, token_type" line items from stored records
+    spend_cat = {}
+    for r in model_rows:
+        name = r["resource_name"] or "API Usage"
+        if ", " in name:
+            model_name, token_type = name.rsplit(", ", 1)
+        else:
+            model_name, token_type = name, "total"
+        if model_name not in spend_cat:
+            spend_cat[model_name] = {}
+        spend_cat[model_name][token_type] = spend_cat[model_name].get(token_type, 0) + r["total"]
+
+    # Live API calls for per-key + token counts (both use same Admin key)
+    by_key = []
+    model_tokens = {}  # model → {input, output, cached, requests}
+    s = get_integration_settings()
+    api_key = s.get("openai_api_key") or ""
+    if api_key:
+        headers  = {"Authorization": f"Bearer {api_key}"}
+        start_ts = int(_cal.timegm(now.replace(day=1).timetuple()))
+        end_ts   = int(_cal.timegm(now.timetuple())) + 3600
+
+        # Per-key usage
+        try:
+            r = _req.get(
+                "https://api.openai.com/v1/organization/usage/completions",
+                headers=headers,
+                params={"start_time": start_ts, "end_time": end_ts,
+                        "bucket_width": "1d", "limit": 180,
+                        "group_by[]": "api_key_id"},
+                timeout=15
+            )
+            if r.status_code == 200:
+                key_totals = {}
+                for bucket in r.json().get("data", []):
+                    for res in bucket.get("results", []):
+                        kid     = res.get("api_key_id") or "unknown"
+                        in_tok  = res.get("input_tokens", 0) or 0
+                        out_tok = res.get("output_tokens", 0) or 0
+                        price   = _OPENAI_PRICING.get("default")
+                        cost    = round((in_tok * price["in"] + out_tok * price["out"]) / 1000, 6)
+                        reqs    = res.get("num_model_requests", 0) or 0
+                        if kid not in key_totals:
+                            key_totals[kid] = {"key_id": kid, "requests": 0, "tokens": 0, "cost": 0}
+                        key_totals[kid]["requests"] += reqs
+                        key_totals[kid]["tokens"]   += in_tok + out_tok
+                        key_totals[kid]["cost"]     += cost
+                by_key = sorted(key_totals.values(), key=lambda x: -x["cost"])
+        except Exception:
+            pass
+
+        # Per-model token counts
+        try:
+            r2 = _req.get(
+                "https://api.openai.com/v1/organization/usage/completions",
+                headers=headers,
+                params={"start_time": start_ts, "end_time": end_ts,
+                        "bucket_width": "1d", "limit": 180,
+                        "group_by[]": "model"},
+                timeout=15
+            )
+            if r2.status_code == 200:
+                for bucket in r2.json().get("data", []):
+                    for res in bucket.get("results", []):
+                        m = res.get("model") or "unknown"
+                        if m not in model_tokens:
+                            model_tokens[m] = {"input": 0, "output": 0, "cached": 0, "requests": 0}
+                        model_tokens[m]["input"]    += res.get("input_tokens", 0) or 0
+                        model_tokens[m]["output"]   += res.get("output_tokens", 0) or 0
+                        model_tokens[m]["cached"]   += ((res.get("input_tokens_details") or {}).get("cached_tokens", 0) or 0)
+                        model_tokens[m]["requests"] += res.get("num_model_requests", 0) or 0
+        except Exception:
+            pass
+
+    # Build spend categories list enriched with token counts
+    spend_cat_list = []
+    for model_name, types in sorted(spend_cat.items(), key=lambda x: -sum(x[1].values())):
+        total = sum(types.values())
+        tok = model_tokens.get(model_name, {})
+        spend_cat_list.append({
+            "model":    model_name,
+            "total":    round(total, 4),
+            "types":    [{"type": t, "cost": round(c, 6)} for t, c in sorted(types.items(), key=lambda x: -x[1])],
+            "input_tokens":  tok.get("input", 0),
+            "output_tokens": tok.get("output", 0),
+            "cached_tokens": tok.get("cached", 0),
+            "requests":      tok.get("requests", 0),
+        })
+
+    return jsonify({
+        "daily":            [{"date": r["date"], "cost": round(r["total"], 4)} for r in daily_rows],
+        "by_model":         [{"name": m, "cost": round(c, 4)} for m, c in sorted(model_totals.items(), key=lambda x: -x[1])],
+        "by_capability":    [{"name": k, "cost": round(v, 4)} for k, v in sorted(cap_totals.items(), key=lambda x: -x[1])],
+        "by_key":           [{"key_id": k["key_id"], "requests": k["requests"],
+                              "tokens": k["tokens"], "cost": round(k["cost"], 4)} for k in by_key],
+        "spend_categories": spend_cat_list,
+    })
 
 
 @app.route("/api/integrations/jira/users", methods=["GET"])
@@ -5115,6 +5581,8 @@ if __name__ == "__main__":
         print("[Email Report] Scheduler disabled by EMAIL_SCHEDULER_ENABLED=false")
     if cur_import_state["enabled"]:
         _schedule_next_cur_import()
+    if openai_auto_sync_state["enabled"]:
+        _schedule_next_openai_auto_sync()
     
     # One-shot Resource Graph sync at startup (uses AZURE_* client credentials)
     _cfg_runner = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config_sync_runner.py")
