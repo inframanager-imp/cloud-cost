@@ -282,6 +282,118 @@ def init_db():
         except Exception:
             cursor.execute(_ddl)
 
+    def _table_exists(tbl):
+        r = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,)).fetchone()
+        return r is not None
+
+    # ── Make integration_settings per-tenant ────────────────────────────────
+    # The original table used a single global row (id=1, CHECK(id=1)).
+    # Recreate it with a tenant_id column so each tenant has its own
+    # Jira/OpenAI/Bitbucket/Cursor configuration.
+    cursor.execute("PRAGMA table_info(integration_settings)")
+    _is_cols = [r[1] for r in cursor.fetchall()]
+    if "tenant_id" not in _is_cols:
+        cursor.execute("ALTER TABLE integration_settings RENAME TO integration_settings_old")
+        cursor.execute("""
+            CREATE TABLE integration_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id INTEGER UNIQUE NOT NULL DEFAULT 1,
+                jira_url TEXT DEFAULT '',
+                jira_email TEXT DEFAULT '',
+                jira_token TEXT DEFAULT '',
+                jira_project TEXT DEFAULT '',
+                jira_issue_type TEXT DEFAULT 'Task',
+                jira_enabled INTEGER DEFAULT 0,
+                jira_admin_token TEXT DEFAULT '',
+                jira_mode TEXT DEFAULT 'cloud',
+                jira_server_user TEXT DEFAULT '',
+                jira_server_password TEXT DEFAULT '',
+                bitbucket_workspace TEXT DEFAULT '',
+                bitbucket_repo TEXT DEFAULT '',
+                bitbucket_token TEXT DEFAULT '',
+                bitbucket_enabled INTEGER DEFAULT 0,
+                cursor_api_key TEXT DEFAULT '',
+                cursor_enabled INTEGER DEFAULT 0,
+                openai_api_key TEXT DEFAULT '',
+                openai_org_id TEXT DEFAULT '',
+                openai_enabled INTEGER DEFAULT 0,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO integration_settings (
+                tenant_id, jira_url, jira_email, jira_token, jira_project, jira_issue_type,
+                jira_enabled, jira_admin_token, jira_mode, jira_server_user, jira_server_password,
+                bitbucket_workspace, bitbucket_repo, bitbucket_token, bitbucket_enabled,
+                cursor_api_key, cursor_enabled, openai_api_key, openai_org_id, openai_enabled, updated_at
+            )
+            SELECT 1, jira_url, jira_email, jira_token, jira_project, jira_issue_type,
+                   jira_enabled, jira_admin_token, jira_mode, jira_server_user, jira_server_password,
+                   bitbucket_workspace, bitbucket_repo, bitbucket_token, bitbucket_enabled,
+                   cursor_api_key, cursor_enabled, openai_api_key, openai_org_id, openai_enabled, updated_at
+            FROM integration_settings_old
+        """)
+        cursor.execute("DROP TABLE integration_settings_old")
+
+    # ── Make email_settings per-tenant ──────────────────────────────────────
+    # The original table used a single global row (id=1, CHECK(id=1)).
+    # Recreate it with a tenant_id column so each tenant has its own
+    # SMTP configuration, recipients, and report preferences.
+    cursor.execute("PRAGMA table_info(email_settings)")
+    _es_cols = [r[1] for r in cursor.fetchall()]
+    if "tenant_id" not in _es_cols:
+        cursor.execute("ALTER TABLE email_settings RENAME TO email_settings_old")
+        cursor.execute("""
+            CREATE TABLE email_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id INTEGER UNIQUE NOT NULL DEFAULT 1,
+                smtp_host TEXT DEFAULT '',
+                smtp_port INTEGER DEFAULT 587,
+                smtp_user TEXT DEFAULT '',
+                smtp_password TEXT DEFAULT '',
+                smtp_from TEXT DEFAULT '',
+                smtp_use_tls INTEGER DEFAULT 1,
+                recipients TEXT DEFAULT '',
+                schedule TEXT DEFAULT 'weekly',
+                schedule_day INTEGER DEFAULT 1,
+                schedule_hour INTEGER DEFAULT 8,
+                report_date_range TEXT DEFAULT 'this_month',
+                report_date_from TEXT DEFAULT '',
+                report_date_to TEXT DEFAULT '',
+                report_cloud_provider TEXT DEFAULT '',
+                report_sections TEXT DEFAULT '["summary","subscriptions","top_services","top_rgs","trend"]',
+                enabled INTEGER DEFAULT 0,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO email_settings (
+                tenant_id, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from, smtp_use_tls,
+                recipients, schedule, schedule_day, schedule_hour, report_date_range, report_date_from,
+                report_date_to, report_cloud_provider, report_sections, enabled, updated_at
+            )
+            SELECT 1, smtp_host, smtp_port, smtp_user, smtp_password, smtp_from, smtp_use_tls,
+                   recipients, schedule, schedule_day, schedule_hour, report_date_range, report_date_from,
+                   report_date_to, report_cloud_provider, report_sections, enabled, updated_at
+            FROM email_settings_old
+        """)
+        cursor.execute("DROP TABLE email_settings_old")
+
+    # ── Migration: tenant_id on custom_reports and email_log ────────────────
+    if _table_exists("custom_reports"):
+        try:
+            cursor.execute("SELECT tenant_id FROM custom_reports LIMIT 1")
+        except Exception:
+            cursor.execute("ALTER TABLE custom_reports ADD COLUMN tenant_id INTEGER DEFAULT 1")
+            print("[DB] Migrated custom_reports: added tenant_id column")
+
+    if _table_exists("email_log"):
+        try:
+            cursor.execute("SELECT tenant_id FROM email_log LIMIT 1")
+        except Exception:
+            cursor.execute("ALTER TABLE email_log ADD COLUMN tenant_id INTEGER DEFAULT 1")
+            print("[DB] Migrated email_log: added tenant_id column")
+
     # ── SaaS: tenants ────────────────────────────────────────────────────────
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tenants (
@@ -316,10 +428,6 @@ def init_db():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email  ON users(email)")
-
-    def _table_exists(tbl):
-        r = cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (tbl,)).fetchone()
-        return r is not None
 
     # ── Migration: tenant_id on cost_data ────────────────────────────────────
     if _table_exists("cost_data"):
@@ -1575,18 +1683,19 @@ def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups
     }
 
 
-def save_custom_report(data):
+def save_custom_report(data, tenant_id=1):
     conn = get_db()
     conn.execute(
-        """INSERT INTO custom_reports (name, recipients, filters, sections, schedule, schedule_day, schedule_hour, enabled)
-           VALUES (?,?,?,?,?,?,?,?)""",
+        """INSERT INTO custom_reports (name, recipients, filters, sections, schedule, schedule_day, schedule_hour, enabled, tenant_id)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
         (data["name"], data.get("recipients", ""),
          json.dumps(data.get("filters", {})),
          json.dumps(data.get("sections", ["summary", "by_service", "by_rg", "trend"])),
          data.get("schedule", "none"),
          data.get("schedule_day", 1),
          data.get("schedule_hour", 8),
-         1 if data.get("enabled") else 0)
+         1 if data.get("enabled") else 0,
+         tenant_id)
     )
     conn.commit()
     rid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -1594,9 +1703,9 @@ def save_custom_report(data):
     return rid
 
 
-def get_custom_reports():
+def get_custom_reports(tenant_id=1):
     conn = get_db()
-    rows = conn.execute("SELECT * FROM custom_reports ORDER BY updated_at DESC").fetchall()
+    rows = conn.execute("SELECT * FROM custom_reports WHERE tenant_id=? ORDER BY updated_at DESC", (tenant_id,)).fetchall()
     conn.close()
     result = []
     for r in rows:
@@ -1614,9 +1723,12 @@ def get_custom_reports():
     return result
 
 
-def get_custom_report(rid):
+def get_custom_report(rid, tenant_id=None):
     conn = get_db()
-    row = conn.execute("SELECT * FROM custom_reports WHERE id=?", (rid,)).fetchone()
+    if tenant_id is not None:
+        row = conn.execute("SELECT * FROM custom_reports WHERE id=? AND tenant_id=?", (rid, tenant_id)).fetchone()
+    else:
+        row = conn.execute("SELECT * FROM custom_reports WHERE id=?", (rid,)).fetchone()
     conn.close()
     if not row:
         return None
@@ -1633,7 +1745,7 @@ def get_custom_report(rid):
     return d
 
 
-def update_custom_report(rid, data):
+def update_custom_report(rid, data, tenant_id=None):
     conn = get_db()
     fields = []
     params = []
@@ -1653,21 +1765,32 @@ def update_custom_report(rid, data):
         return
     fields.append("updated_at=CURRENT_TIMESTAMP")
     params.append(rid)
-    conn.execute(f"UPDATE custom_reports SET {', '.join(fields)} WHERE id=?", params)
+    query = f"UPDATE custom_reports SET {', '.join(fields)} WHERE id=?"
+    if tenant_id is not None:
+        query += " AND tenant_id=?"
+        params.append(tenant_id)
+    conn.execute(query, params)
     conn.commit()
     conn.close()
 
 
-def delete_custom_report(rid):
+def delete_custom_report(rid, tenant_id=None):
     conn = get_db()
-    conn.execute("DELETE FROM custom_reports WHERE id=?", (rid,))
+    if tenant_id is not None:
+        conn.execute("DELETE FROM custom_reports WHERE id=? AND tenant_id=?", (rid, tenant_id))
+    else:
+        conn.execute("DELETE FROM custom_reports WHERE id=?", (rid,))
     conn.commit()
     conn.close()
 
 
-def get_email_settings():
+def get_email_settings(tenant_id=1):
     conn = get_db()
-    row = conn.execute("SELECT * FROM email_settings WHERE id=1").fetchone()
+    row = conn.execute("SELECT * FROM email_settings WHERE tenant_id=?", (tenant_id,)).fetchone()
+    if not row:
+        conn.execute("INSERT OR IGNORE INTO email_settings (tenant_id) VALUES (?)", (tenant_id,))
+        conn.commit()
+        row = conn.execute("SELECT * FROM email_settings WHERE tenant_id=?", (tenant_id,)).fetchone()
     conn.close()
     if not row:
         return {}
@@ -1686,8 +1809,9 @@ def get_email_settings():
     return d
 
 
-def update_email_settings(settings):
+def update_email_settings(settings, tenant_id=1):
     conn = get_db()
+    conn.execute("INSERT OR IGNORE INTO email_settings (tenant_id) VALUES (?)", (tenant_id,))
     fields = []
     params = []
     allowed = ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from",
@@ -1705,18 +1829,23 @@ def update_email_settings(settings):
             params.append(val)
 
     if not fields:
+        conn.commit()
         conn.close()
         return
     fields.append("updated_at=CURRENT_TIMESTAMP")
-    params.append(1)
-    conn.execute(f"UPDATE email_settings SET {', '.join(fields)} WHERE id=?", params)
+    params.append(tenant_id)
+    conn.execute(f"UPDATE email_settings SET {', '.join(fields)} WHERE tenant_id=?", params)
     conn.commit()
     conn.close()
 
 
-def get_integration_settings():
+def get_integration_settings(tenant_id=1):
     conn = get_db()
-    row = conn.execute("SELECT * FROM integration_settings WHERE id=1").fetchone()
+    row = conn.execute("SELECT * FROM integration_settings WHERE tenant_id=?", (tenant_id,)).fetchone()
+    if not row:
+        conn.execute("INSERT OR IGNORE INTO integration_settings (tenant_id) VALUES (?)", (tenant_id,))
+        conn.commit()
+        row = conn.execute("SELECT * FROM integration_settings WHERE tenant_id=?", (tenant_id,)).fetchone()
     conn.close()
     if not row:
         return {}
@@ -1726,8 +1855,9 @@ def get_integration_settings():
     return d
 
 
-def update_integration_settings(settings):
+def update_integration_settings(settings, tenant_id=1):
     conn = get_db()
+    conn.execute("INSERT OR IGNORE INTO integration_settings (tenant_id) VALUES (?)", (tenant_id,))
     allowed = [
         "jira_url", "jira_email", "jira_token", "jira_project", "jira_issue_type", "jira_enabled",
         "jira_admin_token", "jira_admin_org_id",
@@ -1745,28 +1875,29 @@ def update_integration_settings(settings):
             fields.append(f"{key}=?")
             params.append(val)
     if not fields:
+        conn.commit()
         conn.close()
         return
     fields.append("updated_at=CURRENT_TIMESTAMP")
-    params.append(1)
-    conn.execute(f"UPDATE integration_settings SET {', '.join(fields)} WHERE id=?", params)
+    params.append(tenant_id)
+    conn.execute(f"UPDATE integration_settings SET {', '.join(fields)} WHERE tenant_id=?", params)
     conn.commit()
     conn.close()
 
 
-def log_email(recipients, subject, status="sent", error=None, report_type="scheduled"):
+def log_email(recipients, subject, status="sent", error=None, report_type="scheduled", tenant_id=1):
     conn = get_db()
     conn.execute(
-        "INSERT INTO email_log (recipients, subject, status, error, report_type) VALUES (?,?,?,?,?)",
-        (recipients, subject, status, error, report_type)
+        "INSERT INTO email_log (recipients, subject, status, error, report_type, tenant_id) VALUES (?,?,?,?,?,?)",
+        (recipients, subject, status, error, report_type, tenant_id)
     )
     conn.commit()
     conn.close()
 
 
-def get_email_log(limit=20):
+def get_email_log(limit=20, tenant_id=1):
     conn = get_db()
-    rows = conn.execute("SELECT * FROM email_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    rows = conn.execute("SELECT * FROM email_log WHERE tenant_id=? ORDER BY id DESC LIMIT ?", (tenant_id, limit)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -2654,7 +2785,12 @@ def get_all_tenants() -> list:
         SELECT t.*,
                (SELECT COUNT(*) FROM users u WHERE u.tenant_id=t.id) AS user_count,
                (SELECT COUNT(*) FROM cloud_providers cp WHERE cp.tenant_id=t.id) AS provider_count,
-               (SELECT COUNT(*) FROM cost_data cd WHERE cd.tenant_id=t.id) AS cost_rows
+               (SELECT COUNT(*) FROM cost_data cd WHERE cd.tenant_id=t.id) AS cost_rows,
+               (SELECT COALESCE(SUM(cd.cost), 0) FROM cost_data cd
+                  WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month')) AS cloud_spend_30d,
+               (SELECT COALESCE(SUM(cd.cost), 0) FROM cost_data cd
+                  WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month', '-1 month')
+                        AND cd.date < date('now', 'start of month')) AS cloud_spend_prev_30d
         FROM tenants t ORDER BY t.created_at DESC
     """).fetchall()
     conn.close()
