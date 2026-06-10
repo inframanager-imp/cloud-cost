@@ -113,7 +113,7 @@ def _send_email_alert(budget: dict, threshold_pct: int, current_spend: float):
             recipients = [r.strip() for r in budget_emails.split(",") if r.strip()]
         else:
             from database import get_email_settings
-            settings = get_email_settings()
+            settings = get_email_settings(budget.get("tenant_id") or 1)
             recipients_raw = settings.get("recipients", "")
             recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
 

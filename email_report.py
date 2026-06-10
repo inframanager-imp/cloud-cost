@@ -44,20 +44,20 @@ def _resolve_report_period(settings):
     return {"date_from": date_from, "date_to": date_to, "label": label}
 
 
-def _get_all_cloud_accounts():
+def _get_all_cloud_accounts(tenant_id=1):
     """Return combined list of accounts/subscriptions from all cloud providers."""
     from database import get_db
     conn = get_db()
     accounts = []
 
     # Azure subscriptions
-    rows = conn.execute("SELECT subscription_id, name, 'azure' as cloud FROM subscriptions WHERE enabled=1").fetchall()
+    rows = conn.execute("SELECT subscription_id, name, 'azure' as cloud FROM subscriptions WHERE enabled=1 AND tenant_id=?", (tenant_id,)).fetchall()
     for r in rows:
         accounts.append({"id": r["subscription_id"], "name": r["name"], "cloud": "azure"})
 
     # AWS + GCP from cloud_providers table (use subscription_id = provider_id for cost_data lookup)
     rows2 = conn.execute(
-        "SELECT provider_id, name, provider_type FROM cloud_providers WHERE enabled=1 AND provider_type IN ('aws','gcp')"
+        "SELECT provider_id, name, provider_type FROM cloud_providers WHERE enabled=1 AND provider_type IN ('aws','gcp') AND tenant_id=?", (tenant_id,)
     ).fetchall()
     for r in rows2:
         accounts.append({"id": r["provider_id"], "name": r["name"], "cloud": r["provider_type"]})
@@ -66,12 +66,12 @@ def _get_all_cloud_accounts():
     return accounts
 
 
-def _build_report_html(sections=None, settings=None, cloud_provider=None):
+def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant_id=1):
     """Generate a professional multi-cloud HTML cost report."""
     if not sections:
         sections = ["summary", "subscriptions", "top_services", "top_rgs", "trend"]
     if settings is None:
-        settings = get_email_settings() or {}
+        settings = get_email_settings(tenant_id) or {}
 
     # Cloud provider filter: explicit arg overrides saved setting
     if cloud_provider is None:
@@ -85,10 +85,10 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
 
     # ── Data gathering (filtered by cloud_provider if set) ────────────────
     cp_filter = cloud_provider if cloud_provider else None
-    top_services = get_summary("service_name",  date_from=month_start, date_to=today, cloud_provider=cp_filter)[:10]
-    top_rgs      = get_summary("resource_group", date_from=month_start, date_to=today, cloud_provider=cp_filter)[:10]
-    trend        = get_daily_trend(date_from=month_start, date_to=today, cloud_provider=cp_filter)
-    monthly      = get_monthly_summary(cloud_provider=cp_filter)
+    top_services = get_summary("service_name",  date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)[:10]
+    top_rgs      = get_summary("resource_group", date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)[:10]
+    trend        = get_daily_trend(date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)
+    monthly      = get_monthly_summary(tenant_id=tenant_id, cloud_provider=cp_filter)
 
     total_this_month = sum(r["total_cost"] for r in top_services) if top_services else 0
     last_month_data  = [m for m in monthly if m["month"] != now.strftime("%Y-%m")]
@@ -100,13 +100,13 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
     conn = get_db()
     if cp_filter:
         cloud_rows = conn.execute(
-            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? GROUP BY cloud_provider ORDER BY total DESC",
-            (month_start, today, cp_filter)
+            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? AND cloud_provider=? GROUP BY cloud_provider ORDER BY total DESC",
+            (month_start, today, tenant_id, cp_filter)
         ).fetchall()
     else:
         cloud_rows = conn.execute(
-            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? GROUP BY cloud_provider ORDER BY total DESC",
-            (month_start, today)
+            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? GROUP BY cloud_provider ORDER BY total DESC",
+            (month_start, today, tenant_id)
         ).fetchall()
     conn.close()
 
@@ -123,13 +123,13 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
     ACCENT = "#185FA5"
     ACCENT_MUTED = "#A3BFDB"
 
-    all_accounts = _get_all_cloud_accounts()
+    all_accounts = _get_all_cloud_accounts(tenant_id)
     # Filter accounts by cloud provider if set
     if cp_filter:
         all_accounts = [a for a in all_accounts if a["cloud"] == cp_filter]
     sub_costs = []
     for acct in all_accounts:
-        svcs = get_summary("service_name", date_from=month_start, date_to=today, subscription_id=acct["id"])
+        svcs = get_summary("service_name", date_from=month_start, date_to=today, subscription_id=acct["id"], tenant_id=tenant_id)
         cost = sum(r["total_cost"] for r in svcs)
         if cost > 0:
             sub_costs.append({"name": acct["name"], "cost": cost, "cloud": acct["cloud"]})
@@ -425,10 +425,10 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
             cost_rows = conn.execute("""
                 SELECT subscription_id, resource_group, resource_name, SUM(cost) as total_cost
                 FROM cost_data
-                WHERE date >= ? AND date <= ?
+                WHERE date >= ? AND date <= ? AND tenant_id = ?
                   AND resource_name IS NOT NULL AND resource_name != ''
                 GROUP BY subscription_id, resource_group, resource_name
-            """, (month_start, today)).fetchall()
+            """, (month_start, today, tenant_id)).fetchall()
             def _norm_rg(x):
                 return (x or "").strip().lower()
 
@@ -443,10 +443,10 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
             daily_rows = conn.execute("""
                 SELECT subscription_id, lower(resource_group) as rg, resource_name, date, SUM(cost) as day_cost
                 FROM cost_data
-                WHERE date >= ? AND date <= ?
+                WHERE date >= ? AND date <= ? AND tenant_id = ?
                   AND resource_name IS NOT NULL AND resource_name != ''
                 GROUP BY subscription_id, rg, resource_name, date
-            """, (lb_start, today)).fetchall()
+            """, (lb_start, today, tenant_id)).fetchall()
             daily_costs = {}
             for r in daily_rows:
                 key = (r["subscription_id"], (r["rg"] or ""), r["resource_name"])
@@ -474,7 +474,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
                             ORDER BY timestamp ASC, id ASC
                         ) as rn
                     FROM activity_logs
-                    WHERE timestamp >= ? AND timestamp <= ?
+                    WHERE timestamp >= ? AND timestamp <= ? AND tenant_id = ?
                       AND resource_name IS NOT NULL AND resource_name != ''
                       AND (operation_name LIKE 'Create%' OR operation LIKE '%/write')
                 )
@@ -489,7 +489,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
                 FROM ranked
                 GROUP BY subscription_id, resource_group, resource_name
                 ORDER BY first_ts DESC
-            """, (start_ts, end_ts)).fetchall()
+            """, (start_ts, end_ts, tenant_id)).fetchall()
 
             deleted = conn.execute("""
                 WITH ranked AS (
@@ -506,7 +506,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
                             ORDER BY timestamp DESC, id DESC
                         ) as rn
                     FROM activity_logs
-                    WHERE timestamp >= ? AND timestamp <= ?
+                    WHERE timestamp >= ? AND timestamp <= ? AND tenant_id = ?
                       AND resource_name IS NOT NULL AND resource_name != ''
                       AND (operation_name LIKE 'Delete%' OR operation LIKE '%/delete')
                 )
@@ -522,7 +522,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
                 FROM ranked
                 GROUP BY subscription_id, resource_group, resource_name
                 ORDER BY last_ts DESC
-            """, (start_ts, end_ts)).fetchall()
+            """, (start_ts, end_ts, tenant_id)).fetchall()
 
             # Resolve actor IDs to display names in bulk (best-effort)
             actor_ids = sorted({(r["actor"] or "").strip() for r in (created + deleted) if (r["actor"] or "").strip()})
@@ -535,17 +535,17 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None):
             total_created = conn.execute("""
                 SELECT COUNT(DISTINCT subscription_id || '|' || resource_group || '|' || resource_name) as cnt
                 FROM activity_logs
-                WHERE timestamp >= ? AND timestamp <= ?
+                WHERE timestamp >= ? AND timestamp <= ? AND tenant_id = ?
                   AND resource_name IS NOT NULL AND resource_name != ''
                   AND (operation_name LIKE 'Create%' OR operation LIKE '%/write')
-            """, (start_ts, end_ts)).fetchone()["cnt"]
+            """, (start_ts, end_ts, tenant_id)).fetchone()["cnt"]
             total_deleted = conn.execute("""
                 SELECT COUNT(DISTINCT subscription_id || '|' || resource_group || '|' || resource_name) as cnt
                 FROM activity_logs
-                WHERE timestamp >= ? AND timestamp <= ?
+                WHERE timestamp >= ? AND timestamp <= ? AND tenant_id = ?
                   AND resource_name IS NOT NULL AND resource_name != ''
                   AND (operation_name LIKE 'Delete%' OR operation LIKE '%/delete')
-            """, (start_ts, end_ts)).fetchone()["cnt"]
+            """, (start_ts, end_ts, tenant_id)).fetchone()["cnt"]
             conn.close()
         except Exception as e:
             resource_changes_available = False
@@ -872,6 +872,7 @@ def _build_custom_report_html(report):
     filters = report.get("filters", {})
     sections = report.get("sections", ["summary", "by_service", "by_rg", "trend"])
     report_name = report.get("name", "Custom Report")
+    tenant_id = report.get("tenant_id") or 1
 
     sub_ids = filters.get("subscription_ids", [])
     rgs = filters.get("resource_groups", [])
@@ -908,6 +909,7 @@ def _build_custom_report_html(report):
         services=services if services else None,
         date_from=date_from or None,
         date_to=date_to or None,
+        tenant_id=tenant_id,
     )
 
     total_cost = data.get("total_cost", 0)
@@ -917,7 +919,7 @@ def _build_custom_report_html(report):
     daily_trend = data.get("daily_trend", [])
 
     # Resolve subscription names
-    subs = get_subscriptions()
+    subs = get_subscriptions(tenant_id=tenant_id)
     sub_map = {s["subscription_id"]: s["name"] for s in subs}
     sub_names = [sub_map.get(sid, sid[:12]) for sid in sub_ids] if sub_ids else ["All Subscriptions"]
 
@@ -1084,15 +1086,15 @@ def _build_custom_report_html(report):
     return html
 
 
-def send_custom_report(report_id, report_type="manual"):
+def send_custom_report(report_id, report_type="manual", tenant_id=1):
     """Send a custom report by ID."""
-    report = get_custom_report(report_id)
+    report = get_custom_report(report_id, tenant_id)
     if not report:
         raise ValueError(f"Report #{report_id} not found")
 
     recipients = report.get("recipients", "")
     if not recipients:
-        settings = get_email_settings()
+        settings = get_email_settings(tenant_id)
         recipients = settings.get("recipients", "")
     if not recipients:
         raise ValueError("No recipients configured for this report")
@@ -1105,25 +1107,26 @@ def send_custom_report(report_id, report_type="manual"):
         subject=subject,
         html_body=html,
         report_type=report_type,
+        tenant_id=tenant_id,
     )
-    update_custom_report(report_id, {"last_sent": datetime.utcnow().isoformat()})
+    update_custom_report(report_id, {"last_sent": datetime.utcnow().isoformat()}, tenant_id)
     return True
 
 
-def preview_custom_report(report_id):
+def preview_custom_report(report_id, tenant_id=1):
     """Generate preview HTML for a custom report."""
-    report = get_custom_report(report_id)
+    report = get_custom_report(report_id, tenant_id)
     if not report:
         raise ValueError(f"Report #{report_id} not found")
     return _build_custom_report_html(report)
 
 
-def _build_report_text(sections=None, settings=None, cloud_provider=None):
+def _build_report_text(sections=None, settings=None, cloud_provider=None, tenant_id=1):
     """Generate a plain-text fallback for the cost report."""
     if not sections:
         sections = ["summary", "subscriptions", "top_services", "top_rgs", "trend"]
     if settings is None:
-        settings = get_email_settings() or {}
+        settings = get_email_settings(tenant_id) or {}
     if cloud_provider is None:
         cloud_provider = settings.get("report_cloud_provider") or ""
     cloud_provider = (cloud_provider or "").strip().lower()
@@ -1134,10 +1137,10 @@ def _build_report_text(sections=None, settings=None, cloud_provider=None):
     today  = period["date_to"]
     cp_filter = cloud_provider if cloud_provider else None
 
-    top_services = get_summary("service_name",  date_from=month_start, date_to=today, cloud_provider=cp_filter)[:5]
-    top_rgs      = get_summary("resource_group", date_from=month_start, date_to=today, cloud_provider=cp_filter)[:5]
-    trend        = get_daily_trend(date_from=month_start, date_to=today, cloud_provider=cp_filter)
-    monthly      = get_monthly_summary(cloud_provider=cp_filter)
+    top_services = get_summary("service_name",  date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)[:5]
+    top_rgs      = get_summary("resource_group", date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)[:5]
+    trend        = get_daily_trend(date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)
+    monthly      = get_monthly_summary(tenant_id=tenant_id, cloud_provider=cp_filter)
 
     total_this_month = sum(r["total_cost"] for r in top_services) if top_services else 0
     last_month_data  = [m for m in monthly if m["month"] != now.strftime("%Y-%m")]
@@ -1149,13 +1152,13 @@ def _build_report_text(sections=None, settings=None, cloud_provider=None):
     conn = get_db()
     if cp_filter:
         cloud_rows = conn.execute(
-            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? GROUP BY cloud_provider ORDER BY total DESC",
-            (month_start, today, cp_filter)
+            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? AND cloud_provider=? GROUP BY cloud_provider ORDER BY total DESC",
+            (month_start, today, tenant_id, cp_filter)
         ).fetchall()
     else:
         cloud_rows = conn.execute(
-            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? GROUP BY cloud_provider ORDER BY total DESC",
-            (month_start, today)
+            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? GROUP BY cloud_provider ORDER BY total DESC",
+            (month_start, today, tenant_id)
         ).fetchall()
     conn.close()
     cloud_totals = [{"cloud": r["cloud_provider"] or "unknown", "total": r["total"] or 0} for r in cloud_rows]
@@ -1193,9 +1196,9 @@ def _build_report_text(sections=None, settings=None, cloud_provider=None):
     return "\n".join(lines)
 
 
-def send_report_email(recipients=None, subject=None, html_body=None, report_type="scheduled"):
+def send_report_email(recipients=None, subject=None, html_body=None, report_type="scheduled", tenant_id=1):
     """Send an HTML email report using configured SMTP settings."""
-    settings = get_email_settings()
+    settings = get_email_settings(tenant_id)
 
     host = settings.get("smtp_host", "")
     port = settings.get("smtp_port", 587)
@@ -1220,9 +1223,9 @@ def send_report_email(recipients=None, subject=None, html_body=None, report_type
 
     sections = settings.get("report_sections", ["summary", "subscriptions", "top_services", "top_rgs", "trend"])
     if not html_body:
-        html_body = _build_report_html(sections, settings=settings)
+        html_body = _build_report_html(sections, settings=settings, tenant_id=tenant_id)
 
-    text_body = _build_report_text(sections, settings=settings)
+    text_body = _build_report_text(sections, settings=settings, tenant_id=tenant_id)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -1246,15 +1249,15 @@ def send_report_email(recipients=None, subject=None, html_body=None, report_type
         server.sendmail(from_addr, recipients, msg.as_string())
         server.quit()
 
-        log_email(", ".join(recipients), subject, "sent", report_type=report_type)
+        log_email(", ".join(recipients), subject, "sent", report_type=report_type, tenant_id=tenant_id)
         return True
 
     except Exception as e:
-        log_email(", ".join(recipients), subject, "failed", str(e), report_type=report_type)
+        log_email(", ".join(recipients), subject, "failed", str(e), report_type=report_type, tenant_id=tenant_id)
         raise
 
 
-def send_test_email(recipient):
+def send_test_email(recipient, tenant_id=1):
     """Send a short test email to verify SMTP configuration."""
     font_stack = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
     now_str = datetime.utcnow().strftime("%-d %B %Y at %H:%M UTC")
@@ -1284,7 +1287,8 @@ def send_test_email(recipient):
         recipients=[recipient],
         subject="Cloud Cost Analyzer — SMTP verified",
         html_body=html,
-        report_type="test"
+        report_type="test",
+        tenant_id=tenant_id
     )
 
 
