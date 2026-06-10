@@ -269,7 +269,20 @@ def login():
         else:
             error = "Invalid email or password"
 
-    return render_template("login.html", error=error)
+    notice = request.args.get("notice") if request.method == "GET" else None
+    return render_template("login.html", error=error, notice=notice, email=request.form.get("username", ""))
+
+
+@app.route("/forgot-password", methods=["GET"])
+def forgot_password():
+    """Stub: password reset is not yet implemented."""
+    return redirect(url_for("login", notice="Password reset isn't available yet — contact your administrator."))
+
+
+@app.route("/auth/sso/<provider>", methods=["GET"])
+def sso_login(provider):
+    """Stub: SSO providers are not yet wired up."""
+    return redirect(url_for("login", notice=f"{provider.capitalize()} sign-in isn't available yet."))
 
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -432,7 +445,18 @@ def api_toggle_subscription(sub_id):
 @app.route("/")
 @login_required
 def index():
-    return render_template("index.html", username=session.get("username", ""))
+    is_impersonating = bool(session.get("is_super_admin")) and session.get("tenant_id") is not None
+    username = session.get("username", "")
+    impersonated_tenant = None
+    if is_impersonating and username.startswith("[Impersonating] "):
+        impersonated_tenant = username[len("[Impersonating] "):]
+        username = "Super Admin"
+    return render_template(
+        "index.html",
+        username=username,
+        is_impersonating=is_impersonating,
+        impersonated_tenant=impersonated_tenant,
+    )
 
 
 @app.route("/drilldown")
@@ -2666,7 +2690,7 @@ def api_delete_saved_filter(fid):
 @app.route("/api/email/settings", methods=["GET"])
 @login_required
 def api_get_email_settings():
-    settings = get_email_settings()
+    settings = get_email_settings(current_tenant_id() or 1)
     safe = dict(settings)
     if safe.get("smtp_password"):
         safe["smtp_password"] = "••••••••"
@@ -2679,7 +2703,7 @@ def api_update_email_settings():
     body = request.get_json(silent=True) or {}
     if body.get("smtp_password") == "••••••••":
         body.pop("smtp_password", None)
-    update_email_settings(body)
+    update_email_settings(body, current_tenant_id() or 1)
     return jsonify({"message": "Email settings updated"})
 
 
@@ -2691,7 +2715,7 @@ def api_test_email():
     if not recipient:
         return jsonify({"error": "Recipient email is required"}), 400
     try:
-        send_test_email(recipient)
+        send_test_email(recipient, current_tenant_id() or 1)
         return jsonify({"message": f"Test email sent to {recipient}"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -2701,7 +2725,7 @@ def api_test_email():
 @login_required
 def api_send_report_now():
     try:
-        send_report_email(report_type="manual")
+        send_report_email(report_type="manual", tenant_id=current_tenant_id() or 1)
         return jsonify({"message": "Report sent successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -2710,7 +2734,8 @@ def api_send_report_now():
 @app.route("/api/email/preview", methods=["GET"])
 @login_required
 def api_preview_report():
-    settings = get_email_settings()
+    tenant_id = current_tenant_id() or 1
+    settings = get_email_settings(tenant_id)
     sections_param = request.args.get("sections")
     if sections_param:
         sections = [s.strip() for s in sections_param.split(",") if s.strip()]
@@ -2727,14 +2752,14 @@ def api_preview_report():
     date_to = request.args.get("date_to", "").strip()
     if date_to:
         settings["report_date_to"] = date_to
-    html = _build_report_html(sections, settings=settings, cloud_provider=cloud_provider)
+    html = _build_report_html(sections, settings=settings, cloud_provider=cloud_provider, tenant_id=tenant_id)
     return Response(html, mimetype="text/html")
 
 
 @app.route("/api/email/log", methods=["GET"])
 @login_required
 def api_email_log():
-    return jsonify(get_email_log(30))
+    return jsonify(get_email_log(30, current_tenant_id() or 1))
 
 
 # ─── AWS CloudFormation One-Click Connect ────────────────────────────────────
@@ -3135,7 +3160,7 @@ def _send_client_cost_report(client, tenant_id, recipients, date_from=None, date
     cost_data = get_client_costs(client["id"], date_from, date_to, tenant_id)
     html = build_client_report_html(client, cost_data, date_from, date_to)
     subject = f"Client Cost Report — {client['name']} ({date_from} to {date_to})"
-    send_report_email(recipients=recipients, subject=subject, html_body=html, report_type=report_type)
+    send_report_email(recipients=recipients, subject=subject, html_body=html, report_type=report_type, tenant_id=tenant_id or 1)
     return subject
 
 
@@ -3206,7 +3231,7 @@ def api_client_report_preview(client_id):
 @app.route("/api/custom-reports", methods=["GET"])
 @login_required
 def api_get_custom_reports():
-    return jsonify(get_custom_reports())
+    return jsonify(get_custom_reports(current_tenant_id() or 1))
 
 
 @app.route("/api/custom-reports", methods=["POST"])
@@ -3216,7 +3241,7 @@ def api_create_custom_report():
     name = body.get("name", "").strip()
     if not name:
         return jsonify({"error": "Report name is required"}), 400
-    rid = save_custom_report(body)
+    rid = save_custom_report(body, current_tenant_id() or 1)
     return jsonify({"id": rid, "message": f"Report '{name}' created"})
 
 
@@ -3224,14 +3249,14 @@ def api_create_custom_report():
 @login_required
 def api_update_custom_report(rid):
     body = request.get_json(silent=True) or {}
-    update_custom_report(rid, body)
+    update_custom_report(rid, body, current_tenant_id() or 1)
     return jsonify({"message": "Report updated"})
 
 
 @app.route("/api/custom-reports/<int:rid>", methods=["DELETE"])
 @login_required
 def api_delete_custom_report(rid):
-    delete_custom_report(rid)
+    delete_custom_report(rid, current_tenant_id() or 1)
     return jsonify({"message": "Report deleted"})
 
 
@@ -3239,7 +3264,7 @@ def api_delete_custom_report(rid):
 @login_required
 def api_send_custom_report(rid):
     try:
-        send_custom_report(rid, report_type="manual")
+        send_custom_report(rid, report_type="manual", tenant_id=current_tenant_id() or 1)
         return jsonify({"message": "Custom report sent successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3249,7 +3274,7 @@ def api_send_custom_report(rid):
 @login_required
 def api_preview_custom_report(rid):
     try:
-        html = preview_custom_report(rid)
+        html = preview_custom_report(rid, current_tenant_id() or 1)
         return Response(html, mimetype="text/html")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3595,56 +3620,57 @@ def _check_email_schedule():
     """Check if it's time to send a scheduled report, then reschedule."""
     global _email_timer
     try:
-        settings = get_email_settings()
-        if not settings.get("enabled"):
-            _schedule_email_check()
-            return
-
         now = datetime.utcnow()
-        schedule = settings.get("schedule", "weekly")
-        target_hour = settings.get("schedule_hour", 8)
-        target_day = settings.get("schedule_day", 1)
 
-        should_send = False
-        if now.hour == target_hour:
-            if schedule == "daily":
-                should_send = True
-            elif schedule == "weekly" and now.weekday() == target_day:
-                should_send = True
-            elif schedule == "monthly" and now.day == 1:
-                should_send = True
+        # Check per-tenant report settings and custom reports
+        for tenant in get_all_tenants():
+            tenant_id = tenant["id"]
+            settings = get_email_settings(tenant_id)
+            if settings.get("enabled"):
+                schedule = settings.get("schedule", "weekly")
+                target_hour = settings.get("schedule_hour", 8)
+                target_day = settings.get("schedule_day", 1)
 
-        if should_send:
-            print(f"[Email Report] Sending scheduled {schedule} report...")
-            try:
-                send_report_email(report_type="scheduled")
-                print("[Email Report] Sent successfully.")
-            except Exception as e:
-                print(f"[Email Report] Failed: {e}")
+                should_send = False
+                if now.hour == target_hour:
+                    if schedule == "daily":
+                        should_send = True
+                    elif schedule == "weekly" and now.weekday() == target_day:
+                        should_send = True
+                    elif schedule == "monthly" and now.day == 1:
+                        should_send = True
 
-        # Check custom reports
-        custom_reports = get_custom_reports()
-        for cr in custom_reports:
-            if not cr.get("enabled") or cr.get("schedule", "none") == "none":
-                continue
-            cr_schedule = cr["schedule"]
-            cr_hour = cr.get("schedule_hour", 8)
-            cr_day = cr.get("schedule_day", 1)
-            cr_should_send = False
-            if now.hour == cr_hour:
-                if cr_schedule == "daily":
-                    cr_should_send = True
-                elif cr_schedule == "weekly" and now.weekday() == cr_day:
-                    cr_should_send = True
-                elif cr_schedule == "monthly" and now.day == 1:
-                    cr_should_send = True
-            if cr_should_send:
-                try:
-                    print(f"[Email Report] Sending custom report '{cr['name']}'...")
-                    send_custom_report(cr["id"], report_type="scheduled")
-                    print(f"[Email Report] Custom report '{cr['name']}' sent.")
-                except Exception as e:
-                    print(f"[Email Report] Custom report '{cr['name']}' failed: {e}")
+                if should_send:
+                    print(f"[Email Report] Sending scheduled {schedule} report for tenant {tenant_id}...")
+                    try:
+                        send_report_email(report_type="scheduled", tenant_id=tenant_id)
+                        print(f"[Email Report] Sent successfully for tenant {tenant_id}.")
+                    except Exception as e:
+                        print(f"[Email Report] Failed for tenant {tenant_id}: {e}")
+
+            # Check custom reports for this tenant
+            custom_reports = get_custom_reports(tenant_id)
+            for cr in custom_reports:
+                if not cr.get("enabled") or cr.get("schedule", "none") == "none":
+                    continue
+                cr_schedule = cr["schedule"]
+                cr_hour = cr.get("schedule_hour", 8)
+                cr_day = cr.get("schedule_day", 1)
+                cr_should_send = False
+                if now.hour == cr_hour:
+                    if cr_schedule == "daily":
+                        cr_should_send = True
+                    elif cr_schedule == "weekly" and now.weekday() == cr_day:
+                        cr_should_send = True
+                    elif cr_schedule == "monthly" and now.day == 1:
+                        cr_should_send = True
+                if cr_should_send:
+                    try:
+                        print(f"[Email Report] Sending custom report '{cr['name']}' for tenant {tenant_id}...")
+                        send_custom_report(cr["id"], report_type="scheduled", tenant_id=tenant_id)
+                        print(f"[Email Report] Custom report '{cr['name']}' sent.")
+                    except Exception as e:
+                        print(f"[Email Report] Custom report '{cr['name']}' failed: {e}")
 
         # Check client report schedules
         for client in get_scheduled_clients():
@@ -3698,13 +3724,14 @@ def super_admin_dashboard():
     tenants = get_all_tenants()
     return render_template("superadmin.html",
                            tenants=tenants,
+                           tenants_json=json.dumps(tenants, default=str).replace("</", "<\\/"),
                            username="Super Admin")
 
 @app.route("/api/superadmin/tenants/<int:tid>", methods=["PUT"])
 @super_admin_required
 def api_sa_tenant_update(tid):
     body = request.get_json(silent=True) or {}
-    update_tenant(tid, **{k: body[k] for k in ("plan","status","max_users","max_cloud_providers") if k in body})
+    update_tenant(tid, **{k: body[k] for k in ("name","plan","status","max_users","max_cloud_providers") if k in body})
     return jsonify({"message": "Updated"})
 
 @app.route("/api/superadmin/impersonate/<int:tid>", methods=["POST"])
@@ -4673,7 +4700,7 @@ def api_notification_settings():
 @app.route("/api/integrations/settings", methods=["GET"])
 @login_required
 def api_get_integrations():
-    s = get_integration_settings()
+    s = get_integration_settings(current_tenant_id() or 1)
     # Mask secrets in response
     def mask(v):
         if not v:
@@ -4701,7 +4728,7 @@ def api_update_integrations():
             if isinstance(v, str) and "••••" in v:
                 continue
             flat[col] = v
-    update_integration_settings(flat)
+    update_integration_settings(flat, current_tenant_id() or 1)
     return jsonify({"message": "Integration settings saved"})
 
 
@@ -4710,7 +4737,7 @@ def api_update_integrations():
 def api_test_integration(tool):
     # Prefer values from the request body (form fields not yet saved),
     # fall back to saved DB settings for any missing field.
-    s    = get_integration_settings()
+    s    = get_integration_settings(current_tenant_id() or 1)
     body = request.get_json(silent=True) or {}
 
     def _pick(body_key, db_key, body_section=None):
@@ -4826,7 +4853,7 @@ def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
     import requests as _req, calendar as _cal
     from datetime import date as _date, timedelta as _td
 
-    s = get_integration_settings()
+    s = get_integration_settings(tenant_id or 1)
     api_key = s.get("openai_api_key", "")
     if not api_key:
         raise ValueError("OpenAI API key not configured")
@@ -5071,7 +5098,7 @@ def api_openai_breakdown():
     # Live API calls for per-key + token counts (both use same Admin key)
     by_key = []
     model_tokens = {}  # model → {input, output, cached, requests}
-    s = get_integration_settings()
+    s = get_integration_settings(current_tenant_id() or 1)
     api_key = s.get("openai_api_key") or ""
     if api_key:
         headers  = {"Authorization": f"Bearer {api_key}"}
@@ -5161,7 +5188,7 @@ def api_jira_users():
     """Fetch Jira user list + license summary. Uses standard API + optional Atlassian Admin API for last_active."""
     import requests as _req, base64
 
-    s = get_integration_settings()
+    s = get_integration_settings(current_tenant_id() or 1)
     url         = (s.get("jira_url") or "").rstrip("/")
     mode        = s.get("jira_mode") or "cloud"
     admin_token = s.get("jira_admin_token") or ""
@@ -5300,7 +5327,7 @@ def api_jira_test_admin():
     """Test Atlassian Admin API token independently."""
     import requests as _req
     body        = request.get_json(silent=True) or {}
-    s           = get_integration_settings()
+    s           = get_integration_settings(current_tenant_id() or 1)
     admin_token = body.get("admin_token","").strip()
     org_id_in   = body.get("org_id","").strip()
     if not admin_token or "••••" in admin_token:
@@ -5557,15 +5584,44 @@ def api_tenant_invite_bulk():
 @app.route("/api/superadmin/tenants")
 @super_admin_required
 def api_sa_tenants_list():
-    """Returns tenant list with user_count for superadmin portal."""
+    """Returns tenant list with user_count and cloud spend for superadmin portal."""
     from database import get_db
     conn = get_db()
-    rows = conn.execute(
-        "SELECT t.*, (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id) AS user_count "
-        "FROM tenants t ORDER BY t.created_at DESC"
-    ).fetchall()
+    rows = conn.execute("""
+        SELECT t.*,
+               (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id) AS user_count,
+               (SELECT COALESCE(SUM(cd.cost), 0) FROM cost_data cd
+                  WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month')) AS cloud_spend_30d,
+               (SELECT COALESCE(SUM(cd.cost), 0) FROM cost_data cd
+                  WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month', '-1 month')
+                        AND cd.date < date('now', 'start of month')) AS cloud_spend_prev_30d
+        FROM tenants t ORDER BY t.created_at DESC
+    """).fetchall()
     conn.close()
     return jsonify({"tenants": [dict(r) for r in rows]})
+
+
+@app.route("/api/superadmin/tenants", methods=["POST"])
+@super_admin_required
+def api_sa_create_tenant():
+    """Create a new tenant (organisation) from the super-admin portal."""
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "").strip()
+    plan = body.get("plan") or "free"
+    owner_email = (body.get("owner_email") or "").strip().lower()
+
+    if not name:
+        return jsonify({"error": "Organisation name is required"}), 400
+    if plan not in ("free", "starter", "pro", "enterprise"):
+        plan = "free"
+
+    slug = slugify((body.get("slug") or name).strip())
+    tenant_id = create_tenant(name, slug, owner_email, plan=plan)
+    tenant = get_tenant(tenant_id)
+    tenant["user_count"] = 0
+    tenant["cloud_spend_30d"] = 0
+    tenant["cloud_spend_prev_30d"] = 0
+    return jsonify({"message": "Tenant created", "tenant": tenant}), 201
 
 
 # ─── Run ──────────────────────────────────────────────────────────────────────

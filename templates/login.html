@@ -1,353 +1,212 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign In — Cloud Cost Analyzer</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-
-        :root {
-            --bg:       #0d0f14;
-            --panel:    #13151c;
-            --card:     #1a1d28;
-            --input:    #20232f;
-            --border:   #2a2d3e;
-            --text:     #e8eaf2;
-            --muted:    #7c7f96;
-            --accent:   #4f6ef7;
-            --accent-h: #3d5ce5;
-            --green:    #22c55e;
-            --red:      #ef4444;
-        }
-
-        body {
-            font-family: "Inter", -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-        }
-
-        /* ── Left brand panel ───────────────────────────────── */
-        .brand-panel {
-            flex: 1;
-            background: linear-gradient(145deg, #0f1420 0%, #141829 50%, #0d1330 100%);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 48px 56px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* subtle grid background */
-        .brand-panel::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background-image:
-                linear-gradient(rgba(79,110,247,.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(79,110,247,.05) 1px, transparent 1px);
-            background-size: 48px 48px;
-            pointer-events: none;
-        }
-
-        /* glow orb */
-        .brand-panel::after {
-            content: '';
-            position: absolute;
-            top: -120px; left: -120px;
-            width: 500px; height: 500px;
-            background: radial-gradient(circle, rgba(79,110,247,.15) 0%, transparent 70%);
-            pointer-events: none;
-        }
-
-        .brand-logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .brand-logo .ic {
-            width: 40px; height: 40px;
-            background: linear-gradient(135deg, var(--accent), #3d5ce5);
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 20px rgba(79,110,247,.4);
-        }
-
-        .brand-logo span {
-            font-size: 16px;
-            font-weight: 600;
-            letter-spacing: -0.2px;
-        }
-
-        .brand-hero {
-            position: relative;
-            z-index: 1;
-        }
-
-        .brand-hero h2 {
-            font-size: clamp(32px, 3.5vw, 52px);
-            font-weight: 700;
-            line-height: 1.15;
-            letter-spacing: -0.8px;
-            margin-bottom: 16px;
-            background: linear-gradient(135deg, #e8eaf2 30%, #7c8ab8 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .brand-hero p {
-            font-size: 15px;
-            color: var(--muted);
-            line-height: 1.6;
-            max-width: 380px;
-        }
-
-        .brand-features {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .brand-feature {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 13px;
-            color: #9da0b8;
-        }
-
-        .brand-feature .dot {
-            width: 6px; height: 6px;
-            border-radius: 50%;
-            background: var(--accent);
-            flex-shrink: 0;
-            box-shadow: 0 0 6px var(--accent);
-        }
-
-        .brand-clouds {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .cloud-chip {
-            font-size: 11px;
-            font-weight: 500;
-            padding: 5px 12px;
-            border-radius: 20px;
-            border: 1px solid var(--border);
-            color: var(--muted);
-            background: rgba(255,255,255,.03);
-        }
-
-        /* ── Right form panel ───────────────────────────────── */
-        .form-panel {
-            width: 40%;
-            min-width: 500px;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 60px 72px;
-            background: var(--panel);
-        }
-
-        .form-inner {
-            width: 100%;
-            max-width: 420px;
-        }
-
-        .form-title {
-            font-size: 32px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            margin-bottom: 8px;
-        }
-
-        .form-sub {
-            font-size: 15px;
-            color: var(--muted);
-            margin-bottom: 40px;
-        }
-
-        .fg {
-            margin-bottom: 18px;
-        }
-
-        .fg label {
-            display: block;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: .5px;
-            color: var(--muted);
-            margin-bottom: 9px;
-        }
-
-        .fg input {
-            width: 100%;
-            padding: 16px 18px;
-            background: var(--input);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            color: var(--text);
-            font-size: 15px;
-            font-family: inherit;
-            transition: border-color .2s, box-shadow .2s;
-        }
-
-        .fg input:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(79,110,247,.15);
-        }
-
-        .fg input::placeholder { color: #3a3d52; }
-
-        .btn-signin {
-            width: 100%;
-            padding: 17px;
-            background: var(--accent);
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            font-family: inherit;
-            cursor: pointer;
-            transition: background .2s, transform .1s;
-            margin-top: 6px;
-            letter-spacing: .1px;
-        }
-
-        .btn-signin:hover  { background: var(--accent-h); }
-        .btn-signin:active { transform: scale(.99); }
-
-        .err {
-            background: rgba(239,68,68,.1);
-            border: 1px solid rgba(239,68,68,.25);
-            color: #f87171;
-            padding: 11px 14px;
-            border-radius: 8px;
-            font-size: 13px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .divider {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin: 24px 0;
-            color: var(--muted);
-            font-size: 12px;
-        }
-        .divider::before, .divider::after { content:""; flex:1; height:1px; background:var(--border); }
-
-        .signup-link {
-            display: block;
-            text-align: center;
-            padding: 15px;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            color: var(--text);
-            font-size: 15px;
-            font-weight: 500;
-            text-decoration: none;
-            transition: border-color .2s, background .2s;
-        }
-        .signup-link:hover { border-color: var(--accent); background: rgba(79,110,247,.06); }
-
-        .form-footer {
-            margin-top: 32px;
-            font-size: 12px;
-            color: var(--muted);
-            text-align: center;
-        }
-
-        /* ── Responsive: stack on narrow screens ──────────────── */
-        @media (max-width: 900px) {
-            body { flex-direction: column; }
-            .brand-panel { padding: 32px; min-height: auto; border-right: none; border-bottom: 1px solid var(--border); }
-            .brand-hero h2 { font-size: 26px; }
-            .form-panel { width: 100%; padding: 40px 24px; }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — Cloud Cost Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
 </head>
 <body>
+<div class="login-shell">
 
-<!-- ── Left: brand panel ───────────────────────────────── -->
-<div class="brand-panel">
-    <div class="brand-logo">
-        <div class="ic">
-            <svg width="22" height="22" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
-            </svg>
+  <!-- ── Left: marketing panel ──────────────────────────────────────── -->
+  <div class="marketing">
+    <div class="logo">
+      <div class="logo__icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+        </svg>
+      </div>
+      <span>Cloud Cost Analyzer</span>
+    </div>
+
+    <div class="hero">
+      <h1>Full visibility into<br><span class="grad">your cloud spend</span></h1>
+      <p>Unify Azure, AWS and GCP costs in one dashboard. Track, compare and forecast spend across every team and project.</p>
+
+      <div class="features">
+        <div class="feature">
+          <div class="feature__tile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          Real-time cost sync across all cloud providers
         </div>
-        <span>Cloud Cost Analyzer</span>
+        <div class="feature">
+          <div class="feature__tile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          Budget alerts before you overspend
+        </div>
+        <div class="feature">
+          <div class="feature__tile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          AI-powered cost analysis and recommendations
+        </div>
+        <div class="feature">
+          <div class="feature__tile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          Multi-tenant with role-based access control
+        </div>
+      </div>
     </div>
 
-    <div class="brand-hero">
-        <h2>Full visibility into<br>your cloud spend</h2>
-        <p>Unify Azure, AWS and GCP costs in one dashboard. Track, compare and forecast spend across all your teams and projects.</p>
-    </div>
-
-    <div class="brand-features">
-        <div class="brand-feature"><div class="dot"></div>Real-time cost sync across all cloud providers</div>
-        <div class="brand-feature"><div class="dot"></div>Budget alerts before you overspend</div>
-        <div class="brand-feature"><div class="dot"></div>AI-powered cost analysis and recommendations</div>
-        <div class="brand-feature"><div class="dot"></div>Multi-tenant with role-based access control</div>
-    </div>
-
-    <div class="brand-clouds">
-        <span class="cloud-chip">Azure</span>
-        <span class="cloud-chip">AWS</span>
-        <span class="cloud-chip">GCP</span>
-        <span style="font-size:11px;color:var(--muted);margin-left:4px">Secure · Enterprise ready</span>
-    </div>
-</div>
-
-<!-- ── Right: form panel ───────────────────────────────── -->
-<div class="form-panel">
-    <div class="form-inner">
-        <h1 class="form-title">Welcome back</h1>
-        <p class="form-sub">Sign in to your account to continue</p>
-
-        {% if error %}<div class="err">{{ error }}</div>{% endif %}
-
-        <form method="POST" action="/login">
-            <div class="fg">
-                <label>Work Email</label>
-                <input type="email" name="username" placeholder="you@company.com" required autofocus>
+    <!-- Live mini dashboard preview -->
+    <div class="preview-card">
+      <div class="preview-card__head">
+        <div class="preview-card__dots"><span></span><span></span><span></span></div>
+        <div class="preview-card__title">Cost Overview · June 2026</div>
+        <div class="live-tag"><span class="live-tag__dot"></span>LIVE</div>
+      </div>
+      <div class="preview-card__body">
+        <div class="preview-stats">
+          <div>
+            <div class="preview-stats__label">Total Spend</div>
+            <div class="preview-stats__value">
+              <span id="pkVal">$49,526</span>
+              <span class="pill-down">↓ 12.4%</span>
             </div>
-            <div class="fg">
-                <label>Password</label>
-                <input type="password" name="password" placeholder="Enter password" required>
+          </div>
+          <div class="preview-stats__right">
+            <div class="saved-callout">
+              <div class="saved-callout__label">Saved this mo.</div>
+              <div class="saved-callout__value">$12,640</div>
             </div>
-            <button type="submit" class="btn-signin">Sign In</button>
+            <span class="peek-tip" id="pkTip">$49.5k</span>
+          </div>
+        </div>
+
+        <div class="peek-chart">
+          <svg class="peek-svg" viewBox="0 0 320 92" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="pkArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--accent)" stop-opacity=".5"/>
+                <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="pkLine" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="oklch(0.7 0.16 230)"/>
+                <stop offset="100%" stop-color="var(--accent)"/>
+              </linearGradient>
+            </defs>
+            <line x1="6" y1="20" x2="314" y2="20" stroke="var(--border-soft)" stroke-width="1"/>
+            <line x1="6" y1="48" x2="314" y2="48" stroke="var(--border-soft)" stroke-width="1"/>
+            <line x1="6" y1="76" x2="314" y2="76" stroke="var(--border-soft)" stroke-width="1"/>
+            <path id="pkPathArea" fill="url(#pkArea)" d=""/>
+            <path id="pkPathLine" fill="none" stroke="url(#pkLine)" stroke-width="2.5" stroke-linecap="round" d=""/>
+            <circle id="pkDot" r="4" fill="#fff" stroke="var(--accent)" stroke-width="3"/>
+          </svg>
+        </div>
+
+        <div class="preview-legend">
+          <div class="preview-legend__item"><span class="preview-legend__dot preview-legend__dot--aws"></span>AWS 52%</div>
+          <div class="preview-legend__item"><span class="preview-legend__dot preview-legend__dot--azure"></span>Azure 31%</div>
+          <div class="preview-legend__item"><span class="preview-legend__dot preview-legend__dot--gcp"></span>GCP 17%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chips">
+      <span class="chip">Azure</span>
+      <span class="chip">AWS</span>
+      <span class="chip">GCP</span>
+      <span class="chip chip--accent">SOC 2 · Enterprise ready</span>
+    </div>
+  </div>
+
+  <!-- ── Right: form panel ───────────────────────────────────────────── -->
+  <div class="form-side">
+    <div class="form-side__top">
+      <div class="logo">
+        <div class="logo__icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+          </svg>
+        </div>
+      </div>
+      <button type="button" class="lang-pill">EN <span aria-hidden="true">▾</span></button>
+    </div>
+
+    <div class="form-side__center">
+      <div class="form-wrap">
+        <h1>Welcome back</h1>
+        <p class="form-wrap__sub">Sign in to your account to continue</p>
+
+        {% if error %}
+          <div class="alert alert--error" role="alert" aria-live="polite">{{ error }}</div>
+        {% endif %}
+        {% if notice %}
+          <div class="alert alert--notice" role="status" aria-live="polite">{{ notice }}</div>
+        {% endif %}
+
+        <div class="sso-stack">
+          <a class="btn-sso" href="{{ url_for('sso_login', provider='microsoft') }}">
+            <svg width="16" height="16" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>
+            Continue with Microsoft
+          </a>
+          <a class="btn-sso" href="{{ url_for('sso_login', provider='google') }}">
+            <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 01-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+            Continue with Google
+          </a>
+          <a class="btn-sso" href="{{ url_for('sso_login', provider='saml') }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Single sign-on (SSO)
+          </a>
+        </div>
+
+        <div class="divider">or continue with email</div>
+
+        <form method="POST" action="{{ url_for('login') }}" id="login-form">
+          <div class="field">
+            <label class="field__label" for="email">Work email</label>
+            <div class="input-wrap">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg>
+              <input type="email" id="email" name="username" placeholder="you@company.com" autocomplete="email" required autofocus value="{{ email or '' }}">
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field__label" for="password">
+              Password
+              <a href="{{ url_for('forgot_password') }}">Forgot password?</a>
+            </label>
+            <div class="input-wrap">
+              <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+              <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+              <button type="button" class="eye-toggle" id="pwToggle" aria-label="Show password">
+                <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <label class="remember">
+            <input type="checkbox" name="remember" checked>
+            <span class="remember__box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <span class="remember__label">Remember me for 30 days</span>
+          </label>
+
+          <button type="submit" class="btn-submit" id="submitBtn">
+            <span class="spinner"></span>
+            <span class="btn-submit__label">Sign in</span>
+            <svg class="btn-submit__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
         </form>
 
-        <div class="divider">or</div>
-        <a href="/signup" class="signup-link">Create a new organisation account</a>
+        <div class="create-org">New to Cloud Cost Analyzer? <a href="{{ url_for('signup') }}">Create an organisation →</a></div>
 
-        <div class="form-footer">Secure &bull; Multi-tenant &bull; Enterprise ready</div>
+        <div class="form-footer">🔒 Secure · Multi-tenant · SOC 2 Type II</div>
+      </div>
     </div>
+  </div>
+
 </div>
 
+<script src="{{ url_for('static', filename='js/login.js') }}"></script>
 </body>
 </html>
