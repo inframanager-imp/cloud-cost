@@ -269,7 +269,20 @@ def login():
         else:
             error = "Invalid email or password"
 
-    return render_template("login.html", error=error)
+    notice = request.args.get("notice") if request.method == "GET" else None
+    return render_template("login.html", error=error, notice=notice, email=request.form.get("username", ""))
+
+
+@app.route("/forgot-password", methods=["GET"])
+def forgot_password():
+    """Stub: password reset is not yet implemented."""
+    return redirect(url_for("login", notice="Password reset isn't available yet — contact your administrator."))
+
+
+@app.route("/auth/sso/<provider>", methods=["GET"])
+def sso_login(provider):
+    """Stub: SSO providers are not yet wired up."""
+    return redirect(url_for("login", notice=f"{provider.capitalize()} sign-in isn't available yet."))
 
 
 @app.route("/signup", methods=["GET", "POST"])
