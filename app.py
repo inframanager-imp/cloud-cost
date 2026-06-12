@@ -4254,8 +4254,11 @@ def api_cloud_provider_sync(pk):
             elif provider["provider_type"] == "gcp":
                 from gcp_fetcher import fetch_gcp_costs
                 records = fetch_gcp_costs(provider, date_from, date_to)
+            elif provider["provider_type"] == "azure":
+                from azure_fetcher import fetch_azure_costs
+                records = fetch_azure_costs(provider, date_from, date_to)
             else:
-                print(f"[Sync] Azure providers use /api/sync endpoint")
+                print(f"[Sync] Unknown provider type: {provider['provider_type']}")
                 return
 
             if records:
