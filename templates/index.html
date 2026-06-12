@@ -55,23 +55,15 @@
         </button>
     </div>
 
-    <!-- Workspace switcher -->
-    <div style="padding:4px 10px 5px;border-bottom:1px solid var(--border)">
-        <div class="workspace-switcher" style="position:relative">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" style="flex-shrink:0;color:var(--text-secondary)">
-                <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
-            </svg>
-            <span id="wsAccountName" style="flex:1;font-size:11px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">All Accounts</span>
-            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;opacity:.5">
-                <polyline points="6,9 12,15 18,9"/>
-            </svg>
-            <select id="globalSubFilter" onchange="onSubscriptionChange();document.getElementById('wsAccountName').textContent=this.options[this.selectedIndex].text" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer">
-                <option value="">All Accounts</option>
-            </select>
-        </div>
-    </div>
-
     <div class="sidebar-nav">
+
+        <!-- ── AI Assistant ────────────────────────── -->
+        <div class="nav-item" data-page="chat" onclick="navigateTo('chat')" style="border-bottom:1px solid var(--border);margin-bottom:4px">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+            <span class="nav-text">AI Assistant</span>
+        </div>
 
         <!-- ── Setup ───────────────────────────────── -->
         <div class="nav-section-label">Setup</div>
@@ -90,6 +82,14 @@
             <span class="nav-text">Budgets &amp; Alerts</span>
         </div>
 
+        <div class="nav-item" data-page="integrations" onclick="navigateTo('integrations')">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
+            <span class="nav-text">Other Services</span>
+        </div>
+
 
         <!-- ── Analytics ───────────────────────────── -->
         <div class="nav-section-label" style="border-top:1px solid var(--border)">Analytics</div>
@@ -98,7 +98,7 @@
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path d="M3 3h18v18H3zM3 9h18M9 21V9"/>
             </svg>
-            <span class="nav-text">Executive Summary</span>
+            <span class="nav-text">Dashboard</span>
         </div>
 
         <div class="nav-item" data-page="cloud-overview" onclick="navigateTo('cloud-overview')">
@@ -107,14 +107,6 @@
                 <path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/>
             </svg>
             <span class="nav-text">Cloud Overview</span>
-        </div>
-
-        <div class="nav-item" data-page="dashboard" onclick="navigateTo('dashboard')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-            </svg>
-            <span class="nav-text">Dashboard</span>
         </div>
 
         <div class="nav-item" data-page="costs" onclick="navigateTo('costs')">
@@ -159,14 +151,6 @@
         <!-- ── Operations ──────────────────────────── -->
         <div class="nav-section-label" style="border-top:1px solid var(--border)">Operations</div>
 
-        <div class="nav-item" data-page="integrations" onclick="navigateTo('integrations')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-            </svg>
-            <span class="nav-text">Integrations</span>
-        </div>
-
         <div class="nav-item" data-page="activity" onclick="navigateTo('activity')">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
@@ -181,13 +165,6 @@
                 <polyline points="22,6 12,13 2,6"/>
             </svg>
             <span class="nav-text">Email Reports</span>
-        </div>
-
-        <div class="nav-item" data-page="chat" onclick="navigateTo('chat')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-            </svg>
-            <span class="nav-text">AI Assistant</span>
         </div>
 
         <div class="nav-item" data-page="team" onclick="navigateTo('team')">
@@ -323,7 +300,7 @@
         <!-- Header -->
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
             <div>
-                <div class="db-breadcrumb">ANALYTICS / EXECUTIVE SUMMARY</div>
+                <div class="db-breadcrumb">ANALYTICS / DASHBOARD</div>
                 <h1 style="font-size:22px;font-weight:700;color:var(--text-primary);margin:3px 0 6px">FinOps Command Center</h1>
                 <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                     <div style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:rgba(0,120,212,0.1);border:1px solid rgba(0,120,212,0.25)">
@@ -532,138 +509,6 @@
             </div>
 
         </div>
-
-    </section>
-
-    <section id="page-dashboard" class="page-section">
-
-        <!-- DB Header -->
-        <div class="db-header">
-            <div class="db-header-left">
-                <div class="db-breadcrumb">ANALYTICS / DASHBOARD</div>
-                <h1 class="db-title" id="dbTitle">Dashboard</h1>
-                <div class="db-sync-line">
-                    <span class="db-sync-dot" id="dbSyncDot"></span>
-                    <span id="lastSyncInfo" style="font-size:12px;color:var(--text-secondary)">Last synced {{ last_sync_time }} · Auto-sync every 6h</span>
-                </div>
-            </div>
-            <div class="db-segmented" id="cloudSegmented">
-                <button class="db-seg-btn active" data-cloud="" onclick="setCloudFilter('')">All clouds</button>
-                <button class="db-seg-btn" data-cloud="azure" onclick="setCloudFilter('azure')">Azure</button>
-                <button class="db-seg-btn" data-cloud="aws" onclick="setCloudFilter('aws')">AWS</button>
-                <button class="db-seg-btn" data-cloud="gcp" onclick="setCloudFilter('gcp')">GCP</button>
-                <button class="db-seg-btn" data-cloud="openai" onclick="setCloudFilter('openai')">OpenAI</button>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;margin-left:10px">
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--text-secondary);flex-shrink:0">
-                    <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
-                </svg>
-                <select id="dashClientFilter" class="filter-input" style="font-size:12px;padding:4px 8px;height:30px" onchange="setClientFilter(this.value)">
-                    <option value="">All Clients</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Data Freshness Banner -->
-        <div id="dataFreshnessBanner" style="display:none;margin-bottom:12px"></div>
-
-        <!-- 4 KPI Tiles -->
-        <div class="db-kpi-grid">
-            <div class="db-kpi-tile">
-                <div class="db-kpi-label">Total spend</div>
-                <div class="db-kpi-value-row">
-                    <span class="db-kpi-value" id="kpiTotal">$—</span>
-                    <span class="db-kpi-delta" id="kpiTotalDelta"></span>
-                </div>
-                <svg class="db-sparkline" viewBox="0 0 120 24" preserveAspectRatio="none">
-                    <polyline id="sparkTotalLine" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,20 120,20"/>
-                </svg>
-                <div class="db-kpi-sub" id="kpiTotalSub"></div>
-            </div>
-            <div class="db-kpi-tile">
-                <div class="db-kpi-label">Avg / day</div>
-                <div class="db-kpi-value-row">
-                    <span class="db-kpi-value" id="kpiAvgDay">$—</span>
-                </div>
-                <svg class="db-sparkline" viewBox="0 0 120 24" preserveAspectRatio="none">
-                    <polyline id="sparkAvgLine" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,20 120,20"/>
-                </svg>
-                <div class="db-kpi-sub" id="kpiAvgSub"></div>
-            </div>
-            <div class="db-kpi-tile">
-                <div class="db-kpi-label">Projected EOM</div>
-                <div class="db-kpi-value-row">
-                    <span class="db-kpi-value" id="kpiProjected">$—</span>
-                </div>
-                <div class="db-kpi-progress-wrap">
-                    <div class="db-kpi-progress-bar">
-                        <div class="db-kpi-progress-fill" id="kpiProgressFill" style="width:0%"></div>
-                    </div>
-                    <div class="db-kpi-progress-label" id="kpiProgressLabel">Day 0 of 31 — 0%</div>
-                </div>
-            </div>
-            <div class="db-kpi-tile">
-                <div class="db-kpi-label">Last month</div>
-                <div class="db-kpi-value-row">
-                    <span class="db-kpi-value" id="kpiLastMonth">$—</span>
-                </div>
-                <svg class="db-sparkline" viewBox="0 0 120 24" preserveAspectRatio="none">
-                    <polyline id="sparkLastLine" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,20 120,20"/>
-                </svg>
-                <div class="db-kpi-sub" id="kpiLastSub"></div>
-            </div>
-        </div>
-
-        <!-- Provider Cards -->
-        <div class="db-section">
-            <div class="db-section-hdr">
-                <span class="db-section-title">Cost by cloud provider <span class="db-section-period">· This month</span></span>
-                <button class="db-link-btn" onclick="navigateTo('cloud-overview')">View details →</button>
-            </div>
-            <div id="dbProviderCards" class="db-provider-grid"></div>
-        </div>
-
-        <!-- Mid Grid: Accounts + Services -->
-        <div class="db-mid-grid">
-            <div class="db-card">
-                <div class="db-card-hdr">
-                    <span class="db-card-title" id="dashSubTitle">Cost by account</span>
-                    <span class="db-card-period">This month</span>
-                </div>
-                <div id="dashSubCosts" class="db-ranked-list"></div>
-            </div>
-            <div class="db-card">
-                <div class="db-card-hdr">
-                    <span class="db-card-title" id="dashServiceTitle">Top services</span>
-                    <span class="db-card-period">This month</span>
-                </div>
-                <div class="db-donut-wrap">
-                    <div class="db-donut-canvas-wrap">
-                        <canvas id="dashServiceChart" width="160" height="160"></canvas>
-                        <div class="db-donut-center">
-                            <div class="db-donut-center-lbl">Total</div>
-                            <div class="db-donut-center-amt" id="dashServiceTotal">—</div>
-                        </div>
-                    </div>
-                    <div id="dashTopServicesList" class="db-donut-legend"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Top RGs full width -->
-        <div class="db-card">
-            <div class="db-card-hdr">
-                <span class="db-card-title" id="dashRGTitle">Top resource groups / projects</span>
-                <span class="db-card-period">This month</span>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 220px;gap:16px;align-items:start">
-                <div id="dashTopRGsList" class="db-ranked-list"></div>
-                <div style="height:200px"><canvas id="dashRGChart"></canvas></div>
-            </div>
-        </div>
-
-        <!-- Hidden backward-compat -->
-        <span id="cloudFilterLabel" style="display:none"></span>
 
     </section>
 
@@ -3010,9 +2855,6 @@
                             <span id="intg-status-jira" class="intg-badge intg-badge-off">Not connected</span>
                         </div>
                     </div>
-                    <p style="font-size:13px;color:var(--text-muted);line-height:1.5;margin:0 0 16px">
-                        Automatically create Jira issues when budgets are exceeded or cost anomalies are detected.
-                    </p>
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('jira')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('jira')">Test</button>
@@ -3038,9 +2880,6 @@
                             <span id="intg-status-bitbucket" class="intg-badge intg-badge-off">Not connected</span>
                         </div>
                     </div>
-                    <p style="font-size:13px;color:var(--text-muted);line-height:1.5;margin:0 0 16px">
-                        Post cost summaries as PR comments and trigger cost reports from repository webhooks.
-                    </p>
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('bitbucket')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('bitbucket')">Test</button>
@@ -3066,9 +2905,6 @@
                             <span id="intg-status-cursor" class="intg-badge intg-badge-off">Not connected</span>
                         </div>
                     </div>
-                    <p style="font-size:13px;color:var(--text-muted);line-height:1.5;margin:0 0 16px">
-                        Track your Cursor AI subscription and usage costs alongside your cloud spend in one place.
-                    </p>
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('cursor')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('cursor')">Test</button>
@@ -3094,9 +2930,6 @@
                             <span id="intg-status-openai" class="intg-badge intg-badge-off">Not connected</span>
                         </div>
                     </div>
-                    <p style="font-size:13px;color:var(--text-muted);line-height:1.5;margin:0 0 16px">
-                        Track OpenAI API token usage and costs. Integrates with the AI Assistant for cost queries.
-                    </p>
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('openai')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('openai')">Test</button>
@@ -5170,7 +5003,6 @@ document.addEventListener('DOMContentLoaded', function() {
         origNav(page);
         if (page === 'cloud-providers') { loadProviders(); loadDataFreshness(); }
         if (page === 'budgets') { loadBudgets(); }
-        if (page === 'dashboard') { loadDataFreshness(); }
         if (page === 'team') { loadTeam(); }
         if (page === 'integrations') { loadIntegrations(); }
     };
@@ -5482,9 +5314,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const statRec = document.getElementById('oai-stat-records');
             if (statRec) statRec.textContent = data.records || 0;
             const lastSyncEl = document.getElementById('openai-last-sync');
-            if (lastSyncEl) lastSyncEl.textContent = data.last_sync ? 'Last synced: ' + new Date(data.last_sync).toLocaleString() : '';
+            if (lastSyncEl) lastSyncEl.textContent = data.last_sync ? 'Last connected: ' + new Date(data.last_sync).toLocaleString() : '';
             const dashLastSync = document.getElementById('openai-dash-lastsync');
-            if (dashLastSync) dashLastSync.textContent = data.last_sync ? 'Last synced: ' + new Date(data.last_sync).toLocaleString() : '';
+            if (dashLastSync) dashLastSync.textContent = data.last_sync ? 'Last connected: ' + new Date(data.last_sync).toLocaleString() : '';
             if (subtitle && data.top_models && data.top_models.length)
                 subtitle.textContent = 'Top model: ' + data.top_models[0].name + ' · $' + data.top_models[0].cost.toFixed(2) + ' this month';
             loadOpenAIBreakdown();
