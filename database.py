@@ -2122,7 +2122,7 @@ def get_stats(subscription_id=None):
     return stats
 
 
-def insert_activity_logs(logs, subscription_id=None, cloud_provider="azure"):
+def insert_activity_logs(logs, subscription_id=None, cloud_provider="azure", tenant_id=1):
     if not logs:
         return 0
     conn = get_db()
@@ -2130,6 +2130,7 @@ def insert_activity_logs(logs, subscription_id=None, cloud_provider="azure"):
     inserted = 0
     sub = subscription_id or ""
     cp = cloud_provider or "azure"
+    tid = tenant_id or 1
     for log in logs:
         try:
             t = list(log)
@@ -2145,9 +2146,9 @@ def insert_activity_logs(logs, subscription_id=None, cloud_provider="azure"):
                 INSERT OR IGNORE INTO activity_logs
                 (event_id, subscription_id, cloud_provider, timestamp, caller, operation, operation_name,
                  resource_group, resource_type, resource_name, resource_id,
-                 status, level, category, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (eid, sub, cp, *t[1:]))
+                 status, level, category, description, tenant_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (eid, sub, cp, *t[1:], tid))
             inserted += cursor.rowcount
         except Exception:
             pass
@@ -2171,6 +2172,9 @@ def query_activity_logs(filters=None):
     params = []
 
     if filters:
+        if filters.get("tenant_id") is not None:
+            query += " AND al.tenant_id = ?"
+            params.append(filters["tenant_id"])
         if filters.get("subscription_id"):
             query += " AND al.subscription_id = ?"
             params.append(filters["subscription_id"])
@@ -2212,24 +2216,28 @@ def query_activity_logs(filters=None):
     return [dict(r) for r in rows]
 
 
-def get_activity_stats():
+def get_activity_stats(tenant_id=None):
     conn = get_db()
     stats = {}
-    row = conn.execute("SELECT COUNT(*) as cnt, MIN(timestamp) as min_ts, MAX(timestamp) as max_ts FROM activity_logs").fetchone()
+    where = " WHERE tenant_id = ?" if tenant_id is not None else ""
+    params = [tenant_id] if tenant_id is not None else []
+
+    row = conn.execute(f"SELECT COUNT(*) as cnt, MIN(timestamp) as min_ts, MAX(timestamp) as max_ts FROM activity_logs{where}", params).fetchone()
     stats["total_events"] = row["cnt"]
     stats["earliest"] = row["min_ts"]
     stats["latest"] = row["max_ts"]
 
-    callers = conn.execute("SELECT DISTINCT caller FROM activity_logs WHERE caller IS NOT NULL AND caller != '' ORDER BY caller").fetchall()
+    caller_where = where + (" AND" if where else " WHERE") + " caller IS NOT NULL AND caller != ''"
+    callers = conn.execute(f"SELECT DISTINCT caller FROM activity_logs{caller_where} ORDER BY caller", params).fetchall()
     stats["callers"] = [r[0] for r in callers]
 
-    statuses = conn.execute("SELECT status, COUNT(*) as cnt FROM activity_logs GROUP BY status ORDER BY cnt DESC").fetchall()
+    statuses = conn.execute(f"SELECT status, COUNT(*) as cnt FROM activity_logs{where} GROUP BY status ORDER BY cnt DESC", params).fetchall()
     stats["by_status"] = {r["status"]: r["cnt"] for r in statuses}
 
-    recent = conn.execute("""
+    recent = conn.execute(f"""
         SELECT caller, operation_name, resource_name, resource_group, status, level, timestamp
-        FROM activity_logs ORDER BY timestamp DESC LIMIT 10
-    """).fetchall()
+        FROM activity_logs{where} ORDER BY timestamp DESC LIMIT 10
+    """, params).fetchall()
     stats["recent"] = [dict(r) for r in recent]
 
     return stats

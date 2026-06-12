@@ -1932,7 +1932,7 @@ def _execute_activity_sync(days=7, target_sub=None, cloud_provider=None):
             date_from = (datetime.utcnow() - timedelta(days=days_local)).strftime("%Y-%m-%d")
 
         records = fetch_activity_logs(date_from, date_to_local, subscription_id=sub_id)
-        count = insert_activity_logs(records, subscription_id=sub_id)
+        count = insert_activity_logs(records, subscription_id=sub_id, tenant_id=sub.get("tenant_id", 1))
         update_subscription_sync_time(sub_id, "activity")
 
         caller_ids = {r[2] for r in records if r[2]}
@@ -2041,7 +2041,7 @@ def _execute_activity_sync(days=7, target_sub=None, cloud_provider=None):
                             recs = fetch_aws_activity(cp, days)
                         else:
                             recs = fetch_gcp_activity(cp, days)
-                        count = insert_activity_logs(recs, subscription_id=cp.get("provider_id"), cloud_provider=cp_type)
+                        count = insert_activity_logs(recs, subscription_id=cp.get("provider_id"), cloud_provider=cp_type, tenant_id=cp.get("tenant_id", 1))
                         total_count += count
                         print(f"[Activity-sync] {cp_name} ({cp_type}): {count} events inserted")
                     except Exception as cp_err:
@@ -2200,6 +2200,7 @@ def api_activity_auto_sync_run_now():
 @login_required
 def api_activity():
     filters = {
+        "tenant_id": current_tenant_id(),
         "subscription_id": request.args.get("subscription_id"),
         "cloud_provider": request.args.get("cloud_provider"),
         "date_from": request.args.get("date_from"),
@@ -2232,6 +2233,7 @@ def api_activity():
 @login_required
 def api_activity_export():
     filters = {
+        "tenant_id": current_tenant_id(),
         "subscription_id": request.args.get("subscription_id"),
         "cloud_provider": request.args.get("cloud_provider"),
         "date_from": request.args.get("date_from"),
@@ -2276,8 +2278,8 @@ def api_activity_overview():
     sub_id = request.args.get("subscription_id")
     cloud_provider = request.args.get("cloud_provider")
     conn = get_db()
-    params = []
-    where = " WHERE 1=1"
+    params = [current_tenant_id()]
+    where = " WHERE tenant_id = ?"
     if sub_id:
         where += " AND subscription_id = ?"
         params.append(sub_id)
@@ -2344,8 +2346,8 @@ def api_activity_users():
     sub_id = request.args.get("subscription_id")
     cloud_provider = request.args.get("cloud_provider")
     conn = get_db()
-    params = []
-    where = " WHERE caller IS NOT NULL AND caller != ''"
+    params = [current_tenant_id()]
+    where = " WHERE tenant_id = ? AND caller IS NOT NULL AND caller != ''"
     if sub_id:
         where += " AND subscription_id = ?"
         params.append(sub_id)
@@ -2385,8 +2387,8 @@ def api_activity_resource_timeline():
     resource_name = request.args.get("resource_name")
     resource_group = request.args.get("resource_group")
     conn = get_db()
-    params = []
-    where = " WHERE 1=1"
+    params = [current_tenant_id()]
+    where = " WHERE tenant_id = ?"
     if sub_id:
         where += " AND subscription_id = ?"
         params.append(sub_id)
@@ -2444,8 +2446,8 @@ def api_activity_failed():
     sub_id = request.args.get("subscription_id")
     cloud_provider = request.args.get("cloud_provider")
     conn = get_db()
-    params = []
-    where = " WHERE status = 'Failed'"
+    params = [current_tenant_id()]
+    where = " WHERE tenant_id = ? AND status = 'Failed'"
     if sub_id:
         where += " AND subscription_id = ?"
         params.append(sub_id)
@@ -2511,8 +2513,8 @@ def api_activity_security():
     sub_id = request.args.get("subscription_id")
     cloud_provider = request.args.get("cloud_provider")
     conn = get_db()
-    params = []
-    where = " WHERE 1=1"
+    params = [current_tenant_id()]
+    where = " WHERE tenant_id = ?"
     if sub_id:
         where += " AND subscription_id = ?"
         params.append(sub_id)
@@ -2570,7 +2572,7 @@ def api_activity_security():
 @app.route("/api/activity/stats")
 @login_required
 def api_activity_stats():
-    stats = get_activity_stats()
+    stats = get_activity_stats(tenant_id=current_tenant_id())
     names = get_caller_names()
     stats["callers_display"] = {c: names.get(c, c) for c in stats.get("callers", [])}
     for r in stats.get("recent", []):
@@ -3466,7 +3468,7 @@ def _run_auto_sync():
                 date_from = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
 
             records = fetch_activity_logs(date_from, date_to, subscription_id=sub_id)
-            count = insert_activity_logs(records, subscription_id=sub_id)
+            count = insert_activity_logs(records, subscription_id=sub_id, tenant_id=sub.get("tenant_id", 1))
             update_subscription_sync_time(sub_id, "activity")
             cids = {r[2] for r in records if r[2]}
             return count, cids

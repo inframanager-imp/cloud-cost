@@ -54,7 +54,7 @@ def _fetch_one_activity(sub, days_local: int, date_to_local: str):
         date_from = (datetime.utcnow() - timedelta(days=days_local)).strftime("%Y-%m-%d")
 
     records = fetch_activity_logs(date_from, date_to_local, subscription_id=sub_id)
-    count = insert_activity_logs(records, subscription_id=sub_id)
+    count = insert_activity_logs(records, subscription_id=sub_id, tenant_id=sub.get("tenant_id", 1))
     update_subscription_sync_time(sub_id, "activity")
 
     caller_ids = {r[2] for r in records if r[2]}
@@ -190,7 +190,7 @@ def run(payload: dict) -> None:
                             recs = fetch_aws_activity(cp, days)
                         else:
                             recs = fetch_gcp_activity(cp, days)
-                        count = insert_activity_logs(recs, subscription_id=cp.get("provider_id"), cloud_provider=cp_type)
+                        count = insert_activity_logs(recs, subscription_id=cp.get("provider_id"), cloud_provider=cp_type, tenant_id=cp.get("tenant_id", 1))
                         total_count += count
                         print(f"[activity_sync_runner] {cp_name} ({cp_type}): {count} events inserted")
                     except Exception as cp_err:
