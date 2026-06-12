@@ -62,6 +62,9 @@ from database import (
     # Azure one-click setup tokens
     create_azure_setup_token, validate_azure_setup_token,
     consume_azure_setup_token, get_azure_setup_token_status,
+    # GCP one-click setup tokens
+    create_gcp_setup_token, validate_gcp_setup_token,
+    consume_gcp_setup_token, get_gcp_setup_token_status,
 )
 from azure_fetcher import (fetch_cost_data, fetch_activity_logs, resolve_caller_names, fetch_subscriptions,
                            fetch_billing_account_costs, filter_billing_only_charges)
@@ -3193,6 +3196,119 @@ def api_azure_setup_status():
     if not token:
         return jsonify({"status": "invalid"}), 400
     return jsonify(get_azure_setup_token_status(token))
+
+
+@app.route("/api/gcp/setup-token", methods=["GET"])
+@login_required
+def api_gcp_setup_token():
+    """Generate a one-time setup token and return the setup command."""
+    tid = current_tenant_id()
+    token = create_gcp_setup_token(tid)
+    app_url = _APP_URL
+    command = (
+        f"curl -sLk {app_url}/static/gcp-setup.sh | bash -s -- --token {token} --tool-url {app_url}"
+    )
+    return jsonify({
+        "token": token,
+        "command": command,
+        "expires_minutes": 30,
+    })
+
+
+@app.route("/api/gcp/auto-connect", methods=["POST"])
+def api_gcp_auto_connect():
+    """Called by gcp-setup.sh after creating the service account & role bindings.
+    No login required — authenticated via one-time token.
+    """
+    body = request.get_json(silent=True) or {}
+    token               = (body.get("token") or "").strip()
+    project_id          = (body.get("project_id") or "").strip()
+    dataset             = (body.get("dataset") or "").strip()
+    table               = (body.get("table") or "").strip()
+    service_account_json = body.get("service_account_json")
+    name                = (body.get("name") or f"GCP {project_id}").strip()
+
+    if not token:
+        return jsonify({"success": False, "error": "token required"}), 400
+
+    token_row = validate_gcp_setup_token(token)
+    if not token_row:
+        return jsonify({"success": False, "error": "Token invalid, expired or already used"}), 401
+
+    if not project_id or not service_account_json:
+        consume_gcp_setup_token(token, "", "failed")
+        return jsonify({"success": False, "error": "Missing credentials"}), 400
+
+    tid = token_row["tenant_id"]
+
+    # Save as cloud provider
+    credentials = json.dumps({
+        "mode": "bigquery",
+        "dataset": dataset,
+        "table": table,
+        "service_account_json": service_account_json,
+    })
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM cloud_providers WHERE provider_type='gcp' AND provider_id=? AND tenant_id=?",
+        (project_id, tid)
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE cloud_providers SET name=?, credentials_json=?, enabled=1 WHERE id=?",
+            (name, credentials, existing["id"])
+        )
+        provider_db_id = existing["id"]
+    else:
+        cur = conn.execute(
+            "INSERT INTO cloud_providers (provider_type, name, provider_id, credentials_json, tenant_id, enabled) "
+            "VALUES ('gcp', ?, ?, ?, ?, 1)",
+            (name, project_id, credentials, tid)
+        )
+        provider_db_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+
+    consume_gcp_setup_token(token, project_id, "connected")
+
+    # Kick off background cost sync (only if dataset/table were provided)
+    def _bg_sync():
+        try:
+            if not dataset or not table:
+                return
+            from database import get_cloud_provider
+            provider = get_cloud_provider(provider_db_id)
+            if provider:
+                from gcp_fetcher import fetch_gcp_costs
+                from database import insert_cost_records
+                today = datetime.utcnow()
+                date_from = (today.replace(day=1)).strftime("%Y-%m-%d")
+                date_to   = today.strftime("%Y-%m-%d")
+                records = fetch_gcp_costs(provider, date_from, date_to)
+                if records:
+                    insert_cost_records(records, tenant_id=tid)
+                    print(f"[AutoConnect] Synced {len(records)} records for GCP {project_id}")
+        except Exception as e:
+            print(f"[AutoConnect] Background sync failed: {e}")
+
+    import threading
+    threading.Thread(target=_bg_sync, daemon=True).start()
+
+    return jsonify({
+        "success": True,
+        "message": f"GCP project {project_id} connected and sync started",
+        "project_id": project_id,
+    })
+
+
+@app.route("/api/gcp/setup-status", methods=["GET"])
+@login_required
+def api_gcp_setup_status():
+    """Poll connection status for a setup token."""
+    token = (request.args.get("token") or "").strip()
+    if not token:
+        return jsonify({"status": "invalid"}), 400
+    return jsonify(get_gcp_setup_token_status(token))
 
 
 # ─── Client Tagging & Cost Allocation ────────────────────────────────────────
