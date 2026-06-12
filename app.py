@@ -4143,6 +4143,7 @@ def api_cloud_provider_sync(pk):
                 return
 
             if records:
+                p_tid = provider.get("tenant_id", 1)
                 conn = get_db()
                 cloud = provider["provider_type"]
                 if cloud == "gcp":
@@ -4150,25 +4151,26 @@ def api_cloud_provider_sync(pk):
                     project_ids = list({r[9] for r in records if r[9]})
                     for proj_id in project_ids:
                         conn.execute(
-                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=?",
-                            (date_from, date_to, proj_id)
+                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
+                            (date_from, date_to, proj_id, p_tid)
                         )
                 else:
                     conn.execute(
-                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=?",
-                        (date_from, date_to, cloud, provider["provider_id"])
+                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                        (date_from, date_to, cloud, provider["provider_id"], p_tid)
                     )
                 conn.commit()
                 conn.close()
 
-                # Insert with 12-column tuples (includes cloud_provider)
+                # Insert with 13-column tuples (includes cloud_provider + tenant_id)
                 conn = get_db()
+                records_with_tid = [r + (p_tid,) for r in records]
                 conn.executemany("""
                     INSERT INTO cost_data
                       (date,resource_group,service_name,resource_type,resource_name,
-                       meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
-                """, records)
+                       meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """, records_with_tid)
                 conn.commit()
                 conn.close()
 
