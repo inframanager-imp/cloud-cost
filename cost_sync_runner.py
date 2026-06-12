@@ -171,11 +171,12 @@ def run_cost_sync_from_payload(payload: dict) -> None:
                     pname = provider.get("name") or pid or ptype
                     _write_status(True, f"{mode_label}: syncing {ptype.upper()} provider {pname} [{idx}/{total_cp}]", 95)
                     try:
+                        provider_tenant_id = provider.get("tenant_id", 1)
                         # Determine date range
                         conn = get_db()
                         row = conn.execute(
-                            "SELECT MAX(substr(date,1,10)) AS latest FROM cost_data WHERE cloud_provider=? AND subscription_id=?",
-                            (ptype, pid),
+                            "SELECT MAX(substr(date,1,10)) AS latest FROM cost_data WHERE cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                            (ptype, pid, provider_tenant_id),
                         ).fetchone()
                         conn.close()
                         latest = row["latest"] if row and row["latest"] else None
@@ -197,21 +198,22 @@ def run_cost_sync_from_payload(payload: dict) -> None:
                             project_ids = list({r[9] for r in (records or []) if r[9]})
                             for proj_id in project_ids:
                                 conn.execute(
-                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=?",
-                                    (p_from, date_to, proj_id),
+                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
+                                    (p_from, date_to, proj_id, provider_tenant_id),
                                 )
                         else:
                             conn.execute(
-                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=?",
-                                (p_from, date_to, ptype, pid),
+                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                                (p_from, date_to, ptype, pid, provider_tenant_id),
                             )
                         if records:
+                            records = [r + (provider_tenant_id,) for r in records]
                             conn.executemany(
                                 """
                                 INSERT INTO cost_data
                                   (date,resource_group,service_name,resource_type,resource_name,
-                                   meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider)
-                                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                                   meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id)
+                                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
                                 """,
                                 records,
                             )
