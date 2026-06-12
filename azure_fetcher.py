@@ -37,6 +37,33 @@ def get_access_token():
     return _token_cache["token"]
 
 
+_custom_token_cache = {}
+
+
+def get_access_token_for(tenant_id, client_id, client_secret):
+    """Get an access token using a per-provider (customer-supplied) service principal."""
+    cache_key = f"{tenant_id}:{client_id}"
+    cached = _custom_token_cache.get(cache_key)
+    if cached and time.time() < cached["expires"]:
+        return cached["token"]
+
+    url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+    data = {
+        "grant_type": "client_credentials",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "scope": "https://management.azure.com/.default"
+    }
+    resp = requests.post(url, data=data, timeout=15)
+    resp.raise_for_status()
+    result = resp.json()
+    _custom_token_cache[cache_key] = {
+        "token": result["access_token"],
+        "expires": time.time() + result.get("expires_in", 3600) - 60,
+    }
+    return _custom_token_cache[cache_key]["token"]
+
+
 def _get_graph_token():
     global _graph_token_cache
     if _graph_token_cache["token"] and time.time() < _graph_token_cache["expires"]:
@@ -186,14 +213,23 @@ def _api_post_with_retry(url, headers, body, max_retries=5):
     return resp
 
 
-def fetch_cost_data(date_from, date_to, granularity="Daily", subscription_id=None):
+def fetch_cost_data(date_from, date_to, granularity="Daily", subscription_id=None, credentials=None):
     """
     Fetch cost data from Azure Cost Management API.
     Uses multiple queries with 2 grouping dimensions each (Azure limit).
     Returns list of tuples ready for DB insertion.
+
+    `credentials`, if provided, is a dict with tenant_id/client_id/client_secret
+    for a customer-supplied service principal (used for per-tenant providers
+    instead of the shared .env service principal).
     """
     sub_id = subscription_id or DEFAULT_SUBSCRIPTION_ID
-    token = get_access_token()
+    if credentials:
+        token = get_access_token_for(
+            credentials["tenant_id"], credentials["client_id"], credentials["client_secret"]
+        )
+    else:
+        token = get_access_token()
     url = (
         f"https://management.azure.com/subscriptions/{sub_id}"
         f"/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
@@ -234,6 +270,20 @@ def fetch_cost_data(date_from, date_to, granularity="Daily", subscription_id=Non
 
     all_records = _merge_records(records_q1, records_q2, sub_id)
     return all_records
+
+
+def fetch_azure_costs(provider, date_from, date_to, granularity="Daily"):
+    """
+    Fetch cost data for a per-tenant Azure cloud_providers row (self-service
+    onboarding). Uses the customer's own service principal credentials stored
+    in credentials_json instead of the shared .env service principal.
+    """
+    creds = json.loads(provider.get("credentials_json") or "{}")
+    credentials = None
+    if creds.get("tenant_id") and creds.get("client_id") and creds.get("client_secret"):
+        credentials = creds
+    sub_id = provider.get("provider_id")
+    return fetch_cost_data(date_from, date_to, granularity=granularity, subscription_id=sub_id, credentials=credentials)
 
 
 def _build_query_body(date_from, date_to, granularity, grouping):

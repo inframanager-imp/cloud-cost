@@ -642,6 +642,20 @@ def init_db():
         )
     """)
 
+    # ── Azure one-click setup tokens ─────────────────────────────────────────
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS azure_setup_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT UNIQUE NOT NULL,
+            tenant_id INTEGER NOT NULL,
+            status TEXT DEFAULT 'pending',
+            provider_id TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            expires_at TEXT NOT NULL,
+            used INTEGER DEFAULT 0
+        )
+    """)
+
     # ── Client tagging & cost allocation ────────────────────────────────────
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS clients (
@@ -3095,6 +3109,63 @@ def get_aws_setup_token_status(token: str) -> dict:
     conn = get_db()
     row = conn.execute(
         "SELECT status, provider_id, used, expires_at FROM aws_setup_tokens WHERE token=?",
+        (token,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return {"status": "invalid"}
+    if datetime.utcnow().isoformat() > row["expires_at"] and not row["used"]:
+        return {"status": "expired"}
+    return {"status": row["status"], "provider_id": row["provider_id"], "used": row["used"]}
+
+
+# ─── Azure One-Click Setup Token helpers ─────────────────────────────────────
+
+def create_azure_setup_token(tenant_id: int) -> str:
+    import uuid as _uuid
+    from datetime import timedelta
+    token = str(_uuid.uuid4())
+    expires = (datetime.utcnow() + timedelta(minutes=30)).isoformat()
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO azure_setup_tokens (token, tenant_id, expires_at) VALUES (?, ?, ?)",
+        (token, tenant_id, expires)
+    )
+    conn.commit()
+    conn.close()
+    return token
+
+
+def validate_azure_setup_token(token: str) -> dict:
+    """Returns token row if valid (not expired, not used), else None."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM azure_setup_tokens WHERE token=?", (token,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    if row["used"]:
+        return None
+    if datetime.utcnow().isoformat() > row["expires_at"]:
+        return None
+    return dict(row)
+
+
+def consume_azure_setup_token(token: str, provider_id: str, status: str = "connected"):
+    conn = get_db()
+    conn.execute(
+        "UPDATE azure_setup_tokens SET used=1, status=?, provider_id=? WHERE token=?",
+        (status, provider_id, token)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_azure_setup_token_status(token: str) -> dict:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT status, provider_id, used, expires_at FROM azure_setup_tokens WHERE token=?",
         (token,)
     ).fetchone()
     conn.close()

@@ -160,8 +160,9 @@ def run_cost_sync_from_payload(payload: dict) -> None:
             try:
                 from aws_fetcher import fetch_aws_costs
                 from gcp_fetcher import fetch_gcp_costs
+                from azure_fetcher import fetch_azure_costs
                 cp_providers = get_cloud_providers(enabled_only=True)
-                cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp")]
+                cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp", "azure")]
                 total_cp = len(cp_providers)
                 for idx, provider in enumerate(cp_providers, start=1):
                     # Re-fetch with credentials (get_cloud_providers() omits credentials_json)
@@ -189,6 +190,8 @@ def run_cost_sync_from_payload(payload: dict) -> None:
 
                         if ptype == "aws":
                             records = fetch_aws_costs(provider, p_from, date_to)
+                        elif ptype == "azure":
+                            records = fetch_azure_costs(provider, p_from, date_to)
                         else:
                             records = fetch_gcp_costs(provider, p_from, date_to)
 

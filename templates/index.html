@@ -2393,13 +2393,87 @@
                         </div>
                     </div>
 
-                    <!-- Azure note -->
-                    <div id="azureFields" style="display:block">
-                        <div style="background:var(--bg);border-radius:8px;padding:12px">
-                            <p style="margin:0;font-size:12px;color:var(--text-secondary)">
-                                Azure subscriptions use the tenant credentials configured in <code>.env</code> (AZURE_CLIENT_ID / AZURE_CLIENT_SECRET / AZURE_TENANT_ID). Enter the Subscription ID above to track it separately.
+                    <!-- Azure Credentials -->
+                    <div id="azureFields" style="display:none;flex-direction:column;gap:10px">
+
+                        <!-- Quick Setup Script -->
+                        <div style="background:var(--bg);border-radius:8px;padding:14px;border:1px solid var(--border)">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                                <span style="font-size:14px">🚀</span>
+                                <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Quick Setup</span>
+                                <span style="font-size:10px;padding:2px 7px;background:var(--accent);color:#fff;border-radius:4px;font-weight:500">1 command · auto-saves</span>
+                            </div>
+                            <p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary);line-height:1.6">
+                                Run this in the customer's Azure CLI (<code>az login</code> first) — creates an app registration, generates a client secret, and grants <strong>Cost Management Reader</strong> + <strong>Reader</strong> on their subscription, then <strong>auto-saves to your tool</strong>.
                             </p>
+
+                            <!-- Loading state -->
+                            <div id="azureSetupLoading" style="text-align:center;padding:12px;color:var(--text-secondary);font-size:12px">
+                                Generating secure command… ⟳
+                            </div>
+
+                            <!-- Command block (shown after token loads) -->
+                            <div id="azureSetupCmdWrap" style="display:none">
+                                <div style="position:relative">
+                                    <pre id="azureSetupCmd" style="background:#1a1a2e;color:#7ec8e3;padding:12px 70px 12px 12px;border-radius:8px;font-size:11px;margin:0;white-space:pre-wrap;word-break:break-all;line-height:1.6"></pre>
+                                    <button onclick="copyAzureSetupCmd()" id="azureSetupCopyBtn"
+                                        style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.15);border:none;color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer">Copy</button>
+                                </div>
+
+                                <!-- Timer + status -->
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+                                    <span style="font-size:11px;color:var(--text-secondary)">⏱ Token expires in <span id="azureTokenTimer" style="font-weight:600;color:var(--text-primary)">30:00</span></span>
+                                    <span id="azureSetupPollStatus" style="font-size:11px;color:var(--text-secondary)">⏳ Waiting for script to run…</span>
+                                </div>
+                            </div>
+
+                            <!-- Connection status banner -->
+                            <div id="azureAutoConnectStatus" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;font-size:12px"></div>
                         </div>
+
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <div style="flex:1;height:1px;background:var(--border)"></div>
+                            <span style="font-size:11px;color:var(--text-secondary)">or enter manually</span>
+                            <div style="flex:1;height:1px;background:var(--border)"></div>
+                        </div>
+
+                        <div style="background:var(--bg);border-radius:8px;padding:12px">
+                            <p style="margin:0 0 10px;font-size:12px;color:var(--text-secondary)">
+                                Provide an app registration (service principal) from the customer's own Azure AD tenant, with <strong>Cost Management Reader</strong> on their subscription. Leave blank to use the shared <code>.env</code> credentials.
+                            </p>
+                            <label class="form-label">Azure AD Tenant ID</label>
+                            <input type="text" id="azureTenantId" class="filter-input" placeholder="00000000-0000-0000-0000-000000000000" style="width:100%;margin-bottom:8px">
+                            <label class="form-label">Client (App) ID</label>
+                            <input type="text" id="azureClientId" class="filter-input" placeholder="00000000-0000-0000-0000-000000000000" style="width:100%;margin-bottom:8px">
+                            <label class="form-label">Client Secret</label>
+                            <input type="password" id="azureClientSecret" class="filter-input" placeholder="Secret (stored encrypted)" style="width:100%">
+                        </div>
+
+                        <!-- Required Azure Permissions -->
+                        <details style="background:var(--bg);border-radius:8px;overflow:hidden">
+                            <summary style="padding:10px 12px;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-primary);display:flex;align-items:center;gap:6px;list-style:none">
+                                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                What permissions does this app registration need?
+                                <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-left:auto"><polyline points="6,9 12,15 18,9"/></svg>
+                            </summary>
+                            <div style="padding:12px;border-top:1px solid var(--border)">
+                                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px">Create an app registration and assign these roles on the subscription via <strong>Azure Portal → Subscription → Access control (IAM) → Add role assignment</strong>.</div>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
+                                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:8px">
+                                        <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">📊 Cost & Billing</div>
+                                        <div style="color:var(--text-secondary)">✅ Cost Management Reader</div>
+                                    </div>
+                                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:8px">
+                                        <div style="font-weight:600;color:var(--text-primary);margin-bottom:6px">🖥️ Resource Discovery</div>
+                                        <div style="color:var(--text-secondary)">✅ Reader</div>
+                                    </div>
+                                </div>
+                                <div style="margin-top:10px;font-size:11px;color:var(--text-secondary)">
+                                    💡 <strong>Quick setup:</strong>
+                                    <a href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/CreateApplicationBlade" target="_blank" style="color:var(--accent)">Create App Registration →</a>
+                                </div>
+                            </div>
+                        </details>
                     </div>
 
                     <!-- SaaS / Dev Tools redirect panel -->
@@ -4079,6 +4153,112 @@ function showAwsAutoConnectError() {
     }
 }
 
+// ─── Azure Quick Setup Token Flow ─────────────────────────────────────────────
+let _azureSetupToken = null;
+let _azureSetupPollTimer = null;
+let _azureSetupCountdown = null;
+let _azureSetupExpiry = null;
+
+async function loadAzureSetupToken() {
+    const loading = document.getElementById('azureSetupLoading');
+    const cmdWrap = document.getElementById('azureSetupCmdWrap');
+    if (!loading) return;
+
+    try {
+        const data = await fetch('/api/azure/setup-token').then(r => r.json());
+        _azureSetupToken = data.token;
+        _azureSetupExpiry = Date.now() + (data.expires_minutes * 60 * 1000);
+
+        const cmdEl = document.getElementById('azureSetupCmd');
+        if (cmdEl) cmdEl.textContent = data.command;
+
+        loading.style.display = 'none';
+        if (cmdWrap) cmdWrap.style.display = 'block';
+
+        startAzureSetupCountdown();
+        startAzureSetupPolling();
+    } catch(e) {
+        if (loading) loading.textContent = 'Failed to generate command. Refresh and try again.';
+    }
+}
+
+function startAzureSetupCountdown() {
+    if (_azureSetupCountdown) clearInterval(_azureSetupCountdown);
+    _azureSetupCountdown = setInterval(() => {
+        const remaining = Math.max(0, _azureSetupExpiry - Date.now());
+        const mins = String(Math.floor(remaining / 60000)).padStart(2,'0');
+        const secs = String(Math.floor((remaining % 60000) / 1000)).padStart(2,'0');
+        const el = document.getElementById('azureTokenTimer');
+        if (el) el.textContent = `${mins}:${secs}`;
+        if (remaining === 0) {
+            clearInterval(_azureSetupCountdown);
+            stopAzureSetupPolling();
+            const pollEl = document.getElementById('azureSetupPollStatus');
+            if (pollEl) pollEl.textContent = '⏰ Token expired — refresh page to get a new command';
+        }
+    }, 1000);
+}
+
+function startAzureSetupPolling() {
+    if (_azureSetupPollTimer) clearInterval(_azureSetupPollTimer);
+    _azureSetupPollTimer = setInterval(async () => {
+        if (!_azureSetupToken) return;
+        try {
+            const data = await fetch(`/api/azure/setup-status?token=${_azureSetupToken}`).then(r => r.json());
+            if (data.status === 'connected') {
+                stopAzureSetupPolling();
+                showAzureAutoConnectSuccess(data.provider_id);
+                // Reload providers list
+                if (typeof loadCloudProvidersPage === 'function') loadCloudProvidersPage();
+            } else if (data.status === 'failed') {
+                stopAzureSetupPolling();
+                showAzureAutoConnectError();
+            }
+        } catch(e) { /* ignore */ }
+    }, 3000);
+}
+
+function stopAzureSetupPolling() {
+    if (_azureSetupPollTimer) { clearInterval(_azureSetupPollTimer); _azureSetupPollTimer = null; }
+    if (_azureSetupCountdown) { clearInterval(_azureSetupCountdown); _azureSetupCountdown = null; }
+}
+
+function showAzureAutoConnectSuccess(subscriptionId) {
+    const el = document.getElementById('azureAutoConnectStatus');
+    const pollEl = document.getElementById('azureSetupPollStatus');
+    if (pollEl) pollEl.textContent = '✅ Connected!';
+    if (el) {
+        el.style.display = 'block';
+        el.style.background = 'rgba(39,174,96,.1)';
+        el.style.border = '1px solid rgba(39,174,96,.3)';
+        el.innerHTML = `<strong style="color:#27ae60">✅ Azure subscription connected!</strong><br>
+            <span style="color:var(--text-secondary);font-size:11px">Subscription: ${subscriptionId} · Cost sync started in background · Data appears in 1-2 min</span>`;
+    }
+    showToast(`Azure ${subscriptionId} connected!`, 'success');
+    setTimeout(() => hideProviderModal(), 3000);
+}
+
+function showAzureAutoConnectError() {
+    const el = document.getElementById('azureAutoConnectStatus');
+    if (el) {
+        el.style.display = 'block';
+        el.style.background = 'rgba(192,57,43,.08)';
+        el.style.border = '1px solid rgba(192,57,43,.3)';
+        el.innerHTML = `<strong style="color:var(--red)">❌ Auto-connect failed</strong><br>
+            <span style="color:var(--text-secondary);font-size:11px">Enter credentials manually in the fields below.</span>`;
+    }
+}
+
+function copyAzureSetupCmd() {
+    const text = document.getElementById('azureSetupCmd')?.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('azureSetupCopyBtn');
+        if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+        const pollEl = document.getElementById('azureSetupPollStatus');
+        if (pollEl) pollEl.textContent = '⏳ Waiting for script to run…';
+    });
+}
+
 function copyAwsSetupCmd() {
     const text = document.getElementById('awsSetupCmd')?.textContent || '';
     navigator.clipboard.writeText(text).then(() => {
@@ -4240,6 +4420,9 @@ function showProviderModal(id) {
     document.getElementById('gcpDataset').value = '';
     document.getElementById('gcpTable').value = '';
     document.getElementById('gcpSaJson').value = '';
+    document.getElementById('azureTenantId').value = '';
+    document.getElementById('azureClientId').value = '';
+    document.getElementById('azureClientSecret').value = '';
     onProviderTypeChange();
     const modal = document.getElementById('providerModal');
     modal.style.display = 'flex';
@@ -4247,6 +4430,7 @@ function showProviderModal(id) {
 
 function hideProviderModal() {
     stopAwsSetupPolling();
+    stopAzureSetupPolling();
     document.getElementById('providerModal').style.display = 'none';
 }
 
@@ -4263,7 +4447,8 @@ function onProviderTypeChange() {
     document.getElementById('awsFields').style.display = t === 'aws' ? 'flex' : 'none';
     if (t === 'aws') { stopAwsSetupPolling(); loadAwsSetupToken(); }
     document.getElementById('gcpFields').style.display = t === 'gcp' ? 'flex' : 'none';
-    document.getElementById('azureFields').style.display = t === 'azure' ? 'block' : 'none';
+    document.getElementById('azureFields').style.display = t === 'azure' ? 'flex' : 'none';
+    if (t === 'azure') { stopAzureSetupPolling(); loadAzureSetupToken(); }
     // SaaS redirect panel
     document.getElementById('saasFields').style.display = isSaas ? 'block' : 'none';
     // Name/ID fields hidden for SaaS
@@ -4312,6 +4497,13 @@ function saveProvider() {
             table: document.getElementById('gcpTable').value.trim(),
             service_account_json: sa,
         };
+    } else if (type === 'azure') {
+        const azTenant = document.getElementById('azureTenantId').value.trim();
+        const azClient = document.getElementById('azureClientId').value.trim();
+        const azSecret = document.getElementById('azureClientSecret').value.trim();
+        if (azTenant && azClient && azSecret) {
+            credentials = { tenant_id: azTenant, client_id: azClient, client_secret: azSecret };
+        }
     }
 
     const payload = { provider_type: type, name, provider_id: pid, credentials };

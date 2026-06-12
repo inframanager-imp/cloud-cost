@@ -59,6 +59,9 @@ from database import (
     # AWS one-click setup tokens
     create_aws_setup_token, validate_aws_setup_token,
     consume_aws_setup_token, get_aws_setup_token_status,
+    # Azure one-click setup tokens
+    create_azure_setup_token, validate_azure_setup_token,
+    consume_azure_setup_token, get_azure_setup_token_status,
 )
 from azure_fetcher import (fetch_cost_data, fetch_activity_logs, resolve_caller_names, fetch_subscriptions,
                            fetch_billing_account_costs, filter_billing_only_charges)
@@ -3080,6 +3083,116 @@ def api_aws_setup_status():
     if not token:
         return jsonify({"status": "invalid"}), 400
     return jsonify(get_aws_setup_token_status(token))
+
+
+@app.route("/api/azure/setup-token", methods=["GET"])
+@login_required
+def api_azure_setup_token():
+    """Generate a one-time setup token and return the setup command."""
+    tid = current_tenant_id()
+    token = create_azure_setup_token(tid)
+    app_url = _APP_URL
+    command = (
+        f"curl -sLk {app_url}/static/azure-setup.sh | bash -s -- --token {token} --tool-url {app_url}"
+    )
+    return jsonify({
+        "token": token,
+        "command": command,
+        "expires_minutes": 30,
+    })
+
+
+@app.route("/api/azure/auto-connect", methods=["POST"])
+def api_azure_auto_connect():
+    """Called by azure-setup.sh after creating the app registration & role assignment.
+    No login required — authenticated via one-time token.
+    """
+    body = request.get_json(silent=True) or {}
+    token            = (body.get("token") or "").strip()
+    azure_tenant_id  = (body.get("azure_tenant_id") or "").strip()
+    client_id        = (body.get("client_id") or "").strip()
+    client_secret    = (body.get("client_secret") or "").strip()
+    subscription_id  = (body.get("subscription_id") or "").strip()
+    name             = (body.get("name") or f"Azure {subscription_id}").strip()
+
+    if not token:
+        return jsonify({"success": False, "error": "token required"}), 400
+
+    token_row = validate_azure_setup_token(token)
+    if not token_row:
+        return jsonify({"success": False, "error": "Token invalid, expired or already used"}), 401
+
+    if not azure_tenant_id or not client_id or not client_secret or not subscription_id:
+        consume_azure_setup_token(token, "", "failed")
+        return jsonify({"success": False, "error": "Missing credentials"}), 400
+
+    tid = token_row["tenant_id"]
+
+    # Save as cloud provider
+    credentials = json.dumps({
+        "tenant_id": azure_tenant_id,
+        "client_id": client_id,
+        "client_secret": client_secret,
+    })
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id FROM cloud_providers WHERE provider_type='azure' AND provider_id=? AND tenant_id=?",
+        (subscription_id, tid)
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE cloud_providers SET name=?, credentials_json=?, enabled=1 WHERE id=?",
+            (name, credentials, existing["id"])
+        )
+        provider_db_id = existing["id"]
+    else:
+        cur = conn.execute(
+            "INSERT INTO cloud_providers (provider_type, name, provider_id, credentials_json, tenant_id, enabled) "
+            "VALUES ('azure', ?, ?, ?, ?, 1)",
+            (name, subscription_id, credentials, tid)
+        )
+        provider_db_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+
+    consume_azure_setup_token(token, subscription_id, "connected")
+
+    # Kick off background cost sync
+    def _bg_sync():
+        try:
+            from database import get_cloud_provider
+            provider = get_cloud_provider(provider_db_id)
+            if provider:
+                from azure_fetcher import fetch_azure_costs
+                from database import insert_cost_records
+                today = datetime.utcnow()
+                date_from = (today.replace(day=1)).strftime("%Y-%m-%d")
+                date_to   = today.strftime("%Y-%m-%d")
+                records = fetch_azure_costs(provider, date_from, date_to)
+                if records:
+                    insert_cost_records(records, tenant_id=tid)
+                    print(f"[AutoConnect] Synced {len(records)} records for Azure {subscription_id}")
+        except Exception as e:
+            print(f"[AutoConnect] Background sync failed: {e}")
+
+    import threading
+    threading.Thread(target=_bg_sync, daemon=True).start()
+
+    return jsonify({
+        "success": True,
+        "message": f"Azure subscription {subscription_id} connected and sync started",
+        "subscription_id": subscription_id,
+    })
+
+
+@app.route("/api/azure/setup-status", methods=["GET"])
+@login_required
+def api_azure_setup_status():
+    """Poll connection status for a setup token."""
+    token = (request.args.get("token") or "").strip()
+    if not token:
+        return jsonify({"status": "invalid"}), 400
+    return jsonify(get_azure_setup_token_status(token))
 
 
 # ─── Client Tagging & Cost Allocation ────────────────────────────────────────
