@@ -1567,7 +1567,7 @@ def get_available_periods(subscription_id=None):
     }
 
 
-def get_distinct_values(column, subscription_id=None, subscription_ids=None, cloud_provider=None):
+def get_distinct_values(column, subscription_id=None, subscription_ids=None, cloud_provider=None, tenant_id=None):
     conn = get_db()
     valid = ["resource_group", "service_name", "resource_type", "meter_category"]
     if column not in valid:
@@ -1584,6 +1584,9 @@ def get_distinct_values(column, subscription_id=None, subscription_ids=None, clo
     if cloud_provider:
         conditions.append("cloud_provider = ?")
         params.append(cloud_provider)
+    if tenant_id is not None:
+        conditions.append("tenant_id = ?")
+        params.append(tenant_id)
     where = " AND ".join(conditions)
     rows = conn.execute(
         f"SELECT DISTINCT {column} FROM cost_data WHERE {where} ORDER BY {column}",

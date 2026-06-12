@@ -1765,11 +1765,12 @@ def api_filters():
     sub_ids_raw = (request.args.get("subscription_ids") or "").strip()
     sub_ids = [v.strip() for v in sub_ids_raw.split(",") if v.strip()] if sub_ids_raw else None
     cloud = request.args.get("cloud_provider")
+    tid = current_tenant_id()
     return jsonify({
-        "resource_groups": get_distinct_values("resource_group", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud),
-        "services": get_distinct_values("service_name", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud),
-        "resource_types": get_distinct_values("resource_type", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud),
-        "meter_categories": get_distinct_values("meter_category", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud),
+        "resource_groups": get_distinct_values("resource_group", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud, tenant_id=tid),
+        "services": get_distinct_values("service_name", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud, tenant_id=tid),
+        "resource_types": get_distinct_values("resource_type", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud, tenant_id=tid),
+        "meter_categories": get_distinct_values("meter_category", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud, tenant_id=tid),
     })
 
 
