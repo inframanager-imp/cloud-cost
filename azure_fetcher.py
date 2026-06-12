@@ -278,7 +278,8 @@ def fetch_azure_costs(provider, date_from, date_to, granularity="Daily"):
     onboarding). Uses the customer's own service principal credentials stored
     in credentials_json instead of the shared .env service principal.
     """
-    creds = json.loads(provider.get("credentials_json") or "{}")
+    raw_creds = provider.get("credentials_json") or {}
+    creds = json.loads(raw_creds) if isinstance(raw_creds, str) else raw_creds
     credentials = None
     if creds.get("tenant_id") and creds.get("client_id") and creds.get("client_secret"):
         credentials = creds
