@@ -79,7 +79,7 @@ def _fetch_one_subscription(sub, is_full: bool, months: int, date_to: str):
         all_records.extend(records)
         current_from = chunk_to + timedelta(days=1)
 
-    count = insert_cost_records(all_records)
+    count = insert_cost_records(all_records, tenant_id=sub.get("tenant_id", 1))
     update_subscription_sync_time(sub_id, "cost")
     return sub_name, count
 

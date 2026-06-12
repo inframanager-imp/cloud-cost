@@ -133,7 +133,8 @@ def init_db():
             name TEXT NOT NULL,
             filters TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            tenant_id INTEGER DEFAULT 1
         )
     """)
 
@@ -488,6 +489,14 @@ def init_db():
             cursor.execute("ALTER TABLE activity_logs ADD COLUMN tenant_id INTEGER DEFAULT 1")
             print("[DB] Migrated activity_logs: added tenant_id column")
 
+    # ── Migration: tenant_id on saved_filters ────────────────────────────────
+    if _table_exists("saved_filters"):
+        try:
+            cursor.execute("SELECT tenant_id FROM saved_filters LIMIT 1")
+        except Exception:
+            cursor.execute("ALTER TABLE saved_filters ADD COLUMN tenant_id INTEGER DEFAULT 1")
+            print("[DB] Migrated saved_filters: added tenant_id column")
+
     # ── Seed: default tenant for existing single-tenant data ─────────────────
     cursor.execute("""
         INSERT OR IGNORE INTO tenants (id, slug, name, plan, owner_email)
@@ -744,18 +753,27 @@ def update_subscription_sync_time(subscription_id, sync_type="cost"):
     conn.close()
 
 
-def insert_cost_records(records):
+def insert_cost_records(records, tenant_id=None):
     if not records:
         return 0
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.executemany("""
-        INSERT INTO cost_data (date, resource_group, service_name, resource_type,
-                               resource_name, meter_category, meter_subcategory,
-                               cost, currency, subscription_id, tags, cloud_provider)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, records)
+    if tenant_id is not None:
+        records = [tuple(r) + (tenant_id,) for r in records]
+        cursor.executemany("""
+            INSERT INTO cost_data (date, resource_group, service_name, resource_type,
+                                   resource_name, meter_category, meter_subcategory,
+                                   cost, currency, subscription_id, tags, cloud_provider, tenant_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, records)
+    else:
+        cursor.executemany("""
+            INSERT INTO cost_data (date, resource_group, service_name, resource_type,
+                                   resource_name, meter_category, meter_subcategory,
+                                   cost, currency, subscription_id, tags, cloud_provider)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, records)
     conn.commit()
     count = cursor.rowcount
     conn.close()
@@ -772,14 +790,18 @@ def clear_cost_data(subscription_id=None):
     conn.close()
 
 
-def delete_cost_data_by_date(date_from, date_to, subscription_id=None):
+def delete_cost_data_by_date(date_from, date_to, subscription_id=None, tenant_id=None):
     conn = get_db()
     cursor = conn.cursor()
+    query = "DELETE FROM cost_data WHERE date >= ? AND date <= ?"
+    params = [date_from, date_to]
     if subscription_id:
-        cursor.execute("DELETE FROM cost_data WHERE date >= ? AND date <= ? AND subscription_id = ?",
-                        (date_from, date_to, subscription_id))
-    else:
-        cursor.execute("DELETE FROM cost_data WHERE date >= ? AND date <= ?", (date_from, date_to))
+        query += " AND subscription_id = ?"
+        params.append(subscription_id)
+    if tenant_id is not None:
+        query += " AND tenant_id = ?"
+        params.append(tenant_id)
+    cursor.execute(query, params)
     deleted = cursor.rowcount
     conn.commit()
     conn.close()
@@ -1905,11 +1927,11 @@ def get_email_log(limit=20, tenant_id=1):
     return [dict(r) for r in rows]
 
 
-def save_filter(name, filters):
+def save_filter(name, filters, tenant_id=1):
     conn = get_db()
     conn.execute(
-        "INSERT INTO saved_filters (name, filters) VALUES (?, ?)",
-        (name, json.dumps(filters))
+        "INSERT INTO saved_filters (name, filters, tenant_id) VALUES (?, ?, ?)",
+        (name, json.dumps(filters), tenant_id)
     )
     conn.commit()
     fid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -1917,9 +1939,15 @@ def save_filter(name, filters):
     return fid
 
 
-def get_saved_filters():
+def get_saved_filters(tenant_id=None):
     conn = get_db()
-    rows = conn.execute("SELECT * FROM saved_filters ORDER BY updated_at DESC").fetchall()
+    if tenant_id is not None:
+        rows = conn.execute(
+            "SELECT * FROM saved_filters WHERE tenant_id=? ORDER BY updated_at DESC",
+            (tenant_id,)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM saved_filters ORDER BY updated_at DESC").fetchall()
     conn.close()
     result = []
     for r in rows:
@@ -1933,24 +1961,32 @@ def get_saved_filters():
     return result
 
 
-def update_saved_filter(fid, name=None, filters=None):
+def update_saved_filter(fid, name=None, filters=None, tenant_id=None):
     conn = get_db()
+    where = " WHERE id=?"
+    where_params = [fid]
+    if tenant_id is not None:
+        where += " AND tenant_id=?"
+        where_params.append(tenant_id)
     if name and filters:
         conn.execute(
-            "UPDATE saved_filters SET name=?, filters=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            (name, json.dumps(filters), fid)
+            "UPDATE saved_filters SET name=?, filters=?, updated_at=CURRENT_TIMESTAMP" + where,
+            [name, json.dumps(filters)] + where_params
         )
     elif name:
-        conn.execute("UPDATE saved_filters SET name=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (name, fid))
+        conn.execute("UPDATE saved_filters SET name=?, updated_at=CURRENT_TIMESTAMP" + where, [name] + where_params)
     elif filters:
-        conn.execute("UPDATE saved_filters SET filters=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (json.dumps(filters), fid))
+        conn.execute("UPDATE saved_filters SET filters=?, updated_at=CURRENT_TIMESTAMP" + where, [json.dumps(filters)] + where_params)
     conn.commit()
     conn.close()
 
 
-def delete_saved_filter(fid):
+def delete_saved_filter(fid, tenant_id=None):
     conn = get_db()
-    conn.execute("DELETE FROM saved_filters WHERE id=?", (fid,))
+    if tenant_id is not None:
+        conn.execute("DELETE FROM saved_filters WHERE id=? AND tenant_id=?", (fid, tenant_id))
+    else:
+        conn.execute("DELETE FROM saved_filters WHERE id=?", (fid,))
     conn.commit()
     conn.close()
 
@@ -2109,14 +2145,22 @@ def get_monthly_subscription_breakdown(subscription_id=None, tenant_id=None, clo
     return result
 
 
-def get_stats(subscription_id=None):
+def get_stats(subscription_id=None, tenant_id=None):
     conn = get_db()
     stats = {}
+    where = []
+    params = []
     if subscription_id:
-        row = conn.execute("SELECT COUNT(*) as cnt, SUM(cost) as total, MIN(date) as min_date, MAX(date) as max_date FROM cost_data WHERE subscription_id = ?",
-                           (subscription_id,)).fetchone()
-    else:
-        row = conn.execute("SELECT COUNT(*) as cnt, SUM(cost) as total, MIN(date) as min_date, MAX(date) as max_date FROM cost_data").fetchone()
+        where.append("subscription_id = ?")
+        params.append(subscription_id)
+    if tenant_id is not None:
+        where.append("tenant_id = ?")
+        params.append(tenant_id)
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    row = conn.execute(
+        f"SELECT COUNT(*) as cnt, SUM(cost) as total, MIN(date) as min_date, MAX(date) as max_date FROM cost_data {clause}",
+        params
+    ).fetchone()
     stats["total_records"] = row["cnt"]
     stats["total_cost"] = round(row["total"] or 0, 2)
     stats["date_range_from"] = row["min_date"]
@@ -2337,12 +2381,18 @@ def upsert_resource_configs(configs):
     conn.close()
     return count
 
-def get_resource_config(subscription_id, resource_group, resource_name):
+def get_resource_config(subscription_id, resource_group, resource_name, tenant_id=None):
     conn = get_db()
-    row = conn.execute("""
-        SELECT * FROM resource_configs 
-        WHERE subscription_id = ? AND resource_group = ? AND resource_name = ?
-    """, (subscription_id, resource_group, resource_name)).fetchone()
+    query = """
+        SELECT rc.* FROM resource_configs rc
+        LEFT JOIN subscriptions s ON s.subscription_id = rc.subscription_id
+        WHERE rc.subscription_id = ? AND rc.resource_group = ? AND rc.resource_name = ?
+    """
+    params = [subscription_id, resource_group, resource_name]
+    if tenant_id is not None:
+        query += " AND COALESCE(s.tenant_id, 1) = ?"
+        params.append(tenant_id)
+    row = conn.execute(query, params).fetchone()
     conn.close()
     if row:
         d = dict(row)
@@ -2356,6 +2406,7 @@ def get_all_resource_configs(
     resource_type=None,
     search=None,
     limit=500,
+    tenant_id=None,
 ):
     conn = get_db()
     query = """
@@ -2365,6 +2416,9 @@ def get_all_resource_configs(
         WHERE 1=1
     """
     params = []
+    if tenant_id is not None:
+        query += " AND COALESCE(s.tenant_id, 1) = ?"
+        params.append(tenant_id)
     if subscription_id:
         query += " AND rc.subscription_id = ?"
         params.append(subscription_id)
@@ -2396,26 +2450,35 @@ def get_all_resource_configs(
     return results
 
 
-def get_resource_config_filter_options():
+def get_resource_config_filter_options(tenant_id=None):
     """Distinct subscriptions, resource groups and resource types across all configs."""
     conn = get_db()
-    subs = conn.execute("""
+    tenant_clause = ""
+    tenant_params = []
+    if tenant_id is not None:
+        tenant_clause = " AND COALESCE(s.tenant_id, 1) = ?"
+        tenant_params = [tenant_id]
+    subs = conn.execute(f"""
         SELECT DISTINCT rc.subscription_id AS v, COALESCE(s.name, rc.subscription_id, '') AS label
         FROM resource_configs rc
         LEFT JOIN subscriptions s ON s.subscription_id = rc.subscription_id
-        WHERE rc.subscription_id IS NOT NULL AND trim(rc.subscription_id) != ''
+        WHERE rc.subscription_id IS NOT NULL AND trim(rc.subscription_id) != ''{tenant_clause}
         ORDER BY label
-    """).fetchall()
-    rgs = conn.execute("""
-        SELECT DISTINCT resource_group AS v FROM resource_configs
-        WHERE resource_group IS NOT NULL AND trim(resource_group) != ''
-        ORDER BY resource_group
-    """).fetchall()
-    types = conn.execute("""
-        SELECT DISTINCT resource_type AS v FROM resource_configs
-        WHERE resource_type IS NOT NULL AND trim(resource_type) != ''
-        ORDER BY resource_type
-    """).fetchall()
+    """, tenant_params).fetchall()
+    rgs = conn.execute(f"""
+        SELECT DISTINCT rc.resource_group AS v
+        FROM resource_configs rc
+        LEFT JOIN subscriptions s ON s.subscription_id = rc.subscription_id
+        WHERE rc.resource_group IS NOT NULL AND trim(rc.resource_group) != ''{tenant_clause}
+        ORDER BY rc.resource_group
+    """, tenant_params).fetchall()
+    types = conn.execute(f"""
+        SELECT DISTINCT rc.resource_type AS v
+        FROM resource_configs rc
+        LEFT JOIN subscriptions s ON s.subscription_id = rc.subscription_id
+        WHERE rc.resource_type IS NOT NULL AND trim(rc.resource_type) != ''{tenant_clause}
+        ORDER BY rc.resource_type
+    """, tenant_params).fetchall()
     conn.close()
     return {
         "subscriptions": [{"id": r["v"], "name": r["label"]} for r in subs if r["v"]],
@@ -2424,12 +2487,17 @@ def get_resource_config_filter_options():
     }
 
 
-def get_activity_distinct(column):
+def get_activity_distinct(column, tenant_id=None):
     conn = get_db()
     valid = ["caller", "resource_group", "status", "level", "operation_name"]
     if column not in valid:
         return []
-    rows = conn.execute(f"SELECT DISTINCT {column} FROM activity_logs WHERE {column} IS NOT NULL AND {column} != '' ORDER BY {column}").fetchall()
+    where = f"WHERE {column} IS NOT NULL AND {column} != ''"
+    params = []
+    if tenant_id is not None:
+        where += " AND tenant_id = ?"
+        params.append(tenant_id)
+    rows = conn.execute(f"SELECT DISTINCT {column} FROM activity_logs {where} ORDER BY {column}", params).fetchall()
     conn.close()
     return [r[0] for r in rows]
 
@@ -2445,7 +2513,7 @@ def get_cloud_providers(enabled_only=False, tenant_id=None):
     if tenant_id is not None:
         conditions.append("tenant_id=?")
         params.append(tenant_id)
-    q = "SELECT id,provider_type,name,provider_id,enabled,last_sync,sync_error,created_at FROM cloud_providers"
+    q = "SELECT id,provider_type,name,provider_id,enabled,last_sync,sync_error,created_at,tenant_id FROM cloud_providers"
     if conditions:
         q += " WHERE " + " AND ".join(conditions)
     q += " ORDER BY provider_type, name"

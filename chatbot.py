@@ -99,7 +99,7 @@ GCP_SERVICE_MAP = {
 }
 
 
-def detect_service(msg, cloud=None):
+def detect_service(msg, cloud=None, tenant_id=None):
     """Detect service from message, optionally filtered by cloud."""
     maps = []
     if cloud == 'aws':
@@ -117,15 +117,15 @@ def detect_service(msg, cloud=None):
                 return service_name
 
     # Fallback: match against actual DB values
-    available = get_distinct_values("service_name")
+    available = get_distinct_values("service_name", tenant_id=tenant_id)
     for svc in available:
         if svc and len(svc) > 3 and svc.lower() in msg:
             return svc
     return None
 
 
-def detect_resource_group(msg):
-    available = get_distinct_values("resource_group")
+def detect_resource_group(msg, tenant_id=None):
+    available = get_distinct_values("resource_group", tenant_id=tenant_id)
     for rg in available:
         if rg and len(rg) > 2 and rg.lower() in msg:
             return rg
@@ -140,7 +140,7 @@ def rule_based_response(msg, tenant_id=None):
 
     # ── Greetings ──
     if re.match(r'^(hi|hello|hey|good\s*(morning|afternoon|evening)|greetings|howdy|sup)\b', msg):
-        stats = get_stats()
+        stats = get_stats(tenant_id=tenant_id)
         return {
             "reply": (
                 f"**Hello! I'm your Multi-Cloud Cost Assistant.**\n\n"
@@ -186,14 +186,19 @@ def rule_based_response(msg, tenant_id=None):
     # ── Stats / Summary ──
     if re.search(r'\b(stats|summary|overview|status|info|total\s*spend|all\s*cloud)\b', msg) and \
        not re.search(r'\b(cost|spend|expense|vm|storage|ec2|gcp|aws|azure)\b', msg):
-        stats = get_stats()
-        azure = sum(r["total_cost"] for r in get_summary("service_name", None, None, cloud_provider="azure")[:1]) if True else 0
+        stats = get_stats(tenant_id=tenant_id)
         try:
             from database import get_db
             conn = get_db()
-            cloud_rows = conn.execute(
-                "SELECT cloud_provider, SUM(cost) as total FROM cost_data GROUP BY cloud_provider"
-            ).fetchall()
+            if tenant_id is not None:
+                cloud_rows = conn.execute(
+                    "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE tenant_id=? GROUP BY cloud_provider",
+                    (tenant_id,)
+                ).fetchall()
+            else:
+                cloud_rows = conn.execute(
+                    "SELECT cloud_provider, SUM(cost) as total FROM cost_data GROUP BY cloud_provider"
+                ).fetchall()
             conn.close()
             breakdown = "\n".join([f"  - **{r['cloud_provider'].upper()}**: ${r['total']:,.2f}" for r in cloud_rows])
         except Exception:
@@ -212,22 +217,22 @@ def rule_based_response(msg, tenant_id=None):
     if re.search(r'\b(compare|versus|vs\.?)\b', msg) and \
        re.search(r'\b(aws|azure|gcp|google|amazon|microsoft)\b', msg) and \
        len(re.findall(r'\b(aws|azure|gcp)\b', msg)) >= 2:
-        return handle_cloud_vs_cloud(msg)
+        return handle_cloud_vs_cloud(msg, tenant_id=tenant_id)
 
     # ── Period comparison ──
     if re.search(r'\b(compare|comparison|versus|vs\.?|differ|between)\b', msg):
-        return handle_comparison(msg)
+        return handle_comparison(msg, tenant_id=tenant_id)
 
     # ── Extract filters ──
     date_from, date_to = extract_date_range(msg)
     cloud  = detect_cloud(msg)
-    service = detect_service(msg, cloud)
-    rg     = detect_resource_group(msg)
+    service = detect_service(msg, cloud, tenant_id=tenant_id)
+    rg     = detect_resource_group(msg, tenant_id=tenant_id)
 
     # ── Cloud total cost ──
     if cloud and not service and not rg and \
        re.search(r'\b(cost|spend|spent|total|much|bill|expense|how much)\b', msg):
-        data = get_summary("service_name", date_from, date_to, cloud_provider=cloud)
+        data = get_summary("service_name", date_from, date_to, cloud_provider=cloud, tenant_id=tenant_id)
         total = sum(r["total_cost"] for r in data)
         top5  = data[:5]
         period = f"({date_from} to {date_to})" if date_from else "(all time)"
@@ -245,12 +250,12 @@ def rule_based_response(msg, tenant_id=None):
     # ── Top services ──
     if re.search(r'\b(top|most expensive|highest|biggest|rank|which.*most|which.*expensive)\b', msg):
         if re.search(r'\b(rg|resource.?group|account|subscription|project)\b', msg):
-            return make_top_rgs_response(date_from, date_to, _extract_limit(msg), cloud)
-        return make_top_services_response(date_from, date_to, _extract_limit(msg), cloud)
+            return make_top_rgs_response(date_from, date_to, _extract_limit(msg), cloud, tenant_id=tenant_id)
+        return make_top_services_response(date_from, date_to, _extract_limit(msg), cloud, tenant_id=tenant_id)
 
     # ── Resource group queries ──
     if rg and not service:
-        data  = get_daily_trend(date_from, date_to, resource_group=rg, cloud_provider=cloud)
+        data  = get_daily_trend(date_from, date_to, resource_group=rg, cloud_provider=cloud, tenant_id=tenant_id)
         total = sum(r["total_cost"] for r in data)
         period = f"({date_from} to {date_to})" if date_from else "(all time)"
         return {
@@ -264,7 +269,7 @@ def rule_based_response(msg, tenant_id=None):
         }
 
     if re.search(r'\b(resource.?group|rg|account|subscription|project)\b', msg):
-        return make_top_rgs_response(date_from, date_to, _extract_limit(msg), cloud)
+        return make_top_rgs_response(date_from, date_to, _extract_limit(msg), cloud, tenant_id=tenant_id)
 
     # ── Service cost ──
     if service:
@@ -273,7 +278,7 @@ def rule_based_response(msg, tenant_id=None):
             filters["resource_group"] = rg
         if cloud:
             filters["cloud_provider"] = cloud
-        data  = query_costs(filters)
+        data  = query_costs(filters, tenant_id=tenant_id)
         total = sum(r["cost"] for r in data)
         daily = {}
         for r in data:
@@ -293,7 +298,7 @@ def rule_based_response(msg, tenant_id=None):
 
     # ── Trend ──
     if re.search(r'\b(trend|daily|chart|graph|over time|day by day)\b', msg):
-        data  = get_daily_trend(date_from, date_to, cloud_provider=cloud)
+        data  = get_daily_trend(date_from, date_to, cloud_provider=cloud, tenant_id=tenant_id)
         if not data:
             return {"reply": "No data found for the specified period."}
         total = sum(r["total_cost"] for r in data)
@@ -312,7 +317,7 @@ def rule_based_response(msg, tenant_id=None):
 
     # ── Generic cost/spend question ──
     if re.search(r'\b(cost|spend|spent|expense|bill|paid|charge|much|total|how much)\b', msg) or _detect_month_name(msg):
-        data  = get_summary("service_name", date_from, date_to, cloud_provider=cloud)
+        data  = get_summary("service_name", date_from, date_to, cloud_provider=cloud, tenant_id=tenant_id)
         total = sum(r["total_cost"] for r in data)
         top5  = data[:5]
         period = f"({date_from} to {date_to})" if date_from else "(all time)"
@@ -335,7 +340,7 @@ def rule_based_response(msg, tenant_id=None):
 # CLOUD vs CLOUD COMPARISON
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def handle_cloud_vs_cloud(msg):
+def handle_cloud_vs_cloud(msg, tenant_id=None):
     date_from, date_to = extract_date_range(msg)
     period = f"({date_from} to {date_to})" if date_from else "(all time)"
 
@@ -349,7 +354,7 @@ def handle_cloud_vs_cloud(msg):
 
     results = []
     for c in clouds:
-        data  = get_summary("service_name", date_from, date_to, cloud_provider=c)
+        data  = get_summary("service_name", date_from, date_to, cloud_provider=c, tenant_id=tenant_id)
         total = sum(r["total_cost"] for r in data)
         results.append((c.upper(), total))
 
@@ -372,8 +377,8 @@ def handle_cloud_vs_cloud(msg):
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def make_top_services_response(date_from, date_to, limit, cloud=None):
-    data   = get_summary("service_name", date_from, date_to, cloud_provider=cloud)
+def make_top_services_response(date_from, date_to, limit, cloud=None, tenant_id=None):
+    data   = get_summary("service_name", date_from, date_to, cloud_provider=cloud, tenant_id=tenant_id)
     top    = data[:limit]
     period = f"({date_from} to {date_to})" if date_from else ""
     label  = "All" if limit >= 50 else f"Top {len(top)}"
@@ -392,8 +397,8 @@ def make_top_services_response(date_from, date_to, limit, cloud=None):
     }
 
 
-def make_top_rgs_response(date_from, date_to, limit, cloud=None):
-    data   = get_summary("resource_group", date_from, date_to, cloud_provider=cloud)
+def make_top_rgs_response(date_from, date_to, limit, cloud=None, tenant_id=None):
+    data   = get_summary("resource_group", date_from, date_to, cloud_provider=cloud, tenant_id=tenant_id)
     top    = data[:limit]
     period = f"({date_from} to {date_to})" if date_from else ""
     label  = "All" if limit >= 50 else f"Top {len(top)}"
@@ -423,11 +428,11 @@ def _extract_limit(msg):
     return 5
 
 
-def handle_comparison(msg):
+def handle_comparison(msg, tenant_id=None):
     today   = datetime.utcnow()
     cloud   = detect_cloud(msg)
-    service = detect_service(msg, cloud)
-    rg      = detect_resource_group(msg)
+    service = detect_service(msg, cloud, tenant_id=tenant_id)
+    rg      = detect_resource_group(msg, tenant_id=tenant_id)
 
     months_found = _find_two_months(msg)
     if months_found:
@@ -454,13 +459,13 @@ def handle_comparison(msg):
         extra["cloud_provider"] = cloud
 
     if service:
-        p1_data  = query_costs({"search": service, "date_from": p1_from, "date_to": p1_to, "limit": 5000, **extra})
-        p2_data  = query_costs({"search": service, "date_from": p2_from, "date_to": p2_to, "limit": 5000, **extra})
+        p1_data  = query_costs({"search": service, "date_from": p1_from, "date_to": p1_to, "limit": 5000, **extra}, tenant_id=tenant_id)
+        p2_data  = query_costs({"search": service, "date_from": p2_from, "date_to": p2_to, "limit": 5000, **extra}, tenant_id=tenant_id)
         p1_total = sum(r["cost"] for r in p1_data)
         p2_total = sum(r["cost"] for r in p2_data)
     else:
-        p1_trend = get_daily_trend(p1_from, p1_to, rg, cloud_provider=cloud)
-        p2_trend = get_daily_trend(p2_from, p2_to, rg, cloud_provider=cloud)
+        p1_trend = get_daily_trend(p1_from, p1_to, rg, cloud_provider=cloud, tenant_id=tenant_id)
+        p2_trend = get_daily_trend(p2_from, p2_to, rg, cloud_provider=cloud, tenant_id=tenant_id)
         p1_total = sum(r["total_cost"] for r in p1_trend)
         p2_total = sum(r["total_cost"] for r in p2_trend)
 
@@ -470,8 +475,8 @@ def handle_comparison(msg):
     filter_label = f" - {service}" if service else (f" - {rg}" if rg else "")
     cloud_label  = f" [{cloud.upper()}]" if cloud else ""
 
-    p1_chart = get_daily_trend(p1_from, p1_to, rg, cloud_provider=cloud)
-    p2_chart = get_daily_trend(p2_from, p2_to, rg, cloud_provider=cloud)
+    p1_chart = get_daily_trend(p1_from, p1_to, rg, cloud_provider=cloud, tenant_id=tenant_id)
+    p2_chart = get_daily_trend(p2_from, p2_to, rg, cloud_provider=cloud, tenant_id=tenant_id)
 
     return {
         "reply": (
@@ -586,13 +591,13 @@ def extract_date_range(msg):
 
 def ollama_response(message, tenant_id=None):
     try:
-        stats    = get_stats()
+        stats    = get_stats(tenant_id=tenant_id)
         today    = datetime.utcnow()
         date_from, date_to = extract_date_range(message.lower())
         cloud    = detect_cloud(message.lower())
 
         # Pull real data to give Ollama actual numbers
-        summary  = get_summary("service_name", date_from, date_to, cloud_provider=cloud)
+        summary  = get_summary("service_name", date_from, date_to, cloud_provider=cloud, tenant_id=tenant_id)
         total    = sum(r["total_cost"] for r in summary)
         top5     = summary[:5]
         top5_text = "\n".join([f"  - {s['service_name']}: ${s['total_cost']:,.2f}" for s in top5])
@@ -600,9 +605,15 @@ def ollama_response(message, tenant_id=None):
         try:
             from database import get_db
             conn = get_db()
-            cloud_rows = conn.execute(
-                "SELECT cloud_provider, SUM(cost) as total FROM cost_data GROUP BY cloud_provider"
-            ).fetchall()
+            if tenant_id is not None:
+                cloud_rows = conn.execute(
+                    "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE tenant_id = ? GROUP BY cloud_provider",
+                    (tenant_id,)
+                ).fetchall()
+            else:
+                cloud_rows = conn.execute(
+                    "SELECT cloud_provider, SUM(cost) as total FROM cost_data GROUP BY cloud_provider"
+                ).fetchall()
             conn.close()
             cloud_text = ", ".join([f"{r['cloud_provider'].upper()}: ${r['total']:,.2f}" for r in cloud_rows])
         except Exception:
@@ -645,7 +656,7 @@ If the question cannot be answered from this data, say so clearly and suggest a 
         try:
             date_from, date_to = extract_date_range(message.lower())
             cloud = detect_cloud(message.lower())
-            data  = get_summary("service_name", date_from, date_to, cloud_provider=cloud)
+            data  = get_summary("service_name", date_from, date_to, cloud_provider=cloud, tenant_id=tenant_id)
             total = sum(r["total_cost"] for r in data)
             top5  = data[:5]
             period = f"({date_from} to {date_to})" if date_from else "(all time)"

@@ -471,7 +471,7 @@ def drilldown_page():
 @app.route("/api/stats")
 @login_required
 def api_stats():
-    stats = get_stats()
+    stats = get_stats(tenant_id=current_tenant_id())
     return jsonify(stats)
 
 
@@ -536,12 +536,13 @@ def api_dashboard():
 
     # Current-month cost per account/subscription (all clouds)
     tid_filter = f"AND tenant_id = {tid}" if tid is not None else ""
-    cloud_sql = f"AND cloud_provider = '{cloud_filter}'" if cloud_filter else ""
+    cloud_sql = "AND cloud_provider = ?" if cloud_filter else ""
+    cloud_params = [cloud_filter] if cloud_filter else []
     sub_costs = conn.execute(f"""
         SELECT subscription_id, cloud_provider, SUM(cost) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cloud_sql} {client_sql_frag}
         GROUP BY subscription_id, cloud_provider ORDER BY total DESC
-    """, [first_of_month, today_str] + client_sql_params).fetchall()
+    """, [first_of_month, today_str] + cloud_params + client_sql_params).fetchall()
 
     # Last month for comparison
     last_month_end2 = today.replace(day=1) - timedelta(days=1)
@@ -552,7 +553,7 @@ def api_dashboard():
         SELECT subscription_id, SUM(cost) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cloud_sql} {client_sql_frag}
         GROUP BY subscription_id
-    """, [lm_str, lm_end_str] + client_sql_params).fetchall()
+    """, [lm_str, lm_end_str] + cloud_params + client_sql_params).fetchall()
     lm_sub_map = {r["subscription_id"]: round(r["total"], 2) for r in lm_sub_costs}
 
     # Cloud breakdown for current month (for the breakdown cards)
@@ -615,7 +616,7 @@ def api_dashboard():
     sync_hist = get_sync_history()
     last_sync = sync_hist[0] if sync_hist else None
 
-    stats = get_stats(subscription_id=sub_id)
+    stats = get_stats(subscription_id=sub_id, tenant_id=tid)
 
     return jsonify({
         "current_month": {
@@ -938,7 +939,7 @@ def api_sync():
                 latest = get_latest_cost_date(subscription_id=sub_id)
                 if latest:
                     delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
-            count = insert_cost_records(all_records)
+            count = insert_cost_records(all_records, tenant_id=tid)
         else:
             count = 0  # Nothing fetched — keep existing data intact
 
@@ -1030,8 +1031,8 @@ def api_sync():
                     sub_svc_totals = {}
                     rows = conn.execute(
                         "SELECT LOWER(service_name), SUM(cost) FROM cost_data "
-                        "WHERE cloud_provider='azure' AND date >= ? GROUP BY LOWER(service_name)",
-                        (date_from_ba,)
+                        "WHERE cloud_provider='azure' AND date >= ? AND tenant_id = ? GROUP BY LOWER(service_name)",
+                        (date_from_ba, tid)
                     ).fetchall()
                     conn.close()
                     sub_svc_totals = {r[0]: r[1] for r in rows}
@@ -1042,7 +1043,7 @@ def api_sync():
                         ba_sub_entries = [{"subscription_id": ba_id, "name": f"Billing: {ba_name}", "state": "Enabled"}
                                           for ba_id, ba_name in ba_ids]
                         upsert_subscriptions(ba_sub_entries, tenant_id=tid)
-                        ba_count = insert_cost_records(ba_records)
+                        ba_count = insert_cost_records(ba_records, tenant_id=tid)
                         total_records += ba_count
                         print(f"[BillingAccount] Inserted {ba_count} billing-account-only records")
                     else:
@@ -1061,8 +1062,8 @@ def api_sync():
                     def _provider_date_from(provider_type, provider_id):
                         conn = get_db()
                         row = conn.execute(
-                            "SELECT MAX(substr(date,1,10)) AS latest FROM cost_data WHERE cloud_provider=? AND subscription_id=?",
-                            (provider_type, provider_id),
+                            "SELECT MAX(substr(date,1,10)) AS latest FROM cost_data WHERE cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                            (provider_type, provider_id, tid),
                         ).fetchone()
                         conn.close()
                         latest = row["latest"] if row and row["latest"] else None
@@ -1098,8 +1099,8 @@ def api_sync():
                                 conn.executemany(
                                     "INSERT INTO cost_data (date,resource_group,service_name,resource_type,"
                                     "resource_name,meter_category,meter_subcategory,cost,currency,"
-                                    "subscription_id,tags,cloud_provider) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-                                    records,
+                                    "subscription_id,tags,cloud_provider,tenant_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                    [r + (tid,) for r in records],
                                 )
                             conn.commit()
                             conn.close()
@@ -1342,7 +1343,7 @@ def api_resource_config():
     if not sub_id or not rg or not name:
         return jsonify({"error": "subscription_id, resource_group, and resource_name are required"}), 400
 
-    cfg = get_resource_config(sub_id, rg, name)
+    cfg = get_resource_config(sub_id, rg, name, tenant_id=current_tenant_id())
     if cfg:
         cfg["display"] = build_display_payload(
             cfg.get("config_json"),
@@ -1363,6 +1364,7 @@ def api_resource_configs_list():
     configs = get_all_resource_configs(
         resource_type=rtype,
         limit=lim,
+        tenant_id=current_tenant_id(),
     )
     for row in configs:
         enrich_list_row(row)
@@ -1372,7 +1374,7 @@ def api_resource_configs_list():
 @app.route("/api/resource_configs/filters")
 @login_required
 def api_resource_configs_filters():
-    return jsonify(get_resource_config_filter_options())
+    return jsonify(get_resource_config_filter_options(tenant_id=current_tenant_id()))
 
 
 @app.route("/api/resource_configs/sync", methods=["POST"])
@@ -1403,7 +1405,7 @@ def api_summary():
     date_from = request.args.get("date_from")
     date_to = request.args.get("date_to")
     sub_id = request.args.get("subscription_id")
-    data = get_summary(group_by, date_from, date_to, subscription_id=sub_id)
+    data = get_summary(group_by, date_from, date_to, subscription_id=sub_id, tenant_id=current_tenant_id())
     return jsonify(data)
 
 
@@ -1808,7 +1810,7 @@ def api_export():
         "search": request.args.get("search"),
     }
     filters = {k: v for k, v in filters.items() if v is not None}
-    data = query_costs(filters)
+    data = query_costs(filters, tenant_id=current_tenant_id())
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -1833,7 +1835,7 @@ def api_chat():
     if not message.strip():
         return jsonify({"reply": "Please type a question about your Azure costs."})
 
-    reply = process_chat_message(message)
+    reply = process_chat_message(message, tenant_id=current_tenant_id())
     return jsonify(reply)
 
 
@@ -2584,14 +2586,15 @@ def api_activity_stats():
 @app.route("/api/activity/filters")
 @login_required
 def api_activity_filters():
-    callers = get_activity_distinct("caller")
+    tid = current_tenant_id()
+    callers = get_activity_distinct("caller", tenant_id=tid)
     names = get_caller_names()
     caller_options = [{"id": c, "name": names.get(c, c)} for c in callers]
     return jsonify({
         "callers": caller_options,
-        "resource_groups": get_activity_distinct("resource_group"),
-        "statuses": get_activity_distinct("status"),
-        "levels": get_activity_distinct("level"),
+        "resource_groups": get_activity_distinct("resource_group", tenant_id=tid),
+        "statuses": get_activity_distinct("status", tenant_id=tid),
+        "levels": get_activity_distinct("level", tenant_id=tid),
     })
 
 
@@ -2658,7 +2661,7 @@ def api_cloud_providers_in_data():
 @app.route("/api/saved-filters", methods=["GET"])
 @login_required
 def api_get_saved_filters():
-    return jsonify(get_saved_filters())
+    return jsonify(get_saved_filters(tenant_id=current_tenant_id()))
 
 
 @app.route("/api/saved-filters", methods=["POST"])
@@ -2669,7 +2672,7 @@ def api_save_filter():
     filters = body.get("filters")
     if not name or not filters:
         return jsonify({"error": "Name and filters are required"}), 400
-    fid = save_filter(name, filters)
+    fid = save_filter(name, filters, tenant_id=current_tenant_id())
     return jsonify({"id": fid, "message": f"Filter '{name}' saved"})
 
 
@@ -2677,14 +2680,14 @@ def api_save_filter():
 @login_required
 def api_update_saved_filter(fid):
     body = request.get_json(silent=True) or {}
-    update_saved_filter(fid, name=body.get("name"), filters=body.get("filters"))
+    update_saved_filter(fid, name=body.get("name"), filters=body.get("filters"), tenant_id=current_tenant_id())
     return jsonify({"message": "Filter updated"})
 
 
 @app.route("/api/saved-filters/<int:fid>", methods=["DELETE"])
 @login_required
 def api_delete_saved_filter(fid):
-    delete_saved_filter(fid)
+    delete_saved_filter(fid, tenant_id=current_tenant_id())
     return jsonify({"message": "Filter deleted"})
 
 
@@ -3054,7 +3057,7 @@ def api_aws_auto_connect():
                 date_to   = today.strftime("%Y-%m-%d")
                 records = fetch_aws_costs(provider, date_from, date_to)
                 if records:
-                    insert_cost_records(records)
+                    insert_cost_records(records, tenant_id=tid)
                     print(f"[AutoConnect] Synced {len(records)} records for {account_id}")
         except Exception as e:
             print(f"[AutoConnect] Background sync failed: {e}")
@@ -3342,7 +3345,7 @@ def _run_auto_sync():
             if all_records:
                 if latest:
                     delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
-                count = insert_cost_records(all_records)
+                count = insert_cost_records(all_records, tenant_id=sub.get("tenant_id", 1))
             else:
                 count = 0  # 429 or empty — keep existing data intact
 
@@ -3404,11 +3407,12 @@ def _run_auto_sync():
                 ptype = p.get("provider_type")
                 pid   = p.get("provider_id")
                 pname = p.get("name") or pid or ptype
+                p_tid = p.get("tenant_id", 1)
                 try:
                     conn2 = get_db()
                     row = conn2.execute(
-                        "SELECT MAX(substr(date,1,10)) FROM cost_data WHERE cloud_provider=? AND subscription_id=?",
-                        (ptype, pid),
+                        "SELECT MAX(substr(date,1,10)) FROM cost_data WHERE cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                        (ptype, pid, p_tid),
                     ).fetchone()
                     conn2.close()
                     latest = row[0] if row and row[0] else None
@@ -3421,20 +3425,20 @@ def _run_auto_sync():
                         project_ids = list({r[9] for r in (records or []) if r[9]})
                         for proj_id in project_ids:
                             conn2.execute(
-                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=?",
-                                (p_from, date_to, proj_id),
+                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
+                                (p_from, date_to, proj_id, p_tid),
                             )
                     else:
                         conn2.execute(
-                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=?",
-                            (p_from, date_to, ptype, pid),
+                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                            (p_from, date_to, ptype, pid, p_tid),
                         )
                     if records:
                         conn2.executemany(
                             "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
-                            "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider) "
-                            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-                            records,
+                            "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
+                            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            [r + (p_tid,) for r in records],
                         )
                     conn2.commit()
                     conn2.close()
@@ -4150,6 +4154,8 @@ def api_cur_import_local():
     if missing:
         return jsonify({"error": f"Files not found: {missing}"}), 400
 
+    tid = current_tenant_id()
+
     def _do_import():
         try:
             from cur_importer import parse_local_cur_files
@@ -4163,16 +4169,15 @@ def api_cur_import_local():
             )
 
             if replace and date_from and date_to and account_id:
-                delete_cost_data_by_date(date_from, date_to, subscription_id=account_id)
+                delete_cost_data_by_date(date_from, date_to, subscription_id=account_id, tenant_id=tid)
             elif replace and account_id:
                 # Replace all data for this account
-                from database import clear_cost_data
                 conn = get_db()
-                conn.execute("DELETE FROM cost_data WHERE subscription_id=? AND cloud_provider='aws'", (account_id,))
+                conn.execute("DELETE FROM cost_data WHERE subscription_id=? AND cloud_provider='aws' AND tenant_id=?", (account_id, tid))
                 conn.commit()
                 conn.close()
 
-            inserted = insert_cost_records(records)
+            inserted = insert_cost_records(records, tenant_id=tid)
             print(f"[CUR] Local import complete: {inserted} inserted, {skipped} skipped")
         except Exception as e:
             import traceback
@@ -4216,6 +4221,8 @@ def api_cur_import():
                 except Exception:
                     pass
 
+    tid = current_tenant_id()
+
     def _do_import():
         try:
             from cur_importer import fetch_cur_records, list_cur_manifests, _s3_client
@@ -4256,7 +4263,7 @@ def api_cur_import():
 
             # Clear existing data for the date range before importing
             if replace and date_from and date_to:
-                delete_cost_data_by_date(date_from, date_to, subscription_id=account_id)
+                delete_cost_data_by_date(date_from, date_to, subscription_id=account_id, tenant_id=tid)
 
             total_inserted = 0
             total_skipped = 0
@@ -4271,7 +4278,7 @@ def api_cur_import():
                     manifest_key=mk,
                     account_id=account_id,
                 )
-                inserted = insert_cost_records(records)
+                inserted = insert_cost_records(records, tenant_id=tid)
                 total_inserted += inserted
                 total_skipped += skipped
                 print(f"[CUR] {mk}: {inserted} inserted")
@@ -4333,6 +4340,7 @@ def _run_cur_auto_import():
             bucket = prov.get("cur_bucket")
             prefix = prov.get("cur_report_prefix") or "cur"
             account_id = prov.get("provider_id")
+            prov_tid = prov.get("tenant_id", 1)
             try:
                 credentials = json.loads(prov["credentials_json"]) if prov.get("credentials_json") else {}
             except Exception:
@@ -4365,9 +4373,9 @@ def _run_cur_auto_import():
                 )
 
                 if records and date_from and date_to:
-                    delete_cost_data_by_date(date_from, date_to, subscription_id=account_id)
+                    delete_cost_data_by_date(date_from, date_to, subscription_id=account_id, tenant_id=prov_tid)
 
-                inserted = insert_cost_records(records)
+                inserted = insert_cost_records(records, tenant_id=prov_tid)
                 print(f"[CUR Auto-Import] {account_id}: {inserted} inserted, {skipped} skipped ({date_from} → {date_to})")
             except Exception as e:
                 print(f"[CUR Auto-Import] {account_id}: error — {e}")
@@ -4583,6 +4591,9 @@ def api_budget_get(budget_id):
 @app.route("/api/budgets/<int:budget_id>", methods=["PUT"])
 @login_required
 def api_budgets_update(budget_id):
+    budgets = get_budgets(tenant_id=current_tenant_id())
+    if not any(b["id"] == budget_id for b in budgets):
+        return jsonify({"error": "Not found"}), 404
     body = request.get_json(silent=True) or {}
     kwargs = {}
     for field in ("name", "amount", "provider_type", "provider_id", "period",
@@ -4597,6 +4608,9 @@ def api_budgets_update(budget_id):
 @app.route("/api/budgets/<int:budget_id>", methods=["DELETE"])
 @login_required
 def api_budgets_delete(budget_id):
+    budgets = get_budgets(tenant_id=current_tenant_id())
+    if not any(b["id"] == budget_id for b in budgets):
+        return jsonify({"error": "Not found"}), 404
     delete_budget(budget_id)
     return jsonify({"message": "Deleted"})
 
