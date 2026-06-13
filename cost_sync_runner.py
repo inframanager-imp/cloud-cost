@@ -92,13 +92,19 @@ def run_cost_sync_from_payload(payload: dict) -> None:
     months = int(os.getenv("COST_HISTORY_MONTHS", "3"))
     date_to = payload.get("date_to") or datetime.utcnow().strftime("%Y-%m-%d")
 
+    # Owner tenant (default 1) drives the global/legacy Azure sync; client
+    # tenants are scoped to their own subscriptions only.
+    owner_tid = int(os.getenv("OWNER_TENANT_ID", "1"))
+    is_owner = payload_tid in (None, owner_tid)
+
     if target_sub:
         all_subs = get_subscriptions()
         match = [s for s in all_subs if s["subscription_id"] == target_sub]
         subs_to_sync = match if match else [{"subscription_id": target_sub, "name": target_sub[:12]}]
     else:
-        subs_to_sync = get_subscriptions(enabled_only=True)
-        if not subs_to_sync:
+        subs_to_sync = get_subscriptions(enabled_only=True, tenant_id=payload_tid if not is_owner else None)
+        # Only the owner tenant falls back to the shared .env Azure subscription.
+        if not subs_to_sync and is_owner:
             subs_to_sync = [{"subscription_id": os.getenv("AZURE_SUBSCRIPTION_ID", ""), "name": "Default"}]
 
     is_full = mode == "full"

@@ -896,7 +896,10 @@ def api_sync():
         subs_to_sync = match if match else [{"subscription_id": target_sub, "name": target_sub[:12]}]
     else:
         subs_to_sync = get_subscriptions(enabled_only=True, tenant_id=current_tenant_id())
-        if not subs_to_sync:
+        # Only the owner tenant falls back to the shared .env Azure subscription.
+        # Client tenants with no Azure subscriptions must NOT pull the shared
+        # subscription (that would attribute the owner's Azure spend to them).
+        if not subs_to_sync and current_tenant_id() in (None, OWNER_TENANT_ID):
             subs_to_sync = [{"subscription_id": os.getenv("AZURE_SUBSCRIPTION_ID", ""), "name": "Default"}]
 
     # Capture tenant_id now — current_tenant_id() uses session which is unavailable in background threads
