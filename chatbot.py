@@ -558,15 +558,20 @@ def extract_date_range(msg):
         d = today.strftime("%Y-%m-%d"); return d, d
     if "yesterday" in msg:
         d = (today - timedelta(days=1)).strftime("%Y-%m-%d"); return d, d
-    if "this week" in msg:
+    if "this week" in msg or "current week" in msg:
         return (today - timedelta(days=today.weekday())).strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
     if "last week" in msg:
         return (today - timedelta(days=today.weekday()+7)).strftime("%Y-%m-%d"), (today - timedelta(days=today.weekday()+1)).strftime("%Y-%m-%d")
-    if "this month" in msg:
+    # "this/current month" and common billing-period synonyms → month-to-date
+    if ("this month" in msg or "current month" in msg or "current billing" in msg
+            or "this billing" in msg or "mtd" in msg or "month to date" in msg or "month-to-date" in msg):
         return today.replace(day=1).strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
-    if "last month" in msg:
+    if "last month" in msg or "previous month" in msg:
         prev = today.replace(day=1) - timedelta(days=1)
         return prev.replace(day=1).strftime("%Y-%m-%d"), prev.strftime("%Y-%m-%d")
+    if ("this year" in msg or "current year" in msg or "ytd" in msg
+            or "year to date" in msg or "year-to-date" in msg):
+        return today.replace(month=1, day=1).strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
     if re.search(r'last\s*7\s*days|past\s*week', msg):
         return (today - timedelta(days=7)).strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
     if re.search(r'last\s*14\s*days|past\s*2\s*weeks|2\s*weeks', msg):
