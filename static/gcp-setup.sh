@@ -48,7 +48,7 @@ KEY_FILE=$(mktemp /tmp/finops-sa-key-XXXXXX.json)
 
 # ── Step 1: Enable required APIs ─────────────────────────────────────────────
 echo -e "[1/4] Enabling required APIs (BigQuery, Cloud Billing)"
-gcloud services enable bigquery.googleapis.com cloudbilling.googleapis.com --project "$PROJECT_ID" > /dev/null 2>&1 \
+gcloud services enable bigquery.googleapis.com cloudbilling.googleapis.com logging.googleapis.com --project "$PROJECT_ID" > /dev/null 2>&1 \
     && echo -e "      ${GREEN}✓ APIs enabled${NC}" \
     || echo -e "      ${YELLOW}→ Could not enable APIs (may already be enabled)${NC}"
 
@@ -76,6 +76,13 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --role="roles/bigquery.jobUser" > /dev/null 2>&1 \
     && echo -e "      ${GREEN}✓ BigQuery Job User assigned${NC}" \
     || echo -e "      ${YELLOW}→ BigQuery Job User may already be assigned${NC}"
+
+# Logs Viewer — needed to read Admin Activity audit logs (Cloud Logging API)
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/logging.viewer" > /dev/null 2>&1 \
+    && echo -e "      ${GREEN}✓ Logs Viewer assigned${NC}" \
+    || echo -e "      ${YELLOW}→ Logs Viewer may already be assigned${NC}"
 
 # Try to grant Billing Account Viewer (best-effort — requires billing IAM admin permission)
 BILLING_ACCOUNT=$(gcloud beta billing projects describe "$PROJECT_ID" --format="value(billingAccountName)" 2>/dev/null | sed 's#billingAccounts/##')

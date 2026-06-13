@@ -191,6 +191,12 @@
                 "Effect": "Allow",
                 "Action": ["savingsplans:Describe*"],
                 "Resource": "*"
+              },
+              {
+                "Sid": "ActivityAuditLogs",
+                "Effect": "Allow",
+                "Action": ["cloudtrail:LookupEvents", "cloudtrail:DescribeTrails", "cloudtrail:GetTrailStatus"],
+                "Resource": "*"
               }
             ]
           }

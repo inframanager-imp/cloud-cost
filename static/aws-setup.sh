@@ -71,6 +71,10 @@ POLICY_DOC='{
                "cloudwatch:GetMetricStatistics","cloudwatch:ListMetrics",
                "organizations:Describe*","organizations:List*",
                "savingsplans:Describe*"],
+     "Resource":"*"},
+    {"Sid":"ActivityAuditLogs","Effect":"Allow",
+     "Action":["cloudtrail:LookupEvents","cloudtrail:DescribeTrails",
+               "cloudtrail:GetTrailStatus"],
      "Resource":"*"}
   ]
 }'
