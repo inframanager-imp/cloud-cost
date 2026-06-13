@@ -4728,8 +4728,10 @@ function syncProvider(id, name) {
                         clearInterval(poll);
                         if (btn) { btn.disabled = false; btn.innerHTML = 'Sync'; btn.style.opacity = ''; }
                         if (changed) {
-                            const hasError = p && p.sync_error;
-                            if (hasError) {
+                            if (syncErrIsPending(p && p.sync_error)) {
+                                if (lastSyncCell) lastSyncCell.innerHTML = `<span style="color:#f59e0b" title="${_esc(syncErrText(p.sync_error))}">⏳ Pending</span> <span style="font-size:11px;color:var(--text-secondary)">${newSync}</span>`;
+                                showToast(`${name}: ${syncErrText(p.sync_error).slice(0,80)}`, 'info');
+                            } else if (p && p.sync_error) {
                                 if (lastSyncCell) lastSyncCell.innerHTML = `<span style="color:var(--red)" title="${p.sync_error}">✗ Failed</span> <span style="font-size:11px;color:var(--text-secondary)">${newSync}</span>`;
                                 showToast(`${name} sync failed: ${p.sync_error.slice(0,80)}`, 'error');
                             } else {

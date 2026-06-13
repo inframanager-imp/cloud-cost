@@ -44,6 +44,13 @@ BILLING_LAG_HOURS = 72
 BILLING_LAG_NOTE = "GCP billing data lags up to 72 hours."
 
 
+class GCPExportPending(Exception):
+    """Raised when a GCP provider is connected but its BigQuery billing export
+    isn't usable yet (no dataset/table configured, or the export table hasn't
+    been created/populated). This is a *pending* state, not a real failure."""
+    pass
+
+
 def _build_credentials(service_account_json: dict):
     """Build google.oauth2 service account credentials from a dict."""
     try:
@@ -64,6 +71,17 @@ def _build_credentials(service_account_json: dict):
 # ─── Mode A: BigQuery export ──────────────────────────────────────────────────
 
 def _fetch_via_bigquery(credentials_cfg: dict, date_from: str, date_to: str, project_id: str) -> list:
+    # Check configuration first — a connected provider with no dataset/table is
+    # "pending" (export not set up yet), not a failure. Do this before touching
+    # google libs or creating a client.
+    dataset = (credentials_cfg.get("dataset") or "").strip()
+    table = (credentials_cfg.get("table") or "").strip()
+    if not dataset or not table:
+        raise GCPExportPending(
+            "BigQuery billing export not configured yet — set the dataset and "
+            "table once Billing export to BigQuery is enabled."
+        )
+
     try:
         from google.cloud import bigquery
     except ImportError:
@@ -79,8 +97,6 @@ def _fetch_via_bigquery(credentials_cfg: dict, date_from: str, date_to: str, pro
     else:
         client = bigquery.Client(project=bq_project)
 
-    dataset = credentials_cfg.get("dataset", "")
-    table = credentials_cfg.get("table", "")
     full_table = f"`{bq_project}.{dataset}.{table}`"
 
     # Detailed export tables contain 'resource' in the name:
@@ -135,7 +151,19 @@ def _fetch_via_bigquery(credentials_cfg: dict, date_from: str, date_to: str, pro
           f"on {full_table} ({date_from} → {date_to})")
 
     records = []
-    for row in client.query(query):
+    try:
+        query_rows = list(client.query(query))
+    except Exception as e:
+        msg = str(e)
+        # Table not created/populated yet, or query references a missing table —
+        # this is the normal state right after enabling Billing export to BigQuery.
+        if any(s in msg.lower() for s in ("not found", "was not found", "must be qualified")):
+            raise GCPExportPending(
+                "Waiting for BigQuery billing export data — the export table "
+                "isn't available yet (can take a few hours after enabling)."
+            )
+        raise
+    for row in query_rows:
         project = row.linked_project or None
         records.append((
             str(row.date),

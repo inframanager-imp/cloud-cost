@@ -166,7 +166,7 @@ def run_cost_sync_from_payload(payload: dict) -> None:
         if not target_sub:
             try:
                 from aws_fetcher import fetch_aws_costs
-                from gcp_fetcher import fetch_gcp_costs
+                from gcp_fetcher import fetch_gcp_costs, GCPExportPending
                 from azure_fetcher import fetch_azure_costs
                 cp_providers = get_cloud_providers(enabled_only=True)
                 cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp", "azure")]
@@ -231,6 +231,9 @@ def run_cost_sync_from_payload(payload: dict) -> None:
                         conn.close()
                         total_records += len(records or [])
                         update_cloud_provider_sync_time(provider["id"], error=None)
+                    except GCPExportPending as pe:
+                        update_cloud_provider_sync_time(provider["id"], error=f"[PENDING] {pe}")
+                        print(f"[cost_sync_runner] GCP provider '{pname}' pending: {pe}")
                     except Exception as cp_err:
                         update_cloud_provider_sync_time(provider["id"], error=str(cp_err))
                         print(f"[cost_sync_runner] {ptype.upper()} provider '{pname}' failed: {cp_err}")

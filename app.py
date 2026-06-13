@@ -16,6 +16,10 @@ import io
 
 load_dotenv()
 
+# Lightweight import (no google deps at module level) — used to classify GCP
+# "export not ready yet" as a pending state rather than a sync failure.
+from gcp_fetcher import GCPExportPending
+
 from database import (
     get_db,
     init_db, insert_cost_records, clear_cost_data, delete_cost_data_by_date,
@@ -1067,7 +1071,7 @@ def api_sync():
             if not target_sub:
                 try:
                     from aws_fetcher import fetch_aws_costs
-                    from gcp_fetcher import fetch_gcp_costs
+                    from gcp_fetcher import fetch_gcp_costs, GCPExportPending
                     cp_providers = get_cloud_providers(enabled_only=True, tenant_id=tid)
                     cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp")]
 
@@ -1119,6 +1123,10 @@ def api_sync():
                             update_cloud_provider_sync_time(provider["id"], error=None)
                             print(f"[Sync] {ptype.upper()} '{pname}': {len(records or [])} records")
                             return len(records or [])
+                        except GCPExportPending as pe:
+                            update_cloud_provider_sync_time(provider["id"], error=f"[PENDING] {pe}")
+                            print(f"[Sync] GCP '{pname}' pending: {pe}")
+                            return 0
                         except Exception as cp_err:
                             update_cloud_provider_sync_time(provider["id"], error=str(cp_err))
                             print(f"[Sync] {ptype.upper()} '{pname}' failed: {cp_err}")
@@ -4274,7 +4282,7 @@ def api_cloud_provider_sync(pk):
                     print(f"[AWS] EC2 name resolution failed: {ne}")
 
             elif provider["provider_type"] == "gcp":
-                from gcp_fetcher import fetch_gcp_costs
+                from gcp_fetcher import fetch_gcp_costs, GCPExportPending
                 records = fetch_gcp_costs(provider, date_from, date_to)
             elif provider["provider_type"] == "azure":
                 from azure_fetcher import fetch_azure_costs
@@ -4319,6 +4327,10 @@ def api_cloud_provider_sync(pk):
             # Run budget checks after sync
             check_budgets(provider_filter=provider["provider_type"])
             print(f"[Sync] {provider['provider_type'].upper()} sync complete: {len(records)} records")
+        except GCPExportPending as pe:
+            # Connected but BigQuery export not ready yet — pending, not a failure.
+            print(f"[Sync] GCP provider {pk} pending: {pe}")
+            update_cloud_provider_sync_time(pk, error=f"[PENDING] {pe}")
         except Exception as e:
             err_msg = str(e)
             print(f"[Sync] {provider['provider_type'].upper()} sync error: {err_msg}")

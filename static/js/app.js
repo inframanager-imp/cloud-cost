@@ -4797,13 +4797,13 @@ async function _scLoadProviders() {
                     <span class="sc-logo" style="color:${col}">${icons[p.provider_type]||'☁'}</span>
                     <span class="sc-name">${_esc(p.name)}</span>
                     <span class="sc-lastsync" id="sc-lastsync-${p.id}">
-                        ${p.sync_error
-                            ? `<span style="color:var(--red)">✗ Failed</span>`
-                            : (p.last_sync ? `<span style="color:var(--green)">✓</span> ${lastSync}` : 'Never')}
+                        ${syncStatusBadge(p)}
                     </span>
                 </div>
                 <div style="font-size:11px;color:var(--text-secondary);margin-bottom:${p.sync_error ? '4px' : '8px'};font-family:monospace">${_esc(p.provider_id)}</div>
-                ${p.sync_error ? `<div style="font-size:11px;color:var(--red);margin-bottom:8px;word-break:break-all">${_esc(p.sync_error.slice(0,120))}</div>` : ''}
+                ${syncErrIsPending(p.sync_error)
+                    ? `<div style="font-size:11px;color:#f59e0b;margin-bottom:8px;word-break:break-all">⏳ ${_esc(syncErrText(p.sync_error).slice(0,160))}</div>`
+                    : (p.sync_error ? `<div style="font-size:11px;color:var(--red);margin-bottom:8px;word-break:break-all">${_esc(p.sync_error.slice(0,120))}</div>` : '')}
                 <div class="sc-provider-actions">
                     <button class="btn-mini" id="sc-sync-btn-${p.id}"
                         onclick="scSyncProvider(${p.id}, '${_escAttr(p.name)}')">
@@ -5053,7 +5053,10 @@ async function scSyncProvider(id, name, mode = 'incremental') {
                     clearInterval(poll);
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Quick Sync'; }
                     const newSync = p?.last_sync ? p.last_sync.slice(0,16).replace('T',' ') : null;
-                    if (p?.sync_error) {
+                    if (syncErrIsPending(p?.sync_error)) {
+                        if (lastSyncEl) lastSyncEl.innerHTML = `<span style="color:#f59e0b" title="${_esc(syncErrText(p.sync_error))}">⏳ Pending</span>`;
+                        showToast(`${name}: ${syncErrText(p.sync_error).slice(0,80)}`, 'info');
+                    } else if (p?.sync_error) {
                         if (lastSyncEl) lastSyncEl.innerHTML = `<span style="color:var(--red)" title="${_esc(p.sync_error)}">✗ Failed</span>`;
                         showToast(`${name} sync failed`, 'error');
                     } else {
@@ -5361,6 +5364,20 @@ function _esc(s) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+// A provider with sync_error prefixed "[PENDING]" is connected but waiting on
+// something external (e.g. GCP BigQuery export data) — show it as pending, not failed.
+function syncErrIsPending(err) { return !!err && String(err).indexOf('[PENDING]') === 0; }
+function syncErrText(err) { return String(err || '').replace('[PENDING]', '').trim(); }
+function syncStatusBadge(p) {
+    if (syncErrIsPending(p.sync_error))
+        return `<span style="color:#f59e0b" title="${_esc(syncErrText(p.sync_error))}">⏳ Pending</span>`;
+    if (p.sync_error)
+        return `<span style="color:var(--red)" title="${_esc(p.sync_error)}">✗ Failed</span>`;
+    if (p.last_sync)
+        return `<span style="color:var(--green)">✓</span> ${(p.last_sync || '').slice(0,16).replace('T',' ')}`;
+    return 'Never';
 }
 
 const RESOURCE_TYPE_LABELS = {
