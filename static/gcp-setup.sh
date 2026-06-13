@@ -155,8 +155,17 @@ echo "If you've already done this, enter the dataset and table name below"
 echo "(table name usually looks like gcp_billing_export_v1_XXXXXX_XXXXXX_XXXXXX)."
 echo "Leave blank to skip for now — you can add this later in the tool."
 echo ""
-read -p "BigQuery dataset name [skip]: " BQ_DATASET
-read -p "BigQuery table name [skip]: " BQ_TABLE
+# Read from the terminal, not stdin. This script is itself piped into bash via
+# 'curl | bash', so stdin carries the script — a bare `read` would consume the
+# next script line instead of the user's input. /dev/tty targets the terminal.
+BQ_DATASET=""
+BQ_TABLE=""
+if [ -r /dev/tty ]; then
+    read -r -p "BigQuery dataset name [skip]: " BQ_DATASET < /dev/tty || BQ_DATASET=""
+    read -r -p "BigQuery table name [skip]: "   BQ_TABLE   < /dev/tty || BQ_TABLE=""
+else
+    echo "(no terminal detected — skipping; add the dataset/table in the tool later)"
+fi
 
 # ── Callback to tool (auto-save) ─────────────────────────────────────────────
 SA_JSON=$(cat "$KEY_FILE")
