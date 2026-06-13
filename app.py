@@ -8,7 +8,7 @@ import calendar
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import csv
@@ -476,7 +476,9 @@ def index():
 @login_required
 def drilldown_page():
     """Standalone compare drilldown (opened from Compare table row link)."""
-    return render_template("drilldown.html")
+    resp = make_response(render_template("drilldown.html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 
 # ─── API: Dashboard Stats ────────────────────────────────────────────────────
