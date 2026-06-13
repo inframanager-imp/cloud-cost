@@ -1898,7 +1898,7 @@ def _sync_or_activity_busy():
     return _sync_is_busy() or _activity_sync_is_busy()
 
 
-def _spawn_activity_sync_subprocess(days, target_sub, cloud_provider=None):
+def _spawn_activity_sync_subprocess(days, target_sub, cloud_provider=None, tenant_id=None):
     """Start activity_sync_runner.py; same pattern as cost subprocess sync."""
     try:
         os.unlink(_activity_sync_status_path())
@@ -1906,7 +1906,8 @@ def _spawn_activity_sync_subprocess(days, target_sub, cloud_provider=None):
         pass
     data_dir = os.path.dirname(os.path.abspath(os.getenv("DB_PATH", "/app/data/azure_costs.db")))
     os.makedirs(data_dir, exist_ok=True)
-    payload = {"days": int(days), "subscription_id": target_sub, "cloud_provider": cloud_provider}
+    payload = {"days": int(days), "subscription_id": target_sub,
+               "cloud_provider": cloud_provider, "tenant_id": tenant_id}
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", dir=data_dir, delete=False, encoding="utf-8"
     ) as tf:
@@ -1925,7 +1926,7 @@ def _spawn_activity_sync_subprocess(days, target_sub, cloud_provider=None):
     print("[Activity-sync] spawned activity_sync_runner.py")
 
 
-def _execute_activity_sync(days=7, target_sub=None, cloud_provider=None):
+def _execute_activity_sync(days=7, target_sub=None, cloud_provider=None, tenant_id=None):
     """Run activity sync job. Updates global activity_sync_status.
     cloud_provider: None=all, 'azure'=only Azure, 'aws'=only AWS, 'gcp'=only GCP
     """
@@ -1934,14 +1935,17 @@ def _execute_activity_sync(days=7, target_sub=None, cloud_provider=None):
     date_to = datetime.utcnow().strftime("%Y-%m-%d")
     skip_azure = cloud_provider in ("aws", "gcp")
     skip_cloud_providers = cloud_provider == "azure"
+    # Owner tenant drives the global/legacy Azure activity sync; client tenants
+    # are scoped to their own subscriptions and providers only.
+    is_owner = tenant_id in (None, OWNER_TENANT_ID)
 
     if target_sub:
         subs_to_sync = [{"subscription_id": target_sub}]
     elif skip_azure:
         subs_to_sync = []
     else:
-        subs_to_sync = get_subscriptions(enabled_only=True)
-        if not subs_to_sync:
+        subs_to_sync = get_subscriptions(enabled_only=True, tenant_id=None if is_owner else tenant_id)
+        if not subs_to_sync and is_owner:
             subs_to_sync = [{"subscription_id": os.getenv("AZURE_SUBSCRIPTION_ID", "")}]
 
     def _fetch_one_activity(sub, days_local, date_to_local):
@@ -2050,7 +2054,7 @@ def _execute_activity_sync(days=7, target_sub=None, cloud_provider=None):
             try:
                 from aws_fetcher import fetch_aws_activity
                 from gcp_fetcher import fetch_gcp_activity
-                cp_providers = get_cloud_providers(enabled_only=True)
+                cp_providers = get_cloud_providers(enabled_only=True, tenant_id=None if is_owner else tenant_id)
                 allowed_types = {cloud_provider} if cloud_provider in ("aws", "gcp") else {"aws", "gcp"}
                 aws_gcp = [p for p in cp_providers if p.get("provider_type") in allowed_types]
                 for cp in aws_gcp:
@@ -2088,15 +2092,16 @@ def api_activity_sync():
     days = int(body.get("days", 7))
     target_sub = body.get("subscription_id")
     cloud_provider = (body.get("cloud_provider") or "").strip().lower() or None
+    tid = current_tenant_id()
 
     if ACTIVITY_SYNC_SUBPROCESS:
-        _spawn_activity_sync_subprocess(days, target_sub, cloud_provider)
+        _spawn_activity_sync_subprocess(days, target_sub, cloud_provider, tid)
         return jsonify({"message": "Activity sync started", "subprocess": True})
 
     started = start_background_thread(
         _execute_activity_sync,
         name="activity-sync",
-        args=(days, target_sub, cloud_provider),
+        args=(days, target_sub, cloud_provider, tid),
         fallback_inline=ACTIVITY_SYNC_INLINE_MODE,
     )
     if not started:

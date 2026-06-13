@@ -66,18 +66,23 @@ def run(payload: dict) -> None:
     days = int(payload.get("days", 7))
     target_sub = payload.get("subscription_id")
     cloud_provider = (payload.get("cloud_provider") or "").strip().lower() or None
+    tenant_id = payload.get("tenant_id")
     date_to = datetime.utcnow().strftime("%Y-%m-%d")
 
     skip_azure = cloud_provider in ("aws", "gcp")
     skip_cloud_providers = cloud_provider == "azure"
+    # Owner tenant drives the global/legacy Azure activity sync; client tenants
+    # are scoped to their own subscriptions and providers only.
+    owner_tid = int(os.getenv("OWNER_TENANT_ID", "1"))
+    is_owner = tenant_id in (None, owner_tid)
 
     if target_sub:
         subs_to_sync = [{"subscription_id": target_sub}]
     elif skip_azure:
         subs_to_sync = []
     else:
-        subs_to_sync = get_subscriptions(enabled_only=True)
-        if not subs_to_sync:
+        subs_to_sync = get_subscriptions(enabled_only=True, tenant_id=None if is_owner else tenant_id)
+        if not subs_to_sync and is_owner:
             subs_to_sync = [{"subscription_id": os.getenv("AZURE_SUBSCRIPTION_ID", ""), "name": "Default"}]
 
     total_subs = len(subs_to_sync)
@@ -178,7 +183,7 @@ def run(payload: dict) -> None:
             try:
                 from aws_fetcher import fetch_aws_activity
                 from gcp_fetcher import fetch_gcp_activity
-                cp_providers = get_cloud_providers(enabled_only=True)
+                cp_providers = get_cloud_providers(enabled_only=True, tenant_id=None if is_owner else tenant_id)
                 allowed_types = {cloud_provider} if cloud_provider in ("aws", "gcp") else {"aws", "gcp"}
                 aws_gcp = [p for p in cp_providers if p.get("provider_type") in allowed_types]
                 for cp in aws_gcp:
