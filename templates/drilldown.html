@@ -73,6 +73,18 @@
 <script>
 const chartInstances = {};
 const DD_COLORS = ['#4f6ef7', '#2ecc71', '#e67e22', '#9b59b6', '#1abc9c', '#e74c3c'];
+
+// Friendly resource name: strip AWS ARN prefix to the trailing resource id.
+// e.g. "arn:aws:rds:us-east-2:319640437000:db:prism-2-0" -> "prism-2-0".
+// Non-ARN names (S3 buckets, GCP/Azure resources) are returned unchanged.
+function ddShortName(name) {
+    if (!name) return name;
+    let s = String(name);
+    if (s.toLowerCase().startsWith('arn:')) {
+        s = s.split(':').pop().split('/').pop();
+    }
+    return s;
+}
 const params = new URLSearchParams(window.location.search);
 const name = params.get('name') || '';
 const groupBy = params.get('group_by') || 'resource_group';
@@ -346,9 +358,12 @@ function renderTab(key) {
             const barClass = r.difference > 0 ? 'up' : r.difference < 0 ? 'down' : 'neutral';
             const badgeClass = r.change_pct > 0 ? 'up' : r.change_pct < 0 ? 'down' : 'neutral';
             const arrow = r.change_pct > 0 ? '▲' : r.change_pct < 0 ? '▼' : '–';
-            const esc = String(r.name).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            const full = String(r.name);
+            const disp = ddShortName(full);
+            const esc = disp.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            const escFull = full.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
             return `<tr>
-            <td style="font-weight:500">${esc}</td>
+            <td style="font-weight:500" title="${escFull}">${esc}</td>
             ${costCells}
             <td style="color:${r.difference > 0 ? 'var(--red)' : 'var(--green)'};font-weight:500">
                 ${r.difference > 0 ? '+' : ''}$${Number(r.difference).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -372,9 +387,10 @@ function renderTab(key) {
         'ddBarChart',
         'bar',
         {
-            labels: top10.map((r) =>
-                r.name.length > 25 ? r.name.substring(0, 25) + '...' : r.name
-            ),
+            labels: top10.map((r) => {
+                const s = ddShortName(r.name);
+                return s.length > 25 ? s.substring(0, 25) + '...' : s;
+            }),
             datasets,
         },
         key
