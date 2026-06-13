@@ -2664,6 +2664,22 @@ def api_cloud_providers_in_data():
     return jsonify(providers)
 
 
+@app.route("/api/connected-clouds")
+@login_required
+def api_connected_clouds():
+    """Clouds this tenant should see in analytics UI: any cloud with an
+    enabled provider, a legacy Azure subscription, or historical cost data
+    (so disconnecting a cloud doesn't hide its history)."""
+    tid = current_tenant_id()
+    clouds = set(get_distinct_cloud_providers_in_data(tenant_id=tid))
+    for p in get_cloud_providers(enabled_only=True, tenant_id=tid):
+        if p.get("provider_type"):
+            clouds.add(p["provider_type"])
+    if get_subscriptions(enabled_only=True, tenant_id=tid):
+        clouds.add("azure")
+    return jsonify(sorted(clouds))
+
+
 @app.route("/api/saved-filters", methods=["GET"])
 @login_required
 def api_get_saved_filters():

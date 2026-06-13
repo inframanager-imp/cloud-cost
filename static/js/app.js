@@ -87,18 +87,50 @@ function addCloudParam(params) {
 }
 
 // Initialise cloud filter pills based on which clouds have data
+// Clouds this tenant should see (enabled providers + historical cost data).
+// null = unknown (fail open: show everything).
+let connectedClouds = null;
+
+function cloudVisible(cloud) {
+    return !connectedClouds || connectedClouds.has(cloud);
+}
+
 async function initCloudFilter() {
     try {
-        const clouds = await fetch('/api/costs/cloud-providers-in-data').then(r => r.json());
-        const pills = document.getElementById('cloudFilterPills');
-        if (!pills) return;
-        // Hide pills for clouds with no data
-        pills.querySelectorAll('.cloud-pill[data-cloud]').forEach(p => {
-            const cloud = p.dataset.cloud;
-            if (cloud === '') return; // keep "All"
-            p.style.display = clouds.includes(cloud) ? '' : 'none';
+        const clouds = await fetch('/api/connected-clouds').then(r => r.json());
+        connectedClouds = new Set(clouds);
+    } catch(e) { connectedClouds = null; /* fail open */ }
+    applyCloudVisibility();
+}
+
+function applyCloudVisibility() {
+    // Static elements tagged with data-cloud-vis (KPI cards, header chips)
+    document.querySelectorAll('[data-cloud-vis]').forEach(el => {
+        el.style.display = cloudVisible(el.dataset.cloudVis) ? '' : 'none';
+    });
+
+    // Cloud filter chips across pages (keep "All" / empty value)
+    const chipSelectors = [
+        ['#cloudFilterPills .cloud-pill[data-cloud]', 'cloud'],
+        ['#ccCloudsFilter [data-cloud]',              'cloud'],
+        ['[data-costs-cloud]',                        'costsCloud'],
+        ['[data-cmp-cloud]',                          'cmpCloud'],
+        ['[data-act-cloud]',                          'actCloud'],
+    ];
+    chipSelectors.forEach(([sel, key]) => {
+        document.querySelectorAll(sel).forEach(b => {
+            const cloud = b.dataset[key];
+            if (!cloud || cloud === 'all') return; // keep "All"
+            b.style.display = cloudVisible(cloud) ? '' : 'none';
         });
-    } catch(e) { /* non-fatal */ }
+    });
+
+    // Recompute KPI grid columns so hidden cards don't leave gaps
+    const row = document.getElementById('exKpiRow');
+    if (row) {
+        const visible = Array.from(row.children).filter(c => c.style.display !== 'none').length;
+        row.style.gridTemplateColumns = `repeat(${visible || 1},minmax(0,1fr))`;
+    }
 }
 
 // ─── Navigation ──────────────────────────────────────────────────────────
@@ -447,9 +479,9 @@ async function loadExecutiveSummary() {
                     labels: trendLabels,
                     datasets: [
                         { label: 'Total',  data: trend.map(t => t.total), borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.08)', tension: 0.4, fill: true,  borderWidth: 2,   pointRadius: 3 },
-                        { label: 'Azure',  data: trend.map(t => t.azure), borderColor: '#0089D6', backgroundColor: 'transparent',            tension: 0.4, fill: false, borderWidth: 1.5, pointRadius: 2, borderDash: [5,3] },
-                        { label: 'AWS',    data: trend.map(t => t.aws),   borderColor: '#FF9900', backgroundColor: 'transparent',            tension: 0.4, fill: false, borderWidth: 1.5, pointRadius: 2, borderDash: [5,3] },
-                        { label: 'GCP',    data: trend.map(t => t.gcp),   borderColor: '#34A853', backgroundColor: 'transparent',            tension: 0.4, fill: false, borderWidth: 1,   pointRadius: 2, borderDash: [3,3] },
+                        ...(cloudVisible('azure') ? [{ label: 'Azure',  data: trend.map(t => t.azure), borderColor: '#0089D6', backgroundColor: 'transparent', tension: 0.4, fill: false, borderWidth: 1.5, pointRadius: 2, borderDash: [5,3] }] : []),
+                        ...(cloudVisible('aws')   ? [{ label: 'AWS',    data: trend.map(t => t.aws),   borderColor: '#FF9900', backgroundColor: 'transparent', tension: 0.4, fill: false, borderWidth: 1.5, pointRadius: 2, borderDash: [5,3] }] : []),
+                        ...(cloudVisible('gcp')   ? [{ label: 'GCP',    data: trend.map(t => t.gcp),   borderColor: '#34A853', backgroundColor: 'transparent', tension: 0.4, fill: false, borderWidth: 1,   pointRadius: 2, borderDash: [3,3] }] : []),
                     ]
                 },
                 options: {
@@ -4723,7 +4755,8 @@ async function _scLoadProviders() {
         const colors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
 
         // Build Azure card from subscriptions + main sync history
-        const subCount = Array.isArray(subsRaw) ? subsRaw.length : 0;
+        // (count only legacy Azure subs — /api/subscriptions also returns AWS/GCP accounts)
+        const subCount = Array.isArray(subsRaw) ? subsRaw.filter(s => s.cloud === 'azure').length : 0;
         const lastAzureSync = histRaw.find(h => h.status === 'success' || h.status === 'running');
         const azureLastSyncStr = lastAzureSync && lastAzureSync.sync_end
             ? lastAzureSync.sync_end.slice(0,16).replace('T',' ')
@@ -4784,7 +4817,11 @@ async function _scLoadProviders() {
             </div>`;
         }).join('');
 
-        container.innerHTML = azureCard + otherCards;
+        // Hide the legacy shared-credentials Azure card when this tenant has no
+        // subscriptions in it (self-service Azure accounts get their own card below)
+        const showAzureCard = subCount > 0;
+        container.innerHTML = (showAzureCard ? azureCard : '') + otherCards
+            || '<div style="font-size:12px;color:var(--text-secondary)">No providers connected yet</div>';
     } catch(e) {
         container.innerHTML = '<div style="font-size:12px;color:var(--red)">Failed to load providers</div>';
     }
@@ -5282,12 +5319,12 @@ function _initNavContextMenu() {
     _attach();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     initAppearanceToggle();
     initUiThemeTrial();
     _scLoadAutoSync();   // load auto-sync state into drawer + badge on startup
     _scLoadStatus();     // update sidebar global status
-    initCloudFilter();   // hide pills for clouds with no data
+    await initCloudFilter();   // hide cloud UI for unconnected clouds (before first page render)
     populateClientDropdowns();
     _initNavContextMenu();
     // Restore page from URL hash (refresh) or ?page= query param, else default to executive
