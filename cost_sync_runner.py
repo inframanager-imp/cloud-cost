@@ -88,6 +88,7 @@ def run_cost_sync_from_payload(payload: dict) -> None:
     init_db()
     mode = payload.get("mode", "incremental")
     target_sub = payload.get("subscription_id")
+    payload_tid = payload.get("tenant_id")
     months = int(os.getenv("COST_HISTORY_MONTHS", "3"))
     date_to = payload.get("date_to") or datetime.utcnow().strftime("%Y-%m-%d")
 
@@ -104,7 +105,7 @@ def run_cost_sync_from_payload(payload: dict) -> None:
     mode_label = "Full sync" if is_full else "Quick sync"
     total_subs = len(subs_to_sync)
     _write_status(True, f"{mode_label}: Starting ({total_subs} subscription(s))...", 5)
-    sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to)
+    sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=payload_tid)
     total_records = 0
 
     try:

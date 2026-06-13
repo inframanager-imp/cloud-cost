@@ -131,6 +131,9 @@ AUTO_SYNC_INTERVAL_HOURS = int(os.getenv("AUTO_SYNC_INTERVAL_HOURS", 6))
 AUTO_SYNC_ENABLED = os.getenv("AUTO_SYNC_ENABLED", "true").lower() in ("true", "1", "yes")
 SYNC_INLINE_MODE = os.getenv("SYNC_INLINE_MODE", "false").lower() in ("true", "1", "yes")
 SYNC_SEQUENTIAL = os.getenv("SYNC_SEQUENTIAL", "false").lower() in ("true", "1", "yes")
+# The global nightly auto-sync covers the shared/legacy account; attribute its
+# sync_log rows to the owner tenant so the admin keeps a visible history.
+OWNER_TENANT_ID = int(os.getenv("OWNER_TENANT_ID", "1"))
 FORCE_SYNC_INLINE = os.getenv("FORCE_SYNC_INLINE", "false").lower() in ("true", "1", "yes")
 SYNC_SUBPROCESS = os.getenv("SYNC_SUBPROCESS", "true").lower() in ("true", "1", "yes")
 ACTIVITY_SYNC_INLINE_MODE = os.getenv("ACTIVITY_SYNC_INLINE_MODE", "false").lower() in ("true", "1", "yes")
@@ -619,7 +622,7 @@ def api_dashboard():
             "last_month_cost": lm_sub_map.get(raw_id, 0),
         })
 
-    sync_hist = get_sync_history()
+    sync_hist = get_sync_history(tenant_id=tid)
     last_sync = sync_hist[0] if sync_hist else None
 
     stats = get_stats(subscription_id=sub_id, tenant_id=tid)
@@ -969,7 +972,7 @@ def api_sync():
         msg_start = f"{mode_label}: Starting {total_subs} subscription(s) — {', '.join(sub_names_list[:4])}{'...' if total_subs > 4 else ''}"
         sync_status = {"running": True, "message": msg_start, "progress": 5, "details": []}
         _write_sync_file(True, msg_start, 5)
-        sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to)
+        sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=tid)
         total_records = 0
         completed_details = []  # track per-sub results for UI
 
@@ -1147,7 +1150,7 @@ def api_sync():
     if FORCE_SYNC_INLINE and SYNC_SUBPROCESS:
         data_dir = os.path.dirname(os.path.abspath(os.getenv("DB_PATH", "/app/data/azure_costs.db")))
         os.makedirs(data_dir, exist_ok=True)
-        payload = {"mode": mode, "subscription_id": target_sub, "date_to": date_to}
+        payload = {"mode": mode, "subscription_id": target_sub, "date_to": date_to, "tenant_id": tid}
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", dir=data_dir, delete=False, encoding="utf-8"
         ) as tf:
@@ -1787,7 +1790,7 @@ def api_filters():
 @app.route("/api/sync/history")
 @login_required
 def api_sync_history():
-    return jsonify(get_sync_history())
+    return jsonify(get_sync_history(tenant_id=current_tenant_id()))
 
 
 # ─── API: Export CSV ──────────────────────────────────────────────────────────
@@ -3555,7 +3558,7 @@ def _run_auto_sync():
     months = int(os.getenv("COST_HISTORY_MONTHS", 3))
     date_to = datetime.utcnow().strftime("%Y-%m-%d")
     total_subs = len(subs_to_sync)
-    sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to)
+    sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=OWNER_TENANT_ID)
     total_records = 0
 
     try:
@@ -4914,7 +4917,7 @@ def api_data_freshness():
     Also includes a global last-sync from sync_log.
     """
     freshness = get_data_freshness(tenant_id=current_tenant_id())
-    sync_hist = get_sync_history()
+    sync_hist = get_sync_history(tenant_id=current_tenant_id())
     last_sync = sync_hist[0] if sync_hist else None
 
     # Billing lag notes per provider

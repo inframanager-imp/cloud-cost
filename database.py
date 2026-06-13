@@ -49,9 +49,17 @@ def init_db():
             records_fetched INTEGER DEFAULT 0,
             date_from TEXT,
             date_to TEXT,
-            error_message TEXT
+            error_message TEXT,
+            tenant_id INTEGER
         )
     """)
+
+    # Migration: add tenant_id to sync_log if missing (NULL = global/system sync)
+    try:
+        cursor.execute("SELECT tenant_id FROM sync_log LIMIT 1")
+    except Exception:
+        cursor.execute("ALTER TABLE sync_log ADD COLUMN tenant_id INTEGER")
+        print("[DB] Migrated sync_log: added tenant_id column")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS subscriptions (
@@ -847,13 +855,13 @@ def get_latest_cost_date(subscription_id=None):
     return row["max_date"] if row and row["max_date"] else None
 
 
-def log_sync(sync_start, date_from, date_to):
+def log_sync(sync_start, date_from, date_to, tenant_id=None):
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO sync_log (sync_start, date_from, date_to, status)
-        VALUES (?, ?, ?, 'running')
-    """, (sync_start, date_from, date_to))
+        INSERT INTO sync_log (sync_start, date_from, date_to, status, tenant_id)
+        VALUES (?, ?, ?, 'running', ?)
+    """, (sync_start, date_from, date_to, tenant_id))
     conn.commit()
     sync_id = cursor.lastrowid
     conn.close()
@@ -2019,9 +2027,16 @@ def delete_saved_filter(fid, tenant_id=None):
     conn.close()
 
 
-def get_sync_history():
+def get_sync_history(tenant_id=None):
     conn = get_db()
-    rows = conn.execute("SELECT * FROM sync_log ORDER BY id DESC LIMIT 20").fetchall()
+    if tenant_id is not None:
+        # Tenant sees only their own syncs (NULL = global/system runs are hidden)
+        rows = conn.execute(
+            "SELECT * FROM sync_log WHERE tenant_id = ? ORDER BY id DESC LIMIT 20",
+            (tenant_id,)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM sync_log ORDER BY id DESC LIMIT 20").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
