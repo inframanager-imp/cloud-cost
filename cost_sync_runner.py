@@ -168,7 +168,8 @@ def run_cost_sync_from_payload(payload: dict) -> None:
                 from aws_fetcher import fetch_aws_costs
                 from gcp_fetcher import fetch_gcp_costs, GCPExportPending
                 from azure_fetcher import fetch_azure_costs
-                cp_providers = get_cloud_providers(enabled_only=True)
+                # Client tenants sync only their own providers; owner/global run syncs all.
+                cp_providers = get_cloud_providers(enabled_only=True, tenant_id=None if is_owner else payload_tid)
                 cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp", "azure")]
                 total_cp = len(cp_providers)
                 for idx, provider in enumerate(cp_providers, start=1):

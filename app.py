@@ -5826,6 +5826,17 @@ def api_sa_delete_user(uid):
     return jsonify({"message": "User deleted"})
 
 
+@app.route("/api/superadmin/isolation-audit")
+@super_admin_required
+def api_sa_isolation_audit():
+    """Run the tenant-isolation audit on demand. Returns any cross-tenant leaks."""
+    try:
+        from tenant_isolation_audit import audit
+        return jsonify(audit())
+    except Exception as e:
+        return jsonify({"clean": False, "error": str(e), "findings": []}), 500
+
+
 @app.route("/api/superadmin/stats")
 @super_admin_required
 def api_sa_stats():
