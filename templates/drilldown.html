@@ -359,7 +359,7 @@ function renderTab(key) {
             const badgeClass = r.change_pct > 0 ? 'up' : r.change_pct < 0 ? 'down' : 'neutral';
             const arrow = r.change_pct > 0 ? '▲' : r.change_pct < 0 ? '▼' : '–';
             const full = String(r.name);
-            const disp = ddShortName(full);
+            const disp = r.display_name ? String(r.display_name) : ddShortName(full);
             const esc = disp.replace(/&/g, '&amp;').replace(/</g, '&lt;');
             const escFull = full.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
             return `<tr>
@@ -388,7 +388,7 @@ function renderTab(key) {
         'bar',
         {
             labels: top10.map((r) => {
-                const s = ddShortName(r.name);
+                const s = r.display_name ? String(r.display_name) : ddShortName(r.name);
                 return s.length > 25 ? s.substring(0, 25) + '...' : s;
             }),
             datasets,

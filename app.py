@@ -1711,6 +1711,21 @@ def api_compare_drilldown():
     resource_groups_str = request.args.get("resource_groups")
     resource_groups = resource_groups_str.split(',') if resource_groups_str else None
 
+    def _enrich_resource_display(data):
+        """Map EC2 instance IDs in the Resources breakdown to their Name tags."""
+        rows = data.get("Resources")
+        if not rows:
+            return
+        try:
+            from database import get_aws_resource_names
+            ec2_names = get_aws_resource_names()
+        except Exception:
+            ec2_names = {}
+        for row in rows:
+            rid = row.get("name") or ""
+            if rid.startswith("i-") and rid in ec2_names:
+                row["display_name"] = ec2_names[rid]  # Name tag; keep id in name for tooltip
+
     periods_raw = request.args.get("periods")
     if periods_raw:
         periods, _labels = _parse_compare_periods_arg(periods_raw)
@@ -1729,6 +1744,7 @@ def api_compare_drilldown():
                 row["costs"] = costs
                 row["difference"] = diff
                 row["change_pct"] = pct
+        _enrich_resource_display(data)
         return jsonify(data)
 
     p1_from = request.args.get("p1_from")
@@ -1755,6 +1771,7 @@ def api_compare_drilldown():
             row["change_pct"] = pct
             row["name"] = row["name"] or "Unknown"
 
+    _enrich_resource_display(data)
     return jsonify(data)
 
 
