@@ -1376,19 +1376,24 @@ def get_comparison_drilldown(group_by, group_value, date_from_1, date_to_1, date
     Returns sub-items grouped by the other dimensions."""
     conn = get_db()
 
-    # Determine sub-group columns based on what we're drilling into
+    # Determine sub-group columns based on what we're drilling into.
+    # "Resources" (resource_name) shows individual buckets/instances/databases
+    # where resource-level billing detail exists (AWS CUR, Azure, GCP detailed).
     if group_by == "resource_group":
         sub_groups = [
+            ("resource_name", "Resources"),
             ("service_name", "Service"),
             ("meter_category", "Meter Category"),
         ]
     elif group_by == "service_name":
         sub_groups = [
+            ("resource_name", "Resources"),
             ("resource_group", "Resource Group"),
             ("meter_category", "Meter Category"),
         ]
     else:  # meter_category
         sub_groups = [
+            ("resource_name", "Resources"),
             ("service_name", "Service"),
             ("resource_group", "Resource Group"),
         ]
@@ -1468,16 +1473,19 @@ def get_comparison_drilldown_multi(group_by, group_value, periods, subscription_
 
     if group_by == "resource_group":
         sub_groups = [
+            ("resource_name", "Resources"),
             ("service_name", "Service"),
             ("meter_category", "Meter Category"),
         ]
     elif group_by == "service_name":
         sub_groups = [
+            ("resource_name", "Resources"),
             ("resource_group", "Resource Group"),
             ("meter_category", "Meter Category"),
         ]
     else:
         sub_groups = [
+            ("resource_name", "Resources"),
             ("service_name", "Service"),
             ("resource_group", "Resource Group"),
         ]

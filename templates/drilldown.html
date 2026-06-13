@@ -45,6 +45,8 @@
 
         <div id="ddTabs" class="tab-bar"></div>
 
+        <div id="ddHint" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);font-size:13px;color:var(--text-secondary)"></div>
+
         <div class="table-container" style="margin-bottom:24px">
             <table>
                 <thead id="ddTableHead">
@@ -309,6 +311,27 @@ function switchTab(key, btn) {
 function renderTab(key) {
     const items = ddData[key] || [];
     const maxDiff = Math.max(...items.map((r) => Math.abs(r.difference || 0)), 1);
+
+    // Resources tab: if there's no real per-resource detail (Cost Explorer-only
+    // accounts), guide the user toward the detailed billing source.
+    const hintEl = document.getElementById('ddHint');
+    if (hintEl) {
+        const placeholders = new Set(['unknown', 'noresourceid', '', '-']);
+        const hasRealResources = items.some(
+            (r) => !placeholders.has(String(r.name || '').trim().toLowerCase())
+        );
+        if (key === 'Resources' && !hasRealResources) {
+            hintEl.style.display = 'block';
+            hintEl.innerHTML =
+                '⏳ <strong>No per-resource detail for this account yet.</strong> ' +
+                'Resource-level costs (individual buckets, instances, databases) require the detailed billing source: ' +
+                '<strong>AWS</strong> → enable the Cost &amp; Usage Report (CUR); ' +
+                '<strong>GCP</strong> → enable the <em>detailed</em> BigQuery export; ' +
+                '<strong>Azure</strong> → already included.';
+        } else {
+            hintEl.style.display = 'none';
+        }
+    }
 
     document.getElementById('ddTableBody').innerHTML = items
         .map((r) => {
