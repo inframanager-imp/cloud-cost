@@ -131,19 +131,21 @@ def _fetch_via_bigquery(credentials_cfg: dict, date_from: str, date_to: str, pro
             ORDER BY 1
         """
     else:
+        # Standard export (gcp_billing_export_v1_*) has no resource-level fields,
+        # so there is no `resource.name` column — only detailed exports do.
         query = f"""
             SELECT
               DATE(usage_start_time)  AS date,
               service.description     AS service_name,
               sku.description         AS meter_subcategory,
-              resource.name           AS resource_name,
+              CAST(NULL AS STRING)    AS resource_name,
               project.id              AS linked_project,
               SUM(cost)               AS total_cost,
               currency
             FROM {full_table}
             WHERE DATE(usage_start_time) BETWEEN '{date_from}' AND '{date_to}'
               AND cost > 0
-            GROUP BY 1,2,3,4,5,7
+            GROUP BY 1,2,3,5,7
             ORDER BY 1
         """
 
