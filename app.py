@@ -540,7 +540,6 @@ def api_dashboard():
     # Build account name map: Azure subscriptions + cloud_providers table (AWS accounts, GCP projects)
     subs = get_subscriptions(tenant_id=tid)
     sub_map = {s["subscription_id"]: s["name"] for s in subs}
-    from database import get_db
     conn = get_db()
     # Enrich with cloud_providers table (provider_id = AWS account ID or GCP project ID)
     cp_rows = conn.execute(
