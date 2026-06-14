@@ -1048,6 +1048,7 @@ async function loadCostsTable() {
     const dateFrom = document.getElementById('costDateFrom')?.value;
     const dateTo = document.getElementById('costDateTo')?.value;
     const granularity = document.getElementById('costGranularity')?.value || 'daily';
+    const costGroupBy = document.getElementById('costGroupBy')?.value || 'resource';
     const dateHeader = document.getElementById('costDateHeader');
     if (dateHeader) {
         dateHeader.innerHTML = `${granularity === 'monthly' ? 'Month' : 'Date'} <span id="sort-date" class="sort-indicator">↕</span>`;
@@ -1069,6 +1070,7 @@ async function loadCostsTable() {
     if (dateFrom) params.set('date_from', dateFrom);
     if (dateTo) params.set('date_to', dateTo);
     params.set('granularity', granularity);
+    if (costGroupBy && costGroupBy !== 'resource') params.set('group_by', costGroupBy);
     if (rg.length) params.set('resource_groups', rg.join(','));
     if (services.length) params.set('service_names', services.join(','));
     if (includeBlankRG) params.set('include_blank_resource_group', '1');

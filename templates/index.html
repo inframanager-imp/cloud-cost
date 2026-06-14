@@ -596,6 +596,15 @@
                     <option value="monthly">Monthly</option>
                 </select>
             </div>
+            <div class="cost-filter-field">
+                <label class="cost-filter-label">Group by</label>
+                <select class="cost-filter-input" id="costGroupBy" onchange="loadCostsTable()">
+                    <option value="resource">Resource (line items)</option>
+                    <option value="resource_group">Resource Group / Project</option>
+                    <option value="service">Service</option>
+                    <option value="account">Account / Subscription</option>
+                </select>
+            </div>
             <div class="cost-filter-field" style="position:relative">
                 <label class="cost-filter-label" id="costRGLabel">Project</label>
                 <div class="multiselect" id="cdRgMultiselect">

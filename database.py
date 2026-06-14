@@ -960,23 +960,35 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
         where += " " + filters["_extra_where"]
         params.extend(filters.get("_extra_params") or [])
 
+    # Roll-up dimension for the Cost Data table. Default = per-resource line items;
+    # other modes collapse rows into Resource Group / Service / Account totals.
+    group_mode = (filters or {}).get("group_by", "resource")
+    dim_map = {
+        "resource":       ["cloud_provider", "resource_group", "service_name", "resource_type", "resource_name", "subscription_id"],
+        "resource_group": ["cloud_provider", "resource_group", "subscription_id"],
+        "service":        ["cloud_provider", "service_name", "subscription_id"],
+        "account":        ["cloud_provider", "subscription_id"],
+    }
+    group_dims = dim_map.get(group_mode, dim_map["resource"])
+    # Always emit the same output columns; non-grouped ones come back NULL.
+    out_cols = ["resource_group", "service_name", "resource_type", "resource_name", "subscription_id"]
+    select_cols = ",\n            ".join(
+        c if c in group_dims else f"NULL AS {c}" for c in out_cols
+    )
+    group_by_cols = ", ".join(group_dims)
     query = f"""
         SELECT
             {date_expr} AS date,
             cloud_provider,
-            resource_group,
-            service_name,
-            resource_type,
-            resource_name,
-            subscription_id,
+            {select_cols},
             SUM({_cost})   AS cost,
-            currency,
+            COUNT(*)    AS line_count,
+            MAX(currency) AS currency,
             MAX(tags)   AS tags,
             tenant_id
         FROM cost_data
         {where}
-        GROUP BY {date_expr}, cloud_provider, resource_group, service_name,
-                 resource_type, resource_name, subscription_id, currency, tenant_id
+        GROUP BY {date_expr}, {group_by_cols}, tenant_id
         ORDER BY {date_expr} DESC, cost DESC
     """
 

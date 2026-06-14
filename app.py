@@ -1268,6 +1268,7 @@ def api_costs():
         "date_from": request.args.get("date_from"),
         "date_to": request.args.get("date_to"),
         "granularity": request.args.get("granularity", "daily"),
+        "group_by": request.args.get("group_by", "resource"),
         "resource_group": request.args.get("resource_group"),
         "resource_groups": _csv_list("resource_groups"),
         "service_name": request.args.get("service_name"),
