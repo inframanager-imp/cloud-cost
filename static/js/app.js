@@ -373,8 +373,10 @@ async function loadExecutiveSummary() {
         const resp = await fetch(`/api/executive-summary?year=${_exYear}&month=${_exMonth}`);
         if (!resp.ok) { console.error('Executive summary API error:', resp.status, await resp.text()); return; }
         const d = await resp.json();
-        const $fmt  = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
-        const $fmt2 = v => '$' + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+        const _sym = d.currency_symbol || '$';
+        if (typeof window !== 'undefined') window.TENANT_CUR = { code: d.currency || 'USD', symbol: _sym };
+        const $fmt  = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
+        const $fmt2 = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
         const kpi = d.kpis || {};
         const isDark = document.body.classList.contains('dark') || document.documentElement.getAttribute('data-theme') === 'dark';
 

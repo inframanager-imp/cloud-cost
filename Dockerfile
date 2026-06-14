@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --progress-bar off -r requirements.txt
 # .env is NOT baked into the image — supply it via docker-compose env_file or EC2 env vars
 COPY app.py cost_sync_runner.py activity_sync_runner.py config_sync_runner.py resource_config_display.py \
      database.py azure_fetcher.py aws_fetcher.py gcp_fetcher.py cur_importer.py chatbot.py email_report.py \
-     slack_notifier.py budget_manager.py tenant_isolation_audit.py gunicorn_conf.py ./
+     slack_notifier.py budget_manager.py tenant_isolation_audit.py currency.py gunicorn_conf.py ./
 COPY templates/ templates/
 COPY static/ static/
 

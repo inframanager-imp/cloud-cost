@@ -667,6 +667,15 @@ def api_dashboard():
 
 # ─── API: Executive Summary ──────────────────────────────────────────────────
 
+@app.route("/api/tenant/currency")
+@login_required
+def api_tenant_currency():
+    """The reporting currency for the current tenant (their dominant currency)."""
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    code = tenant_reporting_currency(current_tenant_id(), get_db)
+    return jsonify({"code": code, "symbol": _cur_symbol(code)})
+
+
 @app.route("/api/executive-summary")
 @login_required
 def api_executive_summary():
@@ -693,9 +702,16 @@ def api_executive_summary():
     conn = get_db()
     tid_filter = f"AND tenant_id = {tid}" if tid is not None else ""
 
+    # Reporting currency: convert every row to the tenant's dominant currency so
+    # mixed-currency tenants (e.g. AWS in USD + Azure in INR) total correctly.
+    from database import _converted_cost_sql
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    rep_cur = tenant_reporting_currency(tid, get_db)
+    _cost = _converted_cost_sql(rep_cur)
+
     # Current month total + per-cloud
     cloud_cur = conn.execute(f"""
-        SELECT cloud_provider, SUM(cost) as total
+        SELECT cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
         GROUP BY cloud_provider
     """, (first_of_month, today_str)).fetchall()
@@ -706,7 +722,7 @@ def api_executive_summary():
     lm_end = today.replace(day=1) - timedelta(days=1)
     lm_start = lm_end.replace(day=1)
     cloud_lm = conn.execute(f"""
-        SELECT cloud_provider, SUM(cost) as total
+        SELECT cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
         GROUP BY cloud_provider
     """, (lm_start.strftime("%Y-%m-%d"), lm_end.strftime("%Y-%m-%d"))).fetchall()
@@ -717,7 +733,7 @@ def api_executive_summary():
     prev_same_day = min(day_of_month, lm_end.day)
     lm_partial_end = lm_start.replace(day=prev_same_day).strftime("%Y-%m-%d")
     lm_partial = conn.execute(f"""
-        SELECT cloud_provider, SUM(cost) as total
+        SELECT cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
         GROUP BY cloud_provider
     """, (lm_start.strftime("%Y-%m-%d"), lm_partial_end)).fetchall()
@@ -736,7 +752,7 @@ def api_executive_summary():
         m_start = ref.replace(day=1)
         m_end = ref if i == 0 else ref
         rows = conn.execute(f"""
-            SELECT cloud_provider, SUM(cost) as total
+            SELECT cloud_provider, SUM({_cost}) as total
             FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
             GROUP BY cloud_provider
         """, (m_start.strftime("%Y-%m-%d"), m_end.strftime("%Y-%m-%d"))).fetchall()
@@ -751,7 +767,7 @@ def api_executive_summary():
 
     # Top 10 cost drivers (services this month)
     top_services = conn.execute(f"""
-        SELECT service_name, SUM(cost) as total
+        SELECT service_name, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
         GROUP BY service_name ORDER BY total DESC LIMIT 10
     """, (first_of_month, today_str)).fetchall()
@@ -767,7 +783,7 @@ def api_executive_summary():
     name_map.update({r["subscription_id"]: r["name"] for r in sub_rows if r["subscription_id"]})
 
     top_accounts = conn.execute(f"""
-        SELECT subscription_id, cloud_provider, SUM(cost) as total
+        SELECT subscription_id, cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
         GROUP BY subscription_id, cloud_provider ORDER BY total DESC LIMIT 8
     """, (first_of_month, today_str)).fetchall()
@@ -806,7 +822,7 @@ def api_executive_summary():
 
     # Cost by service category (group service_name into categories)
     svc_cats = conn.execute(f"""
-        SELECT service_name, SUM(cost) as total FROM cost_data
+        SELECT service_name, SUM({_cost}) as total FROM cost_data
         WHERE date >= ? AND date <= ? {tid_filter}
         GROUP BY service_name ORDER BY total DESC LIMIT 20
     """, (first_of_month, today_str)).fetchall()
@@ -830,6 +846,8 @@ def api_executive_summary():
     return jsonify({
         "period": today.strftime("%b %Y"),
         "compare_period": lm_start.strftime("%b %Y"),
+        "currency": rep_cur,
+        "currency_symbol": _cur_symbol(rep_cur),
         "kpis": {
             "total": round(total_cur, 2),
             "total_lm": round(total_lm, 2),

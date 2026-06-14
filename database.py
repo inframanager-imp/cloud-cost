@@ -1184,14 +1184,39 @@ def get_cost_totals_by_subscription(filters=None, tenant_id=None, cloud_provider
     return result
 
 
-def get_summary(group_by="service_name", date_from=None, date_to=None, subscription_id=None, tenant_id=None, cloud_provider=None):
+def _converted_cost_sql(reporting_currency):
+    """SQL expression converting per-row `cost` (in its native `currency`) to the
+    given reporting currency. Returns plain `cost` when reporting_currency is
+    falsy, so existing callers are unaffected."""
+    if not reporting_currency:
+        return "cost"
+    try:
+        from currency import get_rates
+        rates = get_rates()
+        rep = reporting_currency.upper()
+        rep_rate = rates.get(rep)
+        if not rep_rate:
+            return "cost"
+        whens = []
+        for code, rate in rates.items():
+            if not rate:
+                continue
+            factor = rep_rate / rate  # native cost × factor → reporting currency
+            whens.append(f"WHEN '{code}' THEN cost * {factor:.10f}")
+        return "CASE UPPER(COALESCE(currency,'USD')) " + " ".join(whens) + " ELSE cost END"
+    except Exception:
+        return "cost"
+
+
+def get_summary(group_by="service_name", date_from=None, date_to=None, subscription_id=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
     conn = get_db()
     valid_groups = ["service_name", "resource_group", "resource_type", "meter_category", "date"]
     if group_by not in valid_groups:
         group_by = "service_name"
 
+    _cost = _converted_cost_sql(reporting_currency)
     query = f"""
-        SELECT {group_by}, SUM(cost) as total_cost, COUNT(*) as record_count,
+        SELECT {group_by}, SUM({_cost}) as total_cost, COUNT(*) as record_count,
                currency
         FROM cost_data WHERE 1=1
     """
@@ -1219,10 +1244,11 @@ def get_summary(group_by="service_name", date_from=None, date_to=None, subscript
     return [dict(r) for r in rows]
 
 
-def get_daily_trend(date_from=None, date_to=None, resource_group=None, service_name=None, subscription_id=None, tenant_id=None, cloud_provider=None):
+def get_daily_trend(date_from=None, date_to=None, resource_group=None, service_name=None, subscription_id=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
     conn = get_db()
-    query = """
-        SELECT SUBSTR(date, 1, 10) AS date, SUM(cost) as total_cost, currency
+    _cost = _converted_cost_sql(reporting_currency)
+    query = f"""
+        SELECT SUBSTR(date, 1, 10) AS date, SUM({_cost}) as total_cost, currency
         FROM cost_data WHERE 1=1
     """
     params = []
@@ -2197,7 +2223,7 @@ def get_monthly_subscription_breakdown(subscription_id=None, tenant_id=None, clo
     return result
 
 
-def get_stats(subscription_id=None, tenant_id=None):
+def get_stats(subscription_id=None, tenant_id=None, reporting_currency=None):
     conn = get_db()
     stats = {}
     where = []
@@ -2209,8 +2235,9 @@ def get_stats(subscription_id=None, tenant_id=None):
         where.append("tenant_id = ?")
         params.append(tenant_id)
     clause = ("WHERE " + " AND ".join(where)) if where else ""
+    _cost = _converted_cost_sql(reporting_currency)
     row = conn.execute(
-        f"SELECT COUNT(*) as cnt, SUM(cost) as total, MIN(date) as min_date, MAX(date) as max_date FROM cost_data {clause}",
+        f"SELECT COUNT(*) as cnt, SUM({_cost}) as total, MIN(date) as min_date, MAX(date) as max_date FROM cost_data {clause}",
         params
     ).fetchone()
     stats["total_records"] = row["cnt"]
@@ -2846,7 +2873,7 @@ def get_data_freshness(tenant_id=None):
     return result
 
 
-def get_cost_by_cloud(tenant_id=None, date_from=None, date_to=None):
+def get_cost_by_cloud(tenant_id=None, date_from=None, date_to=None, reporting_currency=None):
     """Total cost grouped by cloud_provider for the dashboard cloud breakdown card."""
     conn = get_db()
     conditions = ["1=1"]
@@ -2860,8 +2887,9 @@ def get_cost_by_cloud(tenant_id=None, date_from=None, date_to=None):
     if date_to:
         conditions.append("date <= ?")
         params.append(date_to)
+    _cost = _converted_cost_sql(reporting_currency)
     query = f"""
-        SELECT cloud_provider, SUM(cost) as total_cost, COUNT(*) as records
+        SELECT cloud_provider, SUM({_cost}) as total_cost, COUNT(*) as records
         FROM cost_data WHERE {' AND '.join(conditions)}
         GROUP BY cloud_provider ORDER BY total_cost DESC
     """
