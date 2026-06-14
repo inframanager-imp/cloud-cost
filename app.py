@@ -788,7 +788,7 @@ def api_executive_summary():
     top_accounts = conn.execute(f"""
         SELECT subscription_id, cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
-        GROUP BY subscription_id, cloud_provider ORDER BY total DESC LIMIT 8
+        GROUP BY subscription_id, cloud_provider ORDER BY total DESC LIMIT 50
     """, (first_of_month, today_str)).fetchall()
 
     # Budget utilization
@@ -1544,7 +1544,7 @@ def api_monthly():
             "service_count": s["service_count"],
             "top_services": svc_by_month.get(s["month"], [])[:10],
             "top_rgs": rg_by_month.get(s["month"], [])[:10],
-            "by_subscription": sub_by_month.get(s["month"], [])[:8],
+            "by_subscription": sub_by_month.get(s["month"], [])[:50],
             "by_cloud": cloud_by_month.get(s["month"], {}),
         })
     return jsonify(result)

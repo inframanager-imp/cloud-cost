@@ -1516,9 +1516,11 @@ async function loadMonthly() {
                 });
                 const cloudGroupOrder = ['azure', 'aws', 'gcp'];
                 const cloudGroupLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
+                const ACCT_SHOWN = 10;
                 const groupHtml = cloudGroupOrder.filter(c => grouped[c]).map(c => {
                     const color = cloudColors[c];
-                    const items = grouped[c].slice(0, 4).map(sub => {
+                    const all = grouped[c];
+                    const items = all.slice(0, ACCT_SHOWN).map(sub => {
                         const raw = (sub.name || sub.subscription_id || '').trim() || '-';
                         const short = raw.length > 20 ? raw.slice(0, 18) + '…' : raw;
                         const esc = raw.replace(/"/g, '&quot;');
@@ -1526,7 +1528,8 @@ async function loadMonthly() {
                             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;color:var(--text-secondary)" title="${esc}">${short}</span>
                             <span style="color:var(--text-primary);flex-shrink:0;font-weight:500;font-variant-numeric:tabular-nums">${curSym()}${Number(sub.cost).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
                         </div>`;
-                    }).join('');
+                    }).join('') + (all.length > ACCT_SHOWN
+                        ? `<div style="font-size:10px;color:var(--text-tertiary);padding-left:8px;margin-top:2px">+${all.length - ACCT_SHOWN} more</div>` : '');
                     return `<div style="margin-top:5px">
                         <div style="display:flex;align-items:center;gap:5px;margin-bottom:1px">
                             <img src="/static/img/${c}-logo.svg" style="height:${c==='aws'?'9':'11'}px;flex-shrink:0">
