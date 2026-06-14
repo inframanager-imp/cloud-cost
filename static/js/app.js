@@ -2211,7 +2211,7 @@ function renderComparisonResults(payload, groupBy) {
     const periodCards = labels.map((lb, i) => `
         <div class="stat-card" style="padding:8px 12px;border-radius:8px;min-width:120px">
             <div class="stat-label" style="font-size:9px;margin-bottom:0">${lb}</div>
-            <div style="${_cmpVal};color:var(--accent)">$${periodTotals[i].toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+            <div style="${_cmpVal};color:var(--accent)">${curSym()}${periodTotals[i].toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
         </div>
     `).join('');
 
@@ -2219,7 +2219,7 @@ function renderComparisonResults(payload, groupBy) {
         <div class="stat-card" style="padding:8px 12px;border-radius:8px;min-width:120px">
             <div class="stat-label" style="font-size:9px;margin-bottom:0">${n > 2 ? 'Last vs first' : 'Difference'}</div>
             <div style="${_cmpVal};color:${totalDiff > 0 ? 'var(--red)' : 'var(--green)'}">
-                ${totalDiff > 0 ? '+' : ''}$${totalDiff.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+                ${totalDiff > 0 ? '+' : ''}${curSym()}${totalDiff.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
             </div>
             <div style="${_cmpSub}color:${totalDiff > 0 ? 'var(--red)' : 'var(--green)'}">${totalDiff > 0 ? '▲' : '▼'} ${Math.abs(totalPct).toFixed(1)}%</div>
         </div>
@@ -2251,7 +2251,7 @@ function renderComparisonResults(payload, groupBy) {
     document.getElementById('cmpTableBody').innerHTML = data.map(r => {
         const costs = r.costs || [];
         const costCells = labels.map((_, i) =>
-            `<td>$${(costs[i] ?? 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>`
+            `<td>${curSym()}${(costs[i] ?? 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>`
         ).join('');
         const barWidth = Math.max(4, Math.min(120, Math.abs(r.difference) / maxDiff * 120));
         const barClass = r.difference > 0 ? 'up' : (r.difference < 0 ? 'down' : 'neutral');
@@ -2263,7 +2263,7 @@ function renderComparisonResults(payload, groupBy) {
             <td><a href="${ddUrl}" target="_blank" style="font-weight:500;color:var(--accent);text-decoration:underline">${escName}</a></td>
             ${costCells}
             <td style="color:${r.difference > 0 ? 'var(--red)' : 'var(--green)'};font-weight:500">
-                ${r.difference > 0 ? '+' : ''}$${r.difference.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+                ${r.difference > 0 ? '+' : ''}${curSym()}${r.difference.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
             </td>
             <td><span class="cmp-badge ${badgeClass}">${arrow} ${Math.abs(r.change_pct).toFixed(1)}%</span></td>
             <td><span class="trend-bar ${barClass}" style="width:${barWidth}px"></span></td>

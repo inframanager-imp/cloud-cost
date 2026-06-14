@@ -1285,19 +1285,20 @@ def get_daily_trend(date_from=None, date_to=None, resource_group=None, service_n
     return [dict(r) for r in rows]
 
 
-def get_comparison_data(group_by, date_from_1, date_to_1, date_from_2, date_to_2, subscription_id=None, resource_groups=None, tenant_id=None, cloud_provider=None, subscription_ids=None):
+def get_comparison_data(group_by, date_from_1, date_to_1, date_from_2, date_to_2, subscription_id=None, resource_groups=None, tenant_id=None, cloud_provider=None, subscription_ids=None, reporting_currency=None):
     """Get cost grouped by a dimension for two periods side-by-side."""
     conn = get_db()
     valid_groups = ["service_name", "resource_group", "meter_category", "subscription_id", "resource_name"]
     if group_by not in valid_groups:
         group_by = "service_name"
 
+    _cost = _converted_cost_sql(reporting_currency)
     query = f"""
         SELECT
             {group_by} as name,
-            SUM(CASE WHEN date >= ? AND date <= ? THEN cost ELSE 0 END) as period1_cost,
-            SUM(CASE WHEN date >= ? AND date <= ? THEN cost ELSE 0 END) as period2_cost,
-            SUM(cost) as total_cost
+            SUM(CASE WHEN date >= ? AND date <= ? THEN {_cost} ELSE 0 END) as period1_cost,
+            SUM(CASE WHEN date >= ? AND date <= ? THEN {_cost} ELSE 0 END) as period2_cost,
+            SUM({_cost}) as total_cost
         FROM cost_data
     """
     query += " WHERE ((date >= ? AND date <= ?) OR (date >= ? AND date <= ?))"
@@ -1335,7 +1336,7 @@ def get_comparison_data(group_by, date_from_1, date_to_1, date_from_2, date_to_2
     return [dict(r) for r in rows]
 
 
-def get_comparison_data_multi(group_by, periods, subscription_id=None, resource_groups=None, tenant_id=None, cloud_provider=None, subscription_ids=None):
+def get_comparison_data_multi(group_by, periods, subscription_id=None, resource_groups=None, tenant_id=None, cloud_provider=None, subscription_ids=None, reporting_currency=None):
     """Get cost grouped by a dimension for 2–6 periods side-by-side.
     periods: list of (date_from, date_to) strings, same length as number of periods."""
     conn = get_db()
@@ -1348,8 +1349,9 @@ def get_comparison_data_multi(group_by, periods, subscription_id=None, resource_
         conn.close()
         return []
 
+    _cost = _converted_cost_sql(reporting_currency)
     case_cols = ", ".join(
-        f"SUM(CASE WHEN date >= ? AND date <= ? THEN cost ELSE 0 END) as p{i}" for i in range(n)
+        f"SUM(CASE WHEN date >= ? AND date <= ? THEN {_cost} ELSE 0 END) as p{i}" for i in range(n)
     )
     date_or = " OR ".join("(date >= ? AND date <= ?)" for _ in periods)
 
@@ -1357,7 +1359,7 @@ def get_comparison_data_multi(group_by, periods, subscription_id=None, resource_
         SELECT
             {group_by} as name,
             {case_cols},
-            SUM(cost) as total_cost
+            SUM({_cost}) as total_cost
         FROM cost_data
         WHERE ({date_or})
     """

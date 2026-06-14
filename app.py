@@ -1655,7 +1655,9 @@ def _periods_labels_from_spec_list(spec):
 
 
 def _compare_multi_response(group_by, periods, labels, sub_id, resource_groups, cloud_provider=None, subscription_ids=None):
-    data = get_comparison_data_multi(group_by, periods, subscription_id=sub_id, resource_groups=resource_groups, tenant_id=current_tenant_id(), cloud_provider=cloud_provider, subscription_ids=subscription_ids)
+    from currency import tenant_reporting_currency
+    _rep = tenant_reporting_currency(current_tenant_id(), get_db)
+    data = get_comparison_data_multi(group_by, periods, subscription_id=sub_id, resource_groups=resource_groups, tenant_id=current_tenant_id(), cloud_provider=cloud_provider, subscription_ids=subscription_ids, reporting_currency=_rep)
     rows = _compare_rows_from_costs(data, group_by)
     return jsonify({"labels": labels, "rows": rows})
 
@@ -1707,7 +1709,9 @@ def api_compare():
     p2_from = request.args.get("p2_from")
     p2_to = request.args.get("p2_to")
     if all([p1_from, p1_to, p2_from, p2_to]):
-        data = get_comparison_data(group_by, p1_from, p1_to, p2_from, p2_to, subscription_id=sub_id, resource_groups=resource_groups, tenant_id=current_tenant_id(), cloud_provider=cloud_provider, subscription_ids=subscription_ids)
+        from currency import tenant_reporting_currency
+        _rep = tenant_reporting_currency(current_tenant_id(), get_db)
+        data = get_comparison_data(group_by, p1_from, p1_to, p2_from, p2_to, subscription_id=sub_id, resource_groups=resource_groups, tenant_id=current_tenant_id(), cloud_provider=cloud_provider, subscription_ids=subscription_ids, reporting_currency=_rep)
         rows = []
         for row in data:
             p1 = round(row["period1_cost"], 2)
