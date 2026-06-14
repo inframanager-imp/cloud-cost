@@ -2679,6 +2679,17 @@ def api_custom_cost():
         tenant_id=current_tenant_id(),
         cloud_provider=cloud_provider,
     )
+    # Resolve EC2 instance IDs to Name tags in the per-resource breakdown
+    try:
+        from database import get_aws_resource_names
+        ec2_names = get_aws_resource_names()
+        if ec2_names:
+            for row in result.get("by_resource", []):
+                rid = (row.get("resource_name") or "")
+                if rid.startswith("i-") and rid in ec2_names:
+                    row["display_name"] = ec2_names[rid]
+    except Exception:
+        pass
     return jsonify(result)
 
 

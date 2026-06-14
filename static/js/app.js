@@ -3992,10 +3992,17 @@ function ccRenderResults(data) {
          <td>${s.records.toLocaleString()}</td></tr>`
     ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--text-secondary)">No data</td></tr>';
 
+    // Friendly resource name: EC2 Name tag (display_name) > short ARN id > type.
+    const resShort = (name) => {
+        let s = String(name || '').trim();
+        if (s.toLowerCase().startsWith('arn:')) s = s.split(':').pop().split('/').pop();
+        return s;
+    };
     const resLabel = (r) => {
-        const n = (r.resource_name || '').trim();
+        if (r.display_name) return String(r.display_name);
+        const s = resShort(r.resource_name);
+        if (s) return s;
         const t = (r.resource_type || '').trim();
-        if (n) return n;
         if (t) return `(${t})`;
         return '— (no resource id)';
     };
