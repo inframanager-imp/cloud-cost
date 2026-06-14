@@ -1564,9 +1564,10 @@ def api_resource_groups():
         months_back = 6
 
     from currency import tenant_reporting_currency, symbol as _cur_symbol
-    from database import _converted_cost_sql
+    from database import _converted_cost_sql, _rg_commitment_label_sql
     rep = tenant_reporting_currency(tid, get_db)
     _cost = _converted_cost_sql(rep)
+    _rg_label = _rg_commitment_label_sql()
 
     # Build the list of YYYY-MM months (oldest → newest)
     now = datetime.utcnow()
@@ -1595,7 +1596,7 @@ def api_resource_groups():
     conn = get_db()
     q = f"""
         SELECT strftime('%Y-%m', date) AS month,
-               COALESCE(NULLIF(TRIM(resource_group),''), '(none)') AS rg,
+               {_rg_label} AS rg,
                cloud_provider AS cloud,
                SUM({_cost}) AS cost
         FROM cost_data
@@ -1632,6 +1633,66 @@ def api_resource_groups():
         "currency": rep,
         "months": months,
         "rows": out,
+    })
+
+
+@app.route("/api/commitments")
+@login_required
+def api_commitments():
+    """Committed (Reserved Instances / Reservations / Savings Plans / CUDs) vs
+    on-demand spend per cloud for the current tenant, in reporting currency."""
+    tid = current_tenant_id()
+    try:
+        months_back = max(1, min(int(request.args.get("months", 6)), 24))
+    except ValueError:
+        months_back = 6
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    from database import _converted_cost_sql, COMMITMENT_SQL
+    rep = tenant_reporting_currency(tid, get_db)
+    _cost = _converted_cost_sql(rep)
+
+    now = datetime.utcnow()
+    y, m = now.year, now.month
+    for _ in range(months_back - 1):
+        m -= 1
+        if m == 0:
+            m = 12; y -= 1
+    date_from = f"{y:04d}-{m:02d}-01"
+
+    tid_filter = "AND tenant_id = ?" if tid is not None else ""
+    conn = get_db()
+    rows = conn.execute(f"""
+        SELECT cloud_provider AS cloud,
+               SUM(CASE WHEN {COMMITMENT_SQL} THEN {_cost} ELSE 0 END) AS committed,
+               SUM(CASE WHEN {COMMITMENT_SQL} THEN 0 ELSE {_cost} END) AS ondemand
+        FROM cost_data
+        WHERE date >= ? {tid_filter}
+        GROUP BY cloud_provider
+    """, ([date_from] + ([tid] if tid is not None else []))).fetchall()
+    conn.close()
+
+    by_cloud, tot_c, tot_o = [], 0.0, 0.0
+    for r in rows:
+        c = round(float(r["committed"] or 0), 2)
+        o = round(float(r["ondemand"] or 0), 2)
+        total = c + o
+        tot_c += c; tot_o += o
+        by_cloud.append({
+            "cloud": r["cloud"] or "other",
+            "committed": c,
+            "ondemand": o,
+            "total": round(total, 2),
+            "committed_pct": round(c / total * 100, 1) if total > 0 else 0,
+        })
+    by_cloud.sort(key=lambda x: -x["total"])
+    grand = tot_c + tot_o
+    return jsonify({
+        "currency_symbol": _cur_symbol(rep),
+        "months": months_back,
+        "by_cloud": by_cloud,
+        "total_committed": round(tot_c, 2),
+        "total_ondemand": round(tot_o, 2),
+        "committed_pct": round(tot_c / grand * 100, 1) if grand > 0 else 0,
     })
 
 

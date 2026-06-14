@@ -970,12 +970,18 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
         "account":        ["cloud_provider", "subscription_id"],
     }
     group_dims = dim_map.get(group_mode, dim_map["resource"])
+    # When grouping by resource group, label commitment rows (RI/Reservations/
+    # Savings Plans/CUDs) instead of leaving them blank.
+    def _dim_expr(d):
+        if d == "resource_group" and group_mode == "resource_group":
+            return _rg_commitment_label_sql()
+        return d
     # Always emit the same output columns; non-grouped ones come back NULL.
     out_cols = ["resource_group", "service_name", "resource_type", "resource_name", "subscription_id"]
     select_cols = ",\n            ".join(
-        c if c in group_dims else f"NULL AS {c}" for c in out_cols
+        (f"{_dim_expr(c)} AS {c}" if c in group_dims else f"NULL AS {c}") for c in out_cols
     )
-    group_by_cols = ", ".join(group_dims)
+    group_by_cols = ", ".join(_dim_expr(d) for d in group_dims)
     query = f"""
         SELECT
             {date_expr} AS date,
@@ -1197,6 +1203,32 @@ def get_cost_totals_by_subscription(filters=None, tenant_id=None, cloud_provider
             "total_records": r["total_records"] or 0,
         })
     return result
+
+
+# Cross-cloud commitment (Reserved Instances / Reservations / Savings Plans / CUDs)
+# detector. Azure → resource_type 'reservationorders'; AWS → "Savings Plans" /
+# "Reserved Instance" services; GCP → "Committed use" SKUs.
+COMMITMENT_SQL = (
+    "("
+    " LOWER(COALESCE(resource_type,'')) LIKE '%reservation%'"
+    " OR LOWER(COALESCE(resource_type,'')) LIKE '%savings%'"
+    " OR LOWER(COALESCE(service_name,'')) LIKE '%savings plan%'"
+    " OR LOWER(COALESCE(service_name,'')) LIKE '%reserved instance%'"
+    " OR LOWER(COALESCE(service_name,'')) LIKE '%committed use%'"
+    " OR LOWER(COALESCE(meter_category,'')) LIKE '%reservation%'"
+    " OR LOWER(COALESCE(meter_category,'')) LIKE '%savings plan%'"
+    " OR LOWER(COALESCE(meter_subcategory,'')) LIKE '%commitment%'"
+    " OR LOWER(COALESCE(meter_subcategory,'')) LIKE '%committed use%'"
+    ")"
+)
+
+# RG label that names commitment rows instead of leaving them blank.
+COMMITMENT_LABEL = "Reservations / Commitments"
+
+
+def _rg_commitment_label_sql(rg_col="resource_group"):
+    return (f"CASE WHEN {COMMITMENT_SQL} THEN '{COMMITMENT_LABEL}' "
+            f"ELSE COALESCE(NULLIF(TRIM({rg_col}),''),'(none)') END")
 
 
 def _converted_cost_sql(reporting_currency, col="cost", cur_col="currency"):

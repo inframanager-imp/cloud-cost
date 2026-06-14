@@ -6060,6 +6060,41 @@ async function loadResourceGroups() {
     } catch (e) {
         if (body) body.innerHTML = '<tr><td style="padding:20px;text-align:center;color:var(--red)">Failed to load.</td></tr>';
     }
+    loadCommitments(months);
+}
+
+async function loadCommitments(months) {
+    const el = document.getElementById('rgCommitments');
+    if (!el) return;
+    try {
+        const d = await fetch(`/api/commitments?months=${months || 6}`).then(r => r.json());
+        const sym = d.currency_symbol || curSym();
+        const fmt = v => sym + Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+        const grand = (d.total_committed || 0) + (d.total_ondemand || 0);
+        if (grand <= 0) { el.innerHTML = ''; return; }
+        const cloudName = { aws: 'AWS', azure: 'Azure', gcp: 'GCP', other: 'Other' };
+        const cloudClr = { aws: '#FF9900', azure: '#0078d4', gcp: '#4285F4', other: '#6366f1' };
+        const cards = (d.by_cloud || []).filter(c => c.committed > 0).map(c => `
+            <div style="flex:1;min-width:170px;background:var(--card-bg);border:1px solid var(--border);border-top:3px solid ${cloudClr[c.cloud] || '#6366f1'};border-radius:8px;padding:12px 14px">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);font-weight:600">${cloudName[c.cloud] || c.cloud} commitments</div>
+                <div style="font-size:20px;font-weight:700;color:var(--text-primary);margin-top:2px">${fmt(c.committed)}</div>
+                <div style="font-size:11px;color:var(--text-secondary)">${c.committed_pct}% of ${cloudName[c.cloud] || c.cloud} spend committed</div>
+                <div style="height:5px;background:var(--border);border-radius:3px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.min(c.committed_pct,100)}%;background:${cloudClr[c.cloud] || '#6366f1'}"></div></div>
+            </div>`).join('');
+        el.innerHTML = `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Reserved Instances / Commitments</span>
+                <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(99,102,241,0.1);color:var(--accent);font-weight:600">${d.committed_pct}% committed · last ${d.months}mo</span>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <div style="flex:1;min-width:170px;background:var(--card-bg);border:1px solid var(--border);border-top:3px solid #10b981;border-radius:8px;padding:12px 14px">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary);font-weight:600">Total committed</div>
+                    <div style="font-size:20px;font-weight:700;color:#10b981;margin-top:2px">${fmt(d.total_committed)}</div>
+                    <div style="font-size:11px;color:var(--text-secondary)">vs ${fmt(d.total_ondemand)} on-demand</div>
+                </div>
+                ${cards || '<div style="flex:2;min-width:200px;display:flex;align-items:center;color:var(--text-secondary);font-size:12px;padding:0 8px">No RI / Savings Plan / CUD purchases detected for this account.</div>'}
+            </div>`;
+    } catch (e) { el.innerHTML = ''; }
 }
 
 function _rgMonthLabel(ym) {
