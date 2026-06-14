@@ -1337,9 +1337,10 @@ def get_comparison_data(group_by, date_from_1, date_to_1, date_from_2, date_to_2
         group_by = "service_name"
 
     _cost = _converted_cost_sql(reporting_currency)
+    _name = _rg_commitment_label_sql() if group_by == "resource_group" else group_by
     query = f"""
         SELECT
-            {group_by} as name,
+            {_name} as name,
             SUM(CASE WHEN date >= ? AND date <= ? THEN {_cost} ELSE 0 END) as period1_cost,
             SUM(CASE WHEN date >= ? AND date <= ? THEN {_cost} ELSE 0 END) as period2_cost,
             SUM({_cost}) as total_cost
@@ -1358,7 +1359,7 @@ def get_comparison_data(group_by, date_from_1, date_to_1, date_from_2, date_to_2
         query += " AND tenant_id = ?"
     if cloud_provider:
         query += " AND cloud_provider = ?"
-    query += f" GROUP BY {group_by} ORDER BY total_cost DESC"
+    query += f" GROUP BY {_name} ORDER BY total_cost DESC"
     params = [
         date_from_1, date_to_1,
         date_from_2, date_to_2,
@@ -1394,6 +1395,7 @@ def get_comparison_data_multi(group_by, periods, subscription_id=None, resource_
         return []
 
     _cost = _converted_cost_sql(reporting_currency)
+    _name = _rg_commitment_label_sql() if group_by == "resource_group" else group_by
     case_cols = ", ".join(
         f"SUM(CASE WHEN date >= ? AND date <= ? THEN {_cost} ELSE 0 END) as p{i}" for i in range(n)
     )
@@ -1401,7 +1403,7 @@ def get_comparison_data_multi(group_by, periods, subscription_id=None, resource_
 
     query = f"""
         SELECT
-            {group_by} as name,
+            {_name} as name,
             {case_cols},
             SUM({_cost}) as total_cost
         FROM cost_data
@@ -1419,7 +1421,7 @@ def get_comparison_data_multi(group_by, periods, subscription_id=None, resource_
         query += " AND tenant_id = ?"
     if cloud_provider:
         query += " AND cloud_provider = ?"
-    query += f" GROUP BY {group_by} ORDER BY total_cost DESC"
+    query += f" GROUP BY {_name} ORDER BY total_cost DESC"
 
     params = []
     for df, dt in periods:
