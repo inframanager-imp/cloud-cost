@@ -467,9 +467,14 @@ def import_from_s3_bucket(provider: dict, credentials: dict = None,
     if not bucket:
         raise ValueError("No CUR bucket configured for this provider")
 
-    # Determine prefix (CUR delivers to reports/{report-name}/...)
+    # Determine prefix. Our one-click setup script delivers CUR under "cur/<report>",
+    # but older/CloudFormation setups use "reports/<report>". Try the likely prefixes
+    # and use whichever actually contains a manifest.
     report_name = provider.get("cur_report_name", "")
-    prefix = f"reports/{report_name}" if report_name else "reports"
+    if report_name:
+        candidate_prefixes = [f"cur/{report_name}", f"reports/{report_name}", "cur", "reports", ""]
+    else:
+        candidate_prefixes = ["cur", "reports", ""]
 
     account_id = provider.get("provider_id", "")
     tid = tenant_id or provider.get("tenant_id", 1)
@@ -481,16 +486,25 @@ def import_from_s3_bucket(provider: dict, credentials: dict = None,
     if not date_to:
         date_to = now.strftime("%Y-%m-%d")
 
-    print(f"[CUR] import_from_s3_bucket: s3://{bucket}/{prefix} for {account_id} ({date_from}→{date_to})")
-
-    records, skipped = fetch_cur_records(
-        credentials=credentials,
-        bucket=bucket,
-        prefix=prefix,
-        date_from=date_from,
-        date_to=date_to,
-        account_id=account_id,
-    )
+    records, skipped, used_prefix, last_err = [], 0, None, None
+    for pfx in candidate_prefixes:
+        print(f"[CUR] import_from_s3_bucket: trying s3://{bucket}/{pfx} for {account_id} ({date_from}→{date_to})")
+        try:
+            records, skipped = fetch_cur_records(
+                credentials=credentials,
+                bucket=bucket,
+                prefix=pfx,
+                date_from=date_from,
+                date_to=date_to,
+                account_id=account_id,
+            )
+            used_prefix = pfx
+            break
+        except ValueError as e:
+            last_err = e  # no manifest under this prefix — try the next
+            continue
+    if used_prefix is None:
+        raise last_err or ValueError(f"No CUR manifests found in s3://{bucket}")
 
     period = f"{date_from} to {date_to}"
     if not records:
