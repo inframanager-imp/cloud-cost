@@ -1296,7 +1296,9 @@ def api_costs():
         except (ValueError, TypeError):
             pass
 
-    data = query_costs(filters, tenant_id=current_tenant_id())
+    from currency import tenant_reporting_currency
+    _rep = tenant_reporting_currency(current_tenant_id(), get_db)
+    data = query_costs(filters, tenant_id=current_tenant_id(), reporting_currency=_rep)
 
     # Replace raw EC2 instance IDs with resolved Name tags where available
     try:
@@ -1347,7 +1349,9 @@ def api_costs_total():
     }
     filters = {k: v for k, v in filters.items() if v is not None and v != ""}
     cloud_provider = request.args.get("cloud_provider") or None
-    return jsonify(get_cost_total(filters, tenant_id=current_tenant_id(), cloud_provider=cloud_provider))
+    from currency import tenant_reporting_currency
+    _rep = tenant_reporting_currency(current_tenant_id(), get_db)
+    return jsonify(get_cost_total(filters, tenant_id=current_tenant_id(), cloud_provider=cloud_provider, reporting_currency=_rep))
 
 
 @app.route("/api/costs/total-by-subscription")
@@ -1374,7 +1378,9 @@ def api_costs_total_by_subscription():
     }
     filters = {k: v for k, v in filters.items() if v is not None and v != ""}
     cloud_provider = request.args.get("cloud_provider") or None
-    return jsonify(get_cost_totals_by_subscription(filters, tenant_id=current_tenant_id(), cloud_provider=cloud_provider))
+    from currency import tenant_reporting_currency
+    _rep = tenant_reporting_currency(current_tenant_id(), get_db)
+    return jsonify(get_cost_totals_by_subscription(filters, tenant_id=current_tenant_id(), cloud_provider=cloud_provider, reporting_currency=_rep))
 
 
 @app.route("/api/resource_config")
@@ -2695,6 +2701,8 @@ def api_custom_cost():
     date_from = body.get("date_from")
     date_to = body.get("date_to")
     cloud_provider = body.get("cloud_provider") or None
+    from currency import tenant_reporting_currency
+    _rep = tenant_reporting_currency(current_tenant_id(), get_db)
     result = get_custom_cost(
         subscription_id=sub_id or None,
         subscription_ids=sub_ids if sub_ids else None,
@@ -2704,6 +2712,7 @@ def api_custom_cost():
         date_to=date_to or None,
         tenant_id=current_tenant_id(),
         cloud_provider=cloud_provider,
+        reporting_currency=_rep,
     )
     # Resolve EC2 instance IDs to Name tags in the per-resource breakdown
     try:

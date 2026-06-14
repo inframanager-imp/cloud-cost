@@ -1155,7 +1155,7 @@ async function loadCostsTable() {
                 <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.resource_group||''}">${r.resource_group || '-'}</td>
                 <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.service_name||''}">${r.service_name || '-'}</td>
                 <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))"><span class="res-link">${resourceDisplay}</span></td>
-                <td class="cost-cell">$${(r.cost || 0).toFixed(2)}</td>
+                <td class="cost-cell">${curSym()}${(r.cost || 0).toFixed(2)}</td>
             </tr>`;
             }).join('');
         }
@@ -1169,7 +1169,7 @@ async function loadCostsTable() {
         if (countChip) countChip.textContent = `${costPageTotal.toLocaleString()} records · showing ${from}–${to}`;
         const subtitleBar = document.getElementById('costsSubtitleBar');
         if (subtitleBar && costPageTotal > 0) {
-            subtitleBar.textContent = `Showing ${from}–${to} of ${costPageTotal.toLocaleString()} records · $${(totals.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})} filtered total`;
+            subtitleBar.textContent = `Showing ${from}–${to} of ${costPageTotal.toLocaleString()} records · ${curSym()}${(totals.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})} filtered total`;
         } else if (subtitleBar) {
             subtitleBar.textContent = 'No records match current filters';
         }
@@ -1180,7 +1180,7 @@ async function loadCostsTable() {
         if (prev) prev.disabled = costPageOffset <= 0;
         if (next) next.disabled = costPageOffset + costPageLimit >= costPageTotal;
         document.getElementById('costTotalAmount').textContent =
-            `$${(totals.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+            `${curSym()}${(totals.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
         document.getElementById('costTotalRecords').textContent =
             (totals.total_records || 0).toLocaleString();
 
@@ -1201,7 +1201,7 @@ async function loadCostsTable() {
             bySubBody.innerHTML = totalsBySub.map(s => `
                 <tr>
                     <td>${s.subscription_name || s.subscription_id || '-'}</td>
-                    <td style="text-align:right;font-weight:500;color:var(--text-primary)">$${(s.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                    <td style="text-align:right;font-weight:500;color:var(--text-primary)">${curSym()}${(s.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
                 </tr>
             `).join('');
         }
@@ -3956,7 +3956,7 @@ function ccRenderResults(data) {
     ccShowSelectionSummary();
 
     document.getElementById('ccTotalCost').textContent =
-        `$${data.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+        `${curSym()}${data.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
     document.getElementById('ccTotalRecords').textContent = data.total_records.toLocaleString();
     document.getElementById('ccRgTotal').textContent = (data.by_rg || []).length;
     document.getElementById('ccSvcTotal').textContent = (data.by_service || []).length;
@@ -3990,7 +3990,7 @@ function ccRenderResults(data) {
     // RG table
     document.getElementById('ccRgTableBody').innerHTML = (data.by_rg || []).map(r =>
         `<tr><td>${r.name}</td>
-         <td style="font-weight:600;color:var(--green)">$${r.cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+         <td style="font-weight:600;color:var(--green)">${curSym()}${r.cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
          <td>${r.records.toLocaleString()}</td></tr>`
     ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--text-secondary)">No data</td></tr>';
 
@@ -4004,7 +4004,7 @@ function ccRenderResults(data) {
     // Service table
     document.getElementById('ccSvcTableBody').innerHTML = (data.by_service || []).map(s =>
         `<tr><td>${s.name}</td>
-         <td style="font-weight:600;color:var(--green)">$${s.cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+         <td style="font-weight:600;color:var(--green)">${curSym()}${s.cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
          <td>${s.records.toLocaleString()}</td></tr>`
     ).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--text-secondary)">No data</td></tr>';
 
@@ -4026,7 +4026,7 @@ function ccRenderResults(data) {
         `<tr><td title="${(r.resource_name || '').replace(/"/g, '&quot;')}">${resLabel(r)}</td>
          <td style="font-size:13px;color:var(--text-secondary)">${r.resource_type || '—'}</td>
          <td>${r.resource_group || '—'}</td>
-         <td style="font-weight:600;color:var(--green)">$${r.cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+         <td style="font-weight:600;color:var(--green)">${curSym()}${r.cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
          <td>${r.records.toLocaleString()}</td></tr>`
     ).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary)">No data</td></tr>';
 

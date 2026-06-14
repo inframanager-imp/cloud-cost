@@ -879,8 +879,9 @@ def update_sync_log(sync_id, status, records_fetched=0, error_message=None):
     conn.close()
 
 
-def query_costs(filters=None, tenant_id=None):
+def query_costs(filters=None, tenant_id=None, reporting_currency=None):
     conn = get_db()
+    _cost = _converted_cost_sql(reporting_currency)
     # Aggregate SKU-level rows into one row per day/cloud/project/service/resource
     # so the Cost Data table shows one line per logical grouping, not per billing SKU.
     granularity = (filters or {}).get("granularity", "daily")
@@ -968,7 +969,7 @@ def query_costs(filters=None, tenant_id=None):
             resource_type,
             resource_name,
             subscription_id,
-            SUM(cost)   AS cost,
+            SUM({_cost})   AS cost,
             currency,
             MAX(tags)   AS tags,
             tenant_id
@@ -991,10 +992,11 @@ def query_costs(filters=None, tenant_id=None):
     return [dict(r) for r in rows]
 
 
-def get_cost_total(filters=None, tenant_id=None, cloud_provider=None):
+def get_cost_total(filters=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
     """Get total cost for current filters (without row limit)."""
     conn = get_db()
-    query = "SELECT SUM(cost) as total_cost, COUNT(*) as total_records FROM cost_data WHERE 1=1"
+    _cost = _converted_cost_sql(reporting_currency)
+    query = f"SELECT SUM({_cost}) as total_cost, COUNT(*) as total_records FROM cost_data WHERE 1=1"
     params = []
 
     if filters:
@@ -1072,16 +1074,17 @@ def get_cost_total(filters=None, tenant_id=None, cloud_provider=None):
     }
 
 
-def get_cost_totals_by_subscription(filters=None, tenant_id=None, cloud_provider=None):
+def get_cost_totals_by_subscription(filters=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
     """Get total cost grouped by subscription for current filters (no subscription_id filter)."""
     conn = get_db()
-    query = """
+    _cost = _converted_cost_sql(reporting_currency, col="cd.cost", cur_col="cd.currency")
+    query = f"""
         SELECT
             cd.subscription_id as subscription_id,
             cd.cloud_provider as cloud_provider,
             s.name as subscription_name,
             cp.name as provider_name,
-            SUM(cd.cost) as total_cost,
+            SUM({_cost}) as total_cost,
             COUNT(*) as total_records
         FROM cost_data cd
         LEFT JOIN subscriptions s ON s.subscription_id = cd.subscription_id
@@ -1690,10 +1693,12 @@ def get_distinct_values(column, subscription_id=None, subscription_ids=None, clo
     return [r[0] for r in rows]
 
 
-def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups=None, services=None, date_from=None, date_to=None, tenant_id=None, cloud_provider=None):
+def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups=None, services=None, date_from=None, date_to=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
     """Calculate cost for a custom combination of subscriptions, RGs, and services."""
     conn = get_db()
-    query = "SELECT SUM(cost) as total_cost, COUNT(*) as records FROM cost_data WHERE 1=1"
+    _cost = _converted_cost_sql(reporting_currency)
+    _base_cost = f"SUM({_cost}) as total_cost, COUNT(*) as records"
+    query = f"SELECT {_base_cost} FROM cost_data WHERE 1=1"
     params = []
 
     if subscription_ids and len(subscription_ids) > 0:
@@ -1729,28 +1734,28 @@ def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups
     records = row["records"] or 0
 
     # Breakdown by RG
-    rg_query = query.replace("SUM(cost) as total_cost, COUNT(*) as records",
-                              "resource_group, SUM(cost) as total_cost, COUNT(*) as records")
+    rg_query = query.replace(_base_cost,
+                              f"resource_group, {_base_cost}")
     rg_query += " GROUP BY resource_group ORDER BY total_cost DESC"
     rg_rows = conn.execute(rg_query, params).fetchall()
 
     # Breakdown by service
-    svc_query = query.replace("SUM(cost) as total_cost, COUNT(*) as records",
-                               "service_name, SUM(cost) as total_cost, COUNT(*) as records")
+    svc_query = query.replace(_base_cost,
+                               f"service_name, {_base_cost}")
     svc_query += " GROUP BY service_name ORDER BY total_cost DESC"
     svc_rows = conn.execute(svc_query, params).fetchall()
 
     # Daily trend
-    trend_query = query.replace("SUM(cost) as total_cost, COUNT(*) as records",
-                                 "date, SUM(cost) as total_cost")
+    trend_query = query.replace(_base_cost,
+                                 f"date, SUM({_cost}) as total_cost")
     trend_query += " GROUP BY date ORDER BY date ASC"
     trend_rows = conn.execute(trend_query, params).fetchall()
 
     # Breakdown by logical Azure resource (sums all meter lines for that resource)
     res_query = query.replace(
-        "SUM(cost) as total_cost, COUNT(*) as records",
+        _base_cost,
         "resource_group, COALESCE(resource_type,'') as resource_type, COALESCE(resource_name,'') as resource_name, "
-        "SUM(cost) as total_cost, COUNT(*) as records",
+        + _base_cost,
     )
     res_query += (
         " GROUP BY resource_group, COALESCE(resource_type,''), COALESCE(resource_name,'') "
