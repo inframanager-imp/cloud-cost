@@ -1762,12 +1762,16 @@ def api_compare_drilldown():
             if rid.startswith("i-") and rid in ec2_names:
                 row["display_name"] = ec2_names[rid]  # Name tag; keep id in name for tooltip
 
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    _rep = tenant_reporting_currency(current_tenant_id(), get_db)
+    _rep_sym = _cur_symbol(_rep)
+
     periods_raw = request.args.get("periods")
     if periods_raw:
         periods, _labels = _parse_compare_periods_arg(periods_raw)
         if not group_value or not periods:
             return jsonify({"error": "name and valid periods (2–6) required"}), 400
-        data = get_comparison_drilldown_multi(group_by, group_value, periods, subscription_id=sub_id, resource_groups=resource_groups, tenant_id=current_tenant_id())
+        data = get_comparison_drilldown_multi(group_by, group_value, periods, subscription_id=sub_id, resource_groups=resource_groups, tenant_id=current_tenant_id(), reporting_currency=_rep)
         for key in data:
             if key == "daily_trend":
                 continue
@@ -1781,6 +1785,7 @@ def api_compare_drilldown():
                 row["difference"] = diff
                 row["change_pct"] = pct
         _enrich_resource_display(data)
+        data["currency_symbol"] = _rep_sym
         return jsonify(data)
 
     p1_from = request.args.get("p1_from")
@@ -1790,7 +1795,7 @@ def api_compare_drilldown():
     if not all([group_value, p1_from, p1_to, p2_from, p2_to]):
         return jsonify({"error": "All parameters required"}), 400
 
-    data = get_comparison_drilldown(group_by, group_value, p1_from, p1_to, p2_from, p2_to, subscription_id=sub_id, resource_groups=resource_groups, tenant_id=current_tenant_id())
+    data = get_comparison_drilldown(group_by, group_value, p1_from, p1_to, p2_from, p2_to, subscription_id=sub_id, resource_groups=resource_groups, tenant_id=current_tenant_id(), reporting_currency=_rep)
 
     for key in data:
         if key == "daily_trend":
@@ -1808,6 +1813,7 @@ def api_compare_drilldown():
             row["name"] = row["name"] or "Unknown"
 
     _enrich_resource_display(data)
+    data["currency_symbol"] = _rep_sym
     return jsonify(data)
 
 

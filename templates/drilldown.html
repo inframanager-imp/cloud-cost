@@ -132,6 +132,7 @@ const labels = periodSpecs.map((p) => p.label);
 const n = labels.length;
 
 let ddData = null;
+let DD_SYM = '$';
 
 document.title = `${name} — Cost Drilldown`;
 document.getElementById('ddTitle').textContent =
@@ -234,6 +235,7 @@ async function loadDrilldown() {
         const resp = await fetch(`/api/compare/drilldown?${qp}`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         ddData = await resp.json();
+        DD_SYM = ddData.currency_symbol || '$';
 
         document.getElementById('ddLoading').style.display = 'none';
         document.getElementById('ddContent').style.display = 'block';
@@ -258,7 +260,7 @@ async function loadDrilldown() {
                 (s, i) => `
             <div class="stat-card">
                 <div class="stat-label">${labels[i].replace(/</g, '&lt;')}</div>
-                <div class="stat-value" style="font-size:22px;color:var(--accent)">$${s.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div class="stat-value" style="font-size:22px;color:var(--accent)">${DD_SYM}${s.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 <div style="font-size:12px;color:var(--text-secondary)">${s.count} days</div>
             </div>
         `
@@ -271,7 +273,7 @@ async function loadDrilldown() {
             <div class="stat-card">
                 <div class="stat-label">${n > 2 ? 'Last vs first' : 'Change'}</div>
                 <div class="stat-value" style="font-size:22px;color:${diff > 0 ? 'var(--red)' : 'var(--green)'}">
-                    ${diff > 0 ? '+' : ''}$${diff.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ${diff > 0 ? '+' : ''}${DD_SYM}${diff.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div style="font-size:12px;color:${diff > 0 ? 'var(--red)' : 'var(--green)'}">${diff > 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%</div>
             </div>
@@ -351,7 +353,7 @@ function renderTab(key) {
             const costCells = labels
                 .map((_, i) => {
                     const v = costs[i] ?? 0;
-                    return `<td>$${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>`;
+                    return `<td>${DD_SYM}${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>`;
                 })
                 .join('');
             const barWidth = Math.max(4, Math.min(100, (Math.abs(r.difference) / maxDiff) * 100));
@@ -366,7 +368,7 @@ function renderTab(key) {
             <td style="font-weight:500" title="${escFull}">${esc}</td>
             ${costCells}
             <td style="color:${r.difference > 0 ? 'var(--red)' : 'var(--green)'};font-weight:500">
-                ${r.difference > 0 ? '+' : ''}$${Number(r.difference).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${r.difference > 0 ? '+' : ''}${DD_SYM}${Number(r.difference).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </td>
             <td><span class="cmp-badge ${badgeClass}">${arrow} ${Math.abs(r.change_pct).toFixed(1)}%</span></td>
             <td><span class="trend-bar ${barClass}" style="width:${barWidth}px"></span></td>

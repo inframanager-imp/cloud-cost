@@ -1404,10 +1404,11 @@ def get_comparison_data_multi(group_by, periods, subscription_id=None, resource_
     return out
 
 
-def get_comparison_drilldown(group_by, group_value, date_from_1, date_to_1, date_from_2, date_to_2, subscription_id=None, resource_groups=None, tenant_id=None):
+def get_comparison_drilldown(group_by, group_value, date_from_1, date_to_1, date_from_2, date_to_2, subscription_id=None, resource_groups=None, tenant_id=None, reporting_currency=None):
     """Get detailed breakdown for a specific item (e.g. a specific RG) across two periods.
     Returns sub-items grouped by the other dimensions."""
     conn = get_db()
+    _cost = _converted_cost_sql(reporting_currency)
 
     # Determine sub-group columns based on what we're drilling into.
     # "Resources" (resource_name) shows individual buckets/instances/databases
@@ -1436,9 +1437,9 @@ def get_comparison_drilldown(group_by, group_value, date_from_1, date_to_1, date
         query = f"""
             SELECT
                 {sub_col} as name,
-                SUM(CASE WHEN date >= ? AND date <= ? THEN cost ELSE 0 END) as period1_cost,
-                SUM(CASE WHEN date >= ? AND date <= ? THEN cost ELSE 0 END) as period2_cost,
-                SUM(cost) as total_cost
+                SUM(CASE WHEN date >= ? AND date <= ? THEN {_cost} ELSE 0 END) as period1_cost,
+                SUM(CASE WHEN date >= ? AND date <= ? THEN {_cost} ELSE 0 END) as period2_cost,
+                SUM({_cost}) as total_cost
             FROM cost_data
             WHERE {group_by} = ?
               AND ((date >= ? AND date <= ?) OR (date >= ? AND date <= ?))
@@ -1469,7 +1470,7 @@ def get_comparison_drilldown(group_by, group_value, date_from_1, date_to_1, date
 
     # Also get daily trend for this item in both periods
     daily_query = f"""
-        SELECT date, SUM(cost) as total_cost
+        SELECT date, SUM({_cost}) as total_cost
         FROM cost_data
         WHERE {group_by} = ?
           AND ((date >= ? AND date <= ?) OR (date >= ? AND date <= ?))
@@ -1496,9 +1497,10 @@ def get_comparison_drilldown(group_by, group_value, date_from_1, date_to_1, date
     return result
 
 
-def get_comparison_drilldown_multi(group_by, group_value, periods, subscription_id=None, resource_groups=None, tenant_id=None):
+def get_comparison_drilldown_multi(group_by, group_value, periods, subscription_id=None, resource_groups=None, tenant_id=None, reporting_currency=None):
     """Drilldown for 2–6 periods: sub-groups and daily trend for one group value."""
     conn = get_db()
+    _cost = _converted_cost_sql(reporting_currency)
     n = len(periods)
     if n < 2 or n > 6:
         conn.close()
@@ -1524,7 +1526,7 @@ def get_comparison_drilldown_multi(group_by, group_value, periods, subscription_
         ]
 
     case_cols = ", ".join(
-        f"SUM(CASE WHEN date >= ? AND date <= ? THEN cost ELSE 0 END) as p{i}" for i in range(n)
+        f"SUM(CASE WHEN date >= ? AND date <= ? THEN {_cost} ELSE 0 END) as p{i}" for i in range(n)
     )
     date_or = " OR ".join("(date >= ? AND date <= ?)" for _ in periods)
 
@@ -1549,7 +1551,7 @@ def get_comparison_drilldown_multi(group_by, group_value, periods, subscription_
             SELECT
                 {sub_col} as name,
                 {case_cols},
-                SUM(cost) as total_cost
+                SUM({_cost}) as total_cost
             FROM cost_data
             WHERE {group_by} = ?
               AND ({date_or})
@@ -1570,7 +1572,7 @@ def get_comparison_drilldown_multi(group_by, group_value, periods, subscription_
             result[sub_label].append({"name": d["name"], "costs": costs, "total_cost": float(d["total_cost"] or 0)})
 
     daily_query = f"""
-        SELECT date, SUM(cost) as total_cost
+        SELECT date, SUM({_cost}) as total_cost
         FROM cost_data
         WHERE {group_by} = ?
           AND ({date_or})
