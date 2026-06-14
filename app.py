@@ -1550,6 +1550,90 @@ def api_monthly():
     return jsonify(result)
 
 
+@app.route("/api/resource-groups")
+@login_required
+def api_resource_groups():
+    """Resource-group (Azure RG / GCP project / AWS group) cost per month, across
+    all clouds, for the current tenant. Converted to the tenant reporting currency."""
+    tid = current_tenant_id()
+    cloud_provider = request.args.get("cloud_provider") or None
+    try:
+        months_back = max(1, min(int(request.args.get("months", 6)), 24))
+    except ValueError:
+        months_back = 6
+
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    from database import _converted_cost_sql
+    rep = tenant_reporting_currency(tid, get_db)
+    _cost = _converted_cost_sql(rep)
+
+    # Build the list of YYYY-MM months (oldest → newest)
+    now = datetime.utcnow()
+    months = []
+    y, m = now.year, now.month
+    for _ in range(months_back):
+        months.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m = 12; y -= 1
+    months.reverse()
+    date_from = months[0] + "-01"
+
+    # Optional client filter
+    client_frag, client_params = ("", [])
+    client_id_param = request.args.get("client_id")
+    if client_id_param:
+        try:
+            client_frag, client_params = build_client_sql_filter(int(client_id_param))
+        except (ValueError, TypeError):
+            pass
+
+    tid_filter = "AND tenant_id = ?" if tid is not None else ""
+    cloud_filter = "AND cloud_provider = ?" if cloud_provider else ""
+
+    conn = get_db()
+    q = f"""
+        SELECT strftime('%Y-%m', date) AS month,
+               COALESCE(NULLIF(TRIM(resource_group),''), '(none)') AS rg,
+               cloud_provider AS cloud,
+               SUM({_cost}) AS cost
+        FROM cost_data
+        WHERE date >= ? {tid_filter} {cloud_filter} {client_frag}
+        GROUP BY month, rg, cloud_provider
+    """
+    params = [date_from]
+    if tid is not None:
+        params.append(tid)
+    if cloud_provider:
+        params.append(cloud_provider)
+    params += client_params
+    rows = conn.execute(q, params).fetchall()
+    conn.close()
+
+    # Pivot into {rg+cloud: {by_month, total}}
+    agg = {}
+    for r in rows:
+        key = (r["rg"], r["cloud"] or "")
+        a = agg.setdefault(key, {"resource_group": r["rg"], "cloud": r["cloud"] or "",
+                                 "by_month": {mo: 0.0 for mo in months}, "total": 0.0})
+        c = round(float(r["cost"] or 0), 2)
+        if r["month"] in a["by_month"]:
+            a["by_month"][r["month"]] += c
+        a["total"] += c
+
+    out = sorted(agg.values(), key=lambda x: -x["total"])
+    for a in out:
+        a["total"] = round(a["total"], 2)
+        a["by_month"] = {k: round(v, 2) for k, v in a["by_month"].items()}
+
+    return jsonify({
+        "currency_symbol": _cur_symbol(rep),
+        "currency": rep,
+        "months": months,
+        "rows": out,
+    })
+
+
 # ─── API: Comparison ──────────────────────────────────────────────────────────
 
 def _parse_compare_periods_arg(raw):

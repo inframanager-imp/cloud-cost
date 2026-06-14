@@ -129,6 +129,7 @@ function applyCloudVisibility() {
         ['[data-costs-cloud]',                        'costsCloud'],
         ['[data-cmp-cloud]',                          'cmpCloud'],
         ['[data-act-cloud]',                          'actCloud'],
+        ['#rgCloudSeg [data-rg-cloud]',               'rgCloud'],
     ];
     chipSelectors.forEach(([sel, key]) => {
         document.querySelectorAll(sel).forEach(b => {
@@ -158,6 +159,7 @@ function navigateTo(page) {
 
     if (page === 'executive') loadExecutiveSummary();
     if (page === 'cloud-overview') loadCloudOverview();
+    if (page === 'rgroups') loadResourceGroups();
     if (page === 'costs') {
         const now = new Date();
         const y = now.getFullYear();
@@ -6020,6 +6022,99 @@ function applyClientDateFilter() {
 
 function _fmt$(n) {
     return curSym() + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ─── Resource Groups view (RG / project cost per month, all clouds) ──────────
+let _rgData = null;
+let _rgCloud = '';
+
+function setRgCloud(btn, cloud) {
+    _rgCloud = cloud;
+    document.querySelectorAll('#rgCloudSeg .cp-seg').forEach(b => b.classList.toggle('active', b === btn));
+    loadResourceGroups();
+}
+
+async function loadResourceGroups() {
+    const body = document.getElementById('rgTableBody');
+    if (body) body.innerHTML = '<tr><td style="padding:20px;text-align:center;color:var(--text-secondary)">Loading…</td></tr>';
+    // populate client dropdown once
+    const clientSel = document.getElementById('rgClient');
+    if (clientSel && !clientSel.dataset.loaded) {
+        try {
+            const clients = await fetch('/api/clients').then(r => r.json());
+            clientSel.innerHTML = '<option value="">All clients</option>' +
+                (clients || []).map(c => `<option value="${c.id}">${_esc(c.name)}</option>`).join('');
+            clientSel.dataset.loaded = '1';
+        } catch (e) { clientSel.innerHTML = '<option value="">All clients</option>'; }
+    }
+    const months = document.getElementById('rgMonths')?.value || '6';
+    const clientId = document.getElementById('rgClient')?.value || '';
+    const qs = new URLSearchParams({ months });
+    if (_rgCloud) qs.set('cloud_provider', _rgCloud);
+    if (clientId) qs.set('client_id', clientId);
+    try {
+        _rgData = await fetch(`/api/resource-groups?${qs}`).then(r => r.json());
+        renderRgroups();
+    } catch (e) {
+        if (body) body.innerHTML = '<tr><td style="padding:20px;text-align:center;color:var(--red)">Failed to load.</td></tr>';
+    }
+}
+
+function _rgMonthLabel(ym) {
+    const [y, m] = ym.split('-');
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleString(undefined, { month: 'short', year: '2-digit' });
+}
+
+function renderRgroups() {
+    if (!_rgData) return;
+    const sym = _rgData.currency_symbol || curSym();
+    const months = _rgData.months || [];
+    const search = (document.getElementById('rgSearch')?.value || '').trim().toLowerCase();
+    let rows = _rgData.rows || [];
+    if (search) rows = rows.filter(r => (r.resource_group || '').toLowerCase().includes(search));
+
+    const head = document.getElementById('rgTableHead');
+    const cloudIcon = { azure: 'Az', aws: 'AW', gcp: 'G' };
+    head.innerHTML = `<tr>
+        <th style="text-align:left">Resource Group / Project</th>
+        <th style="text-align:left">Cloud</th>
+        ${months.map(m => `<th style="text-align:right">${_rgMonthLabel(m)}</th>`).join('')}
+        <th style="text-align:right">Total</th>
+    </tr>`;
+
+    const fmt = v => sym + Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const body = document.getElementById('rgTableBody');
+    if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="${months.length + 3}" style="padding:20px;text-align:center;color:var(--text-secondary)">No resource-group data for this selection.</td></tr>`;
+    } else {
+        body.innerHTML = rows.map(r => `
+            <tr>
+                <td style="font-weight:500" title="${_esc(r.resource_group)}">${_esc(r.resource_group)}</td>
+                <td style="color:var(--text-secondary);font-size:12px">${(cloudIcon[r.cloud] || (r.cloud || '').toUpperCase())}</td>
+                ${months.map(m => `<td style="text-align:right">${r.by_month[m] ? fmt(r.by_month[m]) : '<span style="color:var(--text-tertiary)">–</span>'}</td>`).join('')}
+                <td style="text-align:right;font-weight:600;color:var(--text-primary)">${fmt(r.total)}</td>
+            </tr>`).join('');
+    }
+    const sum = rows.reduce((s, r) => s + (r.total || 0), 0);
+    const el = document.getElementById('rgSummary');
+    if (el) el.textContent = `${rows.length} resource group${rows.length !== 1 ? 's' : ''} · ${sym}${sum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} over ${months.length} month${months.length !== 1 ? 's' : ''}`;
+}
+
+function exportRgroupsCsv() {
+    if (!_rgData || !_rgData.rows) return;
+    const months = _rgData.months || [];
+    const header = ['Resource Group', 'Cloud', ...months, 'Total'];
+    const lines = [header.join(',')];
+    (_rgData.rows || []).forEach(r => {
+        const row = [`"${(r.resource_group || '').replace(/"/g, '""')}"`, r.cloud || '',
+            ...months.map(m => r.by_month[m] || 0), r.total || 0];
+        lines.push(row.join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'resource-groups-monthly.csv';
+    a.click();
 }
 
 async function loadClientsPage() {
