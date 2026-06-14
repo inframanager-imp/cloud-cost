@@ -502,6 +502,10 @@ def api_dashboard():
 
     tid = current_tenant_id()
     cloud_filter = request.args.get("cloud_provider") or None
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    from database import _converted_cost_sql
+    rep = tenant_reporting_currency(tid, get_db)
+    _cost = _converted_cost_sql(rep)
 
     # Client filter: if client_id is provided, scope to that client's mappings
     client_id_param = request.args.get("client_id")
@@ -512,7 +516,7 @@ def api_dashboard():
         except (ValueError, TypeError):
             pass
 
-    cur_trend = get_daily_trend(first_of_month, today_str, subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter)
+    cur_trend = get_daily_trend(first_of_month, today_str, subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter, reporting_currency=rep)
     cur_total = sum(r["total_cost"] for r in cur_trend)
     days_with_data = len(cur_trend)
     avg_daily = cur_total / days_with_data if days_with_data > 0 else 0
@@ -520,18 +524,18 @@ def api_dashboard():
 
     last_month_end = today.replace(day=1) - timedelta(days=1)
     last_month_start = last_month_end.replace(day=1)
-    prev_trend = get_daily_trend(last_month_start.strftime("%Y-%m-%d"), last_month_end.strftime("%Y-%m-%d"), subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter)
+    prev_trend = get_daily_trend(last_month_start.strftime("%Y-%m-%d"), last_month_end.strftime("%Y-%m-%d"), subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter, reporting_currency=rep)
     prev_total = sum(r["total_cost"] for r in prev_trend)
 
     prev_same_day = min(day_of_month, last_month_end.day)
     prev_same_day_str = last_month_start.replace(day=prev_same_day).strftime("%Y-%m-%d")
-    prev_partial_trend = get_daily_trend(last_month_start.strftime("%Y-%m-%d"), prev_same_day_str, subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter)
+    prev_partial_trend = get_daily_trend(last_month_start.strftime("%Y-%m-%d"), prev_same_day_str, subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter, reporting_currency=rep)
     prev_partial_total = sum(r["total_cost"] for r in prev_partial_trend)
 
     mom_change = ((cur_total - prev_partial_total) / prev_partial_total * 100) if prev_partial_total > 0 else 0
 
-    cur_services = get_summary("service_name", first_of_month, today_str, subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter)[:8]
-    cur_rgs = get_summary("resource_group", first_of_month, today_str, subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter)[:8]
+    cur_services = get_summary("service_name", first_of_month, today_str, subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter, reporting_currency=rep)[:8]
+    cur_rgs = get_summary("resource_group", first_of_month, today_str, subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_filter, reporting_currency=rep)[:8]
 
     # Build account name map: Azure subscriptions + cloud_providers table (AWS accounts, GCP projects)
     subs = get_subscriptions(tenant_id=tid)
@@ -554,7 +558,7 @@ def api_dashboard():
     cloud_sql = "AND cloud_provider = ?" if cloud_filter else ""
     cloud_params = [cloud_filter] if cloud_filter else []
     sub_costs = conn.execute(f"""
-        SELECT subscription_id, cloud_provider, SUM(cost) as total
+        SELECT subscription_id, cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cloud_sql} {client_sql_frag}
         GROUP BY subscription_id, cloud_provider ORDER BY total DESC
     """, [first_of_month, today_str] + cloud_params + client_sql_params).fetchall()
@@ -565,7 +569,7 @@ def api_dashboard():
     lm_str = last_month_start2.strftime("%Y-%m-%d")
     lm_end_str = last_month_end2.strftime("%Y-%m-%d")
     lm_sub_costs = conn.execute(f"""
-        SELECT subscription_id, SUM(cost) as total
+        SELECT subscription_id, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cloud_sql} {client_sql_frag}
         GROUP BY subscription_id
     """, [lm_str, lm_end_str] + cloud_params + client_sql_params).fetchall()
@@ -573,7 +577,7 @@ def api_dashboard():
 
     # Cloud breakdown for current month (for the breakdown cards)
     cloud_costs_cur = conn.execute(f"""
-        SELECT cloud_provider, SUM(cost) as total
+        SELECT cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
         GROUP BY cloud_provider ORDER BY total DESC
     """, (first_of_month, today_str)).fetchall()
@@ -582,12 +586,12 @@ def api_dashboard():
     two_months_ago_end = last_month_start2 - timedelta(days=1)
     two_months_ago_start = two_months_ago_end.replace(day=1)
     cloud_costs_lm = conn.execute(f"""
-        SELECT cloud_provider, SUM(cost) as total
+        SELECT cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
         GROUP BY cloud_provider ORDER BY total DESC
     """, (lm_str, lm_end_str)).fetchall()
     cloud_costs_2m = conn.execute(f"""
-        SELECT cloud_provider, SUM(cost) as total
+        SELECT cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
         GROUP BY cloud_provider ORDER BY total DESC
     """, (two_months_ago_start.strftime("%Y-%m-%d"), two_months_ago_end.strftime("%Y-%m-%d"))).fetchall()
@@ -1471,10 +1475,13 @@ def api_trend():
 def api_monthly():
     sub_id = request.args.get("subscription_id")
     cloud_provider = request.args.get("cloud_provider") or None
-    summary = get_monthly_summary(subscription_id=sub_id, tenant_id=current_tenant_id(), cloud_provider=cloud_provider)
-    service_breakdown = get_monthly_service_breakdown(subscription_id=sub_id, tenant_id=current_tenant_id(), cloud_provider=cloud_provider)
-    rg_breakdown = get_monthly_rg_breakdown(subscription_id=sub_id, tenant_id=current_tenant_id(), cloud_provider=cloud_provider)
-    sub_breakdown = get_monthly_subscription_breakdown(subscription_id=sub_id, tenant_id=current_tenant_id(), cloud_provider=cloud_provider)
+    tid = current_tenant_id()
+    from currency import tenant_reporting_currency
+    rep = tenant_reporting_currency(tid, get_db)
+    summary = get_monthly_summary(subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_provider, reporting_currency=rep)
+    service_breakdown = get_monthly_service_breakdown(subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_provider, reporting_currency=rep)
+    rg_breakdown = get_monthly_rg_breakdown(subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_provider, reporting_currency=rep)
+    sub_breakdown = get_monthly_subscription_breakdown(subscription_id=sub_id, tenant_id=tid, cloud_provider=cloud_provider, reporting_currency=rep)
 
     # Group service/rg/subscription data by month
     svc_by_month = {}
@@ -1504,10 +1511,11 @@ def api_monthly():
         })
 
     # Cloud breakdown per month (aws / azure / gcp totals)
-    tid = current_tenant_id()
+    from database import _converted_cost_sql
+    _cost = _converted_cost_sql(rep)
     conn = get_db()
-    cloud_rows = conn.execute("""
-        SELECT strftime('%Y-%m', date) as month, cloud_provider, SUM(cost) as total
+    cloud_rows = conn.execute(f"""
+        SELECT strftime('%Y-%m', date) as month, cloud_provider, SUM({_cost}) as total
         FROM cost_data
         WHERE tenant_id = ?
         GROUP BY month, cloud_provider

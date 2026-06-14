@@ -1184,28 +1184,29 @@ def get_cost_totals_by_subscription(filters=None, tenant_id=None, cloud_provider
     return result
 
 
-def _converted_cost_sql(reporting_currency):
-    """SQL expression converting per-row `cost` (in its native `currency`) to the
-    given reporting currency. Returns plain `cost` when reporting_currency is
-    falsy, so existing callers are unaffected."""
+def _converted_cost_sql(reporting_currency, col="cost", cur_col="currency"):
+    """SQL expression converting per-row `col` (in its native `cur_col`) to the
+    given reporting currency. Returns plain `col` when reporting_currency is
+    falsy, so existing callers are unaffected. col/cur_col allow table aliases
+    (e.g. cd.cost / cd.currency in joined queries)."""
     if not reporting_currency:
-        return "cost"
+        return col
     try:
         from currency import get_rates
         rates = get_rates()
         rep = reporting_currency.upper()
         rep_rate = rates.get(rep)
         if not rep_rate:
-            return "cost"
+            return col
         whens = []
         for code, rate in rates.items():
             if not rate:
                 continue
             factor = rep_rate / rate  # native cost × factor → reporting currency
-            whens.append(f"WHEN '{code}' THEN cost * {factor:.10f}")
-        return "CASE UPPER(COALESCE(currency,'USD')) " + " ".join(whens) + " ELSE cost END"
+            whens.append(f"WHEN '{code}' THEN {col} * {factor:.10f}")
+        return f"CASE UPPER(COALESCE({cur_col},'USD')) " + " ".join(whens) + f" ELSE {col} END"
     except Exception:
-        return "cost"
+        return col
 
 
 def get_summary(group_by="service_name", date_from=None, date_to=None, subscription_id=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
@@ -2076,12 +2077,13 @@ def get_sync_history(tenant_id=None):
     return [dict(r) for r in rows]
 
 
-def get_monthly_summary(subscription_id=None, tenant_id=None, cloud_provider=None):
+def get_monthly_summary(subscription_id=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
     conn = get_db()
-    query = """
+    _cost = _converted_cost_sql(reporting_currency)
+    query = f"""
         SELECT
             strftime('%Y-%m', date) as month,
-            SUM(cost) as total_cost,
+            SUM({_cost}) as total_cost,
             COUNT(*) as record_count,
             COUNT(DISTINCT resource_group) as rg_count,
             COUNT(DISTINCT service_name) as service_count,
@@ -2107,13 +2109,14 @@ def get_monthly_summary(subscription_id=None, tenant_id=None, cloud_provider=Non
     return [dict(r) for r in rows]
 
 
-def get_monthly_service_breakdown(subscription_id=None, tenant_id=None, cloud_provider=None):
+def get_monthly_service_breakdown(subscription_id=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
     conn = get_db()
-    query = """
+    _cost = _converted_cost_sql(reporting_currency)
+    query = f"""
         SELECT
             strftime('%Y-%m', date) as month,
             service_name,
-            SUM(cost) as total_cost,
+            SUM({_cost}) as total_cost,
             currency
         FROM cost_data
     """
@@ -2136,13 +2139,14 @@ def get_monthly_service_breakdown(subscription_id=None, tenant_id=None, cloud_pr
     return [dict(r) for r in rows]
 
 
-def get_monthly_rg_breakdown(subscription_id=None, tenant_id=None, cloud_provider=None):
+def get_monthly_rg_breakdown(subscription_id=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
     conn = get_db()
-    query = """
+    _cost = _converted_cost_sql(reporting_currency)
+    query = f"""
         SELECT
             strftime('%Y-%m', date) as month,
             resource_group,
-            SUM(cost) as total_cost,
+            SUM({_cost}) as total_cost,
             currency
         FROM cost_data
     """
@@ -2165,17 +2169,18 @@ def get_monthly_rg_breakdown(subscription_id=None, tenant_id=None, cloud_provide
     return [dict(r) for r in rows]
 
 
-def get_monthly_subscription_breakdown(subscription_id=None, tenant_id=None, cloud_provider=None):
+def get_monthly_subscription_breakdown(subscription_id=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
     """Per month, per subscription totals (with display name from subscriptions and cloud_providers tables)."""
     conn = get_db()
-    query = """
+    _cost = _converted_cost_sql(reporting_currency, col="cd.cost", cur_col="cd.currency")
+    query = f"""
         SELECT
             strftime('%Y-%m', cd.date) as month,
             cd.subscription_id,
             cd.cloud_provider,
             s.name as subscription_name,
             cp.name as provider_name,
-            SUM(cd.cost) as total_cost
+            SUM({_cost}) as total_cost
         FROM cost_data cd
         LEFT JOIN subscriptions s ON s.subscription_id = cd.subscription_id
         LEFT JOIN cloud_providers cp ON cp.provider_id = cd.subscription_id

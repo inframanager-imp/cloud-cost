@@ -1,6 +1,19 @@
 // ─── State ────────────────────────────────────────────────────────────────
 let currentPage = 'executive';
 let chartInstances = {};
+
+// ─── Currency (per-tenant reporting currency) ───────────────────────────────
+window.TENANT_CUR = window.TENANT_CUR || { code: 'USD', symbol: '$' };
+function curSym() { return (window.TENANT_CUR && window.TENANT_CUR.symbol) || '$'; }
+function money(v, dec = 2) {
+    return curSym() + Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+async function loadTenantCurrency() {
+    try {
+        const c = await fetch('/api/tenant/currency').then(r => r.json());
+        if (c && c.symbol) window.TENANT_CUR = { code: c.code || 'USD', symbol: c.symbol };
+    } catch (e) { /* keep default $ */ }
+}
 let syncInterval = null;
 let selectedSubscription = '';
 let selectedCloud = '';          // '' | 'azure' | 'aws' | 'gcp'
@@ -303,9 +316,10 @@ const PROVIDER_META = {
 };
 
 function _coFmtShort(v) {
-    if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
-    if (v >= 1e3) return '$' + (v / 1e3).toFixed(1) + 'K';
-    return '$' + Math.round(v).toLocaleString();
+    const s = curSym();
+    if (v >= 1e6) return s + (v / 1e6).toFixed(1) + 'M';
+    if (v >= 1e3) return s + (v / 1e3).toFixed(1) + 'K';
+    return s + Math.round(v).toLocaleString();
 }
 
 function _emptyState(tone, svgPath, headline, sub, actions) {
@@ -680,7 +694,7 @@ async function loadCloudOverview() {
             <div class="co-kpi">
                 <div class="co-kpi__label">Avg / day</div>
                 <div class="co-kpi__value-row">
-                    <span class="co-kpi__value">$${Math.round(avgPerDay).toLocaleString()}</span>
+                    <span class="co-kpi__value">${curSym()}${Math.round(avgPerDay).toLocaleString()}</span>
                 </div>
                 <div class="co-kpi__sub">${daysTracked}-day average</div>
             </div>
@@ -768,7 +782,7 @@ async function loadCloudOverview() {
             </div>
 
             <div class="co-card-lg__amount">
-                <span class="metric-number">$${cm.total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                <span class="metric-number">${curSym()}${cm.total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
                 <span class="co-card-lg__delta delta-${momDir2}">${momArrow2} ${Math.abs(mom).toFixed(1)}%</span>
             </div>
 
@@ -780,15 +794,15 @@ async function loadCloudOverview() {
             <div class="co-card-lg__stats">
                 <div>
                     <div class="co-stat-cell__label">Last month</div>
-                    <div class="co-stat-cell__value">$${Math.round(lm.total).toLocaleString()}</div>
+                    <div class="co-stat-cell__value">${curSym()}${Math.round(lm.total).toLocaleString()}</div>
                 </div>
                 <div>
                     <div class="co-stat-cell__label">Avg / day</div>
-                    <div class="co-stat-cell__value">$${Math.round(cm.avg_daily).toLocaleString()}</div>
+                    <div class="co-stat-cell__value">${curSym()}${Math.round(cm.avg_daily).toLocaleString()}</div>
                 </div>
                 <div>
                     <div class="co-stat-cell__label">Projected</div>
-                    <div class="co-stat-cell__value">$${Math.round(cm.projected).toLocaleString()}</div>
+                    <div class="co-stat-cell__value">${curSym()}${Math.round(cm.projected).toLocaleString()}</div>
                 </div>
             </div>
 
@@ -803,7 +817,7 @@ async function loadCloudOverview() {
                     <div class="co-rank-item">
                         <div class="co-rank-row">
                             <span class="co-rank-name" title="${_esc(s.name)}">${_esc(s.name)}</span>
-                            <span class="co-rank-amt">$${Math.round(s.cost).toLocaleString()}</span>
+                            <span class="co-rank-amt">${curSym()}${Math.round(s.cost).toLocaleString()}</span>
                         </div>
                         <div class="co-rank-bar"><div class="co-rank-bar__fill" style="width:${Math.round(s.cost/maxSub*100)}%;background:${clr};opacity:${1-i*0.25}"></div></div>
                     </div>`).join('')}
@@ -1476,7 +1490,7 @@ async function loadMonthly() {
                         return `<div style="margin-bottom:5px">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
                                 <div style="display:flex;align-items:center;gap:5px"><img src="/static/img/${c}-logo.svg" style="height:${c==='aws'?'10':'12'}px"><span style="font-size:11px;color:var(--text-secondary)">${cloudLabels[c]}</span></div>
-                                <span style="color:var(--text-primary);flex-shrink:0;font-weight:500;font-variant-numeric:tabular-nums">$${Number(cost).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+                                <span style="color:var(--text-primary);flex-shrink:0;font-weight:500;font-variant-numeric:tabular-nums">${curSym()}${Number(cost).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
                             </div>
                             <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden">
                                 <div style="width:${pct}%;height:100%;background:${color};border-radius:2px"></div>
@@ -1506,7 +1520,7 @@ async function loadMonthly() {
                         const esc = raw.replace(/"/g, '&quot;');
                         return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:11px;margin-top:2px;line-height:1.3;padding-left:8px">
                             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;color:var(--text-secondary)" title="${esc}">${short}</span>
-                            <span style="color:var(--text-primary);flex-shrink:0;font-weight:500;font-variant-numeric:tabular-nums">$${Number(sub.cost).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+                            <span style="color:var(--text-primary);flex-shrink:0;font-weight:500;font-variant-numeric:tabular-nums">${curSym()}${Number(sub.cost).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
                         </div>`;
                     }).join('');
                     return `<div style="margin-top:5px">
@@ -1525,7 +1539,7 @@ async function loadMonthly() {
             return `
                 <div class="${i === 0 ? 'month-card month-card--current' : 'month-card'}" onclick="showMonthDetail('${m.month}')">
                     <div class="stat-label">${formatMonth(m.month)}</div>
-                    <div class="metric-number" style="font-size:20px">$${m.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                    <div class="metric-number" style="font-size:20px">${curSym()}${m.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
                     ${changeStr}
                     <div style="font-size:11px;color:var(--text-secondary);margin-top:6px">
                         ${m.service_count} services &bull; ${m.rg_count} RGs &bull; ${m.record_count.toLocaleString()} records
@@ -1600,7 +1614,7 @@ function renderMonthlyTable() {
             const changeIcon = change > 0 ? '▲' : '▼';
             return `<tr>
                 <td style="font-weight:500">${formatMonth(m.month)}</td>
-                <td style="font-weight:500;color:var(--text-primary)">$${m.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                <td style="font-weight:500;color:var(--text-primary)">${curSym()}${m.total_cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
                 <td style="color:${changeColor}">${!hasOlder ? '-' : `${changeIcon} ${Math.abs(change).toFixed(1)}%`}</td>
                 <td>${m.service_count}</td>
                 <td>${m.rg_count}</td>
@@ -1621,8 +1635,8 @@ function renderMonthlyTable() {
             const total = costs.reduce((a, b) => a + b, 0);
             return `<tr>
                 <td style="font-weight:500">${svc}</td>
-                ${costs.map(c => `<td>${c > 0 ? '$' + c.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'}</td>`).join('')}
-                <td style="font-weight:500;color:var(--text-primary)">$${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                ${costs.map(c => `<td>${c > 0 ? curSym() + c.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'}</td>`).join('')}
+                <td style="font-weight:500;color:var(--text-primary)">${curSym()}${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             </tr>`;
         }).join('');
 
@@ -1639,8 +1653,8 @@ function renderMonthlyTable() {
             const total = costs.reduce((a, b) => a + b, 0);
             return `<tr>
                 <td style="font-weight:500">${rg}</td>
-                ${costs.map(c => `<td>${c > 0 ? '$' + c.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'}</td>`).join('')}
-                <td style="font-weight:500;color:var(--text-primary)">$${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                ${costs.map(c => `<td>${c > 0 ? curSym() + c.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'}</td>`).join('')}
+                <td style="font-weight:500;color:var(--text-primary)">${curSym()}${total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             </tr>`;
         }).join('');
     }
@@ -5337,6 +5351,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     _scLoadAutoSync();   // load auto-sync state into drawer + badge on startup
     _scLoadStatus();     // update sidebar global status
     await initCloudFilter();   // hide cloud UI for unconnected clouds (before first page render)
+    await loadTenantCurrency(); // load tenant reporting currency before first render
     populateClientDropdowns();
     _initNavContextMenu();
     // Restore page from URL hash (refresh) or ?page= query param, else default to executive
@@ -6004,7 +6019,7 @@ function applyClientDateFilter() {
 }
 
 function _fmt$(n) {
-    return '$' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return curSym() + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 async function loadClientsPage() {
