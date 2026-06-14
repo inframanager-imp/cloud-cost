@@ -3087,15 +3087,15 @@ def api_aws_auto_connect():
     ).fetchone()
     if existing:
         conn.execute(
-            "UPDATE cloud_providers SET name=?, credentials_json=?, cur_bucket=?, cur_report_name=?, enabled=1 WHERE id=?",
-            (name, credentials, bucket, report, existing["id"])
+            "UPDATE cloud_providers SET name=?, credentials_json=?, cur_bucket=?, cur_report_name=?, cur_report_prefix=?, enabled=1 WHERE id=?",
+            (name, credentials, bucket, report, prefix, existing["id"])
         )
         provider_db_id = existing["id"]
     else:
         cur = conn.execute(
-            "INSERT INTO cloud_providers (provider_type, name, provider_id, credentials_json, tenant_id, cur_bucket, cur_report_name, enabled) "
-            "VALUES ('aws', ?, ?, ?, ?, ?, ?, 1)",
-            (name, account_id, credentials, tid, bucket, report)
+            "INSERT INTO cloud_providers (provider_type, name, provider_id, credentials_json, tenant_id, cur_bucket, cur_report_name, cur_report_prefix, enabled) "
+            "VALUES ('aws', ?, ?, ?, ?, ?, ?, ?, 1)",
+            (name, account_id, credentials, tid, bucket, report, prefix)
         )
         provider_db_id = cur.lastrowid
     conn.commit()

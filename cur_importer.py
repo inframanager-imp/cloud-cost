@@ -471,10 +471,17 @@ def import_from_s3_bucket(provider: dict, credentials: dict = None,
     # but older/CloudFormation setups use "reports/<report>". Try the likely prefixes
     # and use whichever actually contains a manifest.
     report_name = provider.get("cur_report_name", "")
+    stored_prefix = (provider.get("cur_report_prefix") or "").strip().strip("/")
+    candidate_prefixes = []
+    if stored_prefix and report_name:
+        candidate_prefixes.append(f"{stored_prefix}/{report_name}")
+    if stored_prefix:
+        candidate_prefixes.append(stored_prefix)
     if report_name:
-        candidate_prefixes = [f"cur/{report_name}", f"reports/{report_name}", "cur", "reports", ""]
-    else:
-        candidate_prefixes = ["cur", "reports", ""]
+        candidate_prefixes += [f"cur/{report_name}", f"reports/{report_name}"]
+    candidate_prefixes += ["cur", "reports", ""]
+    # de-dupe preserving order
+    candidate_prefixes = list(dict.fromkeys(candidate_prefixes))
 
     account_id = provider.get("provider_id", "")
     tid = tenant_id or provider.get("tenant_id", 1)

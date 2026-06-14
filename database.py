@@ -463,6 +463,7 @@ def init_db():
             ("role_arn",         "ALTER TABLE cloud_providers ADD COLUMN role_arn TEXT DEFAULT ''"),
             ("cur_bucket",       "ALTER TABLE cloud_providers ADD COLUMN cur_bucket TEXT DEFAULT ''"),
             ("cur_report_name",  "ALTER TABLE cloud_providers ADD COLUMN cur_report_name TEXT DEFAULT ''"),
+            ("cur_report_prefix","ALTER TABLE cloud_providers ADD COLUMN cur_report_prefix TEXT DEFAULT ''"),
         ]:
             try:
                 cursor.execute(f"SELECT {col} FROM cloud_providers LIMIT 1")
