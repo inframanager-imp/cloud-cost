@@ -5178,7 +5178,6 @@ function renderBudgetCards(budgets) {
                     <div style="min-width:0">
                         <span class="budget-card__name">${b.name}</span>
                         ${b.scope_label ? `<div style="font-size:10px;color:var(--text-tertiary);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(b.scope_label)}</div>` : ''}
-                        ${b.alert_emails ? `<div style="font-size:10px;color:var(--accent-text);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">✉ ${_esc(b.alert_emails)}</div>` : ''}
                     </div>
                 </div>
                 <span class="status-pill status-pill--${pillStatus}"><span class="status-pill__dot"></span>${statusLabels[status]}</span>
