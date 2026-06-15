@@ -1063,7 +1063,7 @@ async function loadCostsTable() {
     const search = document.getElementById('costSearch')?.value;
     const dateFrom = document.getElementById('costDateFrom')?.value;
     const dateTo = document.getElementById('costDateTo')?.value;
-    const granularity = document.getElementById('costGranularity')?.value || 'daily';
+    const granularity = document.getElementById('costGranularity')?.value || 'monthly';
     const costGroupBy = document.getElementById('costGroupBy')?.value || 'resource';
     const dateHeader = document.getElementById('costDateHeader');
     if (dateHeader) {
@@ -2431,7 +2431,7 @@ function exportCSV() {
     const search = document.getElementById('costSearch')?.value;
     const dateFrom = document.getElementById('costDateFrom')?.value;
     const dateTo = document.getElementById('costDateTo')?.value;
-    const granularity = document.getElementById('costGranularity')?.value || 'daily';
+    const granularity = document.getElementById('costGranularity')?.value || 'monthly';
     const rgValues = [...cdRgSelected];
     const serviceValues = [...cdSvcSelected];
     const awsAccounts = (costsSelectedCloud === 'aws') ? [...cdAccSelected] : [];

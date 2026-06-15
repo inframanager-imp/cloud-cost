@@ -598,19 +598,19 @@
                 </div>
             </div>
             <div class="cost-filter-field">
-                <label class="cost-filter-label">View</label>
-                <select class="cost-filter-input" id="costGranularity" onchange="loadCostsTable()">
-                    <option value="daily">Daily</option>
-                    <option value="monthly">Monthly</option>
-                </select>
-            </div>
-            <div class="cost-filter-field">
                 <label class="cost-filter-label">Group by</label>
                 <select class="cost-filter-input" id="costGroupBy" onchange="loadCostsTable()">
                     <option value="resource">Resource (line items)</option>
                     <option value="resource_group">Resource Group / Project</option>
                     <option value="service">Service</option>
                     <option value="account">Account / Subscription</option>
+                </select>
+            </div>
+            <div class="cost-filter-field">
+                <label class="cost-filter-label">View</label>
+                <select class="cost-filter-input" id="costGranularity" onchange="loadCostsTable()">
+                    <option value="daily">Daily</option>
+                    <option value="monthly" selected>Monthly</option>
                 </select>
             </div>
             <div class="cost-filter-field" style="position:relative">
