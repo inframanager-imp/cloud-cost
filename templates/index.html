@@ -3086,13 +3086,15 @@
                     <div id="bgtAwsFields" style="display:none;flex-direction:column;gap:10px">
                         <div>
                             <label class="form-label">AWS Account</label>
-                            <select id="bgtAwsAccount" class="filter-input" style="width:100%">
+                            <select id="bgtAwsAccount" class="filter-input" style="width:100%" onchange="onBudgetScopeChange()">
                                 <option value="">All accounts</option>
                             </select>
                         </div>
                         <div>
                             <label class="form-label">Service (optional)</label>
-                            <input type="text" id="bgtAwsService" class="filter-input" placeholder="e.g. Amazon EC2" style="width:100%">
+                            <select id="bgtAwsService" class="filter-input" style="width:100%">
+                                <option value="">All services</option>
+                            </select>
                         </div>
                     </div>
 
@@ -3100,18 +3102,22 @@
                     <div id="bgtAzureFields" style="display:none;flex-direction:column;gap:10px">
                         <div>
                             <label class="form-label">Subscription</label>
-                            <select id="bgtAzureSub" class="filter-input" style="width:100%">
+                            <select id="bgtAzureSub" class="filter-input" style="width:100%" onchange="onBudgetScopeChange()">
                                 <option value="">All subscriptions</option>
                             </select>
                         </div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                             <div>
                                 <label class="form-label">Resource Group (optional)</label>
-                                <input type="text" id="bgtAzureRG" class="filter-input" placeholder="e.g. prod-rg" style="width:100%">
+                                <select id="bgtAzureRG" class="filter-input" style="width:100%">
+                                    <option value="">All resource groups</option>
+                                </select>
                             </div>
                             <div>
                                 <label class="form-label">Service (optional)</label>
-                                <input type="text" id="bgtAzureService" class="filter-input" placeholder="e.g. Virtual Machines" style="width:100%">
+                                <select id="bgtAzureService" class="filter-input" style="width:100%">
+                                    <option value="">All services</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -3120,13 +3126,15 @@
                     <div id="bgtGcpFields" style="display:none;flex-direction:column;gap:10px">
                         <div>
                             <label class="form-label">GCP Project</label>
-                            <select id="bgtGcpProject" class="filter-input" style="width:100%">
+                            <select id="bgtGcpProject" class="filter-input" style="width:100%" onchange="onBudgetScopeChange()">
                                 <option value="">All projects</option>
                             </select>
                         </div>
                         <div>
                             <label class="form-label">Service (optional)</label>
-                            <input type="text" id="bgtGcpService" class="filter-input" placeholder="e.g. Cloud Storage" style="width:100%">
+                            <select id="bgtGcpService" class="filter-input" style="width:100%">
+                                <option value="">All services</option>
+                            </select>
                         </div>
                     </div>
 
@@ -5295,6 +5303,46 @@ async function onBudgetProviderChange() {
                     .map(s => `<option value="${s.subscription_id}">${_esc(s.name || s.subscription_id)}</option>`).join('');
         }
     } catch(e) {}
+
+    await onBudgetScopeChange();
+}
+
+async function onBudgetScopeChange() {
+    const cloud = document.getElementById('budgetProvider').value;
+    if (cloud !== 'aws' && cloud !== 'azure' && cloud !== 'gcp') return;
+
+    let subId = '';
+    if (cloud === 'aws') subId = document.getElementById('bgtAwsAccount').value;
+    else if (cloud === 'azure') subId = document.getElementById('bgtAzureSub').value;
+    else if (cloud === 'gcp') subId = document.getElementById('bgtGcpProject').value;
+
+    try {
+        const qs = `cloud_provider=${cloud}` + (subId ? `&subscription_id=${encodeURIComponent(subId)}` : '');
+        const filters = await fetch(`/api/filters?${qs}`).then(r => r.json());
+        const services = filters.services || [];
+        const resourceGroups = filters.resource_groups || [];
+
+        if (cloud === 'azure') {
+            const rgSel = document.getElementById('bgtAzureRG');
+            const prevRg = rgSel.value;
+            rgSel.innerHTML = '<option value="">All resource groups</option>' +
+                resourceGroups.map(rg => `<option value="${_esc(rg)}">${_esc(rg)}</option>`).join('');
+            if (resourceGroups.includes(prevRg)) rgSel.value = prevRg;
+
+            const svcSel = document.getElementById('bgtAzureService');
+            const prevSvc = svcSel.value;
+            svcSel.innerHTML = '<option value="">All services</option>' +
+                services.map(s => `<option value="${_esc(s)}">${_esc(s)}</option>`).join('');
+            if (services.includes(prevSvc)) svcSel.value = prevSvc;
+        } else {
+            const svcId = cloud === 'aws' ? 'bgtAwsService' : 'bgtGcpService';
+            const svcSel = document.getElementById(svcId);
+            const prevSvc = svcSel.value;
+            svcSel.innerHTML = '<option value="">All services</option>' +
+                services.map(s => `<option value="${_esc(s)}">${_esc(s)}</option>`).join('');
+            if (services.includes(prevSvc)) svcSel.value = prevSvc;
+        }
+    } catch(e) {}
 }
 
 function showBudgetModal() {
@@ -5424,16 +5472,27 @@ async function editBudget(id) {
         // Show cloud-specific fields and pre-fill
         await onBudgetProviderChange();
         const cloud = b.provider_type || 'all';
+        const _selectValue = (id, value) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (value && !Array.from(el.options).some(o => o.value === value)) {
+                el.insertAdjacentHTML('beforeend', `<option value="${_esc(value)}">${_esc(value)}</option>`);
+            }
+            el.value = value || '';
+        };
         if (cloud === 'aws') {
             document.getElementById('bgtAwsAccount').value  = b.provider_id || '';
-            document.getElementById('bgtAwsService').value  = b.service_name || '';
+            await onBudgetScopeChange();
+            _selectValue('bgtAwsService', b.service_name || '');
         } else if (cloud === 'azure') {
             document.getElementById('bgtAzureSub').value     = b.provider_id || '';
-            document.getElementById('bgtAzureRG').value      = b.resource_group || '';
-            document.getElementById('bgtAzureService').value = b.service_name || '';
+            await onBudgetScopeChange();
+            _selectValue('bgtAzureRG', b.resource_group || '');
+            _selectValue('bgtAzureService', b.service_name || '');
         } else if (cloud === 'gcp') {
             document.getElementById('bgtGcpProject').value  = b.provider_id || '';
-            document.getElementById('bgtGcpService').value  = b.service_name || '';
+            await onBudgetScopeChange();
+            _selectValue('bgtGcpService', b.service_name || '');
         }
 
         document.getElementById('budgetAlertEmails').value = b.alert_emails || '';
