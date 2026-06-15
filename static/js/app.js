@@ -197,6 +197,7 @@ function navigateTo(page) {
             costsSelectedCloud = '';
             document.querySelectorAll('[data-costs-cloud]').forEach(b =>
                 b.classList.toggle('active', b.dataset.costsCloud === ''));
+            _updateCostsCloudFilters('');
         }
         loadCostsTable();
     }
@@ -892,7 +893,6 @@ let costsSelectedCloud = '';
 let costPageOffset = 0;
 let costPageLimit = 100;
 let costPageTotal = 0;
-let costCompact = false;
 
 // Cost Data multiselect state
 let cdRgOptions  = [];   // string[]
@@ -916,8 +916,20 @@ function cdTogglePanel(key) {
     const panel = document.getElementById(cfg.panel);
     if (!panel) return;
     const wasHidden = panel.hasAttribute('hidden');
-    Object.values(CD_MS).forEach(c => document.getElementById(c.panel)?.setAttribute('hidden', ''));
-    if (wasHidden) { panel.removeAttribute('hidden'); document.getElementById(cfg.search)?.focus(); }
+    Object.values(CD_MS).forEach(c => {
+        const p = document.getElementById(c.panel);
+        if (p) { p.setAttribute('hidden', ''); p.style.left = ''; p.style.right = ''; }
+    });
+    if (wasHidden) {
+        panel.removeAttribute('hidden');
+        // Keep the panel within the viewport horizontally
+        const rect = panel.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+            panel.style.left = 'auto';
+            panel.style.right = '0';
+        }
+        document.getElementById(cfg.search)?.focus();
+    }
 }
 
 function cdRenderList(key) {
@@ -991,7 +1003,7 @@ function populateCdMultiselect(key, options) {
 }
 
 function populateCdAccounts(accounts) {
-    cdAccOptions = [{ id: '__BLANK__', label: '(Blank)' }, ...accounts.map(a => ({ id: a.provider_id, label: a.name || a.provider_id }))];
+    cdAccOptions = [{ id: '__BLANK__', label: '(Blank)' }, ...accounts.map(a => ({ id: a.subscription_id || a.provider_id, label: a.name || a.subscription_id || a.provider_id }))];
     const allowed = new Set(cdAccOptions.map(o => o.id));
     [...cdAccSelected].forEach(s => { if (!allowed.has(s)) cdAccSelected.delete(s); });
     cdRenderList('acc');
@@ -1036,6 +1048,7 @@ function setCostsCloud(btn, cloud) {
 
 async function _updateCostsCloudFilters(cloud) {
     const accountWrap  = document.getElementById('costAccountWrap');
+    const accountLabelEl = document.getElementById('costAccountLabel');
     const rgLabelEl    = document.getElementById('costRGLabel');
     const rgColLabelEl = document.getElementById('costsRGColumnLabel');
     if (!accountWrap) return;
@@ -1043,17 +1056,15 @@ async function _updateCostsCloudFilters(cloud) {
     const resTypeWrap = document.getElementById('costResourceTypeWrap');
     const lbl = rgLabel(cloud); // cloud-aware label from CLOUD_META
 
-    if (cloud === 'aws') {
-        accountWrap.style.display = '';
-        if (resTypeWrap) resTypeWrap.style.display = '';
-        // Populate AWS account multiselect
-        const providers = await fetch('/api/cloud-providers').then(r => r.json()).catch(() => []);
-        const awsAccounts = providers.filter(p => p.provider_type === 'aws');
-        populateCdAccounts(awsAccounts);
-    } else {
-        accountWrap.style.display = 'none';
-        if (resTypeWrap) resTypeWrap.style.display = 'none';
-    }
+    if (resTypeWrap) resTypeWrap.style.display = (cloud === 'aws') ? '' : 'none';
+
+    if (accountLabelEl) accountLabelEl.textContent = cloud ? subLabel(cloud) : 'Account / Subscription';
+
+    // Populate account/subscription multiselect, optionally scoped to the selected cloud
+    const subs = await fetch('/api/subscriptions').then(r => r.json()).catch(() => []);
+    const filtered = cloud ? subs.filter(s => (s.cloud || 'azure').toLowerCase() === cloud) : subs;
+    populateCdAccounts(filtered);
+
     if (rgLabelEl)    rgLabelEl.textContent    = lbl;
     if (rgColLabelEl) rgColLabelEl.textContent = lbl || 'RG / Region / Project';
 }
@@ -1069,18 +1080,33 @@ async function loadCostsTable() {
     if (dateHeader) {
         dateHeader.innerHTML = `${granularity === 'monthly' ? 'Month' : 'Date'} <span id="sort-date" class="sort-indicator">↕</span>`;
     }
+    const isRgGroup = costGroupBy === 'resource_group';
+    const cloudHeader = document.getElementById('costCloudHeader');
+    const rgHeader = document.getElementById('costRGHeader');
+    const serviceHeader = document.getElementById('costServiceHeader');
+    const resourceHeader = document.getElementById('costResourceHeader');
+    const subscriptionHeader = document.getElementById('costSubscriptionHeader');
+    if (serviceHeader) serviceHeader.style.display = isRgGroup ? 'none' : '';
+    if (resourceHeader) resourceHeader.style.display = isRgGroup ? 'none' : '';
+    if (subscriptionHeader) subscriptionHeader.style.display = isRgGroup ? '' : 'none';
+    // Column order: Cloud, Date, [Subscription, Resource Group] or [Resource Group, Service, Resource], Cost
+    if (cloudHeader && dateHeader && cloudHeader.nextElementSibling !== dateHeader) {
+        dateHeader.parentNode.insertBefore(cloudHeader, dateHeader);
+    }
+    if (subscriptionHeader && rgHeader && subscriptionHeader.nextElementSibling !== rgHeader) {
+        rgHeader.parentNode.insertBefore(subscriptionHeader, rgHeader);
+    }
     const rgValues = [...cdRgSelected];
     const serviceValues = [...cdSvcSelected];
-    // AWS account sub-filter
-    const awsAccounts = (costsSelectedCloud === 'aws') ? [...cdAccSelected] : [];
+    const accSelected = [...cdAccSelected];
     const resType = (costsSelectedCloud === 'aws') ? (document.getElementById('costResourceType')?.value || '') : '';
     const activeCloud = costsSelectedCloud || '';
     const includeBlankRG = rgValues.includes('__BLANK__');
     const includeBlankService = serviceValues.includes('__BLANK__');
-    const includeBlankSub = awsAccounts.includes('__BLANK__');
+    const includeBlankSub = accSelected.includes('__BLANK__');
     const rg = rgValues.filter(v => v !== '__BLANK__');
     const services = serviceValues.filter(v => v !== '__BLANK__');
-    const subs = awsAccounts.filter(v => v !== '__BLANK__');
+    const subs = accSelected.filter(v => v !== '__BLANK__');
 
     if (search) params.set('search', search);
     if (dateFrom) params.set('date_from', dateFrom);
@@ -1121,11 +1147,13 @@ async function loadCostsTable() {
 
         const cloudLogoH = { azure: '12', aws: '10', gcp: '12' };
         const cloudNames = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
+        const subNameMap = {};
+        (totalsBySub || []).forEach(s => { subNameMap[s.subscription_id] = s.subscription_name || s.subscription_id; });
         if (!sortedData.length) {
           const hasFilter = (document.getElementById('costSearch')?.value || '') ||
             (document.getElementById('costDateFrom')?.value || '') ||
             costsSelectedCloud;
-          tbody.innerHTML = `<tr><td colspan="6" style="padding:0;border:none">` +
+          tbody.innerHTML = `<tr><td colspan="${isRgGroup ? 5 : 6}" style="padding:0;border:none">` +
             (hasFilter
               ? _emptyState('neutral',
                   '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
@@ -1169,12 +1197,15 @@ async function loadCostsTable() {
                 const resourceTitle = vmName ? `${vmName} (${prettyResourceName})` : (prettyResourceName || '');
                 const rawDate = (r.date || '').toString();
                 const dateOnly = granularity === 'monthly' ? rawDate.slice(0, 7) : rawDate.split('T')[0];
+                const rgCell = `<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.resource_group||''}">${r.resource_group || '-'}</td>`;
+                const middleCells = isRgGroup
+                    ? `<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${subNameMap[r.subscription_id]||''}">${subNameMap[r.subscription_id] || '-'}</td>${rgCell}`
+                    : `${rgCell}<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.service_name||''}">${r.service_name || '-'}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))"><span class="res-link">${resourceDisplay}</span></td>`;
                 return `<tr>
-                <td style="white-space:nowrap;color:var(--text-secondary)">${dateOnly}</td>
                 <td>${cloudCell}</td>
-                <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.resource_group||''}">${r.resource_group || '-'}</td>
-                <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.service_name||''}">${r.service_name || '-'}</td>
-                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))"><span class="res-link">${resourceDisplay}</span></td>
+                <td style="white-space:nowrap;color:var(--text-secondary)">${dateOnly}</td>
+                ${middleCells}
                 <td class="cost-cell">${curSym()}${(r.cost || 0).toFixed(2)}</td>
             </tr>`;
             }).join('');
@@ -1260,23 +1291,6 @@ function changeCostPage(delta) {
     if (nextOffset >= costPageTotal && delta > 0) return;
     costPageOffset = nextOffset;
     loadCostsTable();
-}
-
-function toggleCostCompact() {
-    costCompact = !costCompact;
-    const table = document.getElementById('costsTable');
-    if (table) table.classList.toggle('compact', costCompact);
-}
-
-function setCostDensity(mode, btn) {
-    costCompact = (mode === 'compact');
-    const table = document.getElementById('costsTable');
-    if (table) table.classList.toggle('compact', costCompact);
-    if (btn) {
-        const ctrl = document.getElementById('costDensityCtrl');
-        if (ctrl) ctrl.querySelectorAll('.cp-seg').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-    }
 }
 
 function sortCostsBy(field) {
@@ -2434,15 +2448,15 @@ function exportCSV() {
     const granularity = document.getElementById('costGranularity')?.value || 'monthly';
     const rgValues = [...cdRgSelected];
     const serviceValues = [...cdSvcSelected];
-    const awsAccounts = (costsSelectedCloud === 'aws') ? [...cdAccSelected] : [];
+    const accSelected = [...cdAccSelected];
     const resType = (costsSelectedCloud === 'aws') ? (document.getElementById('costResourceType')?.value || '') : '';
     const activeCloud = costsSelectedCloud || '';
     const includeBlankRG = rgValues.includes('__BLANK__');
     const includeBlankService = serviceValues.includes('__BLANK__');
-    const includeBlankSub = awsAccounts.includes('__BLANK__');
+    const includeBlankSub = accSelected.includes('__BLANK__');
     const rg = rgValues.filter(v => v !== '__BLANK__');
     const services = serviceValues.filter(v => v !== '__BLANK__');
-    const subs = awsAccounts.filter(v => v !== '__BLANK__');
+    const subs = accSelected.filter(v => v !== '__BLANK__');
     if (search) params.set('search', search);
     if (dateFrom) params.set('date_from', dateFrom);
     if (dateTo) params.set('date_to', dateTo);

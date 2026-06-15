@@ -1764,7 +1764,7 @@ def get_distinct_values(column, subscription_id=None, subscription_ids=None, clo
     valid = ["resource_group", "service_name", "resource_type", "meter_category"]
     if column not in valid:
         return []
-    conditions = [f"{column} IS NOT NULL"]
+    conditions = [f"{column} IS NOT NULL", f"TRIM({column}) != ''"]
     params = []
     if subscription_ids:
         placeholders = ",".join(["?"] * len(subscription_ids))

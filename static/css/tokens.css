@@ -291,7 +291,7 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .ch-inline { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); }
 
 /* ── Cost Data page ─────────────────────────────────────────────────────── */
-.cost-filter-strip { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+.cost-filter-strip { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; position: sticky; top: 0; z-index: 40; }
 .cost-filter-field { display: flex; flex-direction: column; gap: 4px; }
 .cost-filter-field--grow { flex: 1 1 200px; }
 .cost-filter-label { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
@@ -306,6 +306,12 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .cost-search-input { flex: 1; border: none; background: transparent; color: var(--text-primary); font-size: 12px; outline: none; min-width: 120px; }
 .cost-search-input::placeholder { color: var(--text-tertiary); }
 
+@media (max-width: 900px) {
+    .cost-filter-strip { position: static; }
+    .cost-filter-field { flex: 1 1 160px; }
+    .cost-filter-field--grow { flex: 1 1 100%; }
+}
+
 .sub-table-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
 .sub-table-card__head { padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
 .sub-table-card__title { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
@@ -318,7 +324,6 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .cost-table tbody tr:nth-child(even) { background: var(--bg-subtle); }
 .cost-table tbody tr:hover { background: var(--bg-hover); }
 .cost-table td { padding: 10px 14px; font-size: 12px; color: var(--text-primary); }
-.cost-table.compact td { padding: 5px 14px; font-size: 11px; }
 .cost-table .cost-cell { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cost-table .cloud-cell { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .cost-table .res-link { color: var(--text-secondary); text-decoration: none; cursor: pointer; }
@@ -430,7 +435,7 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .multiselect__trigger:hover { background: var(--bg-hover); }
 .multiselect__placeholder { color: var(--text-tertiary); flex: 1; text-align: left; }
 .multiselect__summary { color: var(--text-primary); font-weight: 500; flex: 1; text-align: left; }
-.multiselect__panel { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 260px; max-width: 360px; max-height: 260px; overflow: hidden; flex-direction: column; }
+.multiselect__panel { position: absolute; top: calc(100% + 4px); left: 0; z-index: 1000; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 260px; max-width: min(360px, calc(100vw - 40px)); max-height: 260px; overflow: hidden; flex-direction: column; }
 .multiselect__panel:not([hidden]) { display: flex; }
 .multiselect__search { font-size: 12px; padding: 8px 10px; border: none; border-bottom: 1px solid var(--border-subtle); background: transparent; color: var(--text-primary); outline: none; flex-shrink: 0; }
 .multiselect__actions { display: flex; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
