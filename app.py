@@ -5263,9 +5263,9 @@ def api_budget_test_email(budget_id):
     if not budget:
         return jsonify({"error": "Budget not found"}), 404
     try:
-        from budget_manager import _send_email_alert
+        from budget_manager import _send_email_alert, get_current_spend
         ok = _send_email_alert(budget, threshold_pct=budget.get("alert_thresholds", [80])[0],
-                               current_spend=budget.get("spent", 0))
+                               current_spend=get_current_spend(budget))
         if ok:
             return jsonify({"message": "Test email sent successfully"})
         return jsonify({"error": "Email not configured or failed to send. Check SMTP settings in Email Reports."}), 400
