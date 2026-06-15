@@ -3694,10 +3694,15 @@ def api_client_update_schedule(client_id):
     except (TypeError, ValueError):
         schedule_hour = 8
     schedule_hour = max(0, min(23, schedule_hour))
+    try:
+        schedule_minute = int(body.get("schedule_minute") or 0)
+    except (TypeError, ValueError):
+        schedule_minute = 0
+    schedule_minute = max(0, min(59, schedule_minute))
     schedule_tz = "IST" if (body.get("schedule_tz") or "UTC").upper() == "IST" else "UTC"
     if schedule != "none" and not recipients:
         return jsonify({"error": "Recipients are required to enable a schedule"}), 400
-    update_client_schedule(client_id, recipients, schedule, schedule_day, schedule_hour, tid, schedule_tz=schedule_tz)
+    update_client_schedule(client_id, recipients, schedule, schedule_day, schedule_hour, tid, schedule_tz=schedule_tz, schedule_minute=schedule_minute)
     return jsonify({"message": "Schedule saved"})
 
 
@@ -4115,10 +4120,12 @@ def _report_local_now(now_utc, tz):
     return now_utc
 
 
-def _in_hour_slot(local_now, target_hour):
-    """True for the first half of the target hour — paired with the 30-min
-    scheduler tick so each scheduled time fires once."""
-    return local_now.hour == int(target_hour) and local_now.minute < 30
+def _in_hour_slot(local_now, target_hour, target_minute=0):
+    """True when the local clock is in the same 5-minute slot as the scheduled
+    HH:MM — paired with the 5-min scheduler tick so each scheduled time fires once.
+    This gives any-minute precision (e.g. 10:15) and works with IST's :30 offset."""
+    return (local_now.hour == int(target_hour)
+            and (local_now.minute // 5) == (int(target_minute) // 5))
 
 
 def _check_email_schedule():
@@ -4134,11 +4141,12 @@ def _check_email_schedule():
             if settings.get("enabled"):
                 schedule = settings.get("schedule", "weekly")
                 target_hour = settings.get("schedule_hour", 8)
+                target_minute = settings.get("schedule_minute", 0)
                 target_day = settings.get("schedule_day", 1)
                 lnow = _report_local_now(now, settings.get("schedule_tz", "UTC"))
 
                 should_send = False
-                if _in_hour_slot(lnow, target_hour):
+                if _in_hour_slot(lnow, target_hour, target_minute):
                     if schedule == "daily":
                         should_send = True
                     elif schedule == "weekly" and lnow.weekday() == target_day:
@@ -4161,10 +4169,11 @@ def _check_email_schedule():
                     continue
                 cr_schedule = cr["schedule"]
                 cr_hour = cr.get("schedule_hour", 8)
+                cr_minute = cr.get("schedule_minute", 0)
                 cr_day = cr.get("schedule_day", 1)
                 cr_lnow = _report_local_now(now, cr.get("schedule_tz", "UTC"))
                 cr_should_send = False
-                if _in_hour_slot(cr_lnow, cr_hour):
+                if _in_hour_slot(cr_lnow, cr_hour, cr_minute):
                     if cr_schedule == "daily":
                         cr_should_send = True
                     elif cr_schedule == "weekly" and cr_lnow.weekday() == cr_day:
@@ -4186,10 +4195,11 @@ def _check_email_schedule():
             if cl_schedule == "none" or not cl_recipients:
                 continue
             cl_hour = client.get("schedule_hour", 8)
+            cl_minute = client.get("schedule_minute", 0)
             cl_day = client.get("schedule_day", 1)
             cl_lnow = _report_local_now(now, client.get("schedule_tz", "UTC"))
             cl_should_send = False
-            if _in_hour_slot(cl_lnow, cl_hour):
+            if _in_hour_slot(cl_lnow, cl_hour, cl_minute):
                 if cl_schedule == "daily":
                     cl_should_send = True
                 elif cl_schedule == "weekly" and cl_lnow.weekday() == cl_day:
@@ -4212,13 +4222,13 @@ def _check_email_schedule():
 
 
 def _schedule_email_check():
-    """Check every hour if a report needs to be sent."""
+    """Check every 5 minutes if a report needs to be sent."""
     global _email_timer
     if _email_timer:
         _email_timer.cancel()
     try:
-        # 30-min cadence so IST schedules (UTC+5:30) fire at the right :30 slot.
-        _email_timer = threading.Timer(1800, _check_email_schedule)
+        # 5-min cadence so any HH:MM (incl. IST's :30 offset) fires in its slot.
+        _email_timer = threading.Timer(300, _check_email_schedule)
         _email_timer.daemon = True
         _email_timer.start()
     except RuntimeError as e:

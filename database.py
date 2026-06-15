@@ -181,6 +181,7 @@ def init_db():
         ("schedule",             "ALTER TABLE email_settings ADD COLUMN schedule TEXT DEFAULT 'weekly'"),
         ("schedule_day",         "ALTER TABLE email_settings ADD COLUMN schedule_day INTEGER DEFAULT 1"),
         ("schedule_hour",        "ALTER TABLE email_settings ADD COLUMN schedule_hour INTEGER DEFAULT 8"),
+        ("schedule_minute",      "ALTER TABLE email_settings ADD COLUMN schedule_minute INTEGER DEFAULT 0"),
         ("schedule_tz",          "ALTER TABLE email_settings ADD COLUMN schedule_tz TEXT DEFAULT 'UTC'"),
         ("enabled",              "ALTER TABLE email_settings ADD COLUMN enabled INTEGER DEFAULT 0"),
         ("updated_at",           "ALTER TABLE email_settings ADD COLUMN updated_at TEXT DEFAULT ''"),
@@ -235,6 +236,16 @@ def init_db():
         try:
             cursor.execute("ALTER TABLE custom_reports ADD COLUMN schedule_tz TEXT DEFAULT 'UTC'")
             print("[DB] Migrated custom_reports: added schedule_tz column")
+        except Exception:
+            pass
+
+    # Migration: add schedule_minute to custom_reports if missing
+    try:
+        cursor.execute("SELECT schedule_minute FROM custom_reports LIMIT 1")
+    except Exception:
+        try:
+            cursor.execute("ALTER TABLE custom_reports ADD COLUMN schedule_minute INTEGER DEFAULT 0")
+            print("[DB] Migrated custom_reports: added schedule_minute column")
         except Exception:
             pass
 
@@ -707,6 +718,7 @@ def init_db():
         ("schedule",      "ALTER TABLE clients ADD COLUMN schedule TEXT DEFAULT 'none'"),
         ("schedule_day",  "ALTER TABLE clients ADD COLUMN schedule_day INTEGER DEFAULT 1"),
         ("schedule_hour", "ALTER TABLE clients ADD COLUMN schedule_hour INTEGER DEFAULT 8"),
+        ("schedule_minute","ALTER TABLE clients ADD COLUMN schedule_minute INTEGER DEFAULT 0"),
         ("schedule_tz",   "ALTER TABLE clients ADD COLUMN schedule_tz TEXT DEFAULT 'UTC'"),
         ("last_sent",     "ALTER TABLE clients ADD COLUMN last_sent TEXT"),
     ]:
@@ -1850,14 +1862,15 @@ def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups
 def save_custom_report(data, tenant_id=1):
     conn = get_db()
     conn.execute(
-        """INSERT INTO custom_reports (name, recipients, filters, sections, schedule, schedule_day, schedule_hour, schedule_tz, enabled, tenant_id)
-           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        """INSERT INTO custom_reports (name, recipients, filters, sections, schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled, tenant_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
         (data["name"], data.get("recipients", ""),
          json.dumps(data.get("filters", {})),
          json.dumps(data.get("sections", ["summary", "by_service", "by_rg", "trend"])),
          data.get("schedule", "none"),
          data.get("schedule_day", 1),
          data.get("schedule_hour", 8),
+         data.get("schedule_minute", 0),
          data.get("schedule_tz", "UTC"),
          1 if data.get("enabled") else 0,
          tenant_id)
@@ -1915,7 +1928,7 @@ def update_custom_report(rid, data, tenant_id=None):
     fields = []
     params = []
     allowed = ["name", "recipients", "filters", "sections", "schedule",
-               "schedule_day", "schedule_hour", "schedule_tz", "enabled", "last_sent"]
+               "schedule_day", "schedule_hour", "schedule_minute", "schedule_tz", "enabled", "last_sent"]
     for key in allowed:
         if key in data:
             val = data[key]
@@ -1981,7 +1994,7 @@ def update_email_settings(settings, tenant_id=1):
     params = []
     allowed = ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from",
                "smtp_use_tls", "recipients", "schedule", "schedule_day", "schedule_hour",
-               "schedule_tz", "report_date_range", "report_date_from", "report_date_to",
+               "schedule_minute", "schedule_tz", "report_date_range", "report_date_from", "report_date_to",
                "report_cloud_provider", "report_sections", "enabled"]
     for key in allowed:
         if key in settings:
@@ -3504,12 +3517,12 @@ def update_client(client_id: int, name: str, tenant_id: int):
 
 def update_client_schedule(client_id: int, recipients: str, schedule: str,
                            schedule_day: int, schedule_hour: int, tenant_id: int,
-                           schedule_tz: str = "UTC"):
+                           schedule_tz: str = "UTC", schedule_minute: int = 0):
     conn = get_db()
     conn.execute(
-        "UPDATE clients SET recipients=?, schedule=?, schedule_day=?, schedule_hour=?, schedule_tz=? "
+        "UPDATE clients SET recipients=?, schedule=?, schedule_day=?, schedule_hour=?, schedule_minute=?, schedule_tz=? "
         "WHERE id=? AND tenant_id=?",
-        (recipients.strip(), schedule, schedule_day, schedule_hour, schedule_tz, client_id, tenant_id)
+        (recipients.strip(), schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, client_id, tenant_id)
     )
     conn.commit()
     conn.close()
