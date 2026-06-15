@@ -248,7 +248,7 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .budget-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
 @media (max-width: 900px) { .budget-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 600px) { .budget-grid { grid-template-columns: 1fr; } }
-.budget-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 16px; }
+.budget-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 16px; min-width: 0; overflow: hidden; }
 .budget-card--at_risk  { border-color: rgba(186,117,23,0.35); }
 .budget-card--exceeded { border-color: rgba(163,45,45,0.35); }
 .budget-card__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 8px; }
