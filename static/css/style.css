@@ -764,6 +764,17 @@ tr:hover { background: rgba(79, 110, 247, 0.05); }
     border-color: var(--accent);
 }
 
+/* Native time picker: make the clock icon clearly visible on the dark input */
+input[type="time"].filter-input::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.9;
+    cursor: pointer;
+    padding: 2px;
+}
+input[type="time"].filter-input::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
 select.filter-input option {
     background-color: var(--bg-input);
     color: var(--text-primary);
