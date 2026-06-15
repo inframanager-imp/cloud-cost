@@ -14,6 +14,20 @@ async function loadTenantCurrency() {
         if (c && c.symbol) window.TENANT_CUR = { code: c.code || 'USD', symbol: c.symbol };
     } catch (e) { /* keep default $ */ }
 }
+
+// ─── Schedule hour dropdowns (full 24-hour list) ────────────────────────────
+function _hourLabel(h) {
+    const ampm = h < 12 ? 'AM' : 'PM';
+    const h12 = (h % 12) === 0 ? 12 : (h % 12);
+    return `${h12}:00 ${ampm}`;
+}
+function fillHourSelects() {
+    const opts = Array.from({ length: 24 }, (_, h) => `<option value="${h}">${_hourLabel(h)}</option>`).join('');
+    ['emScheduleHour', 'crScheduleHour', 'clientReportScheduleHour'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.options.length !== 24) { el.innerHTML = opts; el.value = '8'; }
+    });
+}
 let syncInterval = null;
 let selectedSubscription = '';
 let selectedCloud = '';          // '' | 'azure' | 'aws' | 'gcp'
@@ -4243,6 +4257,7 @@ async function loadReportsPage() {
         document.getElementById('emSchedule').value = settings.schedule || 'weekly';
         document.getElementById('emScheduleDay').value = settings.schedule_day ?? 1;
         document.getElementById('emScheduleHour').value = settings.schedule_hour ?? 8;
+        document.getElementById('emScheduleTz').value = settings.schedule_tz || 'UTC';
         document.getElementById('emEnabled').checked = settings.enabled || false;
         document.getElementById('emReportDateRange').value = settings.report_date_range || 'this_month';
         document.getElementById('emReportDateFrom').value = settings.report_date_from || '';
@@ -4305,6 +4320,7 @@ async function saveReportSettings() {
         schedule: document.getElementById('emSchedule').value,
         schedule_day: parseInt(document.getElementById('emScheduleDay').value),
         schedule_hour: parseInt(document.getElementById('emScheduleHour').value),
+        schedule_tz: document.getElementById('emScheduleTz').value,
         report_date_range: document.getElementById('emReportDateRange').value,
         report_date_from: document.getElementById('emReportDateFrom').value,
         report_date_to: document.getElementById('emReportDateTo').value,
@@ -4456,7 +4472,7 @@ async function loadCustomReportsList() {
             if (fl.resource_groups?.length) tags.push(`${fl.resource_groups.length} RGs`);
             if (fl.services?.length) tags.push(`${fl.services.length} svcs`);
             tags.push(fl.date_range || 'this_month');
-            const schedBadge = r.schedule === 'none' ? 'Manual' : `${r.schedule} @ ${r.schedule_hour}:00`;
+            const schedBadge = r.schedule === 'none' ? 'Manual' : `${r.schedule} @ ${r.schedule_hour}:00 ${r.schedule_tz || 'UTC'}`;
             const statusDot = r.enabled && r.schedule !== 'none' ? '<span class="auto-sync-dot on"></span>' : '<span class="auto-sync-dot off"></span>';
             const lastSent = r.last_sent ? new Date(r.last_sent + 'Z').toLocaleString() : 'Never';
             return `<div class="saved-filter-card" style="margin-bottom:8px">
@@ -4498,6 +4514,7 @@ async function openCustomReportBuilder(editData) {
     document.getElementById('crSchedule').value = 'none';
     document.getElementById('crScheduleDay').value = '1';
     document.getElementById('crScheduleHour').value = '8';
+    document.getElementById('crScheduleTz').value = 'UTC';
     document.getElementById('crEnabled').checked = false;
     crSelectedSubs.clear();
     crSelectedRgs.clear();
@@ -4538,6 +4555,7 @@ async function openCustomReportBuilder(editData) {
         document.getElementById('crSchedule').value = editData.schedule || 'none';
         document.getElementById('crScheduleDay').value = editData.schedule_day ?? 1;
         document.getElementById('crScheduleHour').value = editData.schedule_hour ?? 8;
+        document.getElementById('crScheduleTz').value = editData.schedule_tz || 'UTC';
         document.getElementById('crEnabled').checked = editData.enabled || false;
 
         (fl.subscription_ids || []).forEach(id => { if (crSubOptions.includes(id)) crSelectedSubs.add(id); });
@@ -4641,6 +4659,7 @@ async function saveCRBuilder() {
         schedule: document.getElementById('crSchedule').value,
         schedule_day: parseInt(document.getElementById('crScheduleDay').value),
         schedule_hour: parseInt(document.getElementById('crScheduleHour').value),
+        schedule_tz: document.getElementById('crScheduleTz').value,
         enabled: document.getElementById('crEnabled').checked,
     };
 
@@ -5359,6 +5378,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     _scLoadStatus();     // update sidebar global status
     await initCloudFilter();   // hide cloud UI for unconnected clouds (before first page render)
     await loadTenantCurrency(); // load tenant reporting currency before first render
+    fillHourSelects();         // populate schedule hour dropdowns with full 24h
     populateClientDropdowns();
     _initNavContextMenu();
     // Restore page from URL hash (refresh) or ?page= query param, else default to executive
@@ -6226,6 +6246,7 @@ function openClientReportModal() {
     document.getElementById('clientReportSchedule').value = client.schedule || 'none';
     document.getElementById('clientReportScheduleDay').value = client.schedule_day ?? 1;
     document.getElementById('clientReportScheduleHour').value = client.schedule_hour ?? 8;
+    document.getElementById('clientReportScheduleTz').value = client.schedule_tz || 'UTC';
     onClientScheduleChange();
 
     const lastSentEl = document.getElementById('clientScheduleLastSent');
@@ -6261,7 +6282,8 @@ async function saveClientReportSchedule() {
                 recipients,
                 schedule,
                 schedule_day: parseInt(document.getElementById('clientReportScheduleDay').value),
-                schedule_hour: parseInt(document.getElementById('clientReportScheduleHour').value)
+                schedule_hour: parseInt(document.getElementById('clientReportScheduleHour').value),
+                schedule_tz: document.getElementById('clientReportScheduleTz').value
             })
         });
         const data = await resp.json();

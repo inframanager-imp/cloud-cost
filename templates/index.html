@@ -1438,11 +1438,14 @@
                             </select>
                         </div>
                         <div class="email-field" style="flex:1" id="clientScheduleHourGroup">
-                            <label>Hour (UTC)</label>
-                            <select id="clientReportScheduleHour" class="filter-input">
-                                <option value="6">6 AM</option><option value="7">7 AM</option>
-                                <option value="8" selected>8 AM</option><option value="9">9 AM</option>
-                                <option value="10">10 AM</option><option value="12">12 PM</option><option value="18">6 PM</option>
+                            <label>Hour</label>
+                            <select id="clientReportScheduleHour" class="filter-input"></select>
+                        </div>
+                        <div class="email-field" style="flex:1">
+                            <label>Timezone</label>
+                            <select id="clientReportScheduleTz" class="filter-input">
+                                <option value="UTC" selected>UTC</option>
+                                <option value="IST">IST (UTC+5:30)</option>
                             </select>
                         </div>
                     </div>
@@ -1854,15 +1857,14 @@
                             </select>
                         </div>
                         <div class="email-field" style="flex:1">
-                            <label>Hour (UTC)</label>
-                            <select id="emScheduleHour" class="filter-input">
-                                <option value="6">6:00 AM</option>
-                                <option value="7">7:00 AM</option>
-                                <option value="8">8:00 AM</option>
-                                <option value="9">9:00 AM</option>
-                                <option value="10">10:00 AM</option>
-                                <option value="12">12:00 PM</option>
-                                <option value="18">6:00 PM</option>
+                            <label>Hour</label>
+                            <select id="emScheduleHour" class="filter-input"></select>
+                        </div>
+                        <div class="email-field" style="flex:1">
+                            <label>Timezone</label>
+                            <select id="emScheduleTz" class="filter-input">
+                                <option value="UTC" selected>UTC</option>
+                                <option value="IST">IST (UTC+5:30)</option>
                             </select>
                         </div>
                     </div>
@@ -2026,11 +2028,14 @@
                             </select>
                         </div>
                         <div class="email-field" style="flex:1" id="crHourGroup">
-                            <label>Hour (UTC)</label>
-                            <select id="crScheduleHour" class="filter-input">
-                                <option value="6">6 AM</option><option value="7">7 AM</option>
-                                <option value="8" selected>8 AM</option><option value="9">9 AM</option>
-                                <option value="10">10 AM</option><option value="12">12 PM</option><option value="18">6 PM</option>
+                            <label>Hour</label>
+                            <select id="crScheduleHour" class="filter-input"></select>
+                        </div>
+                        <div class="email-field" style="flex:1">
+                            <label>Timezone</label>
+                            <select id="crScheduleTz" class="filter-input">
+                                <option value="UTC" selected>UTC</option>
+                                <option value="IST">IST (UTC+5:30)</option>
                             </select>
                         </div>
                     </div>

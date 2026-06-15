@@ -3694,9 +3694,10 @@ def api_client_update_schedule(client_id):
     except (TypeError, ValueError):
         schedule_hour = 8
     schedule_hour = max(0, min(23, schedule_hour))
+    schedule_tz = "IST" if (body.get("schedule_tz") or "UTC").upper() == "IST" else "UTC"
     if schedule != "none" and not recipients:
         return jsonify({"error": "Recipients are required to enable a schedule"}), 400
-    update_client_schedule(client_id, recipients, schedule, schedule_day, schedule_hour, tid)
+    update_client_schedule(client_id, recipients, schedule, schedule_day, schedule_hour, tid, schedule_tz=schedule_tz)
     return jsonify({"message": "Schedule saved"})
 
 
@@ -4107,6 +4108,19 @@ def api_auto_sync_run_now():
 
 _email_timer = None
 
+def _report_local_now(now_utc, tz):
+    """Current time in the report's chosen timezone (UTC or IST)."""
+    if (tz or "UTC").upper() == "IST":
+        return now_utc + timedelta(hours=5, minutes=30)
+    return now_utc
+
+
+def _in_hour_slot(local_now, target_hour):
+    """True for the first half of the target hour — paired with the 30-min
+    scheduler tick so each scheduled time fires once."""
+    return local_now.hour == int(target_hour) and local_now.minute < 30
+
+
 def _check_email_schedule():
     """Check if it's time to send a scheduled report, then reschedule."""
     global _email_timer
@@ -4121,14 +4135,15 @@ def _check_email_schedule():
                 schedule = settings.get("schedule", "weekly")
                 target_hour = settings.get("schedule_hour", 8)
                 target_day = settings.get("schedule_day", 1)
+                lnow = _report_local_now(now, settings.get("schedule_tz", "UTC"))
 
                 should_send = False
-                if now.hour == target_hour:
+                if _in_hour_slot(lnow, target_hour):
                     if schedule == "daily":
                         should_send = True
-                    elif schedule == "weekly" and now.weekday() == target_day:
+                    elif schedule == "weekly" and lnow.weekday() == target_day:
                         should_send = True
-                    elif schedule == "monthly" and now.day == 1:
+                    elif schedule == "monthly" and lnow.day == 1:
                         should_send = True
 
                 if should_send:
@@ -4147,13 +4162,14 @@ def _check_email_schedule():
                 cr_schedule = cr["schedule"]
                 cr_hour = cr.get("schedule_hour", 8)
                 cr_day = cr.get("schedule_day", 1)
+                cr_lnow = _report_local_now(now, cr.get("schedule_tz", "UTC"))
                 cr_should_send = False
-                if now.hour == cr_hour:
+                if _in_hour_slot(cr_lnow, cr_hour):
                     if cr_schedule == "daily":
                         cr_should_send = True
-                    elif cr_schedule == "weekly" and now.weekday() == cr_day:
+                    elif cr_schedule == "weekly" and cr_lnow.weekday() == cr_day:
                         cr_should_send = True
-                    elif cr_schedule == "monthly" and now.day == 1:
+                    elif cr_schedule == "monthly" and cr_lnow.day == 1:
                         cr_should_send = True
                 if cr_should_send:
                     try:
@@ -4171,13 +4187,14 @@ def _check_email_schedule():
                 continue
             cl_hour = client.get("schedule_hour", 8)
             cl_day = client.get("schedule_day", 1)
+            cl_lnow = _report_local_now(now, client.get("schedule_tz", "UTC"))
             cl_should_send = False
-            if now.hour == cl_hour:
+            if _in_hour_slot(cl_lnow, cl_hour):
                 if cl_schedule == "daily":
                     cl_should_send = True
-                elif cl_schedule == "weekly" and now.weekday() == cl_day:
+                elif cl_schedule == "weekly" and cl_lnow.weekday() == cl_day:
                     cl_should_send = True
-                elif cl_schedule == "monthly" and now.day == 1:
+                elif cl_schedule == "monthly" and cl_lnow.day == 1:
                     cl_should_send = True
             if cl_should_send:
                 try:
@@ -4200,7 +4217,8 @@ def _schedule_email_check():
     if _email_timer:
         _email_timer.cancel()
     try:
-        _email_timer = threading.Timer(3600, _check_email_schedule)
+        # 30-min cadence so IST schedules (UTC+5:30) fire at the right :30 slot.
+        _email_timer = threading.Timer(1800, _check_email_schedule)
         _email_timer.daemon = True
         _email_timer.start()
     except RuntimeError as e:
