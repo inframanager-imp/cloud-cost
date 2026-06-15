@@ -215,6 +215,7 @@ function navigateTo(page) {
     if (page === 'cloud-providers') loadCloudProvidersPage();
     if (page === 'team') loadTeamPage();
     if (page === 'clients') loadClientsPage();
+    if (page === 'othercosts') loadOtherCostsPage();
 }
 
 function subParam(prefix = '?') {
@@ -6793,6 +6794,201 @@ async function deleteClientById(id, name) {
         loadClientsPage();
         populateClientDropdowns();
     } catch(e) {
+        showToast('Delete failed: ' + e.message, 'error');
+    }
+}
+
+// ─── Other Costs (manually-added tools/subscriptions) ───────────────────────
+
+const MC_CUR_SYMBOLS = { USD:'$', INR:'₹', EUR:'€', GBP:'£', AUD:'A$', CAD:'C$', SGD:'S$', AED:'AED ', JPY:'¥' };
+function _mcSymbol(code) { return MC_CUR_SYMBOLS[(code || 'USD').toUpperCase()] || ((code || '') + ' '); }
+function _mcMoney(v, sym) { return sym + Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+let _mcData = null;
+let _mcCategories = null;
+
+async function _populateMcClientFilter() {
+    try {
+        const clients = await fetch('/api/clients').then(r => r.json());
+        const filterEl = document.getElementById('mcClientFilter');
+        const formEl = document.getElementById('mcClient');
+        const opts = clients.map(c => `<option value="${c.id}">${_esc(c.name)}</option>`).join('');
+        if (filterEl) {
+            const cur = filterEl.value;
+            filterEl.innerHTML = `<option value="">All Clients</option><option value="none">General / Unassigned</option>` + opts;
+            filterEl.value = cur;
+        }
+        if (formEl) formEl.innerHTML = `<option value="">General / Unassigned</option>` + opts;
+    } catch (e) { /* keep existing options */ }
+}
+
+async function _populateMcCategories() {
+    if (_mcCategories) return _mcCategories;
+    try {
+        _mcCategories = await fetch('/api/manual-costs/categories').then(r => r.json());
+    } catch (e) {
+        _mcCategories = ['Other'];
+    }
+    const sel = document.getElementById('mcCategory');
+    if (sel) sel.innerHTML = _mcCategories.map(c => `<option value="${_esc(c)}">${_esc(c)}</option>`).join('');
+    return _mcCategories;
+}
+
+async function loadOtherCostsPage() {
+    const monthEl = document.getElementById('mcMonth');
+    if (monthEl && !monthEl.value) {
+        const now = new Date();
+        monthEl.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+    await _populateMcClientFilter();
+    await _populateMcCategories();
+
+    const month = monthEl ? monthEl.value : '';
+    const clientId = document.getElementById('mcClientFilter')?.value || '';
+    const params = new URLSearchParams();
+    if (month) params.set('month', month);
+    if (clientId) params.set('client_id', clientId);
+
+    const tbody = document.getElementById('mcTableBody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-secondary)">Loading…</td></tr>`;
+    try {
+        _mcData = await fetch(`/api/manual-costs?${params}`).then(r => r.json());
+        _renderOtherCosts(_mcData);
+    } catch (e) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--red)">Failed to load.</td></tr>`;
+    }
+}
+
+function _renderOtherCosts(data) {
+    const sym = data.symbol || curSym();
+    const totalEl = document.getElementById('mcTotal');
+    const countEl = document.getElementById('mcCount');
+    const catEl = document.getElementById('mcByCategory');
+    if (totalEl) totalEl.textContent = _mcMoney(data.total, sym);
+    if (countEl) countEl.textContent = data.items.length;
+
+    if (catEl) {
+        if (!data.by_category.length) {
+            catEl.innerHTML = `<div style="font-size:12px;color:var(--text-secondary)">No data yet</div>`;
+        } else {
+            const max = data.by_category[0].cost || 1;
+            catEl.innerHTML = data.by_category.map(c => `
+                <div style="display:flex;align-items:center;gap:8px">
+                    <span style="font-size:12px;color:var(--text-primary);min-width:200px">${_esc(c.category)}</span>
+                    <div style="flex:1;background:var(--bg-input,#eee);border-radius:4px;height:8px;overflow:hidden">
+                        <div style="height:100%;width:${Math.max(3, c.cost / max * 100)}%;background:var(--accent)"></div>
+                    </div>
+                    <span style="font-size:12px;font-weight:500;color:var(--text-primary);min-width:90px;text-align:right">${_mcMoney(c.cost, sym)}</span>
+                </div>`).join('');
+        }
+    }
+
+    const tbody = document.getElementById('mcTableBody');
+    if (!tbody) return;
+    if (!data.items.length) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-secondary)">No other costs for this month. Click <strong>+ Add Cost</strong> to add one.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = data.items.map(it => `
+        <tr>
+            <td>${_esc(it.client_name || 'General')}</td>
+            <td>${_esc(it.item_name)}</td>
+            <td>${_esc(it.category)}</td>
+            <td style="text-align:right;white-space:nowrap">${_mcMoney(it.amount, _mcSymbol(it.currency))} <span style="color:var(--text-secondary);font-size:11px">${it.currency}</span></td>
+            <td style="text-align:right;white-space:nowrap">${_mcMoney(it.amount_converted, sym)}</td>
+            <td>${it.recurring ? '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--accent-subtle,rgba(79,110,247,.12));color:var(--accent)">Monthly</span>' : ''}</td>
+            <td style="font-size:12px;color:var(--text-secondary)">${_esc(it.notes || '')}</td>
+            <td>
+                <div style="display:flex;gap:4px">
+                    <button class="btn-mini" onclick="openManualCostForm(${it.id})" title="Edit">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="btn-mini" onclick="deleteManualCost(${it.id})" title="Delete" style="color:var(--red)">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                    </button>
+                </div>
+            </td>
+        </tr>`).join('');
+}
+
+async function openManualCostForm(id) {
+    await _populateMcClientFilter();
+    await _populateMcCategories();
+
+    document.getElementById('mcEditId').value = id || '';
+    document.getElementById('mcFormTitle').textContent = id ? 'Edit Other Cost' : 'Add Other Cost';
+
+    if (id) {
+        const item = (_mcData?.items || []).find(i => i.id === id);
+        if (item) {
+            document.getElementById('mcClient').value = item.client_id || '';
+            document.getElementById('mcCategory').value = item.category;
+            document.getElementById('mcItemName').value = item.item_name;
+            document.getElementById('mcAmount').value = item.amount;
+            document.getElementById('mcCurrency').value = item.currency;
+            document.getElementById('mcFormMonth').value = (item.cost_month || '').slice(0, 7);
+            document.getElementById('mcRecurring').checked = !!item.recurring;
+            document.getElementById('mcNotes').value = item.notes || '';
+        }
+    } else {
+        const filterClient = document.getElementById('mcClientFilter')?.value || '';
+        document.getElementById('mcClient').value = (filterClient && filterClient !== 'none') ? filterClient : '';
+        document.getElementById('mcItemName').value = '';
+        document.getElementById('mcAmount').value = '';
+        document.getElementById('mcCurrency').value = (window.TENANT_CUR && window.TENANT_CUR.code) || 'USD';
+        document.getElementById('mcFormMonth').value = document.getElementById('mcMonth')?.value || '';
+        document.getElementById('mcRecurring').checked = false;
+        document.getElementById('mcNotes').value = '';
+        if (_mcCategories && _mcCategories.length) document.getElementById('mcCategory').value = _mcCategories[0];
+    }
+
+    document.getElementById('mcFormModal').style.display = 'flex';
+}
+
+function closeManualCostForm() {
+    document.getElementById('mcFormModal').style.display = 'none';
+}
+
+async function saveManualCost() {
+    const id = document.getElementById('mcEditId').value;
+    const body = {
+        client_id: document.getElementById('mcClient').value || null,
+        item_name: document.getElementById('mcItemName').value.trim(),
+        category: document.getElementById('mcCategory').value,
+        amount: parseFloat(document.getElementById('mcAmount').value) || 0,
+        currency: document.getElementById('mcCurrency').value,
+        cost_month: document.getElementById('mcFormMonth').value,
+        recurring: document.getElementById('mcRecurring').checked,
+        notes: document.getElementById('mcNotes').value.trim(),
+    };
+    if (!body.item_name || !body.cost_month) {
+        showToast('Item name and month are required', 'error');
+        return;
+    }
+    try {
+        const resp = await fetch(id ? `/api/manual-costs/${id}` : '/api/manual-costs', {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!resp.ok) { showToast(data.error || 'Save failed', 'error'); return; }
+        showToast('Saved', 'success');
+        closeManualCostForm();
+        loadOtherCostsPage();
+    } catch (e) {
+        showToast('Save failed: ' + e.message, 'error');
+    }
+}
+
+async function deleteManualCost(id) {
+    if (!confirm('Delete this cost item?')) return;
+    try {
+        const resp = await fetch(`/api/manual-costs/${id}`, { method: 'DELETE' });
+        if (!resp.ok) { showToast('Delete failed', 'error'); return; }
+        showToast('Deleted', 'success');
+        loadOtherCostsPage();
+    } catch (e) {
         showToast('Delete failed: ' + e.message, 'error');
     }
 }

@@ -164,6 +164,14 @@
             <span class="nav-text">Clients</span>
         </div>
 
+        <div class="nav-item" data-page="othercosts" onclick="navigateTo('othercosts')">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M9 2h6l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z"/>
+                <path d="M14 2v5h5"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>
+            </svg>
+            <span class="nav-text">Other Costs</span>
+        </div>
+
         <!-- ── Operations ──────────────────────────── -->
         <div class="nav-section-label" style="border-top:1px solid var(--border)">Operations</div>
 
@@ -1490,6 +1498,145 @@
             </div>
 
         </div>
+    </section>
+
+    <!-- ═══ Other Costs Page ══════════════════════════════════════════════ -->
+    <section id="page-othercosts" class="page-section">
+
+        <div class="db-header">
+            <div class="db-header-left">
+                <div class="db-breadcrumb">ANALYTICS / OTHER COSTS</div>
+                <h1 class="db-title">Other Costs &amp; Tools</h1>
+                <div class="db-sync-line">
+                    <span style="font-size:12px;color:var(--text-secondary)">Manually tracked tools, licenses &amp; subscriptions not visible to cloud billing — included in client reports</span>
+                </div>
+            </div>
+            <button class="cp-btn-primary" onclick="openManualCostForm()" style="height:36px">+ Add Cost</button>
+        </div>
+
+        <!-- Filter bar -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:8px">
+                <label style="font-size:12px;color:var(--text-secondary)">Month</label>
+                <input type="month" id="mcMonth" class="filter-input" style="font-size:12px;height:30px" onchange="loadOtherCostsPage()">
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+                <label style="font-size:12px;color:var(--text-secondary)">Client</label>
+                <select id="mcClientFilter" class="filter-input" style="font-size:12px;height:30px" onchange="loadOtherCostsPage()">
+                    <option value="">All Clients</option>
+                    <option value="none">General / Unassigned</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Summary cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:16px">
+            <div class="db-card" style="padding:16px">
+                <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">Total Other Costs</div>
+                <div style="font-size:24px;font-weight:600;color:var(--text-primary);margin-top:6px" id="mcTotal">—</div>
+            </div>
+            <div class="db-card" style="padding:16px">
+                <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em">Items</div>
+                <div style="font-size:24px;font-weight:600;color:var(--text-primary);margin-top:6px" id="mcCount">—</div>
+            </div>
+            <div class="db-card" style="padding:16px;grid-column:span 2">
+                <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">By Category</div>
+                <div id="mcByCategory" style="display:flex;flex-direction:column;gap:6px">
+                    <div style="font-size:12px;color:var(--text-secondary)">No data yet</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-container" style="overflow-x:auto">
+            <table class="cost-table" style="min-width:760px">
+                <thead>
+                    <tr>
+                        <th>Client</th>
+                        <th>Item</th>
+                        <th>Category</th>
+                        <th style="text-align:right">Amount</th>
+                        <th style="text-align:right">Converted</th>
+                        <th>Recurring</th>
+                        <th>Notes</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="mcTableBody">
+                    <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-secondary)">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Add/Edit modal -->
+        <div id="mcFormModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+            <div style="background:var(--bg-card,#fff);border-radius:12px;padding:28px;width:460px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+                <div style="font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:16px" id="mcFormTitle">Add Other Cost</div>
+                <input type="hidden" id="mcEditId" value="">
+
+                <div class="email-field-row" style="margin-bottom:12px">
+                    <div class="email-field" style="flex:1">
+                        <label>Client</label>
+                        <select id="mcClient" class="filter-input">
+                            <option value="">General / Unassigned</option>
+                        </select>
+                    </div>
+                    <div class="email-field" style="flex:1">
+                        <label>Category</label>
+                        <select id="mcCategory" class="filter-input"></select>
+                    </div>
+                </div>
+
+                <div class="email-field" style="margin-bottom:12px">
+                    <label>Item Name</label>
+                    <input type="text" id="mcItemName" class="filter-input" placeholder="e.g. Datadog, Zoom, GitHub Enterprise">
+                </div>
+
+                <div class="email-field-row" style="margin-bottom:12px">
+                    <div class="email-field" style="flex:1">
+                        <label>Amount</label>
+                        <input type="number" id="mcAmount" class="filter-input" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="email-field" style="flex:1">
+                        <label>Currency</label>
+                        <select id="mcCurrency" class="filter-input">
+                            <option value="USD">USD</option>
+                            <option value="INR">INR</option>
+                            <option value="EUR">EUR</option>
+                            <option value="GBP">GBP</option>
+                            <option value="AUD">AUD</option>
+                            <option value="CAD">CAD</option>
+                            <option value="SGD">SGD</option>
+                            <option value="AED">AED</option>
+                            <option value="JPY">JPY</option>
+                        </select>
+                    </div>
+                    <div class="email-field" style="flex:1">
+                        <label>Month</label>
+                        <input type="month" id="mcFormMonth" class="filter-input">
+                    </div>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="mcRecurring">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size:13px;color:var(--text-primary)">Recurring every month</span>
+                </div>
+
+                <div class="email-field" style="margin-bottom:4px">
+                    <label>Notes (optional)</label>
+                    <input type="text" id="mcNotes" class="filter-input" placeholder="e.g. Annual license, renews in March">
+                </div>
+
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+                    <button class="cp-btn-secondary" onclick="closeManualCostForm()">Cancel</button>
+                    <button class="cp-btn-primary" onclick="saveManualCost()">Save</button>
+                </div>
+            </div>
+        </div>
+
     </section>
 
     <!-- ═══ Activity Log Page ═════════════════════════════════════════════ -->

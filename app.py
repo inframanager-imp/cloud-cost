@@ -58,6 +58,9 @@ from database import (
     get_client_mappings, upsert_client_mappings, get_client_costs,
     update_client_schedule, mark_client_report_sent, get_scheduled_clients,
     build_client_sql_filter, get_client_filter_values,
+    # Manually-added costs
+    MANUAL_COST_CATEGORIES, create_manual_cost, update_manual_cost, delete_manual_cost,
+    get_manual_costs, get_manual_cost,
     # AWS CloudFormation connect
     get_or_create_aws_external_id, save_aws_handshake, get_aws_connection_status,
     # AWS one-click setup tokens
@@ -3640,6 +3643,120 @@ def api_client_costs(client_id):
     return jsonify(get_client_costs(client_id, date_from, date_to, tid))
 
 
+def _manual_costs_with_summary(tenant_id, client_id=None, month=None):
+    """Manual cost entries plus totals converted to the tenant's reporting currency."""
+    from currency import convert, get_rates, tenant_reporting_currency, symbol as _cur_symbol
+    rep_cur = tenant_reporting_currency(tenant_id, get_db)
+    rates = get_rates()
+    items = get_manual_costs(tenant_id, client_id=client_id, month=month)
+    by_category = {}
+    by_client = {}
+    total = 0.0
+    for it in items:
+        conv = convert(it["amount"], it["currency"], rep_cur, rates)
+        it["amount_converted"] = round(conv, 2)
+        total += conv
+        by_category[it["category"]] = by_category.get(it["category"], 0) + conv
+        cname = it.get("client_name") or "General / Unassigned"
+        by_client[cname] = by_client.get(cname, 0) + conv
+    return {
+        "items": items,
+        "total": round(total, 2),
+        "currency": rep_cur,
+        "symbol": _cur_symbol(rep_cur),
+        "by_category": [{"category": k, "cost": round(v, 2)} for k, v in sorted(by_category.items(), key=lambda x: -x[1])],
+        "by_client": [{"client": k, "cost": round(v, 2)} for k, v in sorted(by_client.items(), key=lambda x: -x[1])],
+    }
+
+
+@app.route("/api/manual-costs/categories", methods=["GET"])
+@login_required
+def api_manual_cost_categories():
+    return jsonify(MANUAL_COST_CATEGORIES)
+
+
+@app.route("/api/manual-costs", methods=["GET"])
+@login_required
+def api_list_manual_costs():
+    tid = current_tenant_id()
+    month = (request.args.get("month") or "").strip() or datetime.utcnow().strftime("%Y-%m")
+    client_id = request.args.get("client_id")
+    if client_id == "none":
+        client_id = -1  # no manual_costs row ever has client_id=-1, so this yields no rows
+    elif client_id:
+        client_id = int(client_id)
+    else:
+        client_id = None
+    month_full = f"{month}-01"
+    return jsonify(_manual_costs_with_summary(tid, client_id=client_id, month=month_full))
+
+
+@app.route("/api/manual-costs", methods=["POST"])
+@login_required
+def api_create_manual_cost():
+    tid = current_tenant_id()
+    body = request.get_json(silent=True) or {}
+    item_name = (body.get("item_name") or "").strip()
+    cost_month = (body.get("cost_month") or "").strip()
+    if not item_name or not cost_month:
+        return jsonify({"error": "item_name and cost_month are required"}), 400
+    if len(cost_month) == 7:
+        cost_month = f"{cost_month}-01"
+    client_id = body.get("client_id")
+    if client_id:
+        client_id = int(client_id)
+        if not get_client(client_id, tid):
+            return jsonify({"error": "Invalid client"}), 400
+    else:
+        client_id = None
+    mc_id = create_manual_cost({
+        "client_id": client_id, "item_name": item_name,
+        "category": body.get("category"), "amount": body.get("amount"),
+        "currency": body.get("currency"), "cost_month": cost_month,
+        "recurring": body.get("recurring"), "notes": body.get("notes", ""),
+    }, tid)
+    return jsonify({"id": mc_id}), 201
+
+
+@app.route("/api/manual-costs/<int:mc_id>", methods=["PUT"])
+@login_required
+def api_update_manual_cost(mc_id):
+    tid = current_tenant_id()
+    if not get_manual_cost(mc_id, tid):
+        return jsonify({"error": "Not found"}), 404
+    body = request.get_json(silent=True) or {}
+    item_name = (body.get("item_name") or "").strip()
+    cost_month = (body.get("cost_month") or "").strip()
+    if not item_name or not cost_month:
+        return jsonify({"error": "item_name and cost_month are required"}), 400
+    if len(cost_month) == 7:
+        cost_month = f"{cost_month}-01"
+    client_id = body.get("client_id")
+    if client_id:
+        client_id = int(client_id)
+        if not get_client(client_id, tid):
+            return jsonify({"error": "Invalid client"}), 400
+    else:
+        client_id = None
+    update_manual_cost(mc_id, {
+        "client_id": client_id, "item_name": item_name,
+        "category": body.get("category"), "amount": body.get("amount"),
+        "currency": body.get("currency"), "cost_month": cost_month,
+        "recurring": body.get("recurring"), "notes": body.get("notes", ""),
+    }, tid)
+    return jsonify({"message": "Updated"})
+
+
+@app.route("/api/manual-costs/<int:mc_id>", methods=["DELETE"])
+@login_required
+def api_delete_manual_cost(mc_id):
+    tid = current_tenant_id()
+    if not get_manual_cost(mc_id, tid):
+        return jsonify({"error": "Not found"}), 404
+    delete_manual_cost(mc_id, tid)
+    return jsonify({"message": "Deleted"})
+
+
 def _send_client_cost_report(client, tenant_id, recipients, date_from=None, date_to=None, report_type="client"):
     """Build and email a client cost report. Returns the email subject on success."""
     today = datetime.utcnow()
@@ -3648,6 +3765,7 @@ def _send_client_cost_report(client, tenant_id, recipients, date_from=None, date
     client = dict(client)
     client["mappings"] = get_client_mappings(client["id"])
     cost_data = get_client_costs(client["id"], date_from, date_to, tenant_id)
+    cost_data["manual_costs"] = _manual_costs_with_summary(tenant_id, client_id=client["id"], month=f"{date_to[:7]}-01")
     html = build_client_report_html(client, cost_data, date_from, date_to)
     subject = f"Client Cost Report — {client['name']} ({date_from} to {date_to})"
     send_report_email(recipients=recipients, subject=subject, html_body=html, report_type=report_type, tenant_id=tenant_id or 1)

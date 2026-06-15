@@ -762,6 +762,27 @@ def init_db():
     except Exception as e:
         print(f"[DB] client_mappings migration: {e}")
 
+    # ── Manually-added costs (tools/subscriptions not visible to cloud APIs) ─
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS manual_costs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id INTEGER NOT NULL DEFAULT 1,
+            client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+            item_name TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'Other',
+            amount REAL NOT NULL DEFAULT 0,
+            currency TEXT NOT NULL DEFAULT 'USD',
+            cost_month TEXT NOT NULL,
+            recurring INTEGER NOT NULL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_costs_tenant ON manual_costs(tenant_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_costs_client ON manual_costs(client_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_costs_month ON manual_costs(cost_month)")
+
     conn.commit()
     conn.close()
     print("[DB] Database initialized successfully.")
@@ -3652,6 +3673,80 @@ def build_client_sql_filter(client_id: int) -> tuple:
         conditions.append(cond)
         params.append(param)
     return ("AND (" + " OR ".join(conditions) + ")", params)
+
+
+# ─── Manually-added costs ─────────────────────────────────────────────────
+
+MANUAL_COST_CATEGORIES = [
+    "SaaS Subscription", "Software License", "Support / Maintenance",
+    "Consulting / Professional Services", "Hosting / Domain", "Security / Compliance Tool",
+    "Monitoring / Observability", "Other",
+]
+
+
+def create_manual_cost(data: dict, tenant_id: int) -> int:
+    conn = get_db()
+    cur = conn.execute(
+        """INSERT INTO manual_costs
+           (tenant_id, client_id, item_name, category, amount, currency, cost_month, recurring, notes, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)""",
+        (tenant_id, data.get("client_id") or None, data["item_name"].strip(),
+         data.get("category") or "Other", float(data.get("amount") or 0),
+         (data.get("currency") or "USD").upper(), data["cost_month"],
+         1 if data.get("recurring") else 0, data.get("notes", ""))
+    )
+    mc_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return mc_id
+
+
+def update_manual_cost(mc_id: int, data: dict, tenant_id: int):
+    conn = get_db()
+    conn.execute(
+        """UPDATE manual_costs SET client_id=?, item_name=?, category=?, amount=?, currency=?,
+           cost_month=?, recurring=?, notes=?, updated_at=CURRENT_TIMESTAMP
+           WHERE id=? AND tenant_id=?""",
+        (data.get("client_id") or None, data["item_name"].strip(), data.get("category") or "Other",
+         float(data.get("amount") or 0), (data.get("currency") or "USD").upper(),
+         data["cost_month"], 1 if data.get("recurring") else 0, data.get("notes", ""),
+         mc_id, tenant_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_manual_cost(mc_id: int, tenant_id: int):
+    conn = get_db()
+    conn.execute("DELETE FROM manual_costs WHERE id=? AND tenant_id=?", (mc_id, tenant_id))
+    conn.commit()
+    conn.close()
+
+
+def get_manual_costs(tenant_id: int, client_id=None, month: str = None) -> list:
+    """Return manual cost entries for a tenant, optionally filtered by client
+    and month. A 'recurring' entry counts for every month from its cost_month
+    onward; a one-off entry counts only for its own cost_month."""
+    conn = get_db()
+    query = "SELECT mc.*, c.name AS client_name FROM manual_costs mc LEFT JOIN clients c ON c.id = mc.client_id WHERE mc.tenant_id=?"
+    params = [tenant_id]
+    if client_id is not None:
+        query += " AND mc.client_id=?"
+        params.append(client_id)
+    if month:
+        query += " AND (mc.cost_month=? OR (mc.recurring=1 AND mc.cost_month<=?))"
+        params += [month, month]
+    query += " ORDER BY mc.cost_month DESC, mc.id DESC"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_manual_cost(mc_id: int, tenant_id: int) -> dict:
+    conn = get_db()
+    row = conn.execute("SELECT * FROM manual_costs WHERE id=? AND tenant_id=?", (mc_id, tenant_id)).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def get_client_filter_values(cloud: str, filter_type: str, tenant_id: int) -> list:

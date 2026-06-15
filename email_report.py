@@ -936,6 +936,30 @@ def _build_custom_report_html(report):
     ACCENT = "#185FA5"
     RANK_COLS = ["#185FA5", "#3A77B2", "#5E8FC0", "#80A7CE", "#A3BFDB", "#BACFE5"]
 
+    # Manually-added costs (tools/subscriptions not visible to cloud APIs)
+    manual = cost_data.get("manual_costs") or {}
+    manual_items = manual.get("items", [])
+    manual_total = manual.get("total", 0)
+    manual_sym = manual.get("symbol", "$")
+    manual_rows = ""
+    for i, m in enumerate(manual_items):
+        bg = "#F7F7F5" if i % 2 == 0 else "#FFFFFF"
+        rec_badge = '<span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px;background:#E6F1FB;color:#0C447C;margin-left:6px">RECURRING</span>' if m.get("recurring") else ""
+        manual_rows += f"""<tr style="background:{bg}">
+            <td style="padding:9px 14px;font-size:13px;color:#1A1A1A">{m['item_name']}{rec_badge}</td>
+            <td style="padding:9px 14px;font-size:12px;color:#525252">{m.get('category','Other')}</td>
+            <td style="padding:9px 14px;font-size:13px;font-weight:500;text-align:right">{manual_sym}{m['amount_converted']:,.2f}</td>
+        </tr>"""
+    manual_section = ""
+    if manual_rows:
+        manual_section = ('<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Other Tools & Subscriptions (Manually Tracked)</div>'
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:10px">'
+            '<tr style="background:#F0F0EE"><th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:left">Item</th>'
+            '<th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:left">Category</th>'
+            '<th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th></tr>'
+            + manual_rows + '</table>'
+            f'<div style="font-size:12px;color:#525252;margin-bottom:28px">Other tools/subscriptions total: <strong>{manual_sym}{manual_total:,.2f}</strong></div>')
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -1438,6 +1462,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
 <!-- Daily cost -->
 {'<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Daily Cost <span style="font-size:11px;font-weight:400;color:#8A8A8A">(last 14 days)</span></div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:28px"><tr style="background:#F0F0EE"><th style="padding:9px 12px;font-size:11px;font-weight:500;color:#525252;text-align:left">Date</th><th style="padding:9px 8px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th><th style="padding:9px 12px;font-size:11px;font-weight:500;color:#525252;text-align:left">Trend</th></tr>' + trend_rows + '</table>' if trend_rows else ''}
 
+{manual_section}
 
 </td></tr></table></td></tr>
 
