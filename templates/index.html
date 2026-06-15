@@ -590,12 +590,12 @@
                 </div>
             </div>
             <div class="cost-filter-field">
-                <label class="cost-filter-label">From</label>
-                <input type="date" class="cost-filter-input" id="costDateFrom" onchange="loadCostsTable()">
-            </div>
-            <div class="cost-filter-field">
-                <label class="cost-filter-label">To</label>
-                <input type="date" class="cost-filter-input" id="costDateTo" onchange="loadCostsTable()">
+                <label class="cost-filter-label">Date range</label>
+                <div class="cost-date-range">
+                    <input type="date" class="cost-date-range__input" id="costDateFrom" onchange="loadCostsTable()">
+                    <span class="cost-date-range__sep">&rarr;</span>
+                    <input type="date" class="cost-date-range__input" id="costDateTo" onchange="loadCostsTable()">
+                </div>
             </div>
             <div class="cost-filter-field">
                 <label class="cost-filter-label">View</label>
