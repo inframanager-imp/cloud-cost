@@ -204,6 +204,15 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .cp-seg:hover { color: var(--text-primary); }
 .cp-seg.active { background: var(--bg-card); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
+/* Cloud filter segmented control — larger icons + clearer active state */
+.cp-segmented--cloud .cp-seg--cloud { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; }
+.cp-segmented--cloud .cp-seg--cloud img,
+.cp-segmented--cloud .cp-seg--cloud .cp-seg__icon { height: 14px; width: 14px; object-fit: contain; flex-shrink: 0; }
+.cp-segmented--cloud .cp-seg--cloud[data-costs-cloud="azure"].active { background: #0078d415; color: #0078d4; box-shadow: inset 0 0 0 1px #0078d440; }
+.cp-segmented--cloud .cp-seg--cloud[data-costs-cloud="aws"].active   { background: #ff990015; color: #b36b00; box-shadow: inset 0 0 0 1px #ff990050; }
+.cp-segmented--cloud .cp-seg--cloud[data-costs-cloud="gcp"].active   { background: #4285f415; color: #4285f4; box-shadow: inset 0 0 0 1px #4285f440; }
+.cp-segmented--cloud .cp-seg--cloud[data-costs-cloud="openai"].active { background: #10a37f15; color: #10a37f; box-shadow: inset 0 0 0 1px #10a37f40; }
+
 .connections-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .connections-table th { text-align: left; padding: 10px 16px; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle); background: var(--bg-card); position: sticky; top: 0; }
 .connections-table td { padding: 11px 16px; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
