@@ -94,30 +94,29 @@ def get_current_spend(budget: dict) -> float:
 def _send_email_alert(budget: dict, threshold_pct: int, current_spend: float):
     """Send budget-breach email via the existing email_report infrastructure."""
     try:
-        from email_report import send_test_email  # noqa — just import to confirm module exists
         import smtplib
         import ssl
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
+        from database import get_email_settings
 
-        smtp_host = os.getenv("SMTP_HOST", "")
-        smtp_port = int(os.getenv("SMTP_PORT", 587))
-        smtp_user = os.getenv("SMTP_USER", "")
-        smtp_pass = os.getenv("SMTP_PASSWORD", "")
-        smtp_from = os.getenv("SMTP_FROM", smtp_user)
-        use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+        settings = get_email_settings(budget.get("tenant_id") or 1)
+        smtp_host = settings.get("smtp_host", "")
+        smtp_port = settings.get("smtp_port", 587)
+        smtp_user = settings.get("smtp_user", "")
+        smtp_pass = settings.get("smtp_password", "")
+        smtp_from = settings.get("smtp_from", "") or smtp_user
+        use_tls = settings.get("smtp_use_tls", True)
 
         # Per-budget emails override global recipients
         budget_emails = budget.get("alert_emails", "")
         if budget_emails and budget_emails.strip():
             recipients = [r.strip() for r in budget_emails.split(",") if r.strip()]
         else:
-            from database import get_email_settings
-            settings = get_email_settings(budget.get("tenant_id") or 1)
             recipients_raw = settings.get("recipients", "")
             recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
 
-        if not smtp_host or not recipients:
+        if not smtp_host or not smtp_user or not smtp_pass or not recipients:
             print("[Budget] Email not configured — skipping email alert.")
             return False
 
@@ -162,16 +161,19 @@ def _send_email_alert(budget: dict, threshold_pct: int, current_spend: float):
         msg["To"] = ", ".join(recipients)
         msg.attach(MIMEText(html, "html"))
 
-        if use_tls:
-            ctx = ssl.create_default_context()
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=ctx) as server:
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(smtp_from, recipients, msg.as_string())
+        if smtp_port == 465:
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30, context=ssl.create_default_context())
+        elif use_tls:
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+            server.ehlo()
+            server.starttls(context=ssl.create_default_context())
+            server.ehlo()
         else:
-            with smtplib.SMTP(smtp_host, smtp_port) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(smtp_from, recipients, msg.as_string())
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_from, recipients, msg.as_string())
+        server.quit()
 
         print(f"[Budget] Email alert sent for '{budget['name']}' threshold {threshold_pct}%")
         return True
