@@ -1131,8 +1131,54 @@ def api_sync():
                         pname = provider.get("name") or pid or ptype
                         p_from = _provider_date_from(ptype, pid)
                         try:
-                            records = fetch_aws_costs(provider, p_from, date_to) if ptype == "aws" \
-                                      else fetch_gcp_costs(provider, p_from, date_to)
+                            records = None
+
+                            if ptype == "aws":
+                                cur_bucket = (provider.get("cur_bucket") or "").strip()
+                                if cur_bucket:
+                                    from cur_importer import import_from_s3_bucket
+                                    conn = get_db()
+                                    conn.execute(
+                                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
+                                        (p_from, date_to, pid, tid),
+                                    )
+                                    conn.commit()
+                                    conn.close()
+                                    result = import_from_s3_bucket(
+                                        provider=provider, date_from=p_from, date_to=date_to, tenant_id=tid,
+                                    )
+                                    print(f"[Sync] CUR import for {pid}: {result}")
+                                    # Supplement last 14 days with Cost Explorer resource-level API
+                                    _cutoff = (datetime.utcnow() - timedelta(days=14)).strftime("%Y-%m-%d")
+                                    _recent_from = _cutoff if _cutoff > p_from else p_from
+                                    if _recent_from < date_to:
+                                        try:
+                                            _ce_records = fetch_aws_costs(provider, _recent_from, date_to)
+                                            if _ce_records:
+                                                conn = get_db()
+                                                conn.execute(
+                                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
+                                                    (_recent_from, date_to, pid, tid),
+                                                )
+                                                conn.executemany(
+                                                    "INSERT INTO cost_data (date,resource_group,service_name,resource_type,"
+                                                    "resource_name,meter_category,meter_subcategory,cost,currency,"
+                                                    "subscription_id,tags,cloud_provider,tenant_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                                    [r + (tid,) for r in _ce_records],
+                                                )
+                                                conn.commit()
+                                                conn.close()
+                                                print(f"[Sync] CE resource-level supplement for {pid}: {len(_ce_records)} records")
+                                        except Exception as _ce_err:
+                                            print(f"[Sync] CE supplement for {pid} failed (non-fatal): {_ce_err}")
+                                    update_cloud_provider_sync_time(provider["id"], error=None)
+                                    print(f"[Sync] {ptype.upper()} '{pname}': {result.get('records', 0)} records (CUR)")
+                                    return result.get("records", 0)
+                                else:
+                                    records = fetch_aws_costs(provider, p_from, date_to)
+                            else:
+                                records = fetch_gcp_costs(provider, p_from, date_to)
+
                             conn = get_db()
                             if ptype == "gcp":
                                 project_ids = list({r[9] for r in (records or []) if r[9]})
