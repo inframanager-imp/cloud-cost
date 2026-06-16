@@ -196,42 +196,68 @@ def run_cost_sync_from_payload(payload: dict) -> None:
                         else:
                             p_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
 
+                        # For AWS with CUR bucket configured: delete old range first,
+                        # then import directly from S3 (gives full resource-level detail).
+                        # records=None signals that CUR already handled the insert.
+                        records = None
+
                         if ptype == "aws":
-                            records = fetch_aws_costs(provider, p_from, date_to)
+                            cur_bucket = (provider.get("cur_bucket") or "").strip()
+                            if cur_bucket:
+                                from cur_importer import import_from_s3_bucket
+                                _c = get_db()
+                                _c.execute(
+                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
+                                    (p_from, date_to, pid, provider_tenant_id),
+                                )
+                                _c.commit()
+                                _c.close()
+                                result = import_from_s3_bucket(
+                                    provider=provider,
+                                    date_from=p_from,
+                                    date_to=date_to,
+                                    tenant_id=provider_tenant_id,
+                                )
+                                print(f"[Sync] CUR import for {pid}: {result}")
+                                total_records += result.get("records", 0)
+                                update_cloud_provider_sync_time(provider["id"], error=None)
+                            else:
+                                records = fetch_aws_costs(provider, p_from, date_to)
                         elif ptype == "azure":
                             records = fetch_azure_costs(provider, p_from, date_to)
                         else:
                             records = fetch_gcp_costs(provider, p_from, date_to)
 
-                        conn = get_db()
-                        if ptype == "gcp":
-                            # Only delete project IDs returned — never wipe other GCP projects
-                            project_ids = list({r[9] for r in (records or []) if r[9]})
-                            for proj_id in project_ids:
+                        if records is not None:
+                            conn = get_db()
+                            if ptype == "gcp":
+                                # Only delete project IDs returned — never wipe other GCP projects
+                                project_ids = list({r[9] for r in (records or []) if r[9]})
+                                for proj_id in project_ids:
+                                    conn.execute(
+                                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
+                                        (p_from, date_to, proj_id, provider_tenant_id),
+                                    )
+                            else:
                                 conn.execute(
-                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
-                                    (p_from, date_to, proj_id, provider_tenant_id),
+                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                                    (p_from, date_to, ptype, pid, provider_tenant_id),
                                 )
-                        else:
-                            conn.execute(
-                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
-                                (p_from, date_to, ptype, pid, provider_tenant_id),
-                            )
-                        if records:
-                            records = [r + (provider_tenant_id,) for r in records]
-                            conn.executemany(
-                                """
-                                INSERT INTO cost_data
-                                  (date,resource_group,service_name,resource_type,resource_name,
-                                   meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id)
-                                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
-                                """,
-                                records,
-                            )
-                        conn.commit()
-                        conn.close()
-                        total_records += len(records or [])
-                        update_cloud_provider_sync_time(provider["id"], error=None)
+                            if records:
+                                records = [r + (provider_tenant_id,) for r in records]
+                                conn.executemany(
+                                    """
+                                    INSERT INTO cost_data
+                                      (date,resource_group,service_name,resource_type,resource_name,
+                                       meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id)
+                                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                    """,
+                                    records,
+                                )
+                            conn.commit()
+                            conn.close()
+                            total_records += len(records or [])
+                            update_cloud_provider_sync_time(provider["id"], error=None)
                     except GCPExportPending as pe:
                         update_cloud_provider_sync_time(provider["id"], error=f"[PENDING] {pe}")
                         print(f"[cost_sync_runner] GCP provider '{pname}' pending: {pe}")
