@@ -63,7 +63,8 @@ def get_current_spend(budget: dict) -> float:
 
     conn = get_db()
     params = [date_from, date_to]
-    where = "WHERE date >= ? AND date <= ?"
+    # Use substr(date,1,10) so timestamps like '2026-06-16T00:00:00Z' match plain date strings
+    where = "WHERE substr(date,1,10) >= ? AND substr(date,1,10) <= ?"
 
     if provider_type and provider_type != "all":
         where += " AND cloud_provider = ?"
