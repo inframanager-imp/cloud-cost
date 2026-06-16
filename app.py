@@ -4047,7 +4047,7 @@ def api_preview_custom_report(rid):
 _auto_sync_timer = None
 
 def _run_auto_sync():
-    """Execute an incremental cost sync + activity sync silently in the background."""
+    """Execute an incremental cost + activity sync for every active tenant."""
     global sync_status, activity_sync_status, auto_sync_state
 
     if _sync_or_activity_busy():
@@ -4059,225 +4059,228 @@ def _run_auto_sync():
     auto_sync_state["last_auto_sync"] = datetime.utcnow().isoformat()
     print(f"[Auto-Sync] Starting at {auto_sync_state['last_auto_sync']}")
 
-    subs_to_sync = get_subscriptions(enabled_only=True)
-    if not subs_to_sync:
-        subs_to_sync = [{"subscription_id": os.getenv("AZURE_SUBSCRIPTION_ID", ""), "name": "Default"}]
-
     months = int(os.getenv("COST_HISTORY_MONTHS", 3))
     date_to = datetime.utcnow().strftime("%Y-%m-%d")
-    total_subs = len(subs_to_sync)
-    sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=OWNER_TENANT_ID, triggered_by="auto")
     total_records = 0
+    total_events = 0
+
+    # All active tenants
+    _conn0 = get_db()
+    all_tenants = [dict(r) for r in _conn0.execute(
+        "SELECT id, name FROM tenants WHERE status='active' OR status IS NULL ORDER BY id"
+    ).fetchall()]
+    _conn0.close()
+    if not all_tenants:
+        all_tenants = [{"id": OWNER_TENANT_ID, "name": "Default"}]
+
+    print(f"[Auto-Sync] {len(all_tenants)} tenant(s) to sync")
 
     try:
-        # --- Parallel cost sync ---
-        sync_status = {"running": True, "message": f"Auto-sync: costs ({total_subs} subs)...", "progress": 5}
+        sync_status = {"running": True, "message": f"Auto-sync: {len(all_tenants)} tenant(s)...", "progress": 5}
 
-        def _auto_fetch_cost(sub):
-            sub_id = sub["subscription_id"]
-            latest = get_latest_cost_date(subscription_id=sub_id)
-            if latest:
-                date_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
-            else:
-                date_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
-
-            all_records = []
-            current_from = datetime.strptime(date_from, "%Y-%m-%d")
-            final_to = datetime.strptime(date_to, "%Y-%m-%d")
-            total_days = (final_to - current_from).days
-            total_chunks = max(1, total_days // 30 + (1 if total_days % 30 else 0))
-
-            for chunk in range(1, total_chunks + 1):
-                chunk_to = min(current_from + timedelta(days=30), final_to)
-                records = fetch_cost_data(
-                    current_from.strftime("%Y-%m-%d"),
-                    chunk_to.strftime("%Y-%m-%d"),
-                    subscription_id=sub_id
-                )
-                all_records.extend(records)
-                current_from = chunk_to + timedelta(days=1)
-
-            # Only delete + replace AFTER successful fetch
-            if all_records:
-                if latest:
-                    delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
-                count = insert_cost_records(all_records, tenant_id=sub.get("tenant_id", 1))
-            else:
-                count = 0  # 429 or empty — keep existing data intact
-
-            update_subscription_sync_time(sub_id, "cost")
-            return count
-
-        max_w = min(total_subs, 5)
-        done = 0
-
-        def _run_cost_parallel():
-            nonlocal total_records, done
-            with ThreadPoolExecutor(max_workers=max_w) as executor:
-                cost_futures = {executor.submit(_auto_fetch_cost, sub): sub for sub in subs_to_sync}
-                for future in as_completed(cost_futures):
-                    try:
-                        total_records += future.result()
-                    except Exception as e:
-                        print(f"[Auto-Sync] Cost sub error: {e}")
-                    done += 1
-                    sync_status["progress"] = 5 + int(45 * done / total_subs)
-                    sync_status["message"] = f"Auto-sync: costs [{done}/{total_subs}] done"
-
-        def _run_cost_sequential():
-            nonlocal total_records, done
-            for sub in subs_to_sync:
-                try:
-                    total_records += _auto_fetch_cost(sub)
-                except Exception as e:
-                    print(f"[Auto-Sync] Cost sub error: {e}")
-                done += 1
-                sync_status["progress"] = 5 + int(45 * done / total_subs)
-                sync_status["message"] = f"Auto-sync: costs [{done}/{total_subs}] done"
-
-        if SYNC_SEQUENTIAL:
-            _run_cost_sequential()
-        else:
+        # ── Per-tenant cost sync ──────────────────────────────────────────
+        def _sync_tenant_costs(tenant):
+            tid   = tenant["id"]
+            tname = tenant.get("name", str(tid))
+            tenant_records = 0
+            sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=tid, triggered_by="auto")
             try:
-                _run_cost_parallel()
-            except RuntimeError as re:
-                if "thread" in str(re).lower():
-                    print(f"[Auto-Sync] Cost parallel failed ({re}), retrying sequential.")
-                    total_records = 0
-                    done = 0
-                    _run_cost_sequential()
-                else:
-                    raise
+                # Azure subscriptions
+                subs = get_subscriptions(enabled_only=True, tenant_id=tid)
+                if not subs and tid == OWNER_TENANT_ID:
+                    env_sub = os.getenv("AZURE_SUBSCRIPTION_ID", "")
+                    if env_sub:
+                        subs = [{"subscription_id": env_sub, "name": "Default", "tenant_id": tid}]
 
-        # --- AWS / GCP provider sync (parallel) ---
-        try:
-            from aws_fetcher import fetch_aws_costs
-            from gcp_fetcher import fetch_gcp_costs
-            from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed as _ac
-            cp_providers = get_cloud_providers(enabled_only=True)
-            cp_providers = [p for p in cp_providers if p.get("provider_type") in ("aws", "gcp")]
-            months = int(os.getenv("COST_HISTORY_MONTHS", 3))
+                for sub in subs:
+                    try:
+                        sub_id = sub["subscription_id"]
+                        latest = get_latest_cost_date(subscription_id=sub_id)
+                        if latest:
+                            date_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
+                        else:
+                            date_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
 
-            def _auto_sync_provider(p):
-                p = get_cloud_provider(p["id"]) or p
-                ptype = p.get("provider_type")
-                pid   = p.get("provider_id")
-                pname = p.get("name") or pid or ptype
-                p_tid = p.get("tenant_id", 1)
-                try:
-                    conn2 = get_db()
-                    row = conn2.execute(
+                        all_sub_recs = []
+                        cur_from = datetime.strptime(date_from, "%Y-%m-%d")
+                        final_to = datetime.strptime(date_to, "%Y-%m-%d")
+                        n_chunks = max(1, (final_to - cur_from).days // 30 + (1 if (final_to - cur_from).days % 30 else 0))
+                        for _ in range(n_chunks):
+                            chunk_to = min(cur_from + timedelta(days=30), final_to)
+                            all_sub_recs.extend(fetch_cost_data(
+                                cur_from.strftime("%Y-%m-%d"), chunk_to.strftime("%Y-%m-%d"), subscription_id=sub_id
+                            ))
+                            cur_from = chunk_to + timedelta(days=1)
+
+                        if all_sub_recs:
+                            if latest:
+                                delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
+                            tenant_records += insert_cost_records(all_sub_recs, tenant_id=tid)
+                        update_subscription_sync_time(sub_id, "cost")
+                    except Exception as sub_err:
+                        print(f"[Auto-Sync] Azure sub {sub.get('subscription_id','?')} (tenant {tname}) failed: {sub_err}")
+
+                # AWS / GCP cloud providers
+                from aws_fetcher import fetch_aws_costs
+                from gcp_fetcher import fetch_gcp_costs, GCPExportPending
+
+                cp_list = get_cloud_providers(enabled_only=True, tenant_id=tid)
+                cp_list = [p for p in cp_list if p.get("provider_type") in ("aws", "gcp")]
+
+                for p_stub in cp_list:
+                    p = get_cloud_provider(p_stub["id"]) or p_stub
+                    ptype = p.get("provider_type")
+                    pid   = p.get("provider_id")
+                    pname = p.get("name") or pid or ptype
+                    p_tid = p.get("tenant_id", tid)
+
+                    _c = get_db()
+                    _row = _c.execute(
                         "SELECT MAX(substr(date,1,10)) FROM cost_data WHERE cloud_provider=? AND subscription_id=? AND tenant_id=?",
                         (ptype, pid, p_tid),
                     ).fetchone()
-                    conn2.close()
-                    latest = row[0] if row and row[0] else None
-                    p_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d") if latest \
+                    _c.close()
+                    latest_p = _row[0] if _row and _row[0] else None
+                    p_from = (datetime.strptime(latest_p, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d") if latest_p \
                              else (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
-                    records = fetch_aws_costs(p, p_from, date_to) if ptype == "aws" \
-                              else fetch_gcp_costs(p, p_from, date_to)
-                    conn2 = get_db()
-                    if ptype == "gcp":
-                        project_ids = list({r[9] for r in (records or []) if r[9]})
-                        for proj_id in project_ids:
-                            conn2.execute(
-                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
-                                (p_from, date_to, proj_id, p_tid),
-                            )
-                    else:
-                        conn2.execute(
-                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
-                            (p_from, date_to, ptype, pid, p_tid),
-                        )
-                    if records:
-                        conn2.executemany(
-                            "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
-                            "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
-                            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                            [r + (p_tid,) for r in records],
-                        )
-                    conn2.commit()
-                    conn2.close()
-                    update_cloud_provider_sync_time(p["id"], error=None)
-                    print(f"[Auto-Sync] {ptype.upper()} '{pname}': {len(records or [])} records")
-                    return len(records or [])
-                except Exception as cp_err:
-                    update_cloud_provider_sync_time(p["id"], error=str(cp_err))
-                    print(f"[Auto-Sync] {ptype.upper()} '{pname}' failed: {cp_err}")
-                    return 0
 
-            with _TPE(max_workers=min(len(cp_providers), 4)) as ex:
-                for count in _ac({ex.submit(_auto_sync_provider, p): p for p in cp_providers}):
-                    total_records += count.result() or 0
-        except Exception as cp_outer:
-            print(f"[Auto-Sync] AWS/GCP sync error (non-fatal): {cp_outer}")
+                    try:
+                        records = None
 
-        update_sync_log(sync_id, "success", total_records)
-        sync_status = {"running": False, "message": f"Auto-sync costs done: {total_records} records", "progress": 100}
+                        if ptype == "aws":
+                            cur_bucket = (p.get("cur_bucket") or "").strip()
+                            if cur_bucket:
+                                from cur_importer import import_from_s3_bucket
+                                _c = get_db()
+                                _c.execute(
+                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
+                                    (p_from, date_to, pid, p_tid),
+                                )
+                                _c.commit(); _c.close()
+                                result = import_from_s3_bucket(provider=p, date_from=p_from, date_to=date_to, tenant_id=p_tid)
+                                tenant_records += result.get("records", 0)
+                                print(f"[Auto-Sync] CUR import {pid} (tenant {tname}): {result}")
+                                # CE supplement last 14 days
+                                _cutoff = (datetime.utcnow() - timedelta(days=14)).strftime("%Y-%m-%d")
+                                _rfrom  = _cutoff if _cutoff > p_from else p_from
+                                if _rfrom < date_to:
+                                    try:
+                                        _ce = fetch_aws_costs(p, _rfrom, date_to)
+                                        if _ce:
+                                            _c = get_db()
+                                            _c.execute(
+                                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
+                                                (_rfrom, date_to, pid, p_tid),
+                                            )
+                                            _c.executemany(
+                                                "INSERT INTO cost_data (date,resource_group,service_name,resource_type,"
+                                                "resource_name,meter_category,meter_subcategory,cost,currency,"
+                                                "subscription_id,tags,cloud_provider,tenant_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                                [r + (p_tid,) for r in _ce],
+                                            )
+                                            _c.commit(); _c.close()
+                                    except Exception as _ce_err:
+                                        print(f"[Auto-Sync] CE supplement {pid} failed (non-fatal): {_ce_err}")
+                                update_cloud_provider_sync_time(p["id"], error=None)
+                                try:
+                                    from aws_fetcher import resolve_all_ec2_names
+                                    from database import save_aws_resource_names
+                                    ec2_names = resolve_all_ec2_names(p)
+                                    if ec2_names:
+                                        save_aws_resource_names(ec2_names, provider_id=pid)
+                                        print(f"[Auto-Sync] EC2 names cached for {pid}: {len(ec2_names)}")
+                                except Exception as _ne:
+                                    print(f"[Auto-Sync] EC2 names {pid} failed (non-fatal): {_ne}")
+                                print(f"[Auto-Sync] AWS '{pname}' (tenant {tname}): {result.get('records',0)} records (CUR)")
+                            else:
+                                records = fetch_aws_costs(p, p_from, date_to)
+                        else:
+                            records = fetch_gcp_costs(p, p_from, date_to)
 
-        # --- Parallel activity sync ---
-        activity_sync_status = {"running": True, "message": f"Auto-sync: activity ({total_subs} subs)...", "progress": 5}
-        total_events = 0
+                        if records is not None:
+                            _c = get_db()
+                            if ptype == "gcp":
+                                for proj_id in list({r[9] for r in records if r[9]}):
+                                    _c.execute(
+                                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
+                                        (p_from, date_to, proj_id, p_tid),
+                                    )
+                            else:
+                                _c.execute(
+                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                                    (p_from, date_to, ptype, pid, p_tid),
+                                )
+                            if records:
+                                _c.executemany(
+                                    "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
+                                    "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
+                                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                    [r + (p_tid,) for r in records],
+                                )
+                            _c.commit(); _c.close()
+                            tenant_records += len(records)
+                            update_cloud_provider_sync_time(p["id"], error=None)
+                            if ptype == "aws":
+                                try:
+                                    from aws_fetcher import resolve_all_ec2_names
+                                    from database import save_aws_resource_names
+                                    ec2_names = resolve_all_ec2_names(p)
+                                    if ec2_names:
+                                        save_aws_resource_names(ec2_names, provider_id=pid)
+                                        print(f"[Auto-Sync] EC2 names cached for {pid}: {len(ec2_names)}")
+                                except Exception as _ne:
+                                    print(f"[Auto-Sync] EC2 names {pid} failed (non-fatal): {_ne}")
+                            print(f"[Auto-Sync] {ptype.upper()} '{pname}' (tenant {tname}): {len(records)} records")
+
+                    except GCPExportPending as pe:
+                        update_cloud_provider_sync_time(p["id"], error=f"[PENDING] {pe}")
+                        print(f"[Auto-Sync] GCP '{pname}' pending: {pe}")
+                    except Exception as cp_err:
+                        update_cloud_provider_sync_time(p["id"], error=str(cp_err))
+                        print(f"[Auto-Sync] {ptype.upper()} '{pname}' failed: {cp_err}")
+
+                update_sync_log(sync_id, "success", tenant_records)
+                print(f"[Auto-Sync] Tenant '{tname}': {tenant_records} records")
+                return tenant_records
+
+            except Exception as t_err:
+                print(f"[Auto-Sync] Tenant '{tname}' error: {t_err}")
+                update_sync_log(sync_id, "failed", 0, str(t_err))
+                return 0
+
+        for i, tenant in enumerate(all_tenants):
+            sync_status["message"] = f"Auto-sync: costs [{i+1}/{len(all_tenants)}] {tenant.get('name','?')}..."
+            sync_status["progress"] = 5 + int(70 * i / len(all_tenants))
+            try:
+                total_records += _sync_tenant_costs(tenant)
+            except Exception as e:
+                print(f"[Auto-Sync] Tenant cost sync error: {e}")
+
+        sync_status = {"running": False, "message": f"Auto-sync costs done: {total_records} records", "progress": 90}
+
+        # ── Activity sync (Azure subscriptions, all tenants) ──────────────
+        all_subs = get_subscriptions(enabled_only=True)
+        if not all_subs:
+            env_sub = os.getenv("AZURE_SUBSCRIPTION_ID", "")
+            if env_sub:
+                all_subs = [{"subscription_id": env_sub, "name": "Default", "tenant_id": OWNER_TENANT_ID}]
+
+        activity_sync_status = {"running": True, "message": f"Auto-sync: activity ({len(all_subs)} subs)...", "progress": 5}
         all_caller_ids = set()
 
-        def _auto_fetch_activity(sub):
-            sub_id = sub["subscription_id"]
-            latest = get_latest_activity_timestamp(subscription_id=sub_id)
-            if latest:
-                date_from = latest[:10]
-            else:
-                date_from = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
-
-            records = fetch_activity_logs(date_from, date_to, subscription_id=sub_id)
-            count = insert_activity_logs(records, subscription_id=sub_id, tenant_id=sub.get("tenant_id", 1))
-            update_subscription_sync_time(sub_id, "activity")
-            cids = {r[2] for r in records if r[2]}
-            return count, cids
-
-        done = 0
-
-        def _run_act_parallel():
-            nonlocal total_events, done
-            with ThreadPoolExecutor(max_workers=max_w) as executor:
-                act_futures = {executor.submit(_auto_fetch_activity, sub): sub for sub in subs_to_sync}
-                for future in as_completed(act_futures):
-                    try:
-                        count, cids = future.result()
-                        total_events += count
-                        all_caller_ids.update(cids)
-                    except Exception as e:
-                        print(f"[Auto-Sync] Activity sub error: {e}")
-                    done += 1
-                    activity_sync_status["progress"] = 5 + int(75 * done / total_subs)
-                    activity_sync_status["message"] = f"Auto-sync: activity [{done}/{total_subs}] done"
-
-        def _run_act_sequential():
-            nonlocal total_events, done
-            for sub in subs_to_sync:
-                try:
-                    count, cids = _auto_fetch_activity(sub)
-                    total_events += count
-                    all_caller_ids.update(cids)
-                except Exception as e:
-                    print(f"[Auto-Sync] Activity sub error: {e}")
-                done += 1
-                activity_sync_status["progress"] = 5 + int(75 * done / total_subs)
-                activity_sync_status["message"] = f"Auto-sync: activity [{done}/{total_subs}] done"
-
-        if SYNC_SEQUENTIAL:
-            _run_act_sequential()
-        else:
+        for idx_a, sub in enumerate(all_subs):
             try:
-                _run_act_parallel()
-            except RuntimeError as re:
-                if "thread" in str(re).lower():
-                    print(f"[Auto-Sync] Activity parallel failed ({re}), retrying sequential.")
-                    total_events = 0
-                    all_caller_ids.clear()
-                    done = 0
-                    _run_act_sequential()
-                else:
-                    raise
+                sub_id = sub["subscription_id"]
+                latest_a = get_latest_activity_timestamp(subscription_id=sub_id)
+                act_from = latest_a[:10] if latest_a else (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
+                act_recs = fetch_activity_logs(act_from, date_to, subscription_id=sub_id)
+                total_events += insert_activity_logs(act_recs, subscription_id=sub_id, tenant_id=sub.get("tenant_id", OWNER_TENANT_ID))
+                all_caller_ids.update({r[2] for r in act_recs if r[2]})
+                update_subscription_sync_time(sub_id, "activity")
+            except Exception as act_err:
+                print(f"[Auto-Sync] Activity sub {sub.get('subscription_id','?')} failed: {act_err}")
+            activity_sync_status["progress"] = 5 + int(80 * (idx_a + 1) / max(1, len(all_subs)))
+            activity_sync_status["message"] = f"Auto-sync: activity [{idx_a+1}/{len(all_subs)}] done"
 
         # Resolve caller names
         guid_ids = [c for c in all_caller_ids if "@" not in c and len(c) > 8]
@@ -4287,11 +4290,9 @@ def _run_auto_sync():
             save_caller_names(claims_names)
         still_unknown = [c for c in guid_ids if c not in claims_names]
         if still_unknown:
-            name_map = resolve_caller_names(still_unknown)
-            save_caller_names(name_map)
+            save_caller_names(resolve_caller_names(still_unknown))
 
         activity_sync_status = {"running": False, "message": f"Auto-sync done: {total_events} events", "progress": 100}
-
         print(f"[Auto-Sync] Complete — {total_records} cost records, {total_events} activity events")
 
     except Exception as e:
