@@ -4898,7 +4898,7 @@ async function _scLoadStatus() {
 
 async function _scLoadAutoSync() {
     try {
-        const data = await fetch('/api/auto-sync').then(r => r.json());
+        const data = await fetch('/api/sync/schedule').then(r => r.json());
         const tog = document.getElementById('scAutoSyncToggle');
         const intv = document.getElementById('scAutoSyncInterval');
         const info = document.getElementById('scAutoSyncInfo');
@@ -4909,7 +4909,7 @@ async function _scLoadAutoSync() {
                 const next = new Date(data.next_auto_sync + 'Z').toLocaleTimeString();
                 info.textContent = `Next auto-sync at ${next}`;
             } else {
-                info.textContent = data.enabled ? 'Auto-sync enabled' : 'Auto-sync is off';
+                info.textContent = data.enabled ? 'Auto-sync every ' + data.interval_hours + 'h' : 'Auto-sync is off';
             }
         }
         // Also update old badge (dashboard)
@@ -5050,11 +5050,10 @@ async function scSaveAutoSync() {
     const enabled  = document.getElementById('scAutoSyncToggle').checked;
     const interval = parseInt(document.getElementById('scAutoSyncInterval').value);
     try {
-        await fetch('/api/auto-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled, interval_hours: interval })
-        });
+        await Promise.all([
+            fetch('/api/sync/schedule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ interval_hours: interval }) }),
+            fetch('/api/auto-sync',    { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ enabled }) })
+        ]);
         _scLoadAutoSync();
         showToast(`Auto-sync ${enabled ? 'enabled every ' + interval + 'h' : 'disabled'}`, 'success');
     } catch(e) {
@@ -5305,11 +5304,10 @@ async function saveAutoSyncSettings() {
     const enabled = document.getElementById('autoSyncToggle').checked;
     const interval = parseInt(document.getElementById('autoSyncInterval').value);
     try {
-        await fetch('/api/auto-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled, interval_hours: interval })
-        });
+        await Promise.all([
+            fetch('/api/sync/schedule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ interval_hours: interval }) }),
+            fetch('/api/auto-sync',    { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ enabled }) })
+        ]);
         loadAutoSyncStatus();
         showToast(`Auto-sync ${enabled ? 'enabled' : 'disabled'} (every ${interval}h)`, 'success');
     } catch (err) {

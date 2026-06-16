@@ -4064,10 +4064,11 @@ def _run_auto_sync():
     total_records = 0
     total_events = 0
 
-    # All active tenants
+    # All active tenants with their individual sync interval
     _conn0 = get_db()
     all_tenants = [dict(r) for r in _conn0.execute(
-        "SELECT id, name FROM tenants WHERE status='active' OR status IS NULL ORDER BY id"
+        "SELECT id, name, COALESCE(auto_sync_interval_hours, 6) AS auto_sync_interval_hours "
+        "FROM tenants WHERE status='active' OR status IS NULL ORDER BY id"
     ).fetchall()]
     _conn0.close()
     if not all_tenants:
@@ -4080,9 +4081,28 @@ def _run_auto_sync():
 
         # ── Per-tenant cost sync ──────────────────────────────────────────
         def _sync_tenant_costs(tenant):
-            tid   = tenant["id"]
-            tname = tenant.get("name", str(tid))
+            tid            = tenant["id"]
+            tname          = tenant.get("name", str(tid))
+            interval_hours = int(tenant.get("auto_sync_interval_hours") or 6)
             tenant_records = 0
+
+            # Skip if not yet due based on this tenant's own interval
+            _lc = get_db()
+            _lr = _lc.execute(
+                "SELECT MAX(sync_start) FROM sync_log WHERE tenant_id=? AND triggered_by='auto' AND status='success'",
+                (tid,),
+            ).fetchone()
+            _lc.close()
+            last_sync_ts = _lr[0] if _lr and _lr[0] else None
+            if last_sync_ts:
+                try:
+                    _elapsed_h = (datetime.utcnow() - datetime.fromisoformat(last_sync_ts)).total_seconds() / 3600
+                    if _elapsed_h < interval_hours:
+                        print(f"[Auto-Sync] Skipping '{tname}' — synced {_elapsed_h:.1f}h ago (interval={interval_hours}h)")
+                        return 0
+                except Exception:
+                    pass
+
             sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=tid, triggered_by="auto")
             try:
                 # Azure subscriptions
@@ -4304,8 +4324,10 @@ def _run_auto_sync():
         _schedule_next_auto_sync()
 
 
+_AUTO_SYNC_TICK_SECS = 1800  # 30-minute tick; per-tenant intervals checked inside _run_auto_sync
+
 def _schedule_next_auto_sync():
-    """Schedule the next auto-sync timer."""
+    """Schedule the next auto-sync tick (every 30 min). Each tenant's interval is checked inside."""
     global _auto_sync_timer
     if _auto_sync_timer:
         _auto_sync_timer.cancel()
@@ -4314,15 +4336,14 @@ def _schedule_next_auto_sync():
         auto_sync_state["next_auto_sync"] = None
         return
 
-    interval_secs = auto_sync_state["interval_hours"] * 3600
-    next_time = datetime.utcnow() + timedelta(seconds=interval_secs)
+    next_time = datetime.utcnow() + timedelta(seconds=_AUTO_SYNC_TICK_SECS)
     auto_sync_state["next_auto_sync"] = next_time.isoformat()
 
     try:
-        _auto_sync_timer = threading.Timer(interval_secs, _run_auto_sync)
+        _auto_sync_timer = threading.Timer(_AUTO_SYNC_TICK_SECS, _run_auto_sync)
         _auto_sync_timer.daemon = True
         _auto_sync_timer.start()
-        print(f"[Auto-Sync] Next sync scheduled at {auto_sync_state['next_auto_sync']} ({auto_sync_state['interval_hours']}h)")
+        print(f"[Auto-Sync] Next tick at {auto_sync_state['next_auto_sync']} (per-tenant intervals apply)")
     except RuntimeError as e:
         auto_sync_state["enabled"] = False
         auto_sync_state["next_auto_sync"] = None
@@ -4359,6 +4380,52 @@ def api_set_auto_sync():
         "interval_hours": auto_sync_state["interval_hours"],
     })
     return jsonify({"message": f"Auto-sync {'enabled' if auto_sync_state['enabled'] else 'disabled'}", **auto_sync_state})
+
+
+@app.route("/api/sync/schedule", methods=["GET"])
+@login_required
+def api_get_sync_schedule():
+    """Return this tenant's auto-sync interval and last/next sync times."""
+    tid = current_tenant_id()
+    conn = get_db()
+    row = conn.execute(
+        "SELECT COALESCE(auto_sync_interval_hours, 6) AS interval_hours FROM tenants WHERE id=?", (tid,)
+    ).fetchone()
+    last_row = conn.execute(
+        "SELECT MAX(sync_start) AS last_sync FROM sync_log WHERE tenant_id=? AND triggered_by='auto' AND status='success'",
+        (tid,),
+    ).fetchone()
+    conn.close()
+    interval = int(row["interval_hours"]) if row else 6
+    last_sync = last_row["last_sync"] if last_row and last_row["last_sync"] else None
+    next_sync = None
+    if auto_sync_state["enabled"] and last_sync:
+        try:
+            next_sync = (datetime.fromisoformat(last_sync) + timedelta(hours=interval)).isoformat()
+        except Exception:
+            pass
+    return jsonify({
+        "enabled": auto_sync_state["enabled"],
+        "interval_hours": interval,
+        "last_auto_sync": last_sync,
+        "next_auto_sync": next_sync,
+    })
+
+
+@app.route("/api/sync/schedule", methods=["POST"])
+@login_required
+def api_set_sync_schedule():
+    """Set this tenant's auto-sync interval (1–24 h)."""
+    tid = current_tenant_id()
+    body = request.get_json(silent=True) or {}
+    if "interval_hours" not in body:
+        return jsonify({"error": "interval_hours required"}), 400
+    hrs = max(1, min(24, int(body["interval_hours"])))
+    conn = get_db()
+    conn.execute("UPDATE tenants SET auto_sync_interval_hours=? WHERE id=?", (hrs, tid))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Auto-sync interval set to {hrs}h", "interval_hours": hrs})
 
 
 @app.route("/api/auto-sync/run-now", methods=["POST"])

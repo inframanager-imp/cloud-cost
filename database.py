@@ -504,6 +504,17 @@ def init_db():
                 except Exception as e2:
                     print(f"[DB] cloud_providers migration skipped {col}: {e2}")
 
+    # ── Migration: per-tenant auto-sync interval ─────────────────────────────
+    if _table_exists("tenants"):
+        try:
+            cursor.execute("SELECT auto_sync_interval_hours FROM tenants LIMIT 1")
+        except Exception:
+            try:
+                cursor.execute("ALTER TABLE tenants ADD COLUMN auto_sync_interval_hours INTEGER DEFAULT 6")
+                print("[DB] tenants: added auto_sync_interval_hours column")
+            except Exception as e2:
+                print(f"[DB] tenants migration skipped auto_sync_interval_hours: {e2}")
+
     # ── Migration: tenant_id on budgets ──────────────────────────────────────
     if _table_exists("budgets"):
         try:
