@@ -937,7 +937,7 @@ def _build_custom_report_html(report):
     RANK_COLS = ["#185FA5", "#3A77B2", "#5E8FC0", "#80A7CE", "#A3BFDB", "#BACFE5"]
 
     # Manually-added costs (tools/subscriptions not visible to cloud APIs)
-    manual = cost_data.get("manual_costs") or {}
+    manual = data.get("manual_costs") or {}
     manual_items = manual.get("items", [])
     manual_total = manual.get("total", 0)
     manual_sym = manual.get("symbol", "$")
