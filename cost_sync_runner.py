@@ -251,6 +251,15 @@ def run_cost_sync_from_payload(payload: dict) -> None:
                                         print(f"[Sync] CE resource-level supplement for {pid} failed (non-fatal): {_ce_err}")
 
                                 update_cloud_provider_sync_time(provider["id"], error=None)
+                                try:
+                                    from aws_fetcher import resolve_all_ec2_names
+                                    from database import save_aws_resource_names
+                                    ec2_names = resolve_all_ec2_names(provider)
+                                    if ec2_names:
+                                        save_aws_resource_names(ec2_names, provider_id=pid)
+                                        print(f"[Sync] Cached {len(ec2_names)} EC2 names for {pid}")
+                                except Exception as _ne:
+                                    print(f"[Sync] EC2 name resolution for {pid} failed (non-fatal): {_ne}")
                             else:
                                 records = fetch_aws_costs(provider, p_from, date_to)
                         elif ptype == "azure":
@@ -288,6 +297,16 @@ def run_cost_sync_from_payload(payload: dict) -> None:
                             conn.close()
                             total_records += len(records or [])
                             update_cloud_provider_sync_time(provider["id"], error=None)
+                            if ptype == "aws":
+                                try:
+                                    from aws_fetcher import resolve_all_ec2_names
+                                    from database import save_aws_resource_names
+                                    ec2_names = resolve_all_ec2_names(provider)
+                                    if ec2_names:
+                                        save_aws_resource_names(ec2_names, provider_id=pid)
+                                        print(f"[Sync] Cached {len(ec2_names)} EC2 names for {pid}")
+                                except Exception as _ne:
+                                    print(f"[Sync] EC2 name resolution for {pid} failed (non-fatal): {_ne}")
                     except GCPExportPending as pe:
                         update_cloud_provider_sync_time(provider["id"], error=f"[PENDING] {pe}")
                         print(f"[cost_sync_runner] GCP provider '{pname}' pending: {pe}")

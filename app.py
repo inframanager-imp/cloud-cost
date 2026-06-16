@@ -1172,6 +1172,15 @@ def api_sync():
                                         except Exception as _ce_err:
                                             print(f"[Sync] CE supplement for {pid} failed (non-fatal): {_ce_err}")
                                     update_cloud_provider_sync_time(provider["id"], error=None)
+                                    try:
+                                        from aws_fetcher import resolve_all_ec2_names
+                                        from database import save_aws_resource_names
+                                        ec2_names = resolve_all_ec2_names(provider)
+                                        if ec2_names:
+                                            save_aws_resource_names(ec2_names, provider_id=pid)
+                                            print(f"[Sync] Cached {len(ec2_names)} EC2 names for {pid}")
+                                    except Exception as _ne:
+                                        print(f"[Sync] EC2 name resolution for {pid} failed (non-fatal): {_ne}")
                                     print(f"[Sync] {ptype.upper()} '{pname}': {result.get('records', 0)} records (CUR)")
                                     return result.get("records", 0)
                                 else:
@@ -1202,6 +1211,16 @@ def api_sync():
                             conn.commit()
                             conn.close()
                             update_cloud_provider_sync_time(provider["id"], error=None)
+                            if ptype == "aws":
+                                try:
+                                    from aws_fetcher import resolve_all_ec2_names
+                                    from database import save_aws_resource_names
+                                    ec2_names = resolve_all_ec2_names(provider)
+                                    if ec2_names:
+                                        save_aws_resource_names(ec2_names, provider_id=pid)
+                                        print(f"[Sync] Cached {len(ec2_names)} EC2 names for {pid}")
+                                except Exception as _ne:
+                                    print(f"[Sync] EC2 name resolution for {pid} failed (non-fatal): {_ne}")
                             print(f"[Sync] {ptype.upper()} '{pname}': {len(records or [])} records")
                             return len(records or [])
                         except GCPExportPending as pe:
