@@ -4373,6 +4373,41 @@ function ccTimeAgo(dateStr) {
     return d.toLocaleDateString();
 }
 
+// ─── Tenant-scoped cloud provider dropdown helper ─────────────────────────
+
+let _cachedTenantProviderTypes = null;
+
+async function _getTenantProviderTypes() {
+    if (_cachedTenantProviderTypes) return _cachedTenantProviderTypes;
+    try {
+        const providers = await fetch('/api/cloud-providers').then(r => r.json());
+        const types = [...new Set((providers || []).map(p => p.provider_type).filter(Boolean))];
+        if (types.length) _cachedTenantProviderTypes = types;
+        return types;
+    } catch { return []; }
+}
+
+// Rebuilds a <select> with only the current tenant's actual provider types.
+// opts.allValue / opts.allLabel control the "All" option (default value="" label="All Clouds").
+// Preserves whatever value was selected before.
+async function _populateCloudProviderSelect(selectId, opts = {}) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const types = await _getTenantProviderTypes();
+    const allValue = opts.allValue !== undefined ? opts.allValue : '';
+    const allLabel = opts.allLabel || 'All Clouds';
+    const savedValue = sel.value;
+    const labels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI' };
+    sel.innerHTML = `<option value="${allValue}">${allLabel}</option>`;
+    types.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = labels[t] || t.toUpperCase();
+        sel.appendChild(opt);
+    });
+    if (savedValue && [...sel.options].some(o => o.value === savedValue)) sel.value = savedValue;
+}
+
 // ─── Email Reports ───────────────────────────────────────────────────────
 
 async function loadReportsPage() {
@@ -4393,6 +4428,7 @@ async function loadReportsPage() {
         document.getElementById('emReportDateRange').value = settings.report_date_range || 'this_month';
         document.getElementById('emReportDateFrom').value = settings.report_date_from || '';
         document.getElementById('emReportDateTo').value = settings.report_date_to || '';
+        await _populateCloudProviderSelect('emReportCloudProvider');
         document.getElementById('emReportCloudProvider').value = settings.report_cloud_provider || '';
 
         const sections = settings.report_sections || [];

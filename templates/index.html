@@ -4908,6 +4908,7 @@ function saveProvider() {
         body: JSON.stringify(payload),
     }).then(r => r.json()).then(d => {
         if (d.error) { alert('Error: ' + d.error); return; }
+        _cachedTenantProviderTypes = null; // force refresh on next dropdown open
         hideProviderModal();
         loadProviders();
     });
@@ -4990,7 +4991,7 @@ function syncProvider(id, name) {
 function deleteProvider(id, name) {
     if (!confirm(`Delete provider "${name}"? This does NOT delete ingested cost data.`)) return;
     fetch(`/api/cloud-providers/${id}`, { method: 'DELETE' })
-        .then(() => loadProviders());
+        .then(() => { _cachedTenantProviderTypes = null; loadProviders(); });
 }
 
 function renameProvider(id, currentName) {
@@ -5354,6 +5355,7 @@ function showBudgetModal() {
     document.getElementById('budgetAmount').value = '';
     document.getElementById('budgetPeriod').value = 'monthly';
     document.getElementById('budgetProvider').value = 'all';
+    _populateCloudProviderSelect('budgetProvider', { allValue: 'all' });
     document.getElementById('chEmail').checked = true;
     document.getElementById('chSlack').checked = false;
     // Reset cloud-specific fields
@@ -5463,6 +5465,7 @@ async function editBudget(id) {
         document.getElementById('budgetName').value   = b.name || '';
         document.getElementById('budgetAmount').value = b.amount || '';
         document.getElementById('budgetPeriod').value = b.period || 'monthly';
+        await _populateCloudProviderSelect('budgetProvider', { allValue: 'all' });
         document.getElementById('budgetProvider').value = b.provider_type || 'all';
         document.getElementById('chEmail').checked = (b.alert_channels || []).includes('email');
         document.getElementById('chSlack').checked  = (b.alert_channels || []).includes('slack');
