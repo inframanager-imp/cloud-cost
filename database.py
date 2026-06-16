@@ -1314,6 +1314,59 @@ def get_cost_totals_by_service(filters=None, tenant_id=None, cloud_provider=None
     return [{"service_name": r["service_name"] or "Unknown", "total_cost": round(r["total_cost"] or 0, 2), "total_records": r["total_records"] or 0} for r in rows]
 
 
+def get_resource_detail(subscription_ids=None, service_name=None, date_from=None, date_to=None,
+                        tenant_id=None, cloud_provider=None, reporting_currency=None):
+    """Get cost breakdown by individual resource for a specific service/account."""
+    conn = get_db()
+    _cost = _converted_cost_sql(reporting_currency, col="cd.cost", cur_col="cd.currency")
+    query = f"""
+        SELECT
+            cd.resource_name,
+            cd.resource_group,
+            arn.display_name,
+            SUM({_cost}) as total_cost,
+            COUNT(*) as total_records
+        FROM cost_data cd
+        LEFT JOIN aws_resource_names arn ON arn.resource_id = cd.resource_name
+        WHERE 1=1
+    """
+    params = []
+
+    if subscription_ids:
+        placeholders = ",".join(["?"] * len(subscription_ids))
+        query += f" AND cd.subscription_id IN ({placeholders})"
+        params.extend(subscription_ids)
+    if service_name:
+        query += " AND cd.service_name = ?"
+        params.append(service_name)
+    if date_from:
+        query += " AND cd.date >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND cd.date <= ?"
+        params.append(date_to)
+    if tenant_id is not None:
+        query += " AND cd.tenant_id = ?"
+        params.append(tenant_id)
+    if cloud_provider is not None:
+        query += " AND cd.cloud_provider = ?"
+        params.append(cloud_provider)
+
+    query += " GROUP BY cd.resource_name, cd.resource_group ORDER BY total_cost DESC LIMIT 500"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [
+        {
+            "resource_name": r["resource_name"] or "Unknown",
+            "display_name": r["display_name"] or None,
+            "region": r["resource_group"] or "-",
+            "total_cost": round(r["total_cost"] or 0, 2),
+            "total_records": r["total_records"] or 0,
+        }
+        for r in rows
+    ]
+
+
 # Cross-cloud commitment (Reserved Instances / Reservations / Savings Plans / CUDs)
 # detector. Azure → resource_type 'reservationorders'; AWS → "Savings Plans" /
 # "Reserved Instance" services; GCP → "Committed use" SKUs.

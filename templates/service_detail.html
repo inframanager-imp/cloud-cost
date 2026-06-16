@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Detail</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body { background: var(--bg-primary); margin: 0; padding: 24px 28px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .sd-wrap { max-width: 1200px; margin: 0 auto; }
+
+        /* Breadcrumb */
+        .sd-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+        .sd-breadcrumb a { color: var(--accent); text-decoration: none; cursor: pointer; }
+        .sd-breadcrumb a:hover { text-decoration: underline; }
+        .sd-breadcrumb .sep { opacity: 0.4; }
+
+        /* Header */
+        .sd-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+        .sd-header-logo { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; flex-shrink: 0; padding: 6px; }
+        .sd-header-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .sd-header-info { flex: 1; min-width: 0; }
+        .sd-header-info h1 { font-size: 22px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; line-height: 1.2; }
+        .sd-header-meta { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--text-secondary); flex-wrap: wrap; }
+        .sd-header-meta .meta-item { display: flex; align-items: center; gap: 5px; }
+        .sd-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .sd-last-updated { font-size: 12px; color: var(--text-secondary); text-align: right; margin-top: 4px; }
+
+        /* Stat cards — override for 4-col layout */
+        .sd-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+        .sd-stats .stat-card { padding: 16px 18px; }
+        .sd-stats .stat-card .stat-label { font-size: 11px; margin-bottom: 6px; }
+        .sd-stats .stat-card .stat-value { font-size: 24px; font-weight: 700; }
+        .sd-stat-featured { background: var(--accent) !important; border-color: var(--accent) !important; }
+        .sd-stat-featured .stat-label { color: rgba(255,255,255,0.75) !important; }
+        .sd-stat-featured .stat-value { color: #fff !important; }
+        .sd-stat-featured .stat-sub { color: rgba(255,255,255,0.75) !important; }
+        .stat-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .stat-icon { float: right; opacity: 0.25; margin-top: 2px; }
+        .sd-stat-featured .stat-icon { opacity: 0.4; }
+
+        /* Body two-column layout */
+        .sd-body { display: grid; grid-template-columns: 1fr 380px; gap: 16px; align-items: start; }
+
+        /* Cards */
+        .chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); }
+        .chart-card h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 14px; }
+
+        /* Resources table */
+        .res-table { width: 100%; border-collapse: collapse; }
+        .res-table th { font-size: 11px; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 10px 10px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
+        .res-table th:hover { color: var(--accent); }
+        .res-table td { padding: 10px 10px; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid var(--border); }
+        .res-table tr:last-child td { border-bottom: none; }
+        .res-table tr:hover td { background: var(--bg-input); }
+        .res-num { color: var(--text-secondary); font-size: 12px; width: 32px; }
+        .res-name-cell { max-width: 200px; }
+        .res-name-inner { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+        .res-cost { text-align: right; font-weight: 500; white-space: nowrap; }
+        .res-pct-cell { width: 100px; }
+        .res-bar-wrap { display: flex; align-items: center; gap: 8px; }
+        .res-bar-bg { flex: 1; height: 4px; background: var(--border); border-radius: 2px; }
+        .res-bar-fill { height: 4px; border-radius: 2px; background: var(--accent); min-width: 2px; }
+        .res-pct-label { font-size: 12px; color: var(--text-secondary); min-width: 36px; text-align: right; }
+        .sort-ind { margin-left: 3px; font-size: 10px; opacity: 0.6; }
+        .view-all-row { padding: 12px 0 2px; }
+        .view-all-btn { background: none; border: none; color: var(--accent); font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 0; }
+        .view-all-btn:hover { text-decoration: underline; }
+
+        /* Right column */
+        .sd-right { display: flex; flex-direction: column; gap: 16px; }
+        .region-legend { margin-top: 12px; }
+        .region-legend-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+        .region-legend-item:last-child { border-bottom: none; }
+        .region-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .region-name { flex: 1; color: var(--text-primary); }
+        .region-cost { font-weight: 500; color: var(--text-primary); }
+        .region-pct { color: var(--text-secondary); min-width: 44px; text-align: right; }
+        .trend-controls { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .trend-controls h3 { margin: 0; }
+        .trend-toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .trend-toggle button { background: none; border: none; padding: 4px 10px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+        .trend-toggle button.active { background: var(--accent); color: #fff; }
+
+        /* Insight banner */
+        .sd-insight { margin-top: 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; box-shadow: var(--shadow); }
+        .sd-insight-icon { width: 36px; height: 36px; background: rgba(79,110,247,0.12); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent); font-size: 18px; }
+        .sd-insight-body { flex: 1; }
+        .sd-insight-title { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 3px; }
+        .sd-insight-text { font-size: 13px; color: var(--text-secondary); }
+        .sd-insight-text strong { color: var(--text-primary); }
+
+        /* Loading/error */
+        .dd-loading { text-align: center; padding: 80px 20px; color: var(--text-secondary); font-size: 15px; }
+        .dd-error   { text-align: center; padding: 60px 20px; color: var(--red); font-size: 14px; }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .sd-body { grid-template-columns: 1fr; }
+            .sd-stats { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 560px) {
+            .sd-stats { grid-template-columns: 1fr; }
+            body { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+<div class="sd-wrap">
+
+    <!-- Breadcrumb -->
+    <div class="sd-breadcrumb">
+        <a onclick="window.close()">Services</a>
+        <span class="sep">›</span>
+        <span id="sdBreadService">Loading…</span>
+    </div>
+
+    <!-- Header -->
+    <div class="sd-header">
+        <div class="sd-header-logo" id="sdLogo">
+            <img id="sdLogoImg" src="" alt="">
+        </div>
+        <div class="sd-header-info">
+            <h1 id="sdTitle">Loading…</h1>
+            <div class="sd-header-meta">
+                <span class="meta-item" id="sdMetaAccount" style="display:none">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                    <span id="sdAccountLabel"></span>
+                </span>
+                <span class="meta-item" id="sdMetaDate" style="display:none">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span id="sdDateLabel"></span>
+                </span>
+            </div>
+        </div>
+        <div>
+            <div class="sd-header-actions">
+                <button class="btn btn-secondary" onclick="downloadCSV()" style="font-size:12px;padding:7px 14px;display:flex;align-items:center;gap:6px">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Download Report
+                </button>
+            </div>
+            <div class="sd-last-updated" id="sdLastUpdated"></div>
+        </div>
+    </div>
+
+    <div id="sdLoading" class="dd-loading">Loading…</div>
+    <div id="sdError"   class="dd-error" style="display:none"></div>
+
+    <div id="sdContent" style="display:none">
+
+        <!-- Stat cards -->
+        <div class="sd-stats">
+            <div class="stat-card sd-stat-featured">
+                <svg class="stat-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <div class="stat-label">Total Cost</div>
+                <div class="stat-value" id="scTotal">—</div>
+                <div class="stat-sub" id="scPeriod"></div>
+            </div>
+            <div class="stat-card">
+                <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                <div class="stat-label">Total Resources</div>
+                <div class="stat-value" id="scResources">—</div>
+                <div class="stat-sub" id="scResourceSub"></div>
+            </div>
+            <div class="stat-card">
+                <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+                <div class="stat-label">Avg Cost / Resource</div>
+                <div class="stat-value" id="scAvg">—</div>
+                <div class="stat-sub" id="scAvgSub"></div>
+            </div>
+            <div class="stat-card">
+                <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <div class="stat-label">Top Region</div>
+                <div class="stat-value" id="scTopRegion" style="font-size:16px;padding-top:4px">—</div>
+                <div class="stat-sub" id="scTopRegionSub"></div>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="sd-body">
+
+            <!-- Left: Resources table -->
+            <div class="chart-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                    <h3 style="margin:0">Top Resources by Cost</h3>
+                    <div style="font-size:12px;color:var(--text-secondary)" id="sdTableMeta"></div>
+                </div>
+                <table class="res-table">
+                    <thead>
+                        <tr>
+                            <th class="res-num" onclick="sortTable('num')"># <span class="sort-ind" id="si-num"></span></th>
+                            <th onclick="sortTable('name')">Resource Name <span class="sort-ind" id="si-name">↓</span></th>
+                            <th id="sdRegionHdr" onclick="sortTable('region')">Region <span class="sort-ind" id="si-region">↕</span></th>
+                            <th style="text-align:right" onclick="sortTable('cost')">Cost <span class="sort-ind" id="si-cost">↕</span></th>
+                            <th class="res-pct-cell" onclick="sortTable('cost')">% of Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sdBody"></tbody>
+                </table>
+                <div class="view-all-row" id="viewAllRow" style="display:none">
+                    <button class="view-all-btn" id="viewAllBtn" onclick="toggleViewAll()">
+                        View all resources <span id="viewAllArrow">›</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right: Charts -->
+            <div class="sd-right">
+
+                <!-- Region doughnut -->
+                <div class="chart-card">
+                    <h3>Cost by Region</h3>
+                    <div style="position:relative;height:200px;display:flex;align-items:center;justify-content:center">
+                        <canvas id="regionChart"></canvas>
+                        <div style="position:absolute;text-align:center;pointer-events:none">
+                            <div style="font-size:11px;color:var(--text-secondary)">Total</div>
+                            <div style="font-size:15px;font-weight:700;color:var(--text-primary)" id="donutCenter">—</div>
+                        </div>
+                    </div>
+                    <div class="region-legend" id="regionLegend"></div>
+                </div>
+
+                <!-- Trend chart -->
+                <div class="chart-card">
+                    <div class="trend-controls">
+                        <h3>Cost Trend</h3>
+                        <div class="trend-toggle">
+                            <button id="btnDaily"  class="active" onclick="setTrendView('daily')">Daily</button>
+                            <button id="btnWeekly"            onclick="setTrendView('weekly')">Weekly</button>
+                        </div>
+                    </div>
+                    <div style="height:180px"><canvas id="trendChart"></canvas></div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Insight -->
+        <div class="sd-insight" id="sdInsight" style="display:none">
+            <div class="sd-insight-icon">&#128161;</div>
+            <div class="sd-insight-body">
+                <div class="sd-insight-title">Cost Insight</div>
+                <div class="sd-insight-text" id="sdInsightText"></div>
+            </div>
+        </div>
+
+        <div id="sdTruncNote" style="display:none;margin-top:8px;font-size:12px;color:var(--text-secondary);text-align:center;padding:6px">
+            Showing top 500 resources. Export CSV for the full list.
+        </div>
+    </div>
+
+</div>
+<script>
+const CHART_COLORS = ['#4f6ef7','#2ecc71','#e67e22','#9b59b6','#1abc9c','#e74c3c','#f39c12','#3498db','#e91e63','#00bcd4'];
+
+const qp       = new URLSearchParams(window.location.search);
+const service  = qp.get('service')   || '';
+const cloud    = qp.get('cloud')     || '';
+const account  = qp.get('account')  || '';
+const dateFrom = qp.get('date_from') || '';
+const dateTo   = qp.get('date_to')   || '';
+
+let allRows     = [];
+let sortBy      = 'cost';
+let sortDir     = 'desc';
+let showAll     = false;
+let sym         = '$';
+let totalCost   = 0;
+let dailyTrend  = [];
+let trendView   = 'daily';
+let chartInstances = {};
+
+const PREVIEW_COUNT = 10;
+
+/* ─── helpers ─────────────────────────────────────────────────────────── */
+function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function shortName(n) {
+    if (!n || n === 'Unknown') return n || 'Unknown';
+    const s = String(n);
+    if (s.toLowerCase().startsWith('arn:')) {
+        const last = s.split(':').pop();
+        return (last.includes('/') ? last.split('/').pop() : last) || s;
+    }
+    return s;
+}
+function dispName(r) { return r.display_name || shortName(r.resource_name); }
+function fmt(v) { return sym + Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtShort(v) {
+    if (v >= 1000) return sym + (v/1000).toFixed(1) + 'K';
+    return fmt(v);
+}
+
+/* ─── page init ────────────────────────────────────────────────────────── */
+const cloudLabel = {aws:'AWS',azure:'Azure',gcp:'GCP'}[cloud] || (cloud||'').toUpperCase();
+const cloudIcon  = {aws:'/static/img/aws-logo.svg', azure:'/static/img/azure-logo.svg', gcp:'/static/img/gcp-logo.svg'}[cloud] || '';
+
+document.title = service ? service + ' — Resources' : 'Service Detail';
+document.getElementById('sdBreadService').textContent = service || 'Service Detail';
+document.getElementById('sdTitle').textContent        = service || 'Service Detail';
+
+const logoImg = document.getElementById('sdLogoImg');
+if (cloudIcon) { logoImg.src = cloudIcon; logoImg.alt = cloudLabel; }
+else           { document.getElementById('sdLogo').textContent = cloudLabel.charAt(0); }
+
+const isAzure = cloud === 'azure';
+document.getElementById('sdRegionHdr').innerHTML = (isAzure ? 'Resource Group' : 'Region') + ' <span class="sort-ind" id="si-region">↕</span>';
+
+if (account) {
+    document.getElementById('sdMetaAccount').style.display = '';
+    document.getElementById('sdAccountLabel').textContent  = 'Account: ' + account;
+}
+if (dateFrom || dateTo) {
+    document.getElementById('sdMetaDate').style.display = '';
+    document.getElementById('sdDateLabel').textContent  = (dateFrom || '…') + ' – ' + (dateTo || '…');
+}
+
+function formatTs(d) {
+    return d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}) +
+           ' ' + d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+}
+document.getElementById('sdLastUpdated').textContent = 'Last updated: ' + formatTs(new Date());
+
+/* ─── sorting ──────────────────────────────────────────────────────────── */
+function sortTable(col) {
+    if (col === 'num') { sortBy = 'cost'; sortDir = 'desc'; }
+    else if (sortBy === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    else { sortBy = col; sortDir = col === 'cost' ? 'desc' : 'asc'; }
+    renderTable();
+}
+
+function getSorted() {
+    return [...allRows].sort((a, b) => {
+        let av, bv;
+        if (sortBy === 'cost')        { av = a.total_cost; bv = b.total_cost; }
+        else if (sortBy === 'region') { av = (a.region||'').toLowerCase(); bv = (b.region||'').toLowerCase(); }
+        else                          { av = dispName(a).toLowerCase(); bv = dispName(b).toLowerCase(); }
+        if (av < bv) return sortDir === 'asc' ? -1 : 1;
+        if (av > bv) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+function renderTable() {
+    ['name','region','cost'].forEach(c => {
+        const el = document.getElementById('si-' + c);
+        if (el) el.textContent = c === sortBy ? (sortDir === 'asc' ? '↑' : '↓') : '↕';
+    });
+
+    const sorted  = getSorted();
+    const visible = showAll ? sorted : sorted.slice(0, PREVIEW_COUNT);
+    const body    = document.getElementById('sdBody');
+
+    if (!visible.length) {
+        body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">No resources found.</td></tr>`;
+        return;
+    }
+
+    body.innerHTML = visible.map((r, i) => {
+        const disp   = dispName(r);
+        const rawId  = r.resource_name || '';
+        const tip    = disp !== rawId ? esc(disp) + ' — ' + esc(rawId) : esc(rawId);
+        const region = r.region || '-';
+        const pct    = totalCost > 0 ? (r.total_cost / totalCost * 100) : 0;
+        const barW   = Math.max(2, Math.round(pct));
+        return `<tr>
+            <td class="res-num">${i+1}</td>
+            <td class="res-name-cell"><span class="res-name-inner" title="${tip}">${esc(disp)}</span></td>
+            <td style="color:var(--text-secondary);font-size:12px">${esc(region)}</td>
+            <td class="res-cost">${fmt(r.total_cost)}</td>
+            <td class="res-pct-cell">
+                <div class="res-bar-wrap">
+                    <div class="res-bar-bg"><div class="res-bar-fill" style="width:${barW}%"></div></div>
+                    <span class="res-pct-label">${pct.toFixed(1)}%</span>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+
+    // View all toggle
+    const viewAllRow = document.getElementById('viewAllRow');
+    const viewAllBtn = document.getElementById('viewAllBtn');
+    if (allRows.length > PREVIEW_COUNT) {
+        viewAllRow.style.display = '';
+        viewAllBtn.innerHTML = showAll
+            ? `Show top ${PREVIEW_COUNT} <span id="viewAllArrow">↑</span>`
+            : `View all ${allRows.length} resources <span id="viewAllArrow">›</span>`;
+    } else {
+        viewAllRow.style.display = 'none';
+    }
+
+    document.getElementById('sdTableMeta').textContent =
+        showAll ? `${allRows.length} resources` : `Top ${Math.min(PREVIEW_COUNT, allRows.length)} of ${allRows.length}`;
+}
+
+function toggleViewAll() { showAll = !showAll; renderTable(); }
+
+/* ─── charts ───────────────────────────────────────────────────────────── */
+function makeChart(id, type, data, opts = {}) {
+    if (chartInstances[id]) chartInstances[id].destroy();
+    const ctx = document.getElementById(id)?.getContext('2d');
+    if (!ctx) return;
+    chartInstances[id] = new Chart(ctx, {
+        type,
+        data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            devicePixelRatio: window.devicePixelRatio || 2,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => ' ' + sym + Number(ctx.parsed || ctx.raw || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) } },
+            },
+            ...opts,
+        },
+    });
+}
+
+function renderRegionChart() {
+    const byRegion = {};
+    allRows.forEach(r => { byRegion[r.region || '-'] = (byRegion[r.region || '-'] || 0) + r.total_cost; });
+    const sorted = Object.entries(byRegion).sort((a,b) => b[1] - a[1]);
+    const topN   = sorted.slice(0, 6);
+    const other  = sorted.slice(6).reduce((s,[,v]) => s+v, 0);
+    if (other > 0) topN.push(['Others', other]);
+
+    makeChart('regionChart', 'doughnut', {
+        labels: topN.map(([k]) => k),
+        datasets: [{
+            data:            topN.map(([,v]) => parseFloat(v.toFixed(2))),
+            backgroundColor: CHART_COLORS,
+            borderColor:     'var(--bg-card)',
+            borderWidth:     3,
+            hoverOffset:     6,
+        }],
+    }, { cutout: '68%', plugins: { legend: { display: false } } });
+
+    document.getElementById('donutCenter').textContent = fmtShort(totalCost);
+
+    document.getElementById('regionLegend').innerHTML = topN.map(([name, cost], i) => {
+        const pct = totalCost > 0 ? (cost / totalCost * 100).toFixed(1) : '0.0';
+        return `<div class="region-legend-item">
+            <div class="region-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></div>
+            <span class="region-name">${esc(name)}</span>
+            <span class="region-cost">${fmt(cost)}</span>
+            <span class="region-pct">(${pct}%)</span>
+        </div>`;
+    }).join('');
+}
+
+function aggregateWeekly(daily) {
+    const weeks = {};
+    daily.forEach(d => {
+        const dt  = new Date(d.date + 'T00:00:00');
+        const dow = dt.getDay();
+        const mon = new Date(dt);
+        mon.setDate(dt.getDate() - (dow === 0 ? 6 : dow - 1));
+        const key = mon.toISOString().slice(0,10);
+        weeks[key] = (weeks[key]||0) + d.cost;
+    });
+    return Object.entries(weeks).sort((a,b) => a[0].localeCompare(b[0])).map(([date,cost]) => ({date, cost: +cost.toFixed(2)}));
+}
+
+function renderTrendChart() {
+    const data = trendView === 'weekly' ? aggregateWeekly(dailyTrend) : dailyTrend;
+    makeChart('trendChart', 'line', {
+        labels: data.map(d => d.date),
+        datasets: [{
+            data:            data.map(d => d.cost),
+            borderColor:     '#4f6ef7',
+            backgroundColor: 'rgba(79,110,247,0.10)',
+            fill:            true,
+            tension:         0.35,
+            pointRadius:     data.length > 30 ? 0 : 3,
+            pointHoverRadius: 5,
+            borderWidth:     2,
+        }],
+    }, {
+        scales: {
+            x: { ticks: { color:'#8b8fa3', font:{size:10}, maxTicksLimit:8 }, grid: { color:'rgba(255,255,255,0.05)' } },
+            y: { ticks: { color:'#8b8fa3', font:{size:10}, callback: v => sym + (v>=1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(0)) }, grid: { color:'rgba(255,255,255,0.05)' } },
+        },
+    });
+}
+
+function setTrendView(v) {
+    trendView = v;
+    document.getElementById('btnDaily').classList.toggle('active',  v === 'daily');
+    document.getElementById('btnWeekly').classList.toggle('active', v === 'weekly');
+    renderTrendChart();
+}
+
+/* ─── CSV export ───────────────────────────────────────────────────────── */
+function downloadCSV() {
+    const sorted = getSorted();
+    const rows   = [['#','Resource Name','Raw ID','Region','Cost','Records']];
+    sorted.forEach((r, i) => rows.push([i+1, dispName(r), r.resource_name, r.region, r.total_cost, r.total_records]));
+    const csv  = rows.map(row => row.map(v => '"' + String(v||'').replace(/"/g,'""') + '"').join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = (service||'resources').replace(/[^a-z0-9]/gi,'_') + '_resources.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+/* ─── load data ────────────────────────────────────────────────────────── */
+async function load() {
+    if (!service) {
+        document.getElementById('sdLoading').style.display = 'none';
+        document.getElementById('sdError').style.display   = 'block';
+        document.getElementById('sdError').textContent     = 'No service specified.';
+        return;
+    }
+    try {
+        const q = new URLSearchParams();
+        if (account)  q.set('subscription_ids', account);
+        if (service)  q.set('service_name',  service);
+        if (dateFrom) q.set('date_from',  dateFrom);
+        if (dateTo)   q.set('date_to',    dateTo);
+        if (cloud)    q.set('cloud_provider', cloud);
+
+        const resp = await fetch('/api/costs/resource-detail?' + q);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const json = await resp.json();
+
+        allRows    = json.rows       || [];
+        sym        = json.currency_symbol || '$';
+        totalCost  = json.total_cost  || 0;
+        dailyTrend = json.daily_trend || [];
+
+        // Stat cards
+        const resCount = allRows.length;
+        const avg      = resCount > 0 ? totalCost / resCount : 0;
+        const byRegion = {};
+        allRows.forEach(r => { const rg = r.region||'-'; byRegion[rg] = (byRegion[rg]||0) + r.total_cost; });
+        const topRegionEntry = Object.entries(byRegion).sort((a,b) => b[1]-a[1])[0] || ['-', 0];
+
+        document.getElementById('scTotal').textContent      = fmt(totalCost);
+        document.getElementById('scPeriod').textContent     = dateFrom && dateTo ? dateFrom + ' – ' + dateTo : '';
+        document.getElementById('scResources').textContent  = resCount;
+        document.getElementById('scResourceSub').textContent = resCount === 500 ? '500+ (capped)' : '';
+        document.getElementById('scAvg').textContent        = fmt(avg);
+        document.getElementById('scAvgSub').textContent     = 'per resource';
+        document.getElementById('scTopRegion').textContent  = topRegionEntry[0];
+        document.getElementById('scTopRegionSub').textContent = fmt(topRegionEntry[1]) + ' (' + (totalCost > 0 ? (topRegionEntry[1]/totalCost*100).toFixed(1) : '0.0') + '%)';
+
+        document.getElementById('sdLoading').style.display = 'none';
+        document.getElementById('sdContent').style.display = 'block';
+
+        if (allRows.length >= 500) document.getElementById('sdTruncNote').style.display = 'block';
+
+        renderTable();
+        renderRegionChart();
+        renderTrendChart();
+
+        // Insight
+        const topRes = allRows[0];
+        if (topRes) {
+            const topPct = (topRes.total_cost / totalCost * 100).toFixed(1);
+            const noRegion = allRows.filter(r => !r.region || r.region === '-').length;
+            let insight = `Top resource <strong>${esc(dispName(topRes))}</strong> accounts for <strong>${topPct}%</strong> of this service's cost.`;
+            if (noRegion > 0) insight += ` <strong>${noRegion}</strong> resource${noRegion>1?'s have':' has'} no region data — run a Full Sync to populate.`;
+            document.getElementById('sdInsightText').innerHTML = insight;
+            document.getElementById('sdInsight').style.display = '';
+        }
+
+    } catch(e) {
+        document.getElementById('sdLoading').style.display = 'none';
+        document.getElementById('sdError').style.display   = 'block';
+        document.getElementById('sdError').textContent     = 'Failed to load: ' + e.message;
+    }
+}
+
+load();
+</script>
+</body>
+</html>

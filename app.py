@@ -24,7 +24,7 @@ from database import (
     get_db,
     init_db, insert_cost_records, clear_cost_data, delete_cost_data_by_date,
     get_latest_cost_date, query_costs,
-    get_cost_total, get_cost_totals_by_subscription, get_cost_totals_by_service, get_custom_cost,
+    get_cost_total, get_cost_totals_by_subscription, get_cost_totals_by_service, get_resource_detail, get_custom_cost,
     get_summary, get_daily_trend, get_distinct_values, get_sync_history,
     get_stats, log_sync, update_sync_log,
     get_monthly_summary, get_monthly_service_breakdown, get_monthly_rg_breakdown,
@@ -480,6 +480,15 @@ def index():
 def drilldown_page():
     """Standalone compare drilldown (opened from Compare table row link)."""
     resp = make_response(render_template("drilldown.html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+
+@app.route("/service-detail")
+@login_required
+def service_detail_page():
+    """Standalone service resource drill-down page (opened from Cost Data service breakdown)."""
+    resp = make_response(render_template("service_detail.html"))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
 
@@ -1405,6 +1414,59 @@ def api_costs_total_by_service():
     from currency import tenant_reporting_currency
     _rep = tenant_reporting_currency(current_tenant_id(), get_db)
     return jsonify(get_cost_totals_by_service(filters, tenant_id=current_tenant_id(), cloud_provider=cloud_provider, reporting_currency=_rep))
+
+
+@app.route("/api/costs/resource-detail")
+@login_required
+def api_costs_resource_detail():
+    def _csv_list(name):
+        raw = (request.args.get(name) or "").strip()
+        return [v.strip() for v in raw.split(",") if v.strip()] if raw else []
+    subscription_ids = _csv_list("subscription_ids") or None
+    service_name = request.args.get("service_name") or None
+    date_from = request.args.get("date_from") or None
+    date_to = request.args.get("date_to") or None
+    cloud_provider = request.args.get("cloud_provider") or None
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    from database import _converted_cost_sql
+    _rep = tenant_reporting_currency(current_tenant_id(), get_db)
+    rows = get_resource_detail(
+        subscription_ids=subscription_ids,
+        service_name=service_name,
+        date_from=date_from,
+        date_to=date_to,
+        tenant_id=current_tenant_id(),
+        cloud_provider=cloud_provider,
+        reporting_currency=_rep,
+    )
+    total = round(sum(r["total_cost"] for r in rows), 2)
+
+    # Daily trend for this service
+    _cost = _converted_cost_sql(_rep)
+    conn = get_db()
+    tq = f"SELECT date, SUM({_cost}) as tc FROM cost_data WHERE 1=1"
+    tp = []
+    if subscription_ids:
+        tq += f" AND subscription_id IN ({','.join(['?']*len(subscription_ids))})"
+        tp.extend(subscription_ids)
+    if service_name:
+        tq += " AND service_name = ?"
+        tp.append(service_name)
+    if date_from:
+        tq += " AND date >= ?"
+        tp.append(date_from)
+    if date_to:
+        tq += " AND date <= ?"
+        tp.append(date_to)
+    if cloud_provider:
+        tq += " AND cloud_provider = ?"
+        tp.append(cloud_provider)
+    tq += " AND tenant_id = ? GROUP BY date ORDER BY date ASC"
+    tp.append(current_tenant_id())
+    trend = [{"date": r["date"], "cost": round(r["tc"] or 0, 2)} for r in conn.execute(tq, tp).fetchall()]
+    conn.close()
+
+    return jsonify({"rows": rows, "total_cost": total, "currency_symbol": _cur_symbol(_rep), "daily_trend": trend})
 
 
 @app.route("/api/resource_config")

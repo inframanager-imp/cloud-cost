@@ -899,6 +899,7 @@ let _subTableData        = [];
 let _subTableIsService   = false;
 let _subTableSortBy      = 'cost';
 let _subTableSortDir     = 'desc';
+let _drillBaseParams     = new URLSearchParams();
 
 function sortSubTable(col) {
     if (_subTableSortBy === col) {
@@ -939,13 +940,16 @@ function _renderSubTable() {
         return;
     }
     if (_subTableIsService) {
-        bySubBody.innerHTML = sorted.map(s => `
-            <tr>
+        bySubBody.innerHTML = sorted.map(s => {
+            const svcAttr = (s.service_name || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+            return `<tr style="cursor:pointer" title="Click to see individual resources"
+                data-service="${svcAttr}" onclick="openServiceDrill(this.dataset.service)">
                 <td>${awsLogo}AWS</td>
                 <td style="color:var(--text-secondary)">${s.account || ''}</td>
-                <td>${s.service_name || '-'}</td>
+                <td style="color:var(--accent)">${s.service_name || '-'} <span style="font-size:10px;opacity:0.7">&#8599;</span></td>
                 <td style="text-align:right;font-weight:500;color:var(--text-primary)">${curSym()}${(s.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-            </tr>`).join('');
+            </tr>`;
+        }).join('');
     } else {
         bySubBody.innerHTML = sorted.map(s => `
             <tr>
@@ -959,6 +963,20 @@ async function refreshCostsTable(btn) {
     if (btn) { btn.disabled = true; const icon = document.getElementById('costsRefreshIcon'); if (icon) icon.style.animation = 'spin 0.8s linear infinite'; }
     await loadCostsTable();
     if (btn) { btn.disabled = false; const icon = document.getElementById('costsRefreshIcon'); if (icon) icon.style.animation = ''; }
+}
+
+function openServiceDrill(serviceName) {
+    const p = new URLSearchParams();
+    p.set('service', serviceName);
+    const cp = _drillBaseParams.get('cloud_provider') || '';
+    if (cp) p.set('cloud', cp);
+    const subs = _drillBaseParams.get('subscription_ids') || '';
+    if (subs) p.set('account', subs);
+    const df = _drillBaseParams.get('date_from') || '';
+    const dt = _drillBaseParams.get('date_to') || '';
+    if (df) p.set('date_from', df);
+    if (dt) p.set('date_to', dt);
+    window.open('/service-detail?' + p.toString(), '_blank');
 }
 
 // Cost Data multiselect state
@@ -1211,6 +1229,8 @@ async function loadCostsTable() {
         const paramsBySub = new URLSearchParams(params);
         paramsBySub.delete('subscription_id');
         paramsBySub.delete('limit');
+        paramsBySub.delete('offset');
+        _drillBaseParams = new URLSearchParams(paramsBySub);
 
         // AWS with a specific account selected → show service breakdown; otherwise show by subscription
         const showServiceBreakdown = costsSelectedCloud === 'aws' && accSelected.length > 0;
