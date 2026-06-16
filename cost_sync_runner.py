@@ -220,6 +220,36 @@ def run_cost_sync_from_payload(payload: dict) -> None:
                                 )
                                 print(f"[Sync] CUR import for {pid}: {result}")
                                 total_records += result.get("records", 0)
+
+                                # Supplement last 14 days with Cost Explorer resource-level API.
+                                # CUR reports without "Include resource IDs" have no resource_name;
+                                # GetCostAndUsageWithResources fills this in without any AWS-side changes.
+                                _cutoff = (datetime.utcnow() - timedelta(days=14)).strftime("%Y-%m-%d")
+                                _recent_from = _cutoff if _cutoff > p_from else p_from
+                                if _recent_from < date_to:
+                                    try:
+                                        _ce_records = fetch_aws_costs(provider, _recent_from, date_to)
+                                        if _ce_records:
+                                            _c = get_db()
+                                            _c.execute(
+                                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
+                                                (_recent_from, date_to, pid, provider_tenant_id),
+                                            )
+                                            _ce_records = [r + (provider_tenant_id,) for r in _ce_records]
+                                            _c.executemany(
+                                                """INSERT INTO cost_data
+                                                  (date,resource_group,service_name,resource_type,resource_name,
+                                                   meter_category,meter_subcategory,cost,currency,subscription_id,
+                                                   tags,cloud_provider,tenant_id)
+                                                  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                                _ce_records,
+                                            )
+                                            _c.commit()
+                                            _c.close()
+                                            print(f"[Sync] CE resource-level supplement for {pid}: {len(_ce_records)} records")
+                                    except Exception as _ce_err:
+                                        print(f"[Sync] CE resource-level supplement for {pid} failed (non-fatal): {_ce_err}")
+
                                 update_cloud_provider_sync_time(provider["id"], error=None)
                             else:
                                 records = fetch_aws_costs(provider, p_from, date_to)
