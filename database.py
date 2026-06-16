@@ -50,7 +50,8 @@ def init_db():
             date_from TEXT,
             date_to TEXT,
             error_message TEXT,
-            tenant_id INTEGER
+            tenant_id INTEGER,
+            triggered_by TEXT DEFAULT 'manual'
         )
     """)
 
@@ -60,6 +61,13 @@ def init_db():
     except Exception:
         cursor.execute("ALTER TABLE sync_log ADD COLUMN tenant_id INTEGER")
         print("[DB] Migrated sync_log: added tenant_id column")
+
+    # Migration: add triggered_by to sync_log if missing
+    try:
+        cursor.execute("SELECT triggered_by FROM sync_log LIMIT 1")
+    except Exception:
+        cursor.execute("ALTER TABLE sync_log ADD COLUMN triggered_by TEXT DEFAULT 'manual'")
+        print("[DB] Migrated sync_log: added triggered_by column")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS subscriptions (
@@ -901,13 +909,13 @@ def get_latest_cost_date(subscription_id=None):
     return row["max_date"] if row and row["max_date"] else None
 
 
-def log_sync(sync_start, date_from, date_to, tenant_id=None):
+def log_sync(sync_start, date_from, date_to, tenant_id=None, triggered_by="manual"):
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO sync_log (sync_start, date_from, date_to, status, tenant_id)
-        VALUES (?, ?, ?, 'running', ?)
-    """, (sync_start, date_from, date_to, tenant_id))
+        INSERT INTO sync_log (sync_start, date_from, date_to, status, tenant_id, triggered_by)
+        VALUES (?, ?, ?, 'running', ?, ?)
+    """, (sync_start, date_from, date_to, tenant_id, triggered_by))
     conn.commit()
     sync_id = cursor.lastrowid
     conn.close()

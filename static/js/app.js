@@ -4909,12 +4909,17 @@ async function _scLoadHistory() {
             const records = h.records_fetched ? `${h.records_fetched.toLocaleString()} records` : '';
             const fromTo = h.date_from && h.date_to ? `${h.date_from} → ${h.date_to}` : '';
             const errSnip = h.error_message ? `<div style="color:var(--red);margin-top:2px;font-size:11px">${_esc(h.error_message.slice(0,80))}</div>` : '';
+            const isAuto = h.triggered_by === 'auto';
+            const triggerTag = `<span style="font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;background:${isAuto ? 'rgba(99,102,241,0.12)' : 'rgba(100,116,139,0.12)'};color:${isAuto ? 'var(--accent)' : 'var(--text-secondary)'}">${isAuto ? 'Auto' : 'Manual'}</span>`;
             return `<div class="sc-history-item">
                 <div class="sc-history-dot ${dotClass}"></div>
                 <div style="flex:1;min-width:0">
-                    <div style="display:flex;justify-content:space-between;gap:8px">
+                    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
                         <span style="font-weight:600;color:var(--text-primary);text-transform:capitalize">${h.status}</span>
-                        <span style="color:var(--text-secondary);white-space:nowrap">${t}</span>
+                        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                            ${triggerTag}
+                            <span style="color:var(--text-secondary);white-space:nowrap;font-size:11px">${t}</span>
+                        </div>
                     </div>
                     ${records ? `<div style="color:var(--text-secondary)">${records}${fromTo ? ' &bull; ' + fromTo : ''}</div>` : ''}
                     ${errSnip}

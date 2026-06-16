@@ -1005,7 +1005,7 @@ def api_sync():
         msg_start = f"{mode_label}: Starting {total_subs} subscription(s) — {', '.join(sub_names_list[:4])}{'...' if total_subs > 4 else ''}"
         sync_status = {"running": True, "message": msg_start, "progress": 5, "details": []}
         _write_sync_file(True, msg_start, 5)
-        sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=tid)
+        sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=tid, triggered_by="manual")
         total_records = 0
         completed_details = []  # track per-sub results for UI
 
@@ -1187,7 +1187,7 @@ def api_sync():
     if FORCE_SYNC_INLINE and SYNC_SUBPROCESS:
         data_dir = os.path.dirname(os.path.abspath(os.getenv("DB_PATH", "/app/data/azure_costs.db")))
         os.makedirs(data_dir, exist_ok=True)
-        payload = {"mode": mode, "subscription_id": target_sub, "date_to": date_to, "tenant_id": tid}
+        payload = {"mode": mode, "subscription_id": target_sub, "date_to": date_to, "tenant_id": tid, "triggered_by": "manual"}
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", dir=data_dir, delete=False, encoding="utf-8"
         ) as tf:
@@ -3918,7 +3918,7 @@ def _run_auto_sync():
     months = int(os.getenv("COST_HISTORY_MONTHS", 3))
     date_to = datetime.utcnow().strftime("%Y-%m-%d")
     total_subs = len(subs_to_sync)
-    sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=OWNER_TENANT_ID)
+    sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=OWNER_TENANT_ID, triggered_by="auto")
     total_records = 0
 
     try:

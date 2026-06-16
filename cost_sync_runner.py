@@ -111,7 +111,7 @@ def run_cost_sync_from_payload(payload: dict) -> None:
     mode_label = "Full sync" if is_full else "Quick sync"
     total_subs = len(subs_to_sync)
     _write_status(True, f"{mode_label}: Starting ({total_subs} subscription(s))...", 5)
-    sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=payload_tid)
+    sync_id = log_sync(datetime.utcnow().isoformat(), "", date_to, tenant_id=payload_tid, triggered_by=payload.get("triggered_by", "manual"))
     total_records = 0
 
     try:
