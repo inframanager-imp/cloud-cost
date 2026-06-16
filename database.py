@@ -3163,6 +3163,7 @@ def get_tenant(tenant_id: int = None, slug: str = None) -> dict:
 
 
 def get_all_tenants() -> list:
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
     conn = get_db()
     rows = conn.execute("""
         SELECT t.*,
@@ -3170,14 +3171,39 @@ def get_all_tenants() -> list:
                (SELECT COUNT(*) FROM cloud_providers cp WHERE cp.tenant_id=t.id) AS provider_count,
                (SELECT COUNT(*) FROM cost_data cd WHERE cd.tenant_id=t.id) AS cost_rows,
                (SELECT COALESCE(SUM(cd.cost), 0) FROM cost_data cd
-                  WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month')) AS cloud_spend_30d,
+                  WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month')) AS cloud_spend_30d_raw,
                (SELECT COALESCE(SUM(cd.cost), 0) FROM cost_data cd
                   WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month', '-1 month')
-                        AND cd.date < date('now', 'start of month')) AS cloud_spend_prev_30d
+                        AND cd.date < date('now', 'start of month')) AS cloud_spend_prev_30d_raw
         FROM tenants t ORDER BY t.created_at DESC
     """).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        rep = tenant_reporting_currency(d["id"], get_db)
+        d["reporting_currency"] = rep
+        d["currency_symbol"] = _cur_symbol(rep)
+        # Convert raw USD spend to tenant's reporting currency
+        from currency import convert, get_rates
+        rates = get_rates()
+        raw = float(d.get("cloud_spend_30d_raw") or 0)
+        prev_raw = float(d.get("cloud_spend_prev_30d_raw") or 0)
+        d["cloud_spend_30d"] = round(convert(raw, "USD", rep, rates), 2)
+        d["cloud_spend_prev_30d"] = round(convert(prev_raw, "USD", rep, rates), 2)
+        result.append(d)
+    return result
+
+
+def delete_tenant(tenant_id: int) -> None:
+    conn = get_db()
+    conn.execute("DELETE FROM cost_data WHERE tenant_id=?", (tenant_id,))
+    conn.execute("DELETE FROM cloud_providers WHERE tenant_id=?", (tenant_id,))
+    conn.execute("DELETE FROM users WHERE tenant_id=?", (tenant_id,))
+    conn.execute("DELETE FROM email_settings WHERE tenant_id=?", (tenant_id,))
+    conn.execute("DELETE FROM tenants WHERE id=?", (tenant_id,))
+    conn.commit()
+    conn.close()
 
 
 def update_tenant(tenant_id: int, **kwargs):

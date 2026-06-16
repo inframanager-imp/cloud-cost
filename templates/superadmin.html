@@ -236,6 +236,9 @@
   </div>
   <div class="topbar-right">
     <span class="topbar-email" id="admin-email-label"></span>
+    <button class="btn-logout" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle theme" style="padding:8px 10px;min-width:38px">
+      <span id="theme-icon">☀️</span>
+    </button>
     <button class="btn-logout" onclick="logout()">Sign out</button>
     <div class="avatar-circle" id="admin-avatar">SA</div>
   </div>
@@ -525,6 +528,58 @@
   </div>
 </div>
 
+<!-- Reset Password Modal -->
+<div class="modal-backdrop" id="reset-pwd-modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reset-pwd-title">
+    <div class="modal-title" id="reset-pwd-title">Reset Password</div>
+    <input type="hidden" id="reset-pwd-tid"/>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+      Reset admin password for: <strong style="color:var(--text)" id="reset-pwd-org"></strong>
+    </p>
+    <div class="form-group">
+      <label for="reset-pwd-input">New Password</label>
+      <input type="text" id="reset-pwd-input" placeholder="Min. 8 characters" autocomplete="new-password"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sm btn-outline-sm" onclick="closeModal('reset-pwd-modal')">Cancel</button>
+      <button class="btn-sm btn-primary-sm" onclick="submitResetPassword()">Reset Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Tenant Modal — Step 1 warning -->
+<div class="modal-backdrop" id="delete-step1-modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-title" style="color:var(--danger)">⚠ Delete Tenant</div>
+    <input type="hidden" id="delete-tid"/>
+    <div style="background:var(--danger-soft);border:1px solid color-mix(in oklch, var(--danger) 35%, transparent);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;color:var(--danger)">
+      <strong>This action is irreversible.</strong> All cost data, cloud providers, users and settings for <strong id="delete-org-name-1"></strong> will be permanently deleted.
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:0">Are you sure you want to continue?</p>
+    <div class="modal-footer">
+      <button class="btn-sm btn-outline-sm" onclick="closeModal('delete-step1-modal')">Cancel</button>
+      <button class="btn-sm" style="background:var(--danger);color:#fff" onclick="openDeleteStep2()">Yes, continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Tenant Modal — Step 2 type name confirmation -->
+<div class="modal-backdrop" id="delete-step2-modal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-title" style="color:var(--danger)">Confirm Permanent Deletion</div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+      Type the organisation name <strong style="color:var(--text)" id="delete-org-name-2"></strong> to confirm:
+    </p>
+    <div class="form-group">
+      <input type="text" id="delete-confirm-input" placeholder="Type organisation name…" oninput="onDeleteConfirmInput()"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sm btn-outline-sm" onclick="closeModal('delete-step2-modal')">Cancel</button>
+      <button class="btn-sm" id="delete-confirm-btn" style="background:var(--danger);color:#fff;opacity:.4;pointer-events:none" onclick="submitDeleteTenant()">Delete permanently</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast-stack" id="toast-stack"></div>
 
 <script type="application/json" id="tenants-seed">{{ tenants_json | safe }}</script>
@@ -607,6 +662,7 @@ function updateMiniStats(tenants) {
     return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
   }).length;
 
+  // Platform total in USD (raw before per-tenant conversion, for a consistent aggregate)
   const spend = tenants.reduce((s,t)=>s+(Number(t.cloud_spend_30d)||0),0);
   const prevSpend = tenants.reduce((s,t)=>s+(Number(t.cloud_spend_prev_30d)||0),0);
 
@@ -634,9 +690,10 @@ function updateMiniStats(tenants) {
 }
 
 // ─── Formatting helpers ──────────────────────────────────────────────────
-function fmtMoney(n) {
+function fmtMoney(n, sym) {
   n = Number(n)||0;
-  return '$'+n.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0});
+  sym = sym || '$';
+  return sym + n.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0});
 }
 function fmtDate(s) {
   if (!s) return '—';
@@ -833,7 +890,7 @@ function renderTenants(tenants, totalFiltered) {
           ${t.user_count||0}
         </span>
       </td>
-      <td class="col-num mono ${spend===0?'dim':''}">${fmtMoney(spend)}</td>
+      <td class="col-num mono ${spend===0?'dim':''}">${fmtMoney(spend, t.currency_symbol)}</td>
       <td class="col-created mono dim">${fmtDate(t.created_at)}</td>
       <td class="row-menu">
         <button class="menu-btn" aria-label="More actions for ${esc(name)}" onclick="toggleRowMenu(event, ${t.id})">
@@ -843,10 +900,12 @@ function renderTenants(tenants, totalFiltered) {
           <button class="menu-item" onclick="viewDetails(${t.id})">View details</button>
           <button class="menu-item" onclick="editTenant(${t.id})">Edit organisation</button>
           <button class="menu-item" onclick="impersonate(${t.id})">View as</button>
+          <button class="menu-item" onclick="openResetPassword(${t.id})">Reset password</button>
           <div class="menu-divider"></div>
           ${t.status==='active'
             ? `<button class="menu-item danger" onclick="suspendTenant(${t.id})">Suspend access</button>`
             : `<button class="menu-item ok" onclick="activateTenant(${t.id})">Reactivate</button>`}
+          <button class="menu-item danger" onclick="openDeleteTenant(${t.id})">Delete tenant…</button>
         </div>
       </td>
     </tr>`;
@@ -1063,6 +1122,89 @@ function toast(msg, type) {
 // ─── Auth ───────────────────────────────────────────────────────────────────
 function logout() {
   fetch('/logout', {method:'POST'}).then(()=>{window.location.href='/login';}).catch(()=>{window.location.href='/login';});
+}
+
+// ─── Theme toggle ────────────────────────────────────────────────────────────
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('theme-icon').textContent = theme === 'light' ? '🌙' : '☀️';
+  localStorage.setItem('sa-theme', theme);
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+(function() {
+  const saved = localStorage.getItem('sa-theme') || 'dark';
+  applyTheme(saved);
+})();
+
+// ─── Reset Password ──────────────────────────────────────────────────────────
+function openResetPassword(id) {
+  const t = allTenants.find(x=>x.id===id);
+  if (!t) return;
+  document.getElementById('reset-pwd-tid').value = id;
+  document.getElementById('reset-pwd-org').textContent = t.name;
+  document.getElementById('reset-pwd-input').value = '';
+  document.querySelectorAll('.menu-dd.open').forEach(m=>m.classList.remove('open'));
+  openModal('reset-pwd-modal');
+  setTimeout(()=>document.getElementById('reset-pwd-input').focus(), 50);
+}
+async function submitResetPassword() {
+  const id = document.getElementById('reset-pwd-tid').value;
+  const pwd = document.getElementById('reset-pwd-input').value.trim();
+  if (pwd.length < 8) { toast('Password must be at least 8 characters', 'danger'); return; }
+  try {
+    const res = await fetch(`/api/superadmin/tenants/${id}/reset-password`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:pwd})
+    });
+    const data = await res.json();
+    if (res.ok) { closeModal('reset-pwd-modal'); toast(data.message || 'Password reset', 'ok'); }
+    else { toast(data.error || 'Failed to reset password', 'danger'); }
+  } catch(e) { toast('Network error', 'danger'); }
+}
+
+// ─── Delete Tenant ───────────────────────────────────────────────────────────
+let deleteTenantId = null;
+function openDeleteTenant(id) {
+  const t = allTenants.find(x=>x.id===id);
+  if (!t) return;
+  deleteTenantId = id;
+  document.getElementById('delete-tid').value = id;
+  document.getElementById('delete-org-name-1').textContent = t.name;
+  document.getElementById('delete-org-name-2').textContent = t.name;
+  document.getElementById('delete-confirm-input').value = '';
+  document.getElementById('delete-confirm-btn').style.opacity = '0.4';
+  document.getElementById('delete-confirm-btn').style.pointerEvents = 'none';
+  document.querySelectorAll('.menu-dd.open').forEach(m=>m.classList.remove('open'));
+  openModal('delete-step1-modal');
+}
+function openDeleteStep2() {
+  closeModal('delete-step1-modal');
+  openModal('delete-step2-modal');
+  setTimeout(()=>document.getElementById('delete-confirm-input').focus(), 50);
+}
+function onDeleteConfirmInput() {
+  const t = allTenants.find(x=>x.id===deleteTenantId);
+  const typed = document.getElementById('delete-confirm-input').value;
+  const match = t && typed === t.name;
+  document.getElementById('delete-confirm-btn').style.opacity = match ? '1' : '0.4';
+  document.getElementById('delete-confirm-btn').style.pointerEvents = match ? 'auto' : 'none';
+}
+async function submitDeleteTenant() {
+  if (!deleteTenantId) return;
+  try {
+    const res = await fetch(`/api/superadmin/tenants/${deleteTenantId}`, {method:'DELETE'});
+    const data = await res.json();
+    if (res.ok) {
+      closeModal('delete-step2-modal');
+      toast(data.message || 'Tenant deleted', 'ok');
+      deleteTenantId = null;
+      refreshTenants();
+    } else {
+      toast(data.error || 'Failed to delete tenant', 'danger');
+    }
+  } catch(e) { toast('Network error', 'danger'); }
 }
 
 loadData();

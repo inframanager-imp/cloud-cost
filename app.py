@@ -4519,6 +4519,37 @@ def api_sa_tenant_update(tid):
     update_tenant(tid, **{k: body[k] for k in ("name","plan","status","max_users","max_cloud_providers") if k in body})
     return jsonify({"message": "Updated"})
 
+@app.route("/api/superadmin/tenants/<int:tid>", methods=["DELETE"])
+@super_admin_required
+def api_sa_tenant_delete(tid):
+    from database import delete_tenant
+    tenant = get_tenant(tid)
+    if not tenant:
+        return jsonify({"error": "Tenant not found"}), 404
+    delete_tenant(tid)
+    return jsonify({"message": f"Tenant '{tenant['name']}' deleted"})
+
+@app.route("/api/superadmin/tenants/<int:tid>/reset-password", methods=["POST"])
+@super_admin_required
+def api_sa_reset_password(tid):
+    from werkzeug.security import generate_password_hash
+    body = request.get_json(silent=True) or {}
+    new_password = body.get("password", "").strip()
+    if len(new_password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters"}), 400
+    users = get_tenant_users(tid)
+    if not users:
+        return jsonify({"error": "No users in this tenant"}), 400
+    # Reset password for all admin users, or the first user if none are admin
+    admins = [u for u in users if u.get("role") == "admin"] or [users[0]]
+    conn = get_db()
+    for u in admins:
+        conn.execute("UPDATE users SET password_hash=? WHERE id=?",
+                     (generate_password_hash(new_password), u["id"]))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Password reset for {len(admins)} admin user(s)"})
+
 @app.route("/api/superadmin/impersonate/<int:tid>", methods=["POST"])
 @super_admin_required
 def api_sa_impersonate(tid):
