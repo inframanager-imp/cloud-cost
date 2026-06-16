@@ -546,6 +546,13 @@
                 <p class="cp-page-subtitle" id="costsSubtitleBar">Select dates to explore costs</p>
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:6px">
+                <button class="cp-btn-secondary" id="costsRefreshBtn" onclick="refreshCostsTable(this)">
+                    <svg id="costsRefreshIcon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <polyline points="23,4 23,10 17,10"/><polyline points="1,20 1,14 7,14"/>
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                    </svg>
+                    Refresh
+                </button>
                 <button class="cp-btn-secondary" onclick="exportCSV()">
                     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -593,7 +600,7 @@
                     <input type="date" class="cost-date-range__input" id="costDateTo" onchange="loadCostsTable()">
                 </div>
             </div>
-            <div class="cost-filter-field">
+            <div class="cost-filter-field" id="costGroupByWrap">
                 <label class="cost-filter-label">Group by</label>
                 <select class="cost-filter-input" id="costGroupBy" onchange="loadCostsTable()">
                     <option value="resource_group">Resource Group</option>
@@ -607,7 +614,24 @@
                     <option value="monthly" selected>Monthly</option>
                 </select>
             </div>
-            <div class="cost-filter-field" style="position:relative">
+            <div class="cost-filter-field" id="costAccountWrap" style="position:relative">
+                <label class="cost-filter-label" id="costAccountLabel">Account / Subscription</label>
+                <div class="multiselect" id="cdAccMultiselect">
+                    <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('acc')">
+                        <span id="cdAccTriggerText" class="multiselect__placeholder">All</span>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="multiselect__panel" id="cdAccPanel" hidden>
+                        <input class="multiselect__search" id="cdAccSearch" placeholder="Search accounts..." oninput="cdFilterList('acc')">
+                        <div class="multiselect__actions">
+                            <button class="btn-link" onclick="cdSelectAll('acc')">Select all</button>
+                            <button class="btn-link" onclick="cdDeselectAll('acc')">Clear</button>
+                        </div>
+                        <div class="multiselect__options" id="cdAccList"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="cost-filter-field" id="costRGWrap" style="position:relative">
                 <label class="cost-filter-label" id="costRGLabel">Project</label>
                 <div class="multiselect" id="cdRgMultiselect">
                     <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('rg')">
@@ -638,23 +662,6 @@
                             <button class="btn-link" onclick="cdDeselectAll('svc')">Clear</button>
                         </div>
                         <div class="multiselect__options" id="cdSvcList"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="cost-filter-field" id="costAccountWrap" style="position:relative">
-                <label class="cost-filter-label" id="costAccountLabel">Account / Subscription</label>
-                <div class="multiselect" id="cdAccMultiselect">
-                    <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('acc')">
-                        <span id="cdAccTriggerText" class="multiselect__placeholder">All</span>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                    </button>
-                    <div class="multiselect__panel" id="cdAccPanel" hidden>
-                        <input class="multiselect__search" id="cdAccSearch" placeholder="Search accounts..." oninput="cdFilterList('acc')">
-                        <div class="multiselect__actions">
-                            <button class="btn-link" onclick="cdSelectAll('acc')">Select all</button>
-                            <button class="btn-link" onclick="cdDeselectAll('acc')">Clear</button>
-                        </div>
-                        <div class="multiselect__options" id="cdAccList"></div>
                     </div>
                 </div>
             </div>
@@ -689,13 +696,15 @@
                 <table>
                     <thead>
                         <tr>
-                            <th id="costSubColHeader">Account / Subscription / Project</th>
-                            <th style="text-align:right">Cost</th>
+                            <th id="costSubCloudHeader" style="display:none;cursor:pointer;white-space:nowrap" onclick="sortSubTable('cloud')">Cloud <span id="sub-sort-cloud" class="sort-indicator">↕</span></th>
+                            <th id="costSubAccHeader" style="display:none;cursor:pointer;white-space:nowrap" onclick="sortSubTable('account')">Account <span id="sub-sort-account" class="sort-indicator">↕</span></th>
+                            <th id="costSubColHeader" style="cursor:pointer;white-space:nowrap" onclick="sortSubTable('name')">Account / Subscription / Project <span id="sub-sort-name" class="sort-indicator">↕</span></th>
+                            <th style="text-align:right;cursor:pointer;white-space:nowrap" onclick="sortSubTable('cost')">Cost <span id="sub-sort-cost" class="sort-indicator">↑</span></th>
                         </tr>
                     </thead>
                     <tbody id="costBySubscriptionBody">
                         <tr>
-                            <td colspan="2" style="text-align:center;padding:25px;color:var(--text-secondary)">
+                            <td colspan="4" style="text-align:center;padding:25px;color:var(--text-secondary)">
                                 Select dates and load cost data to see totals.
                             </td>
                         </tr>

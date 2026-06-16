@@ -53,7 +53,7 @@ const CLOUD_LOGOS = {
 };
 const CLOUD_META = {
     azure:  { icon: '⊞', logo: CLOUD_LOGOS.azure,  label: 'Azure',  color: '#0078d4', groupLabel: { sub: 'Subscription', rg: 'Resource Group', service: 'Service' } },
-    aws:    { icon: '⚙', logo: CLOUD_LOGOS.aws,    label: 'AWS',    color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Account',        service: 'Service' } },
+    aws:    { icon: '⚙', logo: CLOUD_LOGOS.aws,    label: 'AWS',    color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Region',         service: 'Service' } },
     gcp:    { icon: '◉', logo: CLOUD_LOGOS.gcp,    label: 'GCP',    color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service' } },
     openai: { icon: '◈', logo: CLOUD_LOGOS.openai, label: 'OpenAI', color: '#10a37f', groupLabel: { sub: 'Org',          rg: 'Model',          service: 'AI API'   } },
 };
@@ -894,6 +894,73 @@ let costPageOffset = 0;
 let costPageLimit = 100;
 let costPageTotal = 0;
 
+// Sub-table sort state
+let _subTableData        = [];
+let _subTableIsService   = false;
+let _subTableSortBy      = 'cost';
+let _subTableSortDir     = 'desc';
+
+function sortSubTable(col) {
+    if (_subTableSortBy === col) {
+        _subTableSortDir = _subTableSortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+        _subTableSortBy = col;
+        _subTableSortDir = col === 'cost' ? 'desc' : 'asc';
+    }
+    _renderSubTable();
+}
+
+function _renderSubTable() {
+    const sorted = [..._subTableData].sort((a, b) => {
+        let av, bv;
+        if (_subTableSortBy === 'cost') { av = a.total_cost || 0; bv = b.total_cost || 0; }
+        else if (_subTableSortBy === 'name') { av = (a.subscription_name || a.service_name || '').toLowerCase(); bv = (b.subscription_name || b.service_name || '').toLowerCase(); }
+        else if (_subTableSortBy === 'account') { av = (a.account || '').toLowerCase(); bv = (b.account || '').toLowerCase(); }
+        else { av = ''; bv = ''; }
+        if (av < bv) return _subTableSortDir === 'asc' ? -1 : 1;
+        if (av > bv) return _subTableSortDir === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    // Update sort indicators
+    ['cloud','account','name','cost'].forEach(col => {
+        const el = document.getElementById(`sub-sort-${col}`);
+        if (!el) return;
+        if (col === _subTableSortBy) el.textContent = _subTableSortDir === 'asc' ? '↑' : '↓';
+        else el.textContent = '↕';
+    });
+
+    const bySubBody = document.getElementById('costBySubscriptionBody');
+    if (!bySubBody) return;
+    const awsLogo = `<img src="/static/img/aws-logo.svg" alt="AWS" style="height:10px;vertical-align:middle;margin-right:4px">`;
+
+    if (!sorted.length) {
+        bySubBody.innerHTML = `<tr><td colspan="${_subTableIsService ? 4 : 2}" style="text-align:center;padding:20px;color:var(--text-secondary)">No data found for current filters.</td></tr>`;
+        return;
+    }
+    if (_subTableIsService) {
+        bySubBody.innerHTML = sorted.map(s => `
+            <tr>
+                <td>${awsLogo}AWS</td>
+                <td style="color:var(--text-secondary)">${s.account || ''}</td>
+                <td>${s.service_name || '-'}</td>
+                <td style="text-align:right;font-weight:500;color:var(--text-primary)">${curSym()}${(s.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+            </tr>`).join('');
+    } else {
+        bySubBody.innerHTML = sorted.map(s => `
+            <tr>
+                <td>${s.subscription_name || s.subscription_id || '-'}</td>
+                <td style="text-align:right;font-weight:500;color:var(--text-primary)">${curSym()}${(s.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+            </tr>`).join('');
+    }
+}
+
+async function refreshCostsTable(btn) {
+    if (btn) { btn.disabled = true; const icon = document.getElementById('costsRefreshIcon'); if (icon) icon.style.animation = 'spin 0.8s linear infinite'; }
+    await loadCostsTable();
+    if (btn) { btn.disabled = false; const icon = document.getElementById('costsRefreshIcon'); if (icon) icon.style.animation = ''; }
+}
+
 // Cost Data multiselect state
 let cdRgOptions  = [];   // string[]
 let cdSvcOptions = [];   // string[]
@@ -1047,20 +1114,29 @@ function setCostsCloud(btn, cloud) {
 }
 
 async function _updateCostsCloudFilters(cloud) {
-    const accountWrap  = document.getElementById('costAccountWrap');
+    const accountWrap    = document.getElementById('costAccountWrap');
     const accountLabelEl = document.getElementById('costAccountLabel');
-    const rgLabelEl    = document.getElementById('costRGLabel');
-    const rgColLabelEl = document.getElementById('costsRGColumnLabel');
+    const rgLabelEl      = document.getElementById('costRGLabel');
+    const rgColLabelEl   = document.getElementById('costsRGColumnLabel');
+    const groupByWrap    = document.getElementById('costGroupByWrap');
+    const rgWrap         = document.getElementById('costRGWrap');
+    const resTypeWrap    = document.getElementById('costResourceTypeWrap');
     if (!accountWrap) return;
 
-    const resTypeWrap = document.getElementById('costResourceTypeWrap');
-    const lbl = rgLabel(cloud); // cloud-aware label from CLOUD_META
+    const isAws = cloud === 'aws';
+    const lbl = rgLabel(cloud);
 
-    if (resTypeWrap) resTypeWrap.style.display = (cloud === 'aws') ? '' : 'none';
+    // AWS: hide Group By only; RG multiselect stays visible (shows regions for AWS)
+    if (groupByWrap) groupByWrap.style.display = isAws ? 'none' : '';
+    if (rgWrap)      rgWrap.style.display      = '';
+
+    // AWS defaults to line-item view so service/resource filters work; Azure/All uses resource_group
+    const groupByEl = document.getElementById('costGroupBy');
+    if (groupByEl) groupByEl.value = isAws ? 'resource' : 'resource_group';
+    if (resTypeWrap) resTypeWrap.style.display  = isAws ? '' : 'none';
 
     if (accountLabelEl) accountLabelEl.textContent = cloud ? subLabel(cloud) : 'Account / Subscription';
 
-    // Populate account/subscription multiselect, optionally scoped to the selected cloud
     const subs = await fetch('/api/subscriptions').then(r => r.json()).catch(() => []);
     const filtered = cloud ? subs.filter(s => (s.cloud || 'azure').toLowerCase() === cloud) : subs;
     populateCdAccounts(filtered);
@@ -1088,7 +1164,11 @@ async function loadCostsTable() {
     const subscriptionHeader = document.getElementById('costSubscriptionHeader');
     if (serviceHeader) serviceHeader.style.display = isRgGroup ? 'none' : '';
     if (resourceHeader) resourceHeader.style.display = isRgGroup ? 'none' : '';
-    if (subscriptionHeader) subscriptionHeader.style.display = isRgGroup ? '' : 'none';
+    if (subscriptionHeader) {
+        subscriptionHeader.style.display = isRgGroup ? '' : 'none';
+        const subHdrText = costsSelectedCloud ? (subLabel(costsSelectedCloud) || 'Account') : 'Subscription';
+        subscriptionHeader.innerHTML = `${subHdrText} <span id="sort-subscription_id" class="sort-indicator">↕</span>`;
+    }
     // Column order: Cloud, Date, [Subscription, Resource Group] or [Resource Group, Service, Resource], Cost
     if (cloudHeader && dateHeader && cloudHeader.nextElementSibling !== dateHeader) {
         dateHeader.parentNode.insertBefore(cloudHeader, dateHeader);
@@ -1132,10 +1212,16 @@ async function loadCostsTable() {
         paramsBySub.delete('subscription_id');
         paramsBySub.delete('limit');
 
+        // AWS with a specific account selected → show service breakdown; otherwise show by subscription
+        const showServiceBreakdown = costsSelectedCloud === 'aws' && accSelected.length > 0;
+        const subTableUrl = showServiceBreakdown
+            ? `/api/costs/total-by-service?${paramsBySub}`
+            : `/api/costs/total-by-subscription?${paramsBySub}`;
+
         const [costsResp, totals, totalsBySub] = await Promise.all([
             fetch(`/api/costs?${params}`).then(r => r.json()),
             fetch(`/api/costs/total?${params}`).then(r => r.json()),
-            fetch(`/api/costs/total-by-subscription?${paramsBySub}`).then(r => r.json())
+            fetch(subTableUrl).then(r => r.json())
         ]);
         const data = Array.isArray(costsResp) ? costsResp : (costsResp.rows || []);
         costPageTotal = Array.isArray(costsResp) ? data.length : (costsResp.total || 0);
@@ -1235,27 +1321,36 @@ async function loadCostsTable() {
         document.getElementById('costTotalRecords').textContent =
             (totals.total_records || 0).toLocaleString();
 
-        // Adaptive header label
-        const costsSubTitleEl = document.getElementById('costsSubTitle');
-        if (costsSubTitleEl) {
+        // Adaptive header label + show/hide extra columns
+        const costsSubTitleEl  = document.getElementById('costsSubTitle');
+        const subCloudHdr      = document.getElementById('costSubCloudHeader');
+        const subAccHdr        = document.getElementById('costSubAccHeader');
+        const subColHdr        = document.getElementById('costSubColHeader');
+        if (showServiceBreakdown) {
+            if (costsSubTitleEl) costsSubTitleEl.textContent = 'Total Cost by Service (Selected Dates)';
+            if (subCloudHdr) { subCloudHdr.style.display = ''; subCloudHdr.textContent = 'Cloud'; }
+            if (subAccHdr)   { subAccHdr.style.display   = ''; subAccHdr.textContent   = 'Account'; }
+            if (subColHdr)   subColHdr.textContent = 'Service';
+        } else {
             const activeCloud = costsSelectedCloud || '';
-            const subWord = subLabel(activeCloud);
-            costsSubTitleEl.textContent = `Total Cost by ${subWord} (Selected Dates)`;
-            const colHdr = document.getElementById('costSubColHeader');
-            if (colHdr) colHdr.textContent = subWord;
+            const subWord = subLabel(activeCloud) || 'Account / Subscription';
+            if (costsSubTitleEl) costsSubTitleEl.textContent = `Total Cost by ${subWord} (Selected Dates)`;
+            if (subCloudHdr) subCloudHdr.style.display = 'none';
+            if (subAccHdr)   subAccHdr.style.display   = 'none';
+            if (subColHdr)   subColHdr.textContent = subWord;
         }
 
-        const bySubBody = document.getElementById('costBySubscriptionBody');
-        if (!totalsBySub || !totalsBySub.length) {
-            bySubBody.innerHTML = `<tr><td colspan="2" style="text-align:center;padding:20px;color:var(--text-secondary)">No subscription totals found for current filters.</td></tr>`;
+        // Store sub-table data and render with sort support
+        const selectedAccNames = accSelected.map(id => subNameMap[id] || id).join(', ') || 'All';
+        _subTableIsService = showServiceBreakdown;
+        _subTableSortBy = 'cost';
+        _subTableSortDir = 'desc';
+        if (showServiceBreakdown) {
+            _subTableData = (totalsBySub || []).map(s => ({ ...s, account: selectedAccNames }));
         } else {
-            bySubBody.innerHTML = totalsBySub.map(s => `
-                <tr>
-                    <td>${s.subscription_name || s.subscription_id || '-'}</td>
-                    <td style="text-align:right;font-weight:500;color:var(--text-primary)">${curSym()}${(s.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-                </tr>
-            `).join('');
+            _subTableData = totalsBySub || [];
         }
+        _renderSubTable();
 
         // Load filter options scoped to the active cloud + account
         const filterParams = new URLSearchParams();

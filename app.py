@@ -24,7 +24,7 @@ from database import (
     get_db,
     init_db, insert_cost_records, clear_cost_data, delete_cost_data_by_date,
     get_latest_cost_date, query_costs,
-    get_cost_total, get_cost_totals_by_subscription, get_custom_cost,
+    get_cost_total, get_cost_totals_by_subscription, get_cost_totals_by_service, get_custom_cost,
     get_summary, get_daily_trend, get_distinct_values, get_sync_history,
     get_stats, log_sync, update_sync_log,
     get_monthly_summary, get_monthly_service_breakdown, get_monthly_rg_breakdown,
@@ -1384,6 +1384,27 @@ def api_costs_total_by_subscription():
     from currency import tenant_reporting_currency
     _rep = tenant_reporting_currency(current_tenant_id(), get_db)
     return jsonify(get_cost_totals_by_subscription(filters, tenant_id=current_tenant_id(), cloud_provider=cloud_provider, reporting_currency=_rep))
+
+
+@app.route("/api/costs/total-by-service")
+@login_required
+def api_costs_total_by_service():
+    def _csv_list(name):
+        raw = (request.args.get(name) or "").strip()
+        return [v.strip() for v in raw.split(",") if v.strip()] if raw else []
+    filters = {
+        "date_from": request.args.get("date_from"),
+        "date_to": request.args.get("date_to"),
+        "subscription_ids": _csv_list("subscription_ids"),
+        "include_blank_subscription": request.args.get("include_blank_subscription") == "1",
+        "resource_groups": _csv_list("resource_groups"),
+        "search": request.args.get("search"),
+    }
+    filters = {k: v for k, v in filters.items() if v is not None and v != "" and v != [] and v is not False}
+    cloud_provider = request.args.get("cloud_provider") or None
+    from currency import tenant_reporting_currency
+    _rep = tenant_reporting_currency(current_tenant_id(), get_db)
+    return jsonify(get_cost_totals_by_service(filters, tenant_id=current_tenant_id(), cloud_provider=cloud_provider, reporting_currency=_rep))
 
 
 @app.route("/api/resource_config")

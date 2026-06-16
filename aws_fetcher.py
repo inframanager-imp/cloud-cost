@@ -68,8 +68,16 @@ def _get_ce_client(credentials: dict):
     )
 
 
+def _region_from_arn(arn):
+    """Extract region from an AWS ARN, e.g. arn:aws:ec2:us-east-1:... → us-east-1."""
+    if not arn or not arn.startswith("arn:aws"):
+        return None
+    parts = arn.split(":")
+    return parts[3] if len(parts) > 3 and parts[3] else None
+
+
 def _fetch_service_level(client, date_from: str, end_exclusive: str, account_id: str) -> list:
-    """Fetch daily costs grouped by SERVICE (always available)."""
+    """Fetch daily costs grouped by REGION + SERVICE."""
     records = []
     paginator_token = None
     while True:
@@ -77,7 +85,10 @@ def _fetch_service_level(client, date_from: str, end_exclusive: str, account_id:
             "TimePeriod": {"Start": date_from, "End": end_exclusive},
             "Granularity": "DAILY",
             "Metrics": ["UnblendedCost"],
-            "GroupBy": [{"Type": "DIMENSION", "Key": "SERVICE"}],
+            "GroupBy": [
+                {"Type": "DIMENSION", "Key": "REGION"},
+                {"Type": "DIMENSION", "Key": "SERVICE"},
+            ],
             "Filter": {"Dimensions": {"Key": "LINKED_ACCOUNT", "Values": [account_id]}},
         }
         if paginator_token:
@@ -86,13 +97,15 @@ def _fetch_service_level(client, date_from: str, end_exclusive: str, account_id:
         for result_by_time in resp.get("ResultsByTime", []):
             date_str = result_by_time["TimePeriod"]["Start"]
             for group in result_by_time.get("Groups", []):
-                service = group.get("Keys", ["Unknown"])[0]
+                keys = group.get("Keys", [])
+                region = keys[0] if len(keys) > 0 else None
+                service = keys[1] if len(keys) > 1 else "Unknown"
                 amount = float(group["Metrics"]["UnblendedCost"]["Amount"])
                 currency = group["Metrics"]["UnblendedCost"]["Unit"]
                 if amount == 0:
                     continue
                 records.append((
-                    date_str, None, service, None, None,
+                    date_str, region or None, service, None, None,
                     service, None, round(amount, 6), currency,
                     account_id, None, "aws",
                 ))
@@ -164,7 +177,9 @@ def _fetch_resource_level(client, date_from: str, end_exclusive: str, account_id
                         if amount == 0:
                             continue
                         resource_type = None
+                        region = None
                         if resource_id:
+                            region = _region_from_arn(resource_id)
                             if resource_id.startswith("i-"):
                                 resource_type = "EC2 Instance"
                             elif resource_id.startswith("vol-"):
@@ -188,10 +203,9 @@ def _fetch_resource_level(client, date_from: str, end_exclusive: str, account_id
                             elif resource_id.startswith("arn:aws:cloudfront"):
                                 resource_type = "CloudFront Distribution"
                             elif resource_id.startswith("arn:aws:"):
-                                # Generic ARN — extract last segment as friendly name
                                 resource_type = "AWS Resource"
                         records.append((
-                            date_str, None, service, resource_type, resource_id,
+                            date_str, region or None, service, resource_type, resource_id,
                             service, None, round(amount, 6), currency,
                             account_id, None, "aws",
                         ))

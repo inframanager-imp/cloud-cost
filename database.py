@@ -1258,6 +1258,62 @@ def get_cost_totals_by_subscription(filters=None, tenant_id=None, cloud_provider
     return result
 
 
+def get_cost_totals_by_service(filters=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
+    """Get total cost grouped by service_name for current filters."""
+    conn = get_db()
+    _cost = _converted_cost_sql(reporting_currency)
+    query = f"""
+        SELECT
+            service_name,
+            SUM({_cost}) as total_cost,
+            COUNT(*) as total_records
+        FROM cost_data
+        WHERE 1=1
+    """
+    params = []
+
+    if filters:
+        if filters.get("subscription_ids"):
+            vals = filters["subscription_ids"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"subscription_id IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_subscription"):
+                cond = f"({cond} OR subscription_id IS NULL OR subscription_id='')"
+            query += f" AND {cond}"
+        elif filters.get("include_blank_subscription"):
+            query += " AND (subscription_id IS NULL OR subscription_id='')"
+        if filters.get("date_from"):
+            query += " AND date >= ?"
+            params.append(filters["date_from"])
+        if filters.get("date_to"):
+            query += " AND date <= ?"
+            params.append(filters["date_to"])
+        if filters.get("resource_groups"):
+            vals = filters["resource_groups"]
+            placeholders = ",".join(["?"] * len(vals))
+            query += f" AND resource_group IN ({placeholders})"
+            params.extend(vals)
+        if filters.get("search"):
+            query += " AND (service_name LIKE ? OR resource_name LIKE ?)"
+            s = f"%{filters['search']}%"
+            params.extend([s, s])
+
+    if tenant_id is not None:
+        query += " AND tenant_id = ?"
+        params.append(tenant_id)
+
+    if cloud_provider is not None:
+        query += " AND cloud_provider = ?"
+        params.append(cloud_provider)
+
+    query += " GROUP BY service_name ORDER BY total_cost DESC"
+
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [{"service_name": r["service_name"] or "Unknown", "total_cost": round(r["total_cost"] or 0, 2), "total_records": r["total_records"] or 0} for r in rows]
+
+
 # Cross-cloud commitment (Reserved Instances / Reservations / Savings Plans / CUDs)
 # detector. Azure → resource_type 'reservationorders'; AWS → "Savings Plans" /
 # "Reserved Instance" services; GCP → "Committed use" SKUs.
