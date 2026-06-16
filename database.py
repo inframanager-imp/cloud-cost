@@ -838,11 +838,17 @@ def get_subscriptions(enabled_only=False, tenant_id=None):
     return [dict(r) for r in rows]
 
 
-def toggle_subscription(subscription_id, enabled):
+def toggle_subscription(subscription_id, enabled, tenant_id=None):
     conn = get_db()
-    conn.execute("UPDATE subscriptions SET enabled = ? WHERE subscription_id = ?", (1 if enabled else 0, subscription_id))
+    if tenant_id is not None:
+        cur = conn.execute("UPDATE subscriptions SET enabled = ? WHERE subscription_id = ? AND tenant_id = ?",
+                           (1 if enabled else 0, subscription_id, tenant_id))
+    else:
+        cur = conn.execute("UPDATE subscriptions SET enabled = ? WHERE subscription_id = ?", (1 if enabled else 0, subscription_id))
     conn.commit()
+    affected = cur.rowcount
     conn.close()
+    return affected
 
 
 def update_subscription_sync_time(subscription_id, sync_type="cost"):
@@ -2836,9 +2842,17 @@ def get_cloud_providers(enabled_only=False, tenant_id=None):
     return [dict(r) for r in rows]
 
 
-def get_cloud_provider(provider_id_pk):
+def get_cloud_provider(provider_id_pk, tenant_id=None):
     conn = get_db()
-    row = conn.execute("SELECT * FROM cloud_providers WHERE id=?", (provider_id_pk,)).fetchone()
+    if tenant_id is not None:
+        # Tenant-scoped: only return the provider if it belongs to this tenant
+        row = conn.execute(
+            "SELECT * FROM cloud_providers WHERE id=? AND tenant_id=?",
+            (provider_id_pk, tenant_id),
+        ).fetchone()
+    else:
+        # No tenant scope (super admin) — return regardless of owner
+        row = conn.execute("SELECT * FROM cloud_providers WHERE id=?", (provider_id_pk,)).fetchone()
     conn.close()
     if row:
         d = dict(row)
@@ -2886,18 +2900,29 @@ def upsert_cloud_provider(provider_type, name, provider_id, credentials, enabled
     return row_id
 
 
-def toggle_cloud_provider(pk, enabled):
+def toggle_cloud_provider(pk, enabled, tenant_id=None):
     conn = get_db()
-    conn.execute("UPDATE cloud_providers SET enabled=? WHERE id=?", (1 if enabled else 0, pk))
+    if tenant_id is not None:
+        cur = conn.execute("UPDATE cloud_providers SET enabled=? WHERE id=? AND tenant_id=?",
+                           (1 if enabled else 0, pk, tenant_id))
+    else:
+        cur = conn.execute("UPDATE cloud_providers SET enabled=? WHERE id=?", (1 if enabled else 0, pk))
     conn.commit()
+    affected = cur.rowcount
     conn.close()
+    return affected
 
 
-def delete_cloud_provider(pk):
+def delete_cloud_provider(pk, tenant_id=None):
     conn = get_db()
-    conn.execute("DELETE FROM cloud_providers WHERE id=?", (pk,))
+    if tenant_id is not None:
+        cur = conn.execute("DELETE FROM cloud_providers WHERE id=? AND tenant_id=?", (pk, tenant_id))
+    else:
+        cur = conn.execute("DELETE FROM cloud_providers WHERE id=?", (pk,))
     conn.commit()
+    affected = cur.rowcount
     conn.close()
+    return affected
 
 
 def update_cloud_provider_sync_time(pk, error=None):

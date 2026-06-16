@@ -452,7 +452,9 @@ def api_discover_subscriptions():
 def api_toggle_subscription(sub_id):
     body = request.get_json(silent=True) or {}
     enabled = body.get("enabled", True)
-    toggle_subscription(sub_id, enabled)
+    affected = toggle_subscription(sub_id, enabled, tenant_id=current_tenant_id())
+    if not affected:
+        return jsonify({"error": "Not found"}), 404
     return jsonify({"message": f"Subscription {'enabled' if enabled else 'disabled'}"})
 
 
@@ -4739,7 +4741,7 @@ def api_cloud_providers_create():
 @app.route("/api/cloud-providers/<int:pk>", methods=["GET"])
 @login_required
 def api_cloud_provider_get(pk):
-    p = get_cloud_provider(pk)
+    p = get_cloud_provider(pk, tenant_id=current_tenant_id())
     if not p:
         return jsonify({"error": "Not found"}), 404
     creds = p.get("credentials_json") or {}
@@ -4767,7 +4769,8 @@ def api_cloud_provider_update(pk):
     cur_report_name = body.get("cur_report_name")
     cur_report_prefix = body.get("cur_report_prefix")
 
-    existing = get_cloud_provider(pk)
+    tid = current_tenant_id()
+    existing = get_cloud_provider(pk, tenant_id=tid)
     if not existing:
         return jsonify({"error": "Not found"}), 404
 
@@ -4778,15 +4781,21 @@ def api_cloud_provider_update(pk):
     upsert_cloud_provider(
         existing["provider_type"], name_val,
         existing["provider_id"], creds_to_save, enabled_val,
-        tenant_id=current_tenant_id()
+        tenant_id=tid
     )
     # Update CUR fields if provided
     if cur_bucket is not None or cur_report_name is not None or cur_report_prefix is not None:
         conn = get_db()
-        conn.execute(
-            "UPDATE cloud_providers SET cur_bucket=?, cur_report_name=?, cur_report_prefix=? WHERE id=?",
-            (cur_bucket or "", cur_report_name or "", cur_report_prefix or "", pk)
-        )
+        if tid is not None:
+            conn.execute(
+                "UPDATE cloud_providers SET cur_bucket=?, cur_report_name=?, cur_report_prefix=? WHERE id=? AND tenant_id=?",
+                (cur_bucket or "", cur_report_name or "", cur_report_prefix or "", pk, tid)
+            )
+        else:
+            conn.execute(
+                "UPDATE cloud_providers SET cur_bucket=?, cur_report_name=?, cur_report_prefix=? WHERE id=?",
+                (cur_bucket or "", cur_report_name or "", cur_report_prefix or "", pk)
+            )
         conn.commit()
         conn.close()
     return jsonify({"message": "Updated"})
@@ -4797,7 +4806,9 @@ def api_cloud_provider_update(pk):
 def api_cloud_provider_toggle(pk):
     body = request.get_json(silent=True) or {}
     enabled = bool(body.get("enabled", True))
-    toggle_cloud_provider(pk, enabled)
+    affected = toggle_cloud_provider(pk, enabled, tenant_id=current_tenant_id())
+    if not affected:
+        return jsonify({"error": "Not found"}), 404
     return jsonify({"message": f"Provider {'enabled' if enabled else 'disabled'}"})
 
 
@@ -4808,17 +4819,26 @@ def api_cloud_provider_rename(pk):
     name = (body.get("name") or "").strip()
     if not name:
         return jsonify({"error": "Name is required"}), 400
+    tid = current_tenant_id()
     conn = get_db()
-    conn.execute("UPDATE cloud_providers SET name = ? WHERE id = ?", (name, pk))
+    if tid is not None:
+        cur = conn.execute("UPDATE cloud_providers SET name = ? WHERE id = ? AND tenant_id = ?", (name, pk, tid))
+    else:
+        cur = conn.execute("UPDATE cloud_providers SET name = ? WHERE id = ?", (name, pk))
     conn.commit()
+    affected = cur.rowcount
     conn.close()
+    if not affected:
+        return jsonify({"error": "Not found"}), 404
     return jsonify({"message": "Renamed"})
 
 
 @app.route("/api/cloud-providers/<int:pk>", methods=["DELETE"])
 @login_required
 def api_cloud_provider_delete(pk):
-    delete_cloud_provider(pk)
+    affected = delete_cloud_provider(pk, tenant_id=current_tenant_id())
+    if not affected:
+        return jsonify({"error": "Not found"}), 404
     return jsonify({"message": "Deleted"})
 
 
@@ -4826,7 +4846,7 @@ def api_cloud_provider_delete(pk):
 @login_required
 def api_cloud_provider_sync(pk):
     """Trigger a cost sync for a specific cloud provider (AWS or GCP)."""
-    provider = get_cloud_provider(pk)
+    provider = get_cloud_provider(pk, tenant_id=current_tenant_id())
     if not provider:
         return jsonify({"error": "Not found"}), 404
 
@@ -5004,9 +5024,10 @@ def api_cur_manifests():
     # Resolve credentials from provider_id if given
     credentials = body.get("credentials") or {}
     if provider_id:
-        conn = get_db()
-        row = conn.execute("SELECT credentials_json FROM cloud_providers WHERE id=?", (provider_id,)).fetchone()
-        conn.close()
+        _cur_prov = get_cloud_provider(provider_id, tenant_id=current_tenant_id())
+        if not _cur_prov:
+            return jsonify({"error": "Not found"}), 404
+        row = {"credentials_json": _cur_prov.get("credentials_json")}
         if row and row["credentials_json"]:
             try:
                 credentials = json.loads(row["credentials_json"]) if isinstance(row["credentials_json"], str) else row["credentials_json"]
@@ -5095,9 +5116,10 @@ def api_cur_import():
 
     credentials = body.get("credentials") or {}
     if provider_id:
-        conn = get_db()
-        row = conn.execute("SELECT credentials_json, provider_id FROM cloud_providers WHERE id=?", (provider_id,)).fetchone()
-        conn.close()
+        _cur_prov = get_cloud_provider(provider_id, tenant_id=current_tenant_id())
+        if not _cur_prov:
+            return jsonify({"error": "Not found"}), 404
+        row = {"credentials_json": _cur_prov.get("credentials_json"), "provider_id": _cur_prov.get("provider_id")}
         if row:
             if not account_id:
                 account_id = row["provider_id"]
