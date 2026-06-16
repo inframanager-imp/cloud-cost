@@ -161,7 +161,7 @@
     .row-menu{position:relative;text-align:right}
     .menu-btn{background:none;border:none;color:var(--text-muted);cursor:pointer;width:32px;height:32px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;transition:all .15s}
     .menu-btn:hover{background:var(--surface-2);color:var(--text)}
-    .menu-dd{display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.3);min-width:180px;z-index:60;padding:4px}
+    .menu-dd{display:none;position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.3);min-width:180px;z-index:9999;padding:4px}
     .menu-dd.open{display:block}
     .menu-item{display:flex;align-items:center;gap:9px;padding:9px 11px;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;border-radius:7px;border:none;background:none;width:100%;text-align:left;min-height:40px}
     .menu-item:hover{background:var(--surface-2)}
@@ -915,11 +915,20 @@ function renderTenants(tenants, totalFiltered) {
 // ─── Row action menu ──────────────────────────────────────────────────────
 function toggleRowMenu(ev, id) {
   ev.stopPropagation();
+  const btn = ev.currentTarget;
   const menu = document.getElementById('menu-'+id);
   const isOpen = menu.classList.contains('open');
   document.querySelectorAll('.menu-dd.open').forEach(m=>m.classList.remove('open'));
-  if (!isOpen) { menu.classList.add('open'); openMenuId = id; }
-  else { openMenuId = null; }
+  if (!isOpen) {
+    const rect = btn.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.right = (window.innerWidth - rect.right) + 'px';
+    menu.style.left = 'auto';
+    menu.classList.add('open');
+    openMenuId = id;
+  } else {
+    openMenuId = null;
+  }
 }
 document.addEventListener('click', ()=>{
   document.querySelectorAll('.menu-dd.open').forEach(m=>m.classList.remove('open'));
