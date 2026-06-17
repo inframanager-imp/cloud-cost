@@ -1384,8 +1384,8 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">{pct:.0f}%</td>
         </tr>"""
 
-    # ── Daily trend (last 14) with spike detection ──────────────────────────
-    recent = trend[-14:]
+    # ── Daily trend (full selected period) with spike detection ─────────────
+    recent = trend
     costs = [r["cost"] for r in recent]
     max_t = max(costs, default=1) or 1
     _sorted = sorted(costs)
@@ -1450,7 +1450,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
 
     trend_section = (
         '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
-        '<div style="font-size:15px;font-weight:600;color:#1A1A1A;margin-bottom:14px">Daily Cost Trends <span style="font-size:11px;font-weight:400;color:#8A95A1">(last 14 days)</span></div>'
+        f'<div style="font-size:15px;font-weight:600;color:#1A1A1A;margin-bottom:14px">Daily Cost Trends <span style="font-size:11px;font-weight:400;color:#8A95A1">({date_from} to {date_to})</span></div>'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">'
         '<tr style="border-bottom:1px solid #E8ECF1"><th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:left;text-transform:uppercase">Date</th>'
         '<th style="padding:6px 8px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Cost</th>'
