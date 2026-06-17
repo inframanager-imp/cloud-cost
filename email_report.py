@@ -1332,80 +1332,76 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     trend = cost_data.get("trend", [])
     mappings = client.get("mappings", [])
 
-    max_svc = by_service[0]["cost"] if by_service else 1
-    max_sub = by_sub[0]["cost"] if by_sub else 1
+    n_days  = len(trend) or 1
+    avg_day = total / n_days if n_days else 0
+    # Previous-period comparison is not computed for the client report yet.
+    compare_note = "Compared to previous period: N/A"
 
-    # Build mapping tag HTML
-    mapping_tags = ""
-    for m in mappings:
-        cloud = (m.get("cloud") or "azure").lower()
-        bg = CLOUD_BADGE_BG.get(cloud, "#F0F0F0")
-        fg = CLOUD_BADGE_FG.get(cloud, "#333")
-        ft = {"subscription_id": "Sub", "resource_group": "RG", "service_name": "Svc"}.get(m.get("filter_type",""), "")
-        mapping_tags += f'<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:{bg};color:{fg};margin-right:4px">{cloud.upper()} · {ft}: {m.get("value","")}</span>'
+    PALETTE = ["#185FA5","#2E6DB0","#E8821E","#5E8FC0","#80A7CE","#A3BFDB","#C2D4E8","#9AA7B5"]
 
-    # Service rows
+    # ── Top services: stacked bar + table with share % ──────────────────────
+    svc_total = sum(s["cost"] for s in by_service) or 1
+    seg_cells = ""
+    for i, s in enumerate(by_service):
+        col = PALETTE[min(i, len(PALETTE)-1)]
+        w = max(1, round(s["cost"] / svc_total * 100))
+        seg_cells += f'<td bgcolor="{col}" width="{w}%" height="14" style="background:{col};line-height:14px;font-size:1px">&nbsp;</td>'
+    svc_bar = (f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" '
+               f'style="border-radius:6px;overflow:hidden;margin-bottom:16px"><tr>{seg_cells}</tr></table>') if seg_cells else ""
     svc_rows = ""
     for i, s in enumerate(by_service):
-        bar = max(3, int(s["cost"] / max_svc * 55))
-        col = RANK_COLS[min(i, len(RANK_COLS)-1)]
-        bg = "#F7F7F5" if i % 2 == 0 else "#FFFFFF"
+        pct = s["cost"] / total * 100 if total else 0
+        col = PALETTE[min(i, len(PALETTE)-1)]
+        bg = "#F7F9FC" if i % 2 == 0 else "#FFFFFF"
         svc_rows += f"""<tr style="background:{bg}">
-            <td style="padding:9px 14px;font-size:13px;color:#1A1A1A">{s['name']}</td>
-            <td style="padding:9px 8px;width:44%">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-                    <td bgcolor="{col}" width="{bar}%" height="7" style="background:{col};border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
-                    <td bgcolor="#EBEBEB" height="7" style="background:#EBEBEB;border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
-                </tr></table>
-            </td>
-            <td style="padding:9px 14px;font-size:13px;font-weight:500;text-align:right">${s['cost']:,.2f}</td>
+            <td style="padding:8px 14px;font-size:13px;color:#1A1A1A"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:{col};margin-right:8px"></span>{s['name']}</td>
+            <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">${s['cost']:,.2f}</td>
+            <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">{pct:.0f}%</td>
         </tr>"""
 
-    # Sub/account rows — grouped by cloud provider
+    # ── By cloud provider with share % ──────────────────────────────────────
     sub_map = {m.get("value",""): m for m in mappings if m.get("filter_type") == "subscription_id"}
-    cloud_totals_sub = {}
+    cloud_totals = {}
     for s in by_sub:
         m = sub_map.get(s.get("subscription_id",""), {})
         cloud = (m.get("cloud") or "azure").lower()
-        cloud_totals_sub[cloud] = cloud_totals_sub.get(cloud, 0) + s["cost"]
-    cloud_totals_sub = sorted(cloud_totals_sub.items(), key=lambda x: x[1], reverse=True)
-    max_sub_cloud = cloud_totals_sub[0][1] if cloud_totals_sub else 1
+        cloud_totals[cloud] = cloud_totals.get(cloud, 0) + s["cost"]
+    cloud_totals = sorted(cloud_totals.items(), key=lambda x: x[1], reverse=True)
+    max_cloud = cloud_totals[0][1] if cloud_totals else 1
     CLOUD_LABELS = {"azure": "Microsoft Azure", "aws": "Amazon AWS", "gcp": "Google Cloud"}
-    sub_rows = ""
-    for i, (cloud, cost) in enumerate(cloud_totals_sub):
-        bar = max(3, int(cost / max_sub_cloud * 55))
-        col = CLOUD_COLORS.get(cloud, RANK_COLS[min(i, len(RANK_COLS)-1)])
+    cloud_rows = ""
+    for i, (cloud, cost) in enumerate(cloud_totals):
+        pct = cost / total * 100 if total else 0
+        bar = max(3, int(cost / max_cloud * 100))
+        col = CLOUD_COLORS.get(cloud, PALETTE[min(i, len(PALETTE)-1)])
         bg_b = CLOUD_BADGE_BG.get(cloud, "#F0F0F0")
         fg_b = CLOUD_BADGE_FG.get(cloud, "#333")
-        bg = "#F7F7F5" if i % 2 == 0 else "#FFFFFF"
         label = CLOUD_LABELS.get(cloud, cloud.upper())
-        sub_rows += f"""<tr style="background:{bg}">
-            <td style="padding:9px 14px">
-                <span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px;background:{bg_b};color:{fg_b};margin-right:6px">{cloud.upper()[:3]}</span>
-                <span style="font-size:13px;color:#1A1A1A">{label}</span>
-            </td>
-            <td style="padding:9px 8px;width:44%">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-                    <td bgcolor="{col}" width="{bar}%" height="7" style="background:{col};border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
-                    <td bgcolor="#EBEBEB" height="7" style="background:#EBEBEB;border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
-                </tr></table>
-            </td>
-            <td style="padding:9px 14px;font-size:13px;font-weight:500;text-align:right">${cost:,.2f}</td>
+        cloud_rows += f"""<tr>
+            <td style="padding:8px 14px;white-space:nowrap"><span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px;background:{bg_b};color:{fg_b};margin-right:6px">{cloud.upper()[:3]}</span><span style="font-size:13px;color:#1A1A1A">{label}</span></td>
+            <td style="padding:8px 8px;width:38%"><div style="background:#EBEBEB;border-radius:4px;height:8px"><div style="background:{col};height:8px;border-radius:4px;width:{bar}%"></div></div></td>
+            <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">${cost:,.2f}</td>
+            <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">{pct:.0f}%</td>
         </tr>"""
 
-    # Trend rows (last 14)
+    # ── Daily trend (last 14) with spike detection ──────────────────────────
     recent = trend[-14:]
-    max_t = max((r["cost"] for r in recent), default=1) or 1
+    costs = [r["cost"] for r in recent]
+    max_t = max(costs, default=1) or 1
+    _sorted = sorted(costs)
+    median = _sorted[len(_sorted)//2] if _sorted else 0
+    spike_threshold = median * 1.6 if median else float("inf")
     trend_rows = ""
     for i, r in enumerate(recent):
+        is_spike = len(costs) >= 5 and r["cost"] >= spike_threshold and r["cost"] > avg_day
         bar = max(4, int(r["cost"] / max_t * 100))
-        bg = "#FFFFFF" if i % 2 == 0 else "#F7F7F5"
+        bg = "#FDECEC" if is_spike else ("#FFFFFF" if i % 2 == 0 else "#F7F9FC")
+        barcol = "#D64545" if is_spike else ACCENT
+        spike_badge = '<span style="font-size:9px;font-weight:700;color:#D64545;margin-left:8px">SPIKE</span>' if is_spike else ""
         trend_rows += f"""<tr style="background:{bg}">
-            <td style="padding:6px 12px;font-size:12px;color:#525252;white-space:nowrap">{r['date']}</td>
-            <td style="padding:6px 8px;font-size:12px;font-weight:500;text-align:right;white-space:nowrap">${r['cost']:,.2f}</td>
-            <td style="padding:6px 12px;width:40%">
-                <div style="background:{ACCENT};height:8px;border-radius:4px;width:{bar}%"></div>
-            </td>
+            <td style="padding:6px 14px;font-size:12px;color:#525252;white-space:nowrap">{r['date']}</td>
+            <td style="padding:6px 8px;font-size:12px;font-weight:600;text-align:right;white-space:nowrap">${r['cost']:,.2f}{spike_badge}</td>
+            <td style="padding:6px 14px;width:38%"><div style="background:{barcol};height:8px;border-radius:4px;width:{bar}%"></div></td>
         </tr>"""
 
     # Manually-tracked costs — present when called from send-report (cost_data
@@ -1434,72 +1430,91 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             + manual_rows + '</table>'
             f'<div style="font-size:12px;color:#525252;margin-bottom:28px">Other tools/subscriptions total: <strong>{manual_sym}{manual_total:,.2f}</strong></div>')
 
+    svc_section = (
+        '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
+        '<div style="font-size:15px;font-weight:600;color:#1A1A1A;margin-bottom:14px">Top Services Breakdown</div>'
+        + svc_bar +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">'
+        '<tr style="border-bottom:1px solid #E8ECF1"><th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:left;text-transform:uppercase">Service</th>'
+        '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Cost</th>'
+        '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Share</th></tr>'
+        + svc_rows + '</table></td></tr></table></td></tr>'
+    ) if svc_rows else ''
+
+    cloud_section = (
+        '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
+        '<div style="font-size:15px;font-weight:600;color:#1A1A1A;margin-bottom:14px">By Cloud Provider</div>'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">'
+        + cloud_rows + '</table></td></tr></table></td></tr>'
+    ) if cloud_rows else ''
+
+    trend_section = (
+        '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
+        '<div style="font-size:15px;font-weight:600;color:#1A1A1A;margin-bottom:14px">Daily Cost Trends <span style="font-size:11px;font-weight:400;color:#8A95A1">(last 14 days)</span></div>'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">'
+        '<tr style="border-bottom:1px solid #E8ECF1"><th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:left;text-transform:uppercase">Date</th>'
+        '<th style="padding:6px 8px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Cost</th>'
+        '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:left;text-transform:uppercase">Trend</th></tr>'
+        + trend_rows + '</table></td></tr></table></td></tr>'
+    ) if trend_rows else ''
+
+    manual_block = (
+        '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
+        + manual_section + '</td></tr></table></td></tr>'
+    ) if manual_section else ''
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Client Report — {client.get('name','')}</title></head>
-<body style="margin:0;padding:0;background:#FAFAF9;font-family:{font_stack}">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#FAFAF9">
-<tr><td align="center" style="padding:32px 16px">
+<title>Executive Cost Overview — {client.get('name','')}</title></head>
+<body style="margin:0;padding:0;background:#EEF1F5;font-family:{font_stack}">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#EEF1F5">
+<tr><td align="center" style="padding:28px 16px">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="680" style="max-width:680px;width:100%">
 
-<!-- Header -->
-<tr><td style="padding-bottom:12px">
+<!-- Header banner -->
+<tr><td style="padding-bottom:14px">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-         style="background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px">
-    <tr><td style="padding:24px 28px">
-      <div style="font-size:11px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">Client Cost Report</div>
-      <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:3px">{client.get('name','')}</div>
-      <div style="font-size:12px;color:#8A8A8A;margin-top:5px">Period: {date_from} to {date_to} · Generated {now.strftime('%-d %B %Y at %H:%M UTC')}</div>
+         style="background-color:#0E4C8A;background-image:linear-gradient(135deg,#0E4C8A,#1A6FB5);border-radius:12px">
+    <tr><td style="padding:26px 30px">
+      <div style="font-size:12px;color:#BBD6F0;letter-spacing:0.12em;text-transform:uppercase;font-weight:600">&#9729; Cloud Cost Analyzer</div>
+      <div style="font-size:26px;color:#FFFFFF;font-weight:700;letter-spacing:-0.01em;margin-top:6px">Executive Cost Overview</div>
+      <div style="font-size:13px;color:#D6E6F6;margin-top:6px">{client.get('name','')} &middot; Period: {date_from} to {date_to}</div>
     </td></tr>
   </table>
 </td></tr>
 
-<!-- KPI strip -->
-<tr><td style="padding-bottom:12px">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-         style="background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px">
-    <tr>
-      <td width="50%" style="padding:18px 20px;border-right:1px solid #F0F0EE;text-align:center">
-        <div style="font-size:10px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">Total Cost</div>
-        <div style="font-size:28px;color:#185FA5;font-weight:600;letter-spacing:-0.02em;margin-top:6px">${total:,.2f}</div>
-        <div style="font-size:11px;color:#8A8A8A;margin-top:4px">{date_from} → {date_to}</div>
-      </td>
-      <td width="50%" style="padding:18px 20px;text-align:center">
-        <div style="font-size:10px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">Avg / Day</div>
-        <div style="font-size:22px;color:#1A1A1A;font-weight:500;margin-top:6px">${(total / max(len(trend),1)):,.2f}</div>
-      </td>
-    </tr>
-  </table>
+<!-- KPI cards -->
+<tr><td style="padding-bottom:0">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+    <td width="50%" style="padding:0 7px 14px 0;vertical-align:top">
+      <table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:20px 22px;text-align:center">
+        <div style="font-size:10px;color:#6B7785;letter-spacing:0.08em;text-transform:uppercase;font-weight:600">Total Cloud Spend</div>
+        <div style="font-size:30px;color:#0E4C8A;font-weight:700;margin-top:8px">${total:,.2f}</div>
+        <div style="font-size:11px;color:#8A95A1;margin-top:6px">{compare_note}</div>
+      </td></tr></table>
+    </td>
+    <td width="50%" style="padding:0 0 14px 7px;vertical-align:top">
+      <table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:20px 22px;text-align:center">
+        <div style="font-size:10px;color:#6B7785;letter-spacing:0.08em;text-transform:uppercase;font-weight:600">Average Daily Spend</div>
+        <div style="font-size:30px;color:#1A1A1A;font-weight:700;margin-top:8px">${avg_day:,.2f}</div>
+        <div style="font-size:11px;color:#8A95A1;margin-top:6px">Based on {n_days} days with data</div>
+      </td></tr></table>
+    </td>
+  </tr></table>
 </td></tr>
 
-<!-- Body card -->
-<tr><td>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-       style="background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px">
-<tr><td style="padding:24px 28px">
-
-<!-- Top services -->
-{'<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Top Services</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:28px"><tr style="background:#F0F0EE"><th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:left">Service</th><th style="padding:9px 8px;font-size:11px;font-weight:500;color:#525252;text-align:left">Share</th><th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th></tr>' + svc_rows + '</table>' if svc_rows else ''}
-
-<!-- By subscription/account -->
-{'<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">By Subscription / Account</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:28px"><tr style="background:#F0F0EE"><th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:left">Account</th><th style="padding:9px 8px;font-size:11px;font-weight:500;color:#525252;text-align:left">Share</th><th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th></tr>' + sub_rows + '</table>' if sub_rows else ''}
-
-<!-- Daily cost -->
-{'<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Daily Cost <span style="font-size:11px;font-weight:400;color:#8A8A8A">(last 14 days)</span></div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:28px"><tr style="background:#F0F0EE"><th style="padding:9px 12px;font-size:11px;font-weight:500;color:#525252;text-align:left">Date</th><th style="padding:9px 8px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th><th style="padding:9px 12px;font-size:11px;font-weight:500;color:#525252;text-align:left">Trend</th></tr>' + trend_rows + '</table>' if trend_rows else ''}
-
-{manual_section}
-
-</td></tr></table></td></tr>
+{svc_section}
+{cloud_section}
+{trend_section}
+{manual_block}
 
 <!-- Footer -->
-<tr><td style="padding-top:16px">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-    <tr><td align="center" style="padding:16px;font-size:11px;color:#8A8A8A;line-height:1.6">
-      Cloud Cost Analyzer · Client Report<br>Generated automatically.
-    </td></tr>
-  </table>
-</td></tr>
+<tr><td><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+  <tr><td align="center" style="padding:14px;font-size:11px;color:#8A95A1;line-height:1.6">
+    Cloud Cost Analyzer &middot; Executive Report &middot; Generated {now.strftime('%-d %B %Y at %H:%M UTC')}
+  </td></tr>
+</table></td></tr>
 
 </table></td></tr></table>
 </body></html>"""
