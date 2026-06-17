@@ -2328,9 +2328,12 @@ def delete_saved_filter(fid, tenant_id=None):
 def get_sync_history(tenant_id=None):
     conn = get_db()
     if tenant_id is not None:
-        # Tenant sees only their own syncs (NULL = global/system runs are hidden)
+        # Tenant sees only their own syncs (NULL = global/system runs are hidden).
+        # 'abandoned' rows are deploy/restart noise (a sync killed mid-run) — hide
+        # them from the client view to avoid alarming "Process killed" entries.
+        # Super admin (tenant_id is None) still sees them for debugging.
         rows = conn.execute(
-            "SELECT * FROM sync_log WHERE tenant_id = ? ORDER BY id DESC LIMIT 20",
+            "SELECT * FROM sync_log WHERE tenant_id = ? AND status != 'abandoned' ORDER BY id DESC LIMIT 20",
             (tenant_id,)
         ).fetchall()
     else:
