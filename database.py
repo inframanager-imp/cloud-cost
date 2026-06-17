@@ -617,6 +617,32 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cost_service    ON cost_data(service_name)")
     print("[DB] cost_data indexes ensured.")
 
+    # ── Normalize cost_data.date to plain YYYY-MM-DD ────────────────────────
+    # Different sync paths historically stored dates as either '2026-06-10' or
+    # '2026-06-10T00:00:00Z', which split the same day into two rows in every
+    # GROUP BY date query (client reports, trends, budgets). cost_data is daily
+    # granularity, so the time portion is always midnight — safe to strip.
+    try:
+        _norm = cursor.execute(
+            "UPDATE cost_data SET date = substr(date,1,10) WHERE length(date) > 10"
+        ).rowcount
+        if _norm:
+            print(f"[DB] cost_data: normalized {_norm} timestamped date(s) to YYYY-MM-DD")
+        # Safety net: auto-normalize any future insert from ANY write path
+        # (database.py, app.py, cur_importer.py, …). The WHEN guard means clean
+        # rows skip the trigger body entirely, so bulk syncs pay ~no overhead.
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS trg_cost_data_normalize_date
+            AFTER INSERT ON cost_data
+            FOR EACH ROW WHEN length(NEW.date) > 10
+            BEGIN
+                UPDATE cost_data SET date = substr(NEW.date,1,10) WHERE id = NEW.id;
+            END
+        """)
+        print("[DB] cost_data: date-normalization trigger ensured.")
+    except Exception as _e:
+        print(f"[DB] cost_data date normalization skipped: {_e}")
+
     # ── Remove old CHECK constraint on budgets.period (blocks daily/weekly) ──
     try:
         row = cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='budgets'").fetchone()
