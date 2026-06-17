@@ -3965,7 +3965,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260507n"></script>
+<script src="/static/js/app.js?v=20260617tz"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -4070,7 +4070,8 @@ function _cpTruncateId(s) {
 
 function _cpRelativeSync(iso) {
     if (!iso) return 'Never';
-    const diff = Math.round((Date.now() - new Date(iso)) / 60000);
+    // Stored timestamps are naive UTC — append 'Z' so they parse as UTC.
+    const diff = Math.round((Date.now() - new Date(iso + 'Z')) / 60000);
     if (diff < 2) return 'Just now';
     if (diff < 60) return `${diff}m ago`;
     if (diff < 1440) return `${Math.round(diff/60)}h ago`;
@@ -4956,7 +4957,7 @@ function syncProvider(id, name) {
                 attempts++;
                 fetch('/api/cloud-providers').then(r => r.json()).then(providers => {
                     const p = providers.find(x => x.id === id);
-                    const newSync = p && p.last_sync ? p.last_sync.slice(0,16).replace('T',' ') : null;
+                    const newSync = p && p.last_sync ? _fmtSyncTime(p.last_sync) : null;
                     const changed = newSync && newSync !== prevLastSync;
                     if (changed || attempts >= maxAttempts) {
                         clearInterval(poll);

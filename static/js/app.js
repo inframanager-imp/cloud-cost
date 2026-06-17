@@ -4976,9 +4976,9 @@ async function _scLoadProviders() {
         // (count only legacy Azure subs — /api/subscriptions also returns AWS/GCP accounts)
         const subCount = Array.isArray(subsRaw) ? subsRaw.filter(s => s.cloud === 'azure').length : 0;
         const lastAzureSync = histRaw.find(h => h.status === 'success' || h.status === 'running');
-        const azureLastSyncStr = lastAzureSync && lastAzureSync.sync_end
-            ? lastAzureSync.sync_end.slice(0,16).replace('T',' ')
-            : (lastAzureSync && lastAzureSync.sync_start ? lastAzureSync.sync_start.slice(0,16).replace('T',' ') : null);
+        const azureLastSyncStr = lastAzureSync && (lastAzureSync.sync_end || lastAzureSync.sync_start)
+            ? _fmtSyncTime(lastAzureSync.sync_end || lastAzureSync.sync_start)
+            : null;
         const azureCard = `
         <div class="sc-provider-card" id="sc-pcard-azure">
             <div class="sc-provider-header">
@@ -5007,7 +5007,7 @@ async function _scLoadProviders() {
 
         // Build other-provider cards (AWS, GCP, etc.)
         const otherCards = providers.map(p => {
-            const lastSync = p.last_sync ? p.last_sync.slice(0,16).replace('T',' ') : 'Never';
+            const lastSync = p.last_sync ? _fmtSyncTime(p.last_sync) : 'Never';
             const col = colors[p.provider_type] || 'var(--accent)';
             return `
             <div class="sc-provider-card" id="sc-pcard-${p.id}">
@@ -5592,13 +5592,23 @@ function _esc(s) {
 // something external (e.g. GCP BigQuery export data) — show it as pending, not failed.
 function syncErrIsPending(err) { return !!err && String(err).indexOf('[PENDING]') === 0; }
 function syncErrText(err) { return String(err || '').replace('[PENDING]', '').trim(); }
+// Stored sync timestamps are naive UTC (no timezone). Append 'Z' so the
+// browser parses them as UTC and renders in the viewer's local timezone —
+// consistent with the Recent Sync History display.
+function _fmtSyncTime(ts) {
+    if (!ts) return 'Never';
+    const d = new Date(ts + 'Z');
+    if (isNaN(d.getTime())) return ts.slice(0,16).replace('T',' ');
+    return d.toLocaleString();
+}
+
 function syncStatusBadge(p) {
     if (syncErrIsPending(p.sync_error))
         return `<span style="color:#f59e0b" title="${_esc(syncErrText(p.sync_error))}">⏳ Pending</span>`;
     if (p.sync_error)
         return `<span style="color:var(--red)" title="${_esc(p.sync_error)}">✗ Failed</span>`;
     if (p.last_sync)
-        return `<span style="color:var(--green)">✓</span> ${(p.last_sync || '').slice(0,16).replace('T',' ')}`;
+        return `<span style="color:var(--green)">✓</span> ${_fmtSyncTime(p.last_sync)}`;
     return 'Never';
 }
 
