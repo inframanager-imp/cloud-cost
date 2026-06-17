@@ -3794,28 +3794,28 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
 
     total_row = conn.execute(
         f"SELECT COALESCE(SUM(cost),0) as total FROM cost_data "
-        f"WHERE date>=? AND date<=? AND tenant_id=? AND {mapping_clause}",
+        f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause}",
         base_params
     ).fetchone()
 
     by_service = conn.execute(
         f"SELECT service_name, COALESCE(SUM(cost),0) as total FROM cost_data "
-        f"WHERE date>=? AND date<=? AND tenant_id=? AND {mapping_clause} "
+        f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
         f"GROUP BY service_name ORDER BY total DESC LIMIT 10",
         base_params
     ).fetchall()
 
     by_subscription = conn.execute(
         f"SELECT subscription_id, COALESCE(SUM(cost),0) as total FROM cost_data "
-        f"WHERE date>=? AND date<=? AND tenant_id=? AND {mapping_clause} "
+        f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
         f"GROUP BY subscription_id ORDER BY total DESC",
         base_params
     ).fetchall()
 
     trend = conn.execute(
-        f"SELECT date, COALESCE(SUM(cost),0) as total FROM cost_data "
-        f"WHERE date>=? AND date<=? AND tenant_id=? AND {mapping_clause} "
-        f"GROUP BY date ORDER BY date",
+        f"SELECT substr(date,1,10) as date, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
+        f"GROUP BY substr(date,1,10) ORDER BY substr(date,1,10)",
         base_params
     ).fetchall()
 
