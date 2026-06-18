@@ -771,7 +771,7 @@ async function loadCloudOverview() {
         const lm      = r.data.last_month;
         const mom     = lm.total > 0 ? ((cm.total - lm.total) / lm.total * 100) : 0;
         const subs    = (r.data.subscription_costs || []).filter(s => s.cost > 0);
-        const topSubs = subs.slice(0, 3);
+        const topSubs = subs.slice(0, 8);
         const maxSub  = topSubs[0]?.cost || 1;
         const sharePct  = totalAll > 0 ? Math.round(cm.total / totalAll * 100) : 0;
         const isLargest = cm.total === maxProvTotal && maxProvTotal > 0;
@@ -838,7 +838,7 @@ async function loadCloudOverview() {
                             <span class="co-rank-name" title="${_esc(s.name)}">${_esc(s.name)}</span>
                             <span class="co-rank-amt">${curSym()}${Math.round(s.cost).toLocaleString()}</span>
                         </div>
-                        <div class="co-rank-bar"><div class="co-rank-bar__fill" style="width:${Math.round(s.cost/maxSub*100)}%;background:${clr};opacity:${1-i*0.25}"></div></div>
+                        <div class="co-rank-bar"><div class="co-rank-bar__fill" style="width:${Math.round(s.cost/maxSub*100)}%;background:${clr};opacity:${Math.max(0.35, 1-i*0.09)}"></div></div>
                     </div>`).join('')}
                 </div>
             </div>` : ''}

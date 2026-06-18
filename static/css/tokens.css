@@ -136,6 +136,15 @@ tbody tr:hover { background: var(--bg-hover); }
 .user-tile__action:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-default); }
 .user-tile__action:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
+/* Keep the sidebar user name + role legible on dark sidebars regardless of the
+   active UI theme (ocean/forest/etc.) — force readable colors in any dark mode. */
+html[data-theme="dark"] .user-tile__name,
+html.dark .user-tile__name,
+body.dark .user-tile__name { color: #F5F5F5; }
+html[data-theme="dark"] .user-tile__role,
+html.dark .user-tile__role,
+body.dark .user-tile__role { color: #A3A3A3; }
+
 /* moon shown in dark mode (default), sun shown in light mode */
 .theme-toggle .icon-sun { display: none; }
 html[data-appearance="light"] .theme-toggle .icon-moon { display: none; }
