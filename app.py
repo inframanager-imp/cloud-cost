@@ -4701,6 +4701,18 @@ def api_cloud_providers_create():
                      (cur_bucket, cur_report_name, row_id))
         conn.commit()
         conn.close()
+
+    # New AWS account: kick off a 12-month Cost Explorer backfill in the
+    # background so the client immediately sees ~a year of history (CUR only has
+    # data from when it was enabled). Gap-fill only — won't overwrite CUR months.
+    if provider_type == "aws" and row_id:
+        _tid = current_tenant_id()
+        _prov = get_cloud_provider(row_id, tenant_id=_tid)
+        if _prov:
+            start_background_thread(
+                lambda: _backfill_ce_history(_prov, _tid, 12),
+                name=f"backfill-new-{row_id}",
+            )
     return jsonify({"id": row_id, "message": "Cloud provider saved"})
 
 
@@ -4943,6 +4955,83 @@ def api_cloud_provider_sync(pk):
 
     start_background_thread(_do_sync, name=f"sync-{provider['provider_type']}-{pk}")
     return jsonify({"message": f"Sync started for {provider['name']}", "provider": provider["provider_type"]})
+
+
+def _backfill_ce_history(provider, tenant_id, months=12):
+    """Fill EMPTY historical months for an AWS account from Cost Explorer.
+
+    Cost Explorer retains ~12 months regardless of when CUR was enabled, so this
+    gives new (and existing) accounts up to a year of history immediately. Only
+    months with zero rows are filled — accurate CUR data is never overwritten.
+    Returns rows inserted.
+    """
+    from aws_fetcher import fetch_aws_costs
+    if (provider.get("provider_type") or "") != "aws":
+        return 0
+    pid = provider.get("provider_id")
+    now = datetime.utcnow()
+    inserted = 0
+    for off in range(months):
+        y, m = now.year, now.month - off
+        while m <= 0:
+            m += 12
+            y -= 1
+        start = datetime(y, m, 1)
+        end = (datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)) - timedelta(days=1)
+        if end > now:
+            end = now
+        s_str, e_str = start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+        conn = get_db()
+        n = conn.execute(
+            "SELECT COUNT(*) FROM cost_data WHERE cloud_provider='aws' AND subscription_id=? "
+            "AND tenant_id=? AND substr(date,1,10) BETWEEN ? AND ?",
+            (pid, tenant_id, s_str, e_str),
+        ).fetchone()[0]
+        conn.close()
+        if n > 0:
+            continue  # month already has data — keep it (CUR is authoritative)
+        try:
+            recs = fetch_aws_costs(provider, s_str, e_str)
+            if recs:
+                conn = get_db()
+                conn.executemany(
+                    "INSERT INTO cost_data (date,resource_group,service_name,resource_type,"
+                    "resource_name,meter_category,meter_subcategory,cost,currency,"
+                    "subscription_id,tags,cloud_provider,tenant_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    [r + (tenant_id,) for r in recs],
+                )
+                conn.commit()
+                conn.close()
+                inserted += len(recs)
+                print(f"[Backfill] {pid} {s_str[:7]}: +{len(recs)} rows (Cost Explorer)")
+        except Exception as e:
+            print(f"[Backfill] {pid} {s_str[:7]} failed (non-fatal): {e}")
+    return inserted
+
+
+@app.route("/api/cloud-providers/<int:pk>/backfill", methods=["POST"])
+@login_required
+def api_cloud_provider_backfill(pk):
+    """Backfill up to 12 months of history from Cost Explorer for one AWS account.
+    Fills only months with no data, so CUR-accurate months are untouched."""
+    provider = get_cloud_provider(pk, tenant_id=current_tenant_id())
+    if not provider:
+        return jsonify({"error": "Not found"}), 404
+    if (provider.get("provider_type") or "") != "aws":
+        return jsonify({"error": "Backfill is AWS-only"}), 400
+    body = request.get_json(silent=True) or {}
+    months = max(1, min(12, int(body.get("months", 12))))
+    tid = current_tenant_id()
+
+    def _run():
+        try:
+            total = _backfill_ce_history(provider, tid, months)
+            print(f"[Backfill] {provider.get('provider_id')}: {total} rows over {months}mo")
+        except Exception as e:
+            print(f"[Backfill] error for {pk}: {e}")
+
+    start_background_thread(_run, name=f"backfill-{pk}")
+    return jsonify({"message": f"Backfilling up to {months} months from Cost Explorer for {provider['name']}"})
 
 
 @app.route("/api/cloud-providers/discover", methods=["POST"])
