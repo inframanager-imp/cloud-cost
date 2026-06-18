@@ -1175,15 +1175,21 @@ async function loadCostsTable() {
         dateHeader.innerHTML = `${granularity === 'monthly' ? 'Month' : 'Date'} <span id="sort-date" class="sort-indicator">↕</span>`;
     }
     const isRgGroup = costGroupBy === 'resource_group';
+    const isSvcGroup = costGroupBy === 'service';
     const cloudHeader = document.getElementById('costCloudHeader');
     const rgHeader = document.getElementById('costRGHeader');
     const serviceHeader = document.getElementById('costServiceHeader');
     const resourceHeader = document.getElementById('costResourceHeader');
     const subscriptionHeader = document.getElementById('costSubscriptionHeader');
+    // Column visibility per group mode:
+    //   resource_group → Cloud, Date, Subscription, Resource Group, Cost
+    //   service        → Cloud, Date, Subscription, Service, Cost
+    //   resource       → Cloud, Date, Resource Group, Service, Resource, Cost
+    if (rgHeader) rgHeader.style.display = isSvcGroup ? 'none' : '';
     if (serviceHeader) serviceHeader.style.display = isRgGroup ? 'none' : '';
-    if (resourceHeader) resourceHeader.style.display = isRgGroup ? 'none' : '';
+    if (resourceHeader) resourceHeader.style.display = (isRgGroup || isSvcGroup) ? 'none' : '';
     if (subscriptionHeader) {
-        subscriptionHeader.style.display = isRgGroup ? '' : 'none';
+        subscriptionHeader.style.display = (isRgGroup || isSvcGroup) ? '' : 'none';
         const subHdrText = costsSelectedCloud ? (subLabel(costsSelectedCloud) || 'Account') : 'Subscription';
         subscriptionHeader.innerHTML = `${subHdrText} <span id="sort-subscription_id" class="sort-indicator">↕</span>`;
     }
@@ -1259,7 +1265,7 @@ async function loadCostsTable() {
           const hasFilter = (document.getElementById('costSearch')?.value || '') ||
             (document.getElementById('costDateFrom')?.value || '') ||
             costsSelectedCloud;
-          tbody.innerHTML = `<tr><td colspan="${isRgGroup ? 5 : 6}" style="padding:0;border:none">` +
+          tbody.innerHTML = `<tr><td colspan="${(isRgGroup || isSvcGroup) ? 5 : 6}" style="padding:0;border:none">` +
             (hasFilter
               ? _emptyState('neutral',
                   '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
@@ -1304,10 +1310,14 @@ async function loadCostsTable() {
                 const rawDate = (r.date || '').toString();
                 const dateOnly = granularity === 'monthly' ? rawDate.slice(0, 7) : rawDate.split('T')[0];
                 const rgCell = `<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.resource_group||''}">${r.resource_group || '-'}</td>`;
+                const subCell = `<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${subNameMap[r.subscription_id]||''}">${subNameMap[r.subscription_id] || '-'}</td>`;
+                const serviceCell = `<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.service_name||''}">${r.service_name || '-'}</td>`;
+                const resourceCell = `<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))"><span class="res-link">${resourceDisplay}</span></td>`;
                 const middleCells = isRgGroup
-                    ? `<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${subNameMap[r.subscription_id]||''}">${subNameMap[r.subscription_id] || '-'}</td>${rgCell}`
-                    : `${rgCell}<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.service_name||''}">${r.service_name || '-'}</td>
-                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))"><span class="res-link">${resourceDisplay}</span></td>`;
+                    ? `${subCell}${rgCell}`
+                    : isSvcGroup
+                        ? `${subCell}${serviceCell}`
+                        : `${rgCell}${serviceCell}${resourceCell}`;
                 return `<tr>
                 <td>${cloudCell}</td>
                 <td style="white-space:nowrap;color:var(--text-secondary)">${dateOnly}</td>

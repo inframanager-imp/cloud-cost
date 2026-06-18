@@ -604,6 +604,7 @@
                 <label class="cost-filter-label">Group by</label>
                 <select class="cost-filter-input" id="costGroupBy" onchange="loadCostsTable()">
                     <option value="resource_group">Resource Group</option>
+                    <option value="service">Service</option>
                     <option value="resource">Resource (line items)</option>
                 </select>
             </div>
@@ -3965,7 +3966,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260618u"></script>
+<script src="/static/js/app.js?v=20260618v"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
