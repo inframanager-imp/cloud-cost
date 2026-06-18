@@ -139,10 +139,10 @@ def _parse_date(val: str) -> str:
 
 def _process_row(row: dict, account_id: str, date_from: str, date_to: str, seen: set):
     """Parse a single CUR row into a cost_data tuple. Returns None if row should be skipped."""
-    line_type = row.get(_COL_LINE_TYPE, "")
-    if line_type in ("Tax", "Credit", "Refund", "RIFee", "SavingsPlanRecurringFee"):
-        return None
-
+    # Sum lineItem/UnblendedCost across ALL line-item types — including RIFee and
+    # SavingsPlanRecurringFee (the committed-spend lines previously dropped). This
+    # yields the AWS unblended invoice total. Negative lines (SavingsPlanNegation,
+    # credits) net out correctly when summed.
     cost = _safe_float(row.get(_COL_COST, "0"))
     if cost == 0:
         return None
@@ -215,11 +215,10 @@ def _process_row(row: dict, account_id: str, date_from: str, date_to: str, seen:
         import json as _json
         tags = _json.dumps({k: v for k, v in {"stack": stack, "cluster": cluster}.items() if v})
 
-    # Deduplicate within import
-    dedup_key = (date_str, acct, resource_id or usage_type, service)
-    if dedup_key in seen:
-        return None
-    seen.add(dedup_key)
+    # NOTE: no per-key deduplication here. A resource has many distinct CUR line
+    # items per day (different usage types / cost components); each is a real,
+    # separate charge. Dropping "duplicate" keys silently discarded most of the
+    # cost. Every line item is emitted and summed downstream.
 
     return (
         date_str,
@@ -259,11 +258,6 @@ def parse_local_cur_files(
         row_count = 0
         for row in _stream_local_csv_gz(path):
             row_count += 1
-
-            line_type = row.get(_COL_LINE_TYPE, "")
-            if line_type in ("Tax", "Credit", "Refund", "RIFee", "SavingsPlanRecurringFee"):
-                skipped += 1
-                continue
 
             cost = _safe_float(row.get(_COL_COST, "0"))
             if cost == 0:

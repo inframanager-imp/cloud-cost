@@ -1150,29 +1150,12 @@ def api_sync():
                                         provider=provider, date_from=p_from, date_to=date_to, tenant_id=tid,
                                     )
                                     print(f"[Sync] CUR import for {pid}: {result}")
-                                    # Supplement last 14 days with Cost Explorer resource-level API
-                                    _cutoff = (datetime.utcnow() - timedelta(days=14)).strftime("%Y-%m-%d")
-                                    _recent_from = _cutoff if _cutoff > p_from else p_from
-                                    if _recent_from < date_to:
-                                        try:
-                                            _ce_records = fetch_aws_costs(provider, _recent_from, date_to)
-                                            if _ce_records:
-                                                conn = get_db()
-                                                conn.execute(
-                                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
-                                                    (_recent_from, date_to, pid, tid),
-                                                )
-                                                conn.executemany(
-                                                    "INSERT INTO cost_data (date,resource_group,service_name,resource_type,"
-                                                    "resource_name,meter_category,meter_subcategory,cost,currency,"
-                                                    "subscription_id,tags,cloud_provider,tenant_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                                                    [r + (tid,) for r in _ce_records],
-                                                )
-                                                conn.commit()
-                                                conn.close()
-                                                print(f"[Sync] CE resource-level supplement for {pid}: {len(_ce_records)} records")
-                                        except Exception as _ce_err:
-                                            print(f"[Sync] CE supplement for {pid} failed (non-fatal): {_ce_err}")
+                                    # NOTE: no Cost Explorer resource-level supplement here.
+                                    # The CUR is the complete, authoritative source (includes
+                                    # Savings Plan / RI commitment spend). The resource-level CE
+                                    # API only returns resource-attributed costs and silently
+                                    # drops SP/RI fees, so overwriting recent days with it would
+                                    # under-report the bill.
                                     update_cloud_provider_sync_time(provider["id"], error=None)
                                     try:
                                         from aws_fetcher import resolve_all_ec2_names
@@ -4182,27 +4165,10 @@ def _run_auto_sync():
                                 result = import_from_s3_bucket(provider=p, date_from=p_from, date_to=date_to, tenant_id=p_tid)
                                 tenant_records += result.get("records", 0)
                                 print(f"[Auto-Sync] CUR import {pid} (tenant {tname}): {result}")
-                                # CE supplement last 14 days
-                                _cutoff = (datetime.utcnow() - timedelta(days=14)).strftime("%Y-%m-%d")
-                                _rfrom  = _cutoff if _cutoff > p_from else p_from
-                                if _rfrom < date_to:
-                                    try:
-                                        _ce = fetch_aws_costs(p, _rfrom, date_to)
-                                        if _ce:
-                                            _c = get_db()
-                                            _c.execute(
-                                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
-                                                (_rfrom, date_to, pid, p_tid),
-                                            )
-                                            _c.executemany(
-                                                "INSERT INTO cost_data (date,resource_group,service_name,resource_type,"
-                                                "resource_name,meter_category,meter_subcategory,cost,currency,"
-                                                "subscription_id,tags,cloud_provider,tenant_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                                                [r + (p_tid,) for r in _ce],
-                                            )
-                                            _c.commit(); _c.close()
-                                    except Exception as _ce_err:
-                                        print(f"[Auto-Sync] CE supplement {pid} failed (non-fatal): {_ce_err}")
+                                # No CE resource-level supplement: CUR is the complete,
+                                # authoritative source (includes Savings Plan / RI committed
+                                # spend). Resource-level CE drops SP/RI fees and would
+                                # under-report recent days.
                                 update_cloud_provider_sync_time(p["id"], error=None)
                                 try:
                                     from aws_fetcher import resolve_all_ec2_names

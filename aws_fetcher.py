@@ -84,7 +84,7 @@ def _fetch_service_level(client, date_from: str, end_exclusive: str, account_id:
         kwargs = {
             "TimePeriod": {"Start": date_from, "End": end_exclusive},
             "Granularity": "DAILY",
-            "Metrics": ["UnblendedCost"],
+            "Metrics": ["AmortizedCost"],
             "GroupBy": [
                 {"Type": "DIMENSION", "Key": "REGION"},
                 {"Type": "DIMENSION", "Key": "SERVICE"},
@@ -100,8 +100,8 @@ def _fetch_service_level(client, date_from: str, end_exclusive: str, account_id:
                 keys = group.get("Keys", [])
                 region = keys[0] if len(keys) > 0 else None
                 service = keys[1] if len(keys) > 1 else "Unknown"
-                amount = float(group["Metrics"]["UnblendedCost"]["Amount"])
-                currency = group["Metrics"]["UnblendedCost"]["Unit"]
+                amount = float(group["Metrics"]["AmortizedCost"]["Amount"])
+                currency = group["Metrics"]["AmortizedCost"]["Unit"]
                 if amount == 0:
                     continue
                 records.append((
@@ -129,7 +129,7 @@ def _fetch_resource_level(client, date_from: str, end_exclusive: str, account_id
         client.get_cost_and_usage_with_resources(
             TimePeriod={"Start": probe_start, "End": probe_end},
             Granularity="DAILY",
-            Metrics=["UnblendedCost"],
+            Metrics=["AmortizedCost"],
             GroupBy=[
                 {"Type": "DIMENSION", "Key": "SERVICE"},
                 {"Type": "DIMENSION", "Key": "RESOURCE_ID"},
@@ -156,7 +156,7 @@ def _fetch_resource_level(client, date_from: str, end_exclusive: str, account_id
                 kwargs = {
                     "TimePeriod": {"Start": chunk_start_str, "End": chunk_end_str},
                     "Granularity": "DAILY",
-                    "Metrics": ["UnblendedCost"],
+                    "Metrics": ["AmortizedCost"],
                     "GroupBy": [
                         {"Type": "DIMENSION", "Key": "SERVICE"},
                         {"Type": "DIMENSION", "Key": "RESOURCE_ID"},
@@ -172,8 +172,8 @@ def _fetch_resource_level(client, date_from: str, end_exclusive: str, account_id
                         keys = group.get("Keys", [])
                         service = keys[0] if len(keys) > 0 else "Unknown"
                         resource_id = keys[1] if len(keys) > 1 else None
-                        amount = float(group["Metrics"]["UnblendedCost"]["Amount"])
-                        currency = group["Metrics"]["UnblendedCost"]["Unit"]
+                        amount = float(group["Metrics"]["AmortizedCost"]["Amount"])
+                        currency = group["Metrics"]["AmortizedCost"]["Unit"]
                         if amount == 0:
                             continue
                         resource_type = None
