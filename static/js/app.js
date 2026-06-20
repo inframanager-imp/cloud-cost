@@ -1400,11 +1400,13 @@ function _atlRenderUserRows() {
         const el = document.getElementById('atl-sort-' + c);
         if (el) el.textContent = (c === col) ? (dir === 'asc' ? '↑' : '↓') : '↕';
     });
-    // Active-filter highlight on funnels
+    // Active-filter highlight on funnels — solid accent fill when a filter is on,
+    // matching the standard cost-table funnels.
     document.querySelectorAll('[data-atlf]').forEach(ic => {
         const on = _atlUserFilters[ic.dataset.atlf]?.size > 0;
         ic.style.opacity = on ? '1' : '0.85';
         ic.style.color = on ? 'var(--accent)' : '';
+        ic.style.fill  = on ? 'var(--accent)' : 'none';
     });
 
     if (!rows.length) {
