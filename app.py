@@ -5107,6 +5107,46 @@ def api_atlassian_user_costs():
     return jsonify({"rows": rows, "total": round(total, 2), "count": len(rows), "org_count": org_count})
 
 
+@app.route("/api/openai/grouped", methods=["GET"])
+@login_required
+def api_openai_grouped():
+    """OpenAI cost grouped by model / API capability / spend category, for the
+    selected date range (tenant-scoped). `by` = model | capability | category.
+    Powers the OpenAI-specific Group By options on the Cost Data page."""
+    by = (request.args.get("by") or "model").lower()
+    tid = current_tenant_id()
+    now = datetime.utcnow()
+    date_from = request.args.get("date_from") or (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    date_to   = request.args.get("date_to")   or now.strftime("%Y-%m-%d")
+
+    conn = get_db()
+    q = ("SELECT resource_name, COALESCE(SUM(cost),0) total FROM cost_data "
+         "WHERE cloud_provider='openai' AND date BETWEEN ? AND ? ")
+    params = [date_from, date_to]
+    if tid is not None:
+        q += "AND tenant_id IS ? "; params.append(tid)
+    q += "GROUP BY resource_name"
+    raw = conn.execute(q, params).fetchall()
+    conn.close()
+
+    agg = {}
+    for r in raw:
+        name = r["resource_name"] or "API Usage"
+        model = name.split(", ")[0]                      # "gpt-5.4-..." (strip token type)
+        if by == "capability":
+            key = _openai_capability(model)
+        elif by == "category":
+            key = name.split(", ", 1)[1] if ", " in name else "total"   # token type / context
+        else:  # model
+            key = model
+        agg[key] = agg.get(key, 0) + r["total"]
+
+    rows = sorted(({"label": k, "cost": round(v, 2)} for k, v in agg.items()),
+                  key=lambda x: -x["cost"])
+    return jsonify({"rows": rows, "total": round(sum(x["cost"] for x in rows), 2),
+                    "count": len(rows), "by": by})
+
+
 def _backfill_ce_history(provider, tenant_id, months=12):
     """Fill EMPTY historical months for an AWS account from Cost Explorer.
 

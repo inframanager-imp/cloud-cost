@@ -638,6 +638,9 @@
                     <option value="service">Service</option>
                     <option value="resource">Resource (line items)</option>
                     <option value="user" id="costGroupByUserOpt" style="display:none">User</option>
+                    <option value="oai_model" class="oai-gb-opt" style="display:none">Model</option>
+                    <option value="oai_capability" class="oai-gb-opt" style="display:none">API Capability</option>
+                    <option value="oai_category" class="oai-gb-opt" style="display:none">Spend Category</option>
                 </select>
             </div>
             <div class="cost-filter-field">
@@ -801,6 +804,21 @@
                 </thead>
                 <tbody id="atlUserCostBody">
                     <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- OpenAI grouped cost table (Model / API Capability / Spend Category) -->
+        <div id="openaiGroupWrap" class="table-container cost-table-wrap" style="display:none;overflow-x:auto">
+            <table class="cost-table" style="min-width:480px;table-layout:auto">
+                <thead>
+                    <tr>
+                        <th id="openaiGroupLabelHeader" style="white-space:nowrap">Model</th>
+                        <th style="text-align:right;white-space:nowrap">Cost</th>
+                    </tr>
+                </thead>
+                <tbody id="openaiGroupBody">
+                    <tr><td colspan="2" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -4025,7 +4043,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260620v"></script>
+<script src="/static/js/app.js?v=20260620w"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

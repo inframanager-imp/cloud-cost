@@ -1357,6 +1357,39 @@ function _atlStatusBadge(st) {
     return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${bg};color:${fg};text-transform:capitalize;white-space:nowrap">${label}</span>`;
 }
 
+// OpenAI Group By → Model / API Capability / Spend Category.
+async function renderOpenAIGrouped(by) {
+    const labels = { model: 'Model', capability: 'API Capability', category: 'Spend Category' };
+    const hdr  = document.getElementById('openaiGroupLabelHeader');
+    const body = document.getElementById('openaiGroupBody');
+    const subtitleBar = document.getElementById('costsSubtitleBar');
+    const countChip = document.getElementById('costRowCountChip');
+    if (hdr) hdr.textContent = labels[by] || 'Model';
+    if (body) body.innerHTML = '<tr><td colspan="2" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
+    const p = new URLSearchParams({ by });
+    const df = document.getElementById('costDateFrom')?.value;
+    const dt = document.getElementById('costDateTo')?.value;
+    if (df) p.set('date_from', df);
+    if (dt) p.set('date_to', dt);
+    try {
+        const d = await fetch('/api/openai/grouped?' + p).then(r => r.json());
+        const rows = d.rows || [];
+        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} ${labels[by].toLowerCase()}${rows.length !== 1 ? (by === 'capability' ? ' capabilities' : 's') : ''} · Total <strong>${_atlMoney(d.total || 0)}</strong>`;
+        if (countChip) countChip.textContent = `${rows.length} ${labels[by].toLowerCase()}s`;
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="2" style="text-align:center;padding:40px;color:var(--text-secondary)">No OpenAI cost data for this range.</td></tr>';
+            return;
+        }
+        body.innerHTML = rows.map(r => `
+            <tr>
+                <td style="font-weight:500">${_esc(r.label || '—')}</td>
+                <td style="text-align:right;font-weight:600">${_atlMoney(r.cost || 0)}</td>
+            </tr>`).join('');
+    } catch (e) {
+        if (body) body.innerHTML = '<tr><td colspan="2" style="text-align:center;padding:40px;color:#c53030">Failed to load OpenAI breakdown</td></tr>';
+    }
+}
+
 async function renderAtlassianUserCosts() {
     const body = document.getElementById('atlUserCostBody');
     if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
@@ -1538,6 +1571,10 @@ async function _updateCostsCloudFilters(cloud) {
         if (isAtlassian) groupByEl.insertBefore(userOpt, groupByEl.firstChild); // first
         else             groupByEl.appendChild(userOpt);                        // back to last
     }
+    // OpenAI-only Group By options: Model / API Capability / Spend Category.
+    const isOpenai = cloud === 'openai';
+    document.querySelectorAll('.oai-gb-opt').forEach(o => o.style.display = isOpenai ? '' : 'none');
+    if (!isOpenai && groupByEl && (groupByEl.value || '').startsWith('oai_')) groupByEl.value = 'resource';
 
     // Group By is shown for every cloud; the toolbar RG dropdown stays hidden
     // (column-header funnel filters replace it).
@@ -1563,20 +1600,26 @@ async function _updateCostsCloudFilters(cloud) {
 }
 
 async function loadCostsTable() {
-    // Atlassian "Group by → User": per-user cost breakdown (separate renderer).
+    // Cloud-specific grouped views (Atlassian per-user, OpenAI model/capability/category)
+    // use their own dedicated tables instead of the standard cost table.
     const _gb = document.getElementById('costGroupBy')?.value || 'resource';
-    const _userWrap = document.getElementById('atlUserCostWrap');
-    const _mainWrap = document.querySelector('.cost-table-wrap:not(#atlUserCostWrap)');
+    const _mainWrap = document.getElementById('costsTable')?.closest('.cost-table-wrap');
+    const _atlWrap  = document.getElementById('atlUserCostWrap');
+    const _oaiWrap  = document.getElementById('openaiGroupWrap');
     const _subCard  = document.querySelector('.sub-table-card');
+    const _showOnly = which => {
+        if (_mainWrap) _mainWrap.style.display = which === 'main' ? '' : 'none';
+        if (_atlWrap)  _atlWrap.style.display  = which === 'atl'  ? '' : 'none';
+        if (_oaiWrap)  _oaiWrap.style.display  = which === 'oai'  ? '' : 'none';
+        if (_subCard)  _subCard.style.display  = which === 'main' ? '' : 'none';
+    };
     if (costsSelectedCloud === 'atlassian' && _gb === 'user') {
-        if (_mainWrap) _mainWrap.style.display = 'none';
-        if (_subCard)  _subCard.style.display = 'none';
-        if (_userWrap) _userWrap.style.display = '';
-        return renderAtlassianUserCosts();
+        _showOnly('atl'); return renderAtlassianUserCosts();
     }
-    if (_userWrap) _userWrap.style.display = 'none';
-    if (_mainWrap) _mainWrap.style.display = '';
-    if (_subCard)  _subCard.style.display = '';
+    if (costsSelectedCloud === 'openai' && _gb.startsWith('oai_')) {
+        _showOnly('oai'); return renderOpenAIGrouped(_gb.replace('oai_', ''));
+    }
+    _showOnly('main');
 
     const params = new URLSearchParams();
     const search = document.getElementById('costSearch')?.value;
