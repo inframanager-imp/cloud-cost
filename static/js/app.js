@@ -1341,6 +1341,21 @@ let _atlUserSort = { col: 'cost', dir: 'desc' };
 const _atlUserFilters = { status: new Set(), products: new Set() };  // empty = no filter
 const _atlMoney = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Coloured status pill matching Atlassian Admin's statuses.
+function _atlStatusBadge(st) {
+    const s = (st || '').toLowerCase();
+    const C = {
+        active:       ['#c6f6d5', '#276749'],   // green
+        invited:      ['#feebc8', '#9c4221'],   // amber
+        suspended:    ['#fefcbf', '#975a16'],   // yellow
+        deactivated:  ['#e2e8f0', '#4a5568'],   // grey
+        for_deletion: ['#fed7d7', '#9b2c2c'],   // red
+    };
+    const [bg, fg] = C[s] || ['#e2e8f0', '#4a5568'];
+    const label = s ? s.replace(/_/g, ' ') : 'unknown';
+    return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${bg};color:${fg};text-transform:capitalize;white-space:nowrap">${label}</span>`;
+}
+
 async function renderAtlassianUserCosts() {
     const body = document.getElementById('atlUserCostBody');
     if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
@@ -1396,15 +1411,11 @@ function _atlRenderUserRows() {
         body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No users match the filters.</td></tr>';
         return;
     }
-    const badge = st => {
-        const active = (st || '').toLowerCase() === 'active';
-        return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${active ? '#c6f6d5' : '#fed7d7'};color:${active ? '#276749' : '#9b2c2c'};text-transform:capitalize">${st ? st.replace(/_/g, ' ') : '—'}</span>`;
-    };
     body.innerHTML = rows.map(u => `
         <tr>
             <td style="font-weight:500">${_esc(u.name || '—')}</td>
             <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
-            <td style="text-align:center">${badge(u.status)}</td>
+            <td style="text-align:center">${_atlStatusBadge(u.status)}</td>
             <td style="color:var(--text-secondary)">${_esc(u.last_active || '—')}</td>
             <td style="font-size:12px;color:var(--text-secondary)">${(u.products || []).map(_esc).join(', ') || '—'}</td>
             <td style="text-align:right;font-weight:600">${_atlMoney(u.cost || 0)}</td>

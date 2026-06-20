@@ -46,6 +46,26 @@ def _display(product_key: str) -> str:
     return PRODUCT_DISPLAY.get(product_key, product_key.replace("-", " ").title())
 
 
+def _derive_status(u: dict) -> str:
+    """Map Atlassian's raw user fields to the status shown in Atlassian Admin:
+    active / suspended / deactivated / invited / for_deletion.
+
+    The API's `status` field is only active/for_deletion; the rest are derived:
+      - suspended    : membershipStatus == suspended
+      - deactivated  : accountStatus inactive/deactivated, or deactivatedOn set
+      - invited      : account added but email not verified (not accepted yet)
+    """
+    if u.get("forDeletion") or (u.get("status") or "").lower() == "for_deletion":
+        return "for_deletion"
+    if (u.get("membershipStatus") or "").lower() == "suspended":
+        return "suspended"
+    if (u.get("accountStatus") or "").lower() in ("inactive", "deactivated") or u.get("deactivatedOn"):
+        return "deactivated"
+    if u.get("emailVerified") is False:
+        return "invited"
+    return "active"
+
+
 # ─── Atlassian Admin API client ────────────────────────────────────────────────
 
 class AtlassianClient:
@@ -133,7 +153,7 @@ def sync_atlassian_users(client, org_id, tenant_id):
         account_id = u.get("accountId")
         if not account_id:
             continue
-        status = (u.get("status") or "").lower()
+        status = _derive_status(u)
         last_active, product_keys = client.fetch_user_activity(account_id)
         if status == "active":
             for key in product_keys:
