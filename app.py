@@ -5053,8 +5053,11 @@ def api_atlassian_user_costs():
     from atlassian_fetcher import get_cached_price
     tid = current_tenant_id()
 
-    # Subscribed products → price, across the tenant's Atlassian providers.
-    sub_price = {}   # product_name -> per-user price
+    # Per-org subscribed products → price, across the tenant's Atlassian accounts.
+    # Org-aware so each user is priced by their own org's plan (supports multiple
+    # Atlassian accounts under one tenant).
+    org_price = {}   # org_id -> {product_name: per-user price}
+    org_name  = {}   # org_id -> display name
     for pstub in get_cloud_providers(tenant_id=tid):
         if pstub.get("provider_type") != "atlassian":
             continue
@@ -5063,15 +5066,18 @@ def api_atlassian_user_costs():
         if isinstance(creds, str):
             try: creds = json.loads(creds or "{}")
             except Exception: creds = {}
+        oid = creds.get("orgId") or p.get("provider_id")
+        org_name[oid] = p.get("name") or oid
+        org_price.setdefault(oid, {})
         for prod in creds.get("products", []):
             pn = prod.get("productName")
             pl = (prod.get("plan") or "standard").lower()
             if pn:
                 price, _ = get_cached_price(pn, pl)
-                sub_price[pn] = price or 0.0
+                org_price[oid][pn] = price or 0.0
 
     conn = get_db()
-    q = "SELECT name,email,status,last_active,products FROM atlassian_users WHERE "
+    q = "SELECT org_id,name,email,status,last_active,products FROM atlassian_users WHERE "
     params = []
     if tid is not None:
         q += "tenant_id IS ? "; params.append(tid)
@@ -5084,17 +5090,21 @@ def api_atlassian_user_costs():
     for r in raw:
         try: prods = json.loads(r["products"] or "[]")
         except Exception: prods = []
+        oid = r.get("org_id")
+        price_map = org_price.get(oid, {})
         active = (r.get("status") or "").lower() == "active"
-        billable = [pn for pn in prods if pn in sub_price] if active else []
-        cost = round(sum(sub_price[pn] for pn in billable), 2)
+        billable = [pn for pn in prods if pn in price_map] if active else []
+        cost = round(sum(price_map[pn] for pn in billable), 2)
         total += cost
         rows.append({
+            "org_id": oid, "org_name": org_name.get(oid, oid),
             "name": r.get("name"), "email": r.get("email"), "status": r.get("status"),
             "last_active": r.get("last_active"),
             "products": billable or prods, "cost": cost,
         })
     rows.sort(key=lambda x: (-x["cost"], (x["name"] or "").lower()))
-    return jsonify({"rows": rows, "total": round(total, 2), "count": len(rows)})
+    org_count = len({r["org_id"] for r in rows})
+    return jsonify({"rows": rows, "total": round(total, 2), "count": len(rows), "org_count": org_count})
 
 
 def _backfill_ce_history(provider, tenant_id, months=12):

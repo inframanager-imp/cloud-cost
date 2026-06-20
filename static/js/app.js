@@ -1337,6 +1337,7 @@ function _renderAtlUsers() {
 
 // Group by → User: per-user cost breakdown rendered into #atlUserCostBody.
 let _atlUserRows = [];
+let _atlMultiOrg = false;
 let _atlUserSort = { col: 'cost', dir: 'desc' };
 const _atlUserFilters = { status: new Set(), products: new Set() };  // empty = no filter
 const _atlMoney = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1362,6 +1363,10 @@ async function renderAtlassianUserCosts() {
     try {
         const d = await fetch('/api/atlassian/user-costs').then(r => r.json());
         _atlUserRows = d.rows || [];
+        // Show the Organization column only when more than one Atlassian account exists.
+        const orgHdr = document.getElementById('atlUserOrgHeader');
+        _atlMultiOrg = (d.org_count || 0) > 1;
+        if (orgHdr) orgHdr.style.display = _atlMultiOrg ? '' : 'none';
         _atlRenderUserRows();
     } catch (e) {
         if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#c53030">Failed to load per-user costs</td></tr>';
@@ -1396,7 +1401,7 @@ function _atlRenderUserRows() {
     if (countChip) countChip.textContent = `${rows.length} users`;
 
     // Sort indicators
-    ['name', 'email', 'status', 'last_active', 'products', 'cost'].forEach(c => {
+    ['org_name', 'name', 'email', 'status', 'last_active', 'products', 'cost'].forEach(c => {
         const el = document.getElementById('atl-sort-' + c);
         if (el) el.textContent = (c === col) ? (dir === 'asc' ? '↑' : '↓') : '↕';
     });
@@ -1409,12 +1414,14 @@ function _atlRenderUserRows() {
         ic.style.fill  = on ? 'var(--accent)' : 'none';
     });
 
+    const cols = _atlMultiOrg ? 7 : 6;
     if (!rows.length) {
-        body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No users match the filters.</td></tr>';
+        body.innerHTML = `<tr><td colspan="${cols}" style="text-align:center;padding:40px;color:var(--text-secondary)">No users match the filters.</td></tr>`;
         return;
     }
     body.innerHTML = rows.map(u => `
         <tr>
+            ${_atlMultiOrg ? `<td style="color:var(--text-secondary)">${_esc(u.org_name || u.org_id || '—')}</td>` : ''}
             <td style="font-weight:500">${_esc(u.name || '—')}</td>
             <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
             <td style="text-align:center">${_atlStatusBadge(u.status)}</td>
