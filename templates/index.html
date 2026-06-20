@@ -3937,7 +3937,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260620k"></script>
+<script src="/static/js/app.js?v=20260620l"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -5693,9 +5693,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const cfg = data[tool] || {};
                 const badge = document.getElementById('intg-status-' + tool);
                 if (badge) {
-                    const on = cfg.enabled;
-                    badge.textContent = on ? 'Connected' : 'Not connected';
-                    badge.className = 'intg-badge ' + (on ? 'intg-badge-on' : 'intg-badge-off');
+                    // "Connected" reflects whether credentials are SAVED, not the
+                    // enable-automation toggle (which only turns the workflow on/off).
+                    const configured = tool === 'jira'     ? !!cfg.url
+                                     : tool === 'bitbucket' ? !!(cfg.workspace || cfg.token)
+                                     :                        !!cfg.api_key;  // cursor, openai
+                    badge.textContent = configured ? 'Connected' : 'Not connected';
+                    badge.className = 'intg-badge ' + (configured ? 'intg-badge-on' : 'intg-badge-off');
                 }
             });
             // Show OpenAI sync button + dashboard if API key is configured
