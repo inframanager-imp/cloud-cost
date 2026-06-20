@@ -577,8 +577,7 @@
             <div class="cost-filter-field">
                 <label class="cost-filter-label">Cloud</label>
                 <div class="cp-segmented cp-segmented--cloud">
-                    <button class="cp-seg active" data-costs-cloud="" onclick="setCostsCloud(this,'')">All</button>
-                    <button class="cp-seg cp-seg--cloud" data-costs-cloud="azure" onclick="setCostsCloud(this,'azure')">
+                    <button class="cp-seg cp-seg--cloud active" data-costs-cloud="azure" onclick="setCostsCloud(this,'azure')">
                         <img src="/static/img/azure-logo.svg" alt="">Azure
                     </button>
                     <button class="cp-seg cp-seg--cloud" data-costs-cloud="aws" onclick="setCostsCloud(this,'aws')">
@@ -615,7 +614,7 @@
                     <option value="monthly" selected>Monthly</option>
                 </select>
             </div>
-            <div class="cost-filter-field" id="costAccountWrap" style="position:relative">
+            <div class="cost-filter-field" id="costAccountWrap" style="position:relative;display:none">
                 <label class="cost-filter-label" id="costAccountLabel">Account / Subscription</label>
                 <div class="multiselect" id="cdAccMultiselect">
                     <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('acc')">
@@ -632,7 +631,7 @@
                     </div>
                 </div>
             </div>
-            <div class="cost-filter-field" id="costRGWrap" style="position:relative">
+            <div class="cost-filter-field" id="costRGWrap" style="position:relative;display:none">
                 <label class="cost-filter-label" id="costRGLabel">Project</label>
                 <div class="multiselect" id="cdRgMultiselect">
                     <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('rg')">
@@ -649,7 +648,7 @@
                     </div>
                 </div>
             </div>
-            <div class="cost-filter-field" style="position:relative">
+            <div class="cost-filter-field" style="position:relative;display:none">
                 <label class="cost-filter-label">Service</label>
                 <div class="multiselect" id="cdSvcMultiselect">
                     <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('svc')">
@@ -663,6 +662,23 @@
                             <button class="btn-link" onclick="cdDeselectAll('svc')">Clear</button>
                         </div>
                         <div class="multiselect__options" id="cdSvcList"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="cost-filter-field" style="position:relative;display:none">
+                <label class="cost-filter-label">Resource</label>
+                <div class="multiselect" id="cdResMultiselect">
+                    <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('res')">
+                        <span id="cdResTriggerText" class="multiselect__placeholder">All</span>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="multiselect__panel" id="cdResPanel" hidden>
+                        <input class="multiselect__search" id="cdResSearch" placeholder="Search..." oninput="cdFilterList('res')">
+                        <div class="multiselect__actions">
+                            <button class="btn-link" onclick="cdSelectAll('res')">Select all</button>
+                            <button class="btn-link" onclick="cdDeselectAll('res')">Clear</button>
+                        </div>
+                        <div class="multiselect__options" id="cdResList"></div>
                     </div>
                 </div>
             </div>
@@ -721,9 +737,9 @@
                     <tr>
                         <th id="costDateHeader" class="sortable-th" onclick="sortCostsBy('date')" style="white-space:nowrap">Date <span id="sort-date" class="sort-indicator">↕</span></th>
                         <th id="costCloudHeader" class="sortable-th" onclick="sortCostsBy('cloud_provider')" style="white-space:nowrap">Cloud <span id="sort-cloud_provider" class="sort-indicator">↕</span></th>
-                        <th id="costRGHeader" class="sortable-th" onclick="sortCostsBy('resource_group')" style="white-space:nowrap"><span id="costsRGColumnLabel">Resource Group</span> <span id="sort-resource_group" class="sort-indicator">↕</span></th>
-                        <th id="costServiceHeader" class="sortable-th" onclick="sortCostsBy('service_name')" style="white-space:nowrap">Service <span id="sort-service_name" class="sort-indicator">↕</span></th>
-                        <th id="costResourceHeader" class="sortable-th" onclick="sortCostsBy('resource_name')" style="white-space:nowrap">Resource <span id="sort-resource_name" class="sort-indicator">↕</span></th>
+                        <th id="costRGHeader" class="sortable-th" onclick="sortCostsBy('resource_group')" style="white-space:nowrap"><span id="costsRGColumnLabel">Resource Group</span> <span id="sort-resource_group" class="sort-indicator">↕</span><svg onclick="openColFilter(event,'rg')" data-colf="rg" class="col-filter-ic" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.55" title="Filter"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></th>
+                        <th id="costServiceHeader" class="sortable-th" onclick="sortCostsBy('service_name')" style="white-space:nowrap">Service <span id="sort-service_name" class="sort-indicator">↕</span><svg onclick="openColFilter(event,'svc')" data-colf="svc" class="col-filter-ic" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.55" title="Filter"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></th>
+                        <th id="costResourceHeader" class="sortable-th" onclick="sortCostsBy('resource_name')" style="white-space:nowrap">Resource <span id="sort-resource_name" class="sort-indicator">↕</span><svg onclick="openColFilter(event,'res')" data-colf="res" class="col-filter-ic" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.55" title="Filter"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></th>
                         <th id="costSubscriptionHeader" class="sortable-th" onclick="sortCostsBy('subscription_id')" style="white-space:nowrap;display:none">Subscription <span id="sort-subscription_id" class="sort-indicator">↕</span></th>
                         <th class="sortable-th" onclick="sortCostsBy('cost')" style="text-align:right;white-space:nowrap">Cost <span id="sort-cost" class="sort-indicator">↕</span></th>
                     </tr>
@@ -734,6 +750,19 @@
                     </td></tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Transparent backdrop: a click anywhere outside the popover closes it -->
+        <div id="colFilterBackdrop" hidden onclick="closeColFilter()" style="position:fixed;inset:0;z-index:9998;background:transparent"></div>
+        <!-- Shared per-column filter popover (anchored to a column header funnel) -->
+        <div id="colFilterPop" class="multiselect__panel" hidden style="position:fixed;z-index:9999;width:260px;max-height:320px;display:none;flex-direction:column">
+            <input class="multiselect__search" id="colFilterSearch" placeholder="Search..." oninput="renderColFilter()">
+            <div class="multiselect__actions">
+                <button class="btn-link" onclick="colFilterSelectAll()">Select all</button>
+                <button class="btn-link" onclick="colFilterClear()">Clear</button>
+                <button class="btn-link" onclick="closeColFilter()" style="margin-left:auto;font-weight:600;color:var(--accent)">Done</button>
+            </div>
+            <div class="multiselect__options" id="colFilterList" style="overflow:auto"></div>
         </div>
 
         <!-- Pagination footer -->
@@ -3966,7 +3995,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260618v"></script>
+<script src="/static/js/app.js?v=20260618z10-test"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

@@ -193,11 +193,11 @@ function navigateTo(page) {
                 b.classList.toggle('active', b.dataset.costsCloud === selectedCloud));
             _updateCostsCloudFilters(selectedCloud);
         } else {
-            // Reset to All when navigating directly
-            costsSelectedCloud = '';
+            // Default to Azure when navigating directly (no "All" option)
+            costsSelectedCloud = 'azure';
             document.querySelectorAll('[data-costs-cloud]').forEach(b =>
-                b.classList.toggle('active', b.dataset.costsCloud === ''));
-            _updateCostsCloudFilters('');
+                b.classList.toggle('active', b.dataset.costsCloud === 'azure'));
+            _updateCostsCloudFilters('azure');
         }
         loadCostsTable();
     }
@@ -889,7 +889,7 @@ async function _renderCoTrendChart(results) {
 }
 
 // ─── Costs Table ─────────────────────────────────────────────────────────
-let costsSelectedCloud = '';
+let costsSelectedCloud = 'azure';
 let costPageOffset = 0;
 let costPageLimit = 100;
 let costPageTotal = 0;
@@ -982,19 +982,22 @@ function openServiceDrill(serviceName) {
 // Cost Data multiselect state
 let cdRgOptions  = [];   // string[]
 let cdSvcOptions = [];   // string[]
+let cdResOptions = [];   // string[]
 let cdAccOptions = [];   // {id, label}[]
 let cdRgSelected  = new Set();
 let cdSvcSelected = new Set();
+let cdResSelected = new Set();
 let cdAccSelected = new Set(); // stores provider_ids
 
 const CD_MS = {
     rg:  { panel: 'cdRgPanel',  list: 'cdRgList',  search: 'cdRgSearch',  trigger: 'cdRgTriggerText'  },
     svc: { panel: 'cdSvcPanel', list: 'cdSvcList', search: 'cdSvcSearch', trigger: 'cdSvcTriggerText' },
+    res: { panel: 'cdResPanel', list: 'cdResList', search: 'cdResSearch', trigger: 'cdResTriggerText' },
     acc: { panel: 'cdAccPanel', list: 'cdAccList', search: 'cdAccSearch', trigger: 'cdAccTriggerText' },
 };
 
-function cdOpts(key) { return key === 'rg' ? cdRgOptions : key === 'svc' ? cdSvcOptions : cdAccOptions; }
-function cdSel(key)  { return key === 'rg' ? cdRgSelected : key === 'svc' ? cdSvcSelected : cdAccSelected; }
+function cdOpts(key) { return key === 'rg' ? cdRgOptions : key === 'svc' ? cdSvcOptions : key === 'res' ? cdResOptions : cdAccOptions; }
+function cdSel(key)  { return key === 'rg' ? cdRgSelected : key === 'svc' ? cdSvcSelected : key === 'res' ? cdResSelected : cdAccSelected; }
 
 function cdTogglePanel(key) {
     const cfg = CD_MS[key];
@@ -1024,7 +1027,7 @@ function cdRenderList(key) {
     if (!list) return;
     const sel = cdSel(key);
     const opts = cdOpts(key);
-    const items = key === 'acc' ? opts : opts.map(o => ({ id: o, label: o === '__BLANK__' ? '(Blank)' : o }));
+    const items = key === 'acc' ? opts : opts.map(o => ({ id: o, label: o === '__BLANK__' ? '(Blank)' : o === '__RESERVATIONS__' ? 'Reservations' : o }));
     const filtered = items.filter(o => o.label.toLowerCase().includes(query));
     list.innerHTML = filtered.map(o => {
         const checked = sel.has(o.id) ? 'checked' : '';
@@ -1069,7 +1072,7 @@ function cdUpdateTrigger(key) {
     } else if (sel.size === 1) {
         const v = [...sel][0];
         const opt = key === 'acc' ? cdAccOptions.find(o => o.id === v) : null;
-        el.textContent = opt ? opt.label : (v === '__BLANK__' ? '(Blank)' : v);
+        el.textContent = opt ? opt.label : (v === '__BLANK__' ? '(Blank)' : v === '__RESERVATIONS__' ? 'Reservations' : v);
         el.className = 'multiselect__summary';
     } else {
         el.textContent = `${sel.size} selected`; el.className = 'multiselect__summary';
@@ -1077,8 +1080,11 @@ function cdUpdateTrigger(key) {
 }
 
 function populateCdMultiselect(key, options) {
-    const newOpts = ['__BLANK__', ...options];
+    // Resource list also gets a single "Reservations" entry (selects all reservation
+    // orders) since the individual reservation GUIDs are excluded from the list.
+    const newOpts = key === 'res' ? ['__BLANK__', '__RESERVATIONS__', ...options] : ['__BLANK__', ...options];
     if (key === 'rg') cdRgOptions = newOpts;
+    else if (key === 'res') cdResOptions = newOpts;
     else cdSvcOptions = newOpts;
     const sel = cdSel(key);
     const allowed = new Set(newOpts);
@@ -1098,24 +1104,134 @@ function populateCdAccounts(accounts) {
 function resetCostFilters() {
     const search = document.getElementById('costSearch');
     if (search) search.value = '';
-    document.querySelectorAll('[data-costs-cloud]').forEach(b => b.classList.toggle('active', b.dataset.costsCloud === ''));
-    costsSelectedCloud = '';
+    document.querySelectorAll('[data-costs-cloud]').forEach(b => b.classList.toggle('active', b.dataset.costsCloud === 'azure'));
+    costsSelectedCloud = 'azure';
     cdRgSelected.clear();  cdUpdateTrigger('rg');
     cdSvcSelected.clear(); cdUpdateTrigger('svc');
+    cdResSelected.clear(); cdUpdateTrigger('res');
     cdAccSelected.clear(); cdUpdateTrigger('acc');
-    _updateCostsCloudFilters('');
+    _updateCostsCloudFilters('azure');
     const costsClient = document.getElementById('costsClientFilter');
     if (costsClient) costsClient.value = '';
     costPageOffset = 0;
     loadCostsTable();
 }
 
-// Close CD panels when clicking outside
+// ─── Per-column header filter popover state (declared before the click handler) ──
+let _colFilterKey = null;
+
+// Friendly label for a resource name. Azure reservation IDs are bare GUIDs with
+// no name — show "Reservation (xxxxxxxx…)" so the filter list is readable.
+function _friendlyResource(name) {
+    if (!name) return name;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(name)) {
+        return 'Reservation (' + name.slice(0, 8) + '…)';
+    }
+    return name;
+}
+
+// Highlight each column funnel icon when that column has an active filter, so
+// it's obvious a filter is applied.
+function _updateColFilterIndicators() {
+    document.querySelectorAll('[data-colf]').forEach(ic => {
+        const key = ic.getAttribute('data-colf');
+        const active = cdSel(key) && cdSel(key).size > 0;
+        ic.style.opacity = active ? '1' : '0.55';
+        ic.style.color   = active ? 'var(--accent)' : '';
+        ic.style.fill    = active ? 'var(--accent)' : 'none';
+    });
+}
+
+// Close CD panels + the column-filter popover when clicking outside them.
 document.addEventListener('click', e => {
-    if (!e.target.closest('#cdRgMultiselect'))  document.getElementById('cdRgPanel')?.setAttribute('hidden', '');
-    if (!e.target.closest('#cdSvcMultiselect')) document.getElementById('cdSvcPanel')?.setAttribute('hidden', '');
-    if (!e.target.closest('#cdAccMultiselect')) document.getElementById('cdAccPanel')?.setAttribute('hidden', '');
+    const t = e.target;
+    if (!t || typeof t.closest !== 'function') return;
+    if (!t.closest('#cdRgMultiselect'))  document.getElementById('cdRgPanel')?.setAttribute('hidden', '');
+    if (!t.closest('#cdSvcMultiselect')) document.getElementById('cdSvcPanel')?.setAttribute('hidden', '');
+    if (!t.closest('#cdResMultiselect')) document.getElementById('cdResPanel')?.setAttribute('hidden', '');
+    if (!t.closest('#cdAccMultiselect')) document.getElementById('cdAccPanel')?.setAttribute('hidden', '');
+    // Per-column header filter popover (the funnel icons themselves stop propagation)
+    if (_colFilterKey && !t.closest('#colFilterPop') && !t.closest('.col-filter-ic')) {
+        closeColFilter();
+    }
 });
+
+// ─── Per-column header filter popover (reuses the toolbar multiselect state) ──
+// NOTE: toggle display directly — the [hidden] attribute is overridden by the
+// popover's inline `display`, so setAttribute('hidden') alone won't hide it.
+function closeColFilter() {
+    const pop = document.getElementById('colFilterPop');
+    if (pop) { pop.style.display = 'none'; pop.setAttribute('hidden', ''); }
+    const bd = document.getElementById('colFilterBackdrop');
+    if (bd) { bd.style.display = 'none'; bd.setAttribute('hidden', ''); }
+    _colFilterKey = null;
+}
+
+function openColFilter(ev, key) {
+    ev.stopPropagation();              // don't trigger column sort
+    ev.preventDefault();
+    const pop = document.getElementById('colFilterPop');
+    const backdrop = document.getElementById('colFilterBackdrop');
+    if (!pop) return;
+    const alreadyOpen = pop.style.display !== 'none' && _colFilterKey === key;
+    if (alreadyOpen) { closeColFilter(); return; }
+    _colFilterKey = key;
+    const rect = ev.currentTarget.getBoundingClientRect();
+    pop.style.top  = (rect.bottom + 4) + 'px';
+    pop.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 270)) + 'px';
+    const search = document.getElementById('colFilterSearch');
+    if (search) search.value = '';
+    if (backdrop) { backdrop.style.display = 'block'; backdrop.removeAttribute('hidden'); }
+    pop.style.display = 'flex';
+    pop.removeAttribute('hidden');
+    renderColFilter();
+    if (search) search.focus();
+}
+
+function renderColFilter() {
+    const key = _colFilterKey;
+    if (!key) return;
+    const q = (document.getElementById('colFilterSearch')?.value || '').toLowerCase();
+    const sel = cdSel(key);
+    const opts = cdOpts(key);
+    const items = key === 'acc' ? opts : opts.map(o => ({ id: o, label: o === '__BLANK__' ? '(Blank)' : o === '__RESERVATIONS__' ? 'Reservations' : o }));
+    const filtered = items.filter(o => o.label.toLowerCase().includes(q));
+    const list = document.getElementById('colFilterList');
+    if (!list) return;
+    list.innerHTML = filtered.length
+        ? filtered.map(o => {
+            const checked = sel.has(o.id) ? 'checked' : '';
+            const safeId = String(o.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return `<label class="multiselect__option"><input type="checkbox" ${checked} onchange="colFilterToggle('${safeId}',this.checked)"> ${o.label}</label>`;
+          }).join('')
+        : '<div style="padding:8px 10px;font-size:12px;color:var(--text-secondary)">No options</div>';
+}
+
+function colFilterToggle(id, checked) {
+    const key = _colFilterKey; if (!key) return;
+    const sel = cdSel(key);
+    if (checked) sel.add(id); else sel.delete(id);
+    cdUpdateTrigger(key);   // keep the toolbar filter chip in sync
+    // Stay open so you can tick multiple values; the table updates live and the
+    // "Done" button (or clicking outside) closes the popover.
+    costPageOffset = 0;
+    try { loadCostsTable(); } catch (e) { console.error('loadCostsTable failed', e); }
+}
+
+function colFilterSelectAll() {
+    const key = _colFilterKey; if (!key) return;
+    const sel = cdSel(key);
+    cdOpts(key).forEach(o => sel.add(typeof o === 'object' ? o.id : o));
+    renderColFilter(); cdUpdateTrigger(key);
+    costPageOffset = 0; loadCostsTable();
+}
+
+function colFilterClear() {
+    const key = _colFilterKey; if (!key) return;
+    cdSel(key).clear();
+    renderColFilter(); cdUpdateTrigger(key);
+    costPageOffset = 0; loadCostsTable();
+}
 
 function getMultiSelectValues(id) {
     const sel = document.getElementById(id);
@@ -1144,13 +1260,16 @@ async function _updateCostsCloudFilters(cloud) {
     const isAws = cloud === 'aws';
     const lbl = rgLabel(cloud);
 
-    // AWS: hide Group By only; RG multiselect stays visible (shows regions for AWS)
+    // AWS: hide Group By only. The toolbar RG/Account/Service/Resource dropdowns
+    // are hidden — column-header funnel filters replace them — so keep rgWrap hidden.
     if (groupByWrap) groupByWrap.style.display = isAws ? 'none' : '';
-    if (rgWrap)      rgWrap.style.display      = '';
+    if (rgWrap)      rgWrap.style.display      = 'none';
 
-    // AWS defaults to line-item view so service/resource filters work; Azure/All uses resource_group
+    // Default all clouds to the full line-item view (Cloud, Month, Subscription,
+    // Resource Group, Service, Resource, Cost). Group by can still switch to the
+    // Resource Group / Service summaries (dropdown stays visible for non-AWS).
     const groupByEl = document.getElementById('costGroupBy');
-    if (groupByEl) groupByEl.value = isAws ? 'resource' : 'resource_group';
+    if (groupByEl) groupByEl.value = 'resource';
     if (resTypeWrap) resTypeWrap.style.display  = isAws ? '' : 'none';
 
     if (accountLabelEl) accountLabelEl.textContent = cloud ? subLabel(cloud) : 'Account / Subscription';
@@ -1181,17 +1300,18 @@ async function loadCostsTable() {
     const serviceHeader = document.getElementById('costServiceHeader');
     const resourceHeader = document.getElementById('costResourceHeader');
     const subscriptionHeader = document.getElementById('costSubscriptionHeader');
-    // Column visibility per group mode:
+    // Column visibility per group mode (Subscription is always shown):
     //   resource_group → Cloud, Date, Subscription, Resource Group, Cost
     //   service        → Cloud, Date, Subscription, Service, Cost
-    //   resource       → Cloud, Date, Resource Group, Service, Resource, Cost
+    //   resource       → Cloud, Date, Subscription, Resource Group, Service, Resource, Cost
     if (rgHeader) rgHeader.style.display = isSvcGroup ? 'none' : '';
     if (serviceHeader) serviceHeader.style.display = isRgGroup ? 'none' : '';
     if (resourceHeader) resourceHeader.style.display = (isRgGroup || isSvcGroup) ? 'none' : '';
     if (subscriptionHeader) {
-        subscriptionHeader.style.display = (isRgGroup || isSvcGroup) ? '' : 'none';
+        subscriptionHeader.style.display = '';
         const subHdrText = costsSelectedCloud ? (subLabel(costsSelectedCloud) || 'Account') : 'Subscription';
-        subscriptionHeader.innerHTML = `${subHdrText} <span id="sort-subscription_id" class="sort-indicator">↕</span>`;
+        subscriptionHeader.innerHTML = `${subHdrText} <span id="sort-subscription_id" class="sort-indicator">↕</span>` +
+            `<svg onclick="openColFilter(event,'acc')" data-colf="acc" class="col-filter-ic" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.55"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`;
     }
     // Column order: Cloud, Date, [Subscription, Resource Group] or [Resource Group, Service, Resource], Cost
     if (cloudHeader && dateHeader && cloudHeader.nextElementSibling !== dateHeader) {
@@ -1202,6 +1322,7 @@ async function loadCostsTable() {
     }
     const rgValues = [...cdRgSelected];
     const serviceValues = [...cdSvcSelected];
+    const resourceValues = [...cdResSelected];
     const accSelected = [...cdAccSelected];
     const resType = (costsSelectedCloud === 'aws') ? (document.getElementById('costResourceType')?.value || '') : '';
     const activeCloud = costsSelectedCloud || '';
@@ -1210,6 +1331,7 @@ async function loadCostsTable() {
     const includeBlankSub = accSelected.includes('__BLANK__');
     const rg = rgValues.filter(v => v !== '__BLANK__');
     const services = serviceValues.filter(v => v !== '__BLANK__');
+    const resources = resourceValues.filter(v => v !== '__BLANK__');
     const subs = accSelected.filter(v => v !== '__BLANK__');
 
     if (search) params.set('search', search);
@@ -1219,6 +1341,7 @@ async function loadCostsTable() {
     if (costGroupBy && costGroupBy !== 'resource') params.set('group_by', costGroupBy);
     if (rg.length) params.set('resource_groups', rg.join(','));
     if (services.length) params.set('service_names', services.join(','));
+    if (resources.length) params.set('resource_names', resources.join(','));
     if (includeBlankRG) params.set('include_blank_resource_group', '1');
     if (includeBlankService) params.set('include_blank_service', '1');
     if (resType) params.set('resource_type', resType);
@@ -1256,6 +1379,7 @@ async function loadCostsTable() {
         const tbody = document.getElementById('costsTableBody');
         const sortedData = sortCostRows(data);
         updateCostSortIndicators();
+        _updateColFilterIndicators();   // highlight funnels for columns with active filters
 
         const cloudLogoH = { azure: '12', aws: '10', gcp: '12' };
         const cloudNames = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
@@ -1265,7 +1389,7 @@ async function loadCostsTable() {
           const hasFilter = (document.getElementById('costSearch')?.value || '') ||
             (document.getElementById('costDateFrom')?.value || '') ||
             costsSelectedCloud;
-          tbody.innerHTML = `<tr><td colspan="${(isRgGroup || isSvcGroup) ? 5 : 6}" style="padding:0;border:none">` +
+          tbody.innerHTML = `<tr><td colspan="${(isRgGroup || isSvcGroup) ? 5 : 7}" style="padding:0;border:none">` +
             (hasFilter
               ? _emptyState('neutral',
                   '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
@@ -1303,9 +1427,17 @@ async function loadCostsTable() {
                         prettyResourceName = slashParts[slashParts.length - 1] || prettyResourceName;
                     }
                 }
+                // Reservation orders (Azure 'reservationorders' / RIs) are identified by a
+                // GUID with no friendly name — show a clear label instead of the raw ID.
+                const isReservation = (r.resource_type || '').toLowerCase().includes('reservation');
+                if (isReservation) {
+                    prettyResourceName = `Reservation — ${r.service_name || 'Commitment'}`;
+                }
                 const resourceDisplay = vmName
                     ? `<span style="font-weight:500">${vmName}</span><br><span style="font-size:11px;color:var(--text-tertiary)">${prettyResourceName}</span>`
-                    : (prettyResourceName || '-');
+                    : (isReservation
+                        ? `<span style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:8px;background:#6366f122;color:#6366f1;margin-right:6px">RI</span><span>${prettyResourceName}</span>`
+                        : (prettyResourceName || '-'));
                 const resourceTitle = vmName ? `${vmName} (${prettyResourceName})` : (prettyResourceName || '');
                 const rawDate = (r.date || '').toString();
                 const dateOnly = granularity === 'monthly' ? rawDate.slice(0, 7) : rawDate.split('T')[0];
@@ -1317,7 +1449,7 @@ async function loadCostsTable() {
                     ? `${subCell}${rgCell}`
                     : isSvcGroup
                         ? `${subCell}${serviceCell}`
-                        : `${rgCell}${serviceCell}${resourceCell}`;
+                        : `${subCell}${rgCell}${serviceCell}${resourceCell}`;
                 return `<tr>
                 <td>${cloudCell}</td>
                 <td style="white-space:nowrap;color:var(--text-secondary)">${dateOnly}</td>
@@ -1391,6 +1523,7 @@ async function loadCostsTable() {
         const filters = await fetch('/api/filters' + filterQs).then(r => r.json());
         populateCdMultiselect('rg', filters.resource_groups || []);
         populateCdMultiselect('svc', filters.services || []);
+        populateCdMultiselect('res', filters.resources || []);
     } catch (err) {
         console.error('Costs load error:', err);
     }

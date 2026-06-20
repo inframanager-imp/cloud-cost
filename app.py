@@ -398,8 +398,9 @@ def discover_subscriptions():
     except Exception as e:
         print(f"[Subscriptions] Discovery failed: {e}")
 
-# Auto-discover on startup
-discover_subscriptions()
+# Auto-discover on startup — in the background so a slow or unreachable Azure
+# API never blocks worker startup (which would make the whole app unresponsive).
+start_background_thread(discover_subscriptions, name="startup-subscription-discovery")
 
 
 @app.route("/api/subscriptions")
@@ -1334,6 +1335,7 @@ def api_costs():
         "resource_groups": _csv_list("resource_groups"),
         "service_name": request.args.get("service_name"),
         "service_names": _csv_list("service_names"),
+        "resource_names": _csv_list("resource_names"),
         "include_blank_subscription": (request.args.get("include_blank_subscription") or "").lower() in ("1", "true", "yes"),
         "include_blank_resource_group": (request.args.get("include_blank_resource_group") or "").lower() in ("1", "true", "yes"),
         "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
@@ -1402,6 +1404,7 @@ def api_costs_total():
         "resource_groups": _csv_list("resource_groups"),
         "service_name": request.args.get("service_name"),
         "service_names": _csv_list("service_names"),
+        "resource_names": _csv_list("resource_names"),
         "include_blank_subscription": (request.args.get("include_blank_subscription") or "").lower() in ("1", "true", "yes"),
         "include_blank_resource_group": (request.args.get("include_blank_resource_group") or "").lower() in ("1", "true", "yes"),
         "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
@@ -2135,6 +2138,8 @@ def api_filters():
         "services": get_distinct_values("service_name", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud, tenant_id=tid),
         "resource_types": get_distinct_values("resource_type", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud, tenant_id=tid),
         "meter_categories": get_distinct_values("meter_category", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud, tenant_id=tid),
+        # Resources are high-cardinality — cap the list; the free-text search box covers the rest.
+        "resources": get_distinct_values("resource_name", subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud, tenant_id=tid, limit=1000),
     })
 
 

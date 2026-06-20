@@ -1031,6 +1031,18 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
         elif filters.get("service_name"):
             where += " AND service_name = ?"
             params.append(filters['service_name'])
+        if filters.get("resource_names"):
+            vals = [v for v in filters["resource_names"] if v != "__RESERVATIONS__"]
+            want_resv = "__RESERVATIONS__" in filters["resource_names"]
+            conds = []
+            if vals:
+                placeholders = ",".join(["?"] * len(vals))
+                conds.append(f"resource_name IN ({placeholders})")
+                params.extend(vals)
+            if want_resv:
+                conds.append("LOWER(resource_type)='reservationorders'")
+            if conds:
+                where += " AND (" + " OR ".join(conds) + ")"
         if filters.get("resource_type"):
             where += " AND resource_type LIKE ?"
             params.append(f"%{filters['resource_type']}%")
@@ -1159,6 +1171,18 @@ def get_cost_total(filters=None, tenant_id=None, cloud_provider=None, reporting_
         elif filters.get("service_name"):
             query += " AND service_name = ?"
             params.append(filters['service_name'])
+        if filters.get("resource_names"):
+            vals = [v for v in filters["resource_names"] if v != "__RESERVATIONS__"]
+            want_resv = "__RESERVATIONS__" in filters["resource_names"]
+            conds = []
+            if vals:
+                placeholders = ",".join(["?"] * len(vals))
+                conds.append(f"resource_name IN ({placeholders})")
+                params.extend(vals)
+            if want_resv:
+                conds.append("LOWER(resource_type)='reservationorders'")
+            if conds:
+                query += " AND (" + " OR ".join(conds) + ")"
         if filters.get("resource_type"):
             query += " AND resource_type LIKE ?"
             params.append(f"%{filters['resource_type']}%")
@@ -1919,13 +1943,21 @@ def get_available_periods(subscription_id=None):
     }
 
 
-def get_distinct_values(column, subscription_id=None, subscription_ids=None, cloud_provider=None, tenant_id=None):
+def get_distinct_values(column, subscription_id=None, subscription_ids=None, cloud_provider=None, tenant_id=None, limit=None):
     conn = get_db()
-    valid = ["resource_group", "service_name", "resource_type", "meter_category"]
+    valid = ["resource_group", "service_name", "resource_type", "meter_category", "resource_name"]
     if column not in valid:
         return []
     conditions = [f"{column} IS NOT NULL", f"TRIM({column}) != ''"]
     params = []
+    if column == "resource_name":
+        # Bare-GUID resource names (reservation orders, ephemeral container
+        # groups, etc.) flood the list and aren't useful filter targets — exclude
+        # anything starting with a GUID. The free-text Search box still finds them.
+        conditions.append(
+            "resource_name NOT GLOB "
+            "'[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]-*'"
+        )
     if subscription_ids:
         placeholders = ",".join(["?"] * len(subscription_ids))
         conditions.append(f"subscription_id IN ({placeholders})")
@@ -1940,10 +1972,10 @@ def get_distinct_values(column, subscription_id=None, subscription_ids=None, clo
         conditions.append("tenant_id = ?")
         params.append(tenant_id)
     where = " AND ".join(conditions)
-    rows = conn.execute(
-        f"SELECT DISTINCT {column} FROM cost_data WHERE {where} ORDER BY {column}",
-        params
-    ).fetchall()
+    query = f"SELECT DISTINCT {column} FROM cost_data WHERE {where} ORDER BY {column}"
+    if limit:
+        query += f" LIMIT {int(limit)}"
+    rows = conn.execute(query, params).fetchall()
     conn.close()
     return [r[0] for r in rows]
 
