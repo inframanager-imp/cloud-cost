@@ -587,6 +587,10 @@
                     </svg>
                     Export CSV
                 </button>
+                <button class="cp-btn-secondary" id="atlassianUsersBtn" style="display:none" onclick="openAtlassianUsers()">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    View Users
+                </button>
             </div>
         </div>
 
@@ -2855,6 +2859,63 @@
             </div>
         </div>
 
+        <!-- Atlassian Users Modal -->
+        <div id="atlassianUsersModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1001;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+            <div style="background:var(--bg-card);border-radius:14px;padding:24px;width:920px;max-width:96vw;max-height:90vh;overflow-y:auto;border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.5)">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+                    <div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#0052cc,#2684ff);display:flex;align-items:center;justify-content:center">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="white"><path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84a.84.84 0 00-.84-.84H11.53zM6.77 6.8a4.36 4.36 0 004.34 4.34h1.78v1.72a4.36 4.36 0 004.35 4.34V7.63a.84.84 0 00-.83-.83H6.77zM2 11.6a4.35 4.35 0 004.35 4.34h1.78v1.72A4.35 4.35 0 0012.48 22V12.43a.84.84 0 00-.84-.83H2z"/></svg>
+                    </div>
+                    <div>
+                        <h3 style="margin:0;color:var(--text-primary);font-size:16px">Atlassian Users</h3>
+                        <div style="font-size:12px;color:var(--text-muted)" id="atlUsersSubtitle">Loading…</div>
+                    </div>
+                    <button onclick="document.getElementById('atlassianUsersModal').style.display='none'" style="margin-left:auto;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-secondary)">&times;</button>
+                </div>
+                <!-- KPI cards -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+                    <div style="background:linear-gradient(135deg,#0052cc,#0065ff);border-radius:10px;padding:14px;color:#fff;text-align:center">
+                        <div style="font-size:10px;font-weight:700;letter-spacing:1px;opacity:.85;text-transform:uppercase">Total</div>
+                        <div style="font-size:26px;font-weight:800" id="atlUsersTotal">—</div>
+                    </div>
+                    <div style="background:linear-gradient(135deg,#0a7c59,#10a37f);border-radius:10px;padding:14px;color:#fff;text-align:center">
+                        <div style="font-size:10px;font-weight:700;letter-spacing:1px;opacity:.85;text-transform:uppercase">Active</div>
+                        <div style="font-size:26px;font-weight:800" id="atlUsersActive">—</div>
+                    </div>
+                    <div style="background:linear-gradient(135deg,#9b2c2c,#e53e3e);border-radius:10px;padding:14px;color:#fff;text-align:center">
+                        <div style="font-size:10px;font-weight:700;letter-spacing:1px;opacity:.85;text-transform:uppercase">Deactivated</div>
+                        <div style="font-size:26px;font-weight:800" id="atlUsersDeactivated">—</div>
+                    </div>
+                </div>
+                <!-- Search + filter -->
+                <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+                    <input id="atlUserSearch" type="text" placeholder="Search name or email…" class="filter-input" style="flex:1;min-width:180px" oninput="_renderAtlUsers()">
+                    <select id="atlUserFilter" class="filter-input" style="width:160px" onchange="_renderAtlUsers()">
+                        <option value="all">All users</option>
+                        <option value="active">Active only</option>
+                        <option value="deactivated">Deactivated only</option>
+                    </select>
+                </div>
+                <div class="table-container" style="padding:0;overflow:hidden">
+                    <table style="width:100%;border-collapse:collapse;min-width:640px">
+                        <thead>
+                            <tr style="background:var(--bg);text-align:left">
+                                <th style="padding:10px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">User</th>
+                                <th style="padding:10px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">Email</th>
+                                <th style="padding:10px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:center">Status</th>
+                                <th style="padding:10px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">Last Active</th>
+                                <th style="padding:10px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">Products</th>
+                            </tr>
+                        </thead>
+                        <tbody id="atlUsersTbody">
+                            <tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-muted)">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="atlUsersCount" style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:right"></div>
+            </div>
+        </div>
+
         <!-- Rename Provider Modal -->
         <div id="renameProviderModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1001;align-items:center;justify-content:center">
             <div style="background:var(--bg-card);border-radius:12px;padding:28px;width:400px;max-width:95vw">
@@ -3937,7 +3998,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260620l"></script>
+<script src="/static/js/app.js?v=20260620m"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

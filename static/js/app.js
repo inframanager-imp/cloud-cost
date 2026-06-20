@@ -1274,6 +1274,64 @@ function setCostsCloud(btn, cloud) {
     loadCostsTable();
 }
 
+// ── Atlassian user directory (behind the per-user cost) ─────────────────────
+let _atlUsers = [];
+function openAtlassianUsers() {
+    const modal = document.getElementById('atlassianUsersModal');
+    if (modal) modal.style.display = 'flex';
+    document.getElementById('atlUsersTbody').innerHTML =
+        '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-muted)">Loading…</td></tr>';
+    ['atlUsersTotal', 'atlUsersActive', 'atlUsersDeactivated'].forEach(id => document.getElementById(id).textContent = '…');
+    fetch('/api/atlassian/users').then(r => r.json()).then(d => {
+        _atlUsers = d.users || [];
+        const s = d.summary || {};
+        document.getElementById('atlUsersTotal').textContent       = s.total || 0;
+        document.getElementById('atlUsersActive').textContent      = s.active || 0;
+        document.getElementById('atlUsersDeactivated').textContent = s.deactivated || 0;
+        document.getElementById('atlUsersSubtitle').textContent =
+            `${s.total || 0} users · ${s.active || 0} active · ${s.deactivated || 0} deactivated`
+            + (d.has_last_active ? '' : ' · last-active unavailable');
+        _renderAtlUsers();
+    }).catch(() => {
+        document.getElementById('atlUsersTbody').innerHTML =
+            '<tr><td colspan="5" style="padding:24px;text-align:center;color:#c53030">Failed to load users</td></tr>';
+    });
+}
+
+function _renderAtlUsers() {
+    const q      = (document.getElementById('atlUserSearch').value || '').toLowerCase();
+    const filter = document.getElementById('atlUserFilter').value || 'all';
+    const isActive = u => (u.status || '').toLowerCase() === 'active';
+    const rows = _atlUsers.filter(u => {
+        const mq = !q || (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
+        const mf = filter === 'all' || (filter === 'active' ? isActive(u) : !isActive(u));
+        return mq && mf;
+    });
+    const tbody = document.getElementById('atlUsersTbody');
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-muted)">No users match.</td></tr>';
+        document.getElementById('atlUsersCount').textContent = '';
+        return;
+    }
+    const badge = st => {
+        const active = (st || '').toLowerCase() === 'active';
+        const color  = active ? '#276749' : '#9b2c2c';
+        const bg     = active ? '#c6f6d5' : '#fed7d7';
+        const label  = st ? st.replace(/_/g, ' ') : '—';
+        return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${bg};color:${color};text-transform:capitalize">${label}</span>`;
+    };
+    tbody.innerHTML = rows.map(u => `
+        <tr style="border-top:1px solid var(--border)">
+            <td style="padding:10px 14px;font-size:13px;color:var(--text-primary)">${_esc(u.name || '—')}</td>
+            <td style="padding:10px 14px;font-size:13px;color:var(--text-secondary)">${_esc(u.email || '—')}</td>
+            <td style="padding:10px 14px;text-align:center">${badge(u.status)}</td>
+            <td style="padding:10px 14px;font-size:13px;color:var(--text-secondary)">${_esc(u.last_active || '—')}</td>
+            <td style="padding:10px 14px;font-size:12px;color:var(--text-secondary)">${(u.products || []).map(_esc).join(', ') || '—'}</td>
+        </tr>`).join('');
+    document.getElementById('atlUsersCount').textContent =
+        `Showing ${rows.length} of ${_atlUsers.length} user${_atlUsers.length !== 1 ? 's' : ''}`;
+}
+
 // Pick the default cloud for the Cost Data page: the first cloud this tenant
 // actually has data for (preferring azure > aws > gcp > openai). An AWS-only
 // tenant defaults to AWS instead of showing an empty Azure view.
@@ -1327,6 +1385,10 @@ async function _updateCostsCloudFilters(cloud) {
 
     const isAws = cloud === 'aws';
     const lbl = rgLabel(cloud);
+
+    // Atlassian-only: "View Users" button (per-user directory behind the cost).
+    const atlUsersBtn = document.getElementById('atlassianUsersBtn');
+    if (atlUsersBtn) atlUsersBtn.style.display = cloud === 'atlassian' ? '' : 'none';
 
     // Group By is shown for every cloud; the toolbar RG dropdown stays hidden
     // (column-header funnel filters replace it).

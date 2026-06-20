@@ -5002,6 +5002,49 @@ def api_cloud_provider_sync(pk):
     return jsonify({"message": f"Sync started for {provider['name']}", "provider": provider["provider_type"]})
 
 
+@app.route("/api/atlassian/users", methods=["GET"])
+@login_required
+def api_atlassian_users():
+    """User directory captured at the last Atlassian cost sync (tenant-scoped).
+    Optional ?org_id= to filter to one org. Returns users + status summary."""
+    tid = current_tenant_id()
+    org_id = (request.args.get("org_id") or "").strip()
+
+    conn = get_db()
+    q = ("SELECT org_id, account_id, name, email, status, membership_status, "
+         "last_active, products, synced_at FROM atlassian_users WHERE ")
+    params = []
+    if tid is not None:
+        q += "tenant_id IS ? "
+        params.append(tid)
+    else:
+        q += "1=1 "
+    if org_id:
+        q += "AND org_id=? "
+        params.append(org_id)
+    q += "ORDER BY (status='active') DESC, name COLLATE NOCASE"
+    rows = [dict(r) for r in conn.execute(q, params).fetchall()]
+    conn.close()
+
+    for r in rows:
+        try:
+            r["products"] = json.loads(r["products"] or "[]")
+        except Exception:
+            r["products"] = []
+
+    summary = {"total": len(rows), "active": 0, "inactive": 0, "for_deletion": 0, "suspended": 0}
+    for r in rows:
+        st = (r.get("status") or "").lower()
+        if st in summary:
+            summary[st] += 1
+        elif st:
+            summary["inactive"] += 1  # bucket unknown non-active statuses
+    summary["deactivated"] = summary["inactive"] + summary["for_deletion"] + summary["suspended"]
+    has_last_active = any(r.get("last_active") for r in rows)
+
+    return jsonify({"users": rows, "summary": summary, "has_last_active": has_last_active})
+
+
 def _backfill_ce_history(provider, tenant_id, months=12):
     """Fill EMPTY historical months for an AWS account from Cost Explorer.
 

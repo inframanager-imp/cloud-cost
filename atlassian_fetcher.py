@@ -87,15 +87,17 @@ class AtlassianClient:
             url, params = (next_url, None) if next_url else (None, None)
         return users
 
-    def fetch_user_products(self, account_id):
-        """Returns the list of product keys this user has access to (or [])."""
+    def fetch_user_activity(self, account_id):
+        """Returns (last_active_date_or_None, [product_key, ...]) for a user."""
         url  = (f"{ATLASSIAN_BASE}/admin/v1/orgs/{self.org_id}"
                 f"/directory/users/{account_id}/last-active-dates")
         resp = self._get(url)
         if resp.status_code != 200:
-            return []
-        access = resp.json().get("data", {}).get("product_access", [])
-        return [p["key"] for p in access if p.get("key")]
+            return None, []
+        access       = resp.json().get("data", {}).get("product_access", [])
+        product_keys = [p["key"] for p in access if p.get("key")]
+        dates        = [p["last_active"] for p in access if p.get("last_active")]
+        return (max(dates) if dates else None), product_keys
 
 
 # ─── Pricing cache ─────────────────────────────────────────────────────────────
@@ -114,6 +116,57 @@ def get_cached_price(product_name: str, plan: str):
     if not row:
         return None, "USD"
     return row["price_per_user"], (row["currency"] or "USD")
+
+
+# ─── User directory sync ────────────────────────────────────────────────────────
+
+def sync_atlassian_users(client, org_id, tenant_id):
+    """
+    Fetch every user + their activity, persist to atlassian_users, and return
+    (active_by_product Counter, [user_record, ...]). One activity call per user.
+    """
+    raw_users = client.fetch_all_users()
+    active_by_product = Counter()
+    records = []
+
+    for u in raw_users:
+        account_id = u.get("accountId")
+        if not account_id:
+            continue
+        status = (u.get("status") or "").lower()
+        last_active, product_keys = client.fetch_user_activity(account_id)
+        if status == "active":
+            for key in product_keys:
+                active_by_product[key] += 1
+        records.append({
+            "account_id":        account_id,
+            "name":              u.get("name"),
+            "email":             u.get("email"),
+            "status":            status,
+            "membership_status": u.get("membershipStatus"),
+            "last_active":       last_active,
+            "products":          product_keys,
+        })
+
+    # Replace this org's user snapshot (fresh each sync).
+    conn = get_db()
+    try:
+        conn.execute(
+            "DELETE FROM atlassian_users WHERE tenant_id IS ? AND org_id=?",
+            (tenant_id, org_id),
+        )
+        now = datetime.utcnow().isoformat()
+        conn.executemany(
+            "INSERT INTO atlassian_users(tenant_id,org_id,account_id,name,email,status,"
+            "membership_status,last_active,products,synced_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            [(tenant_id, org_id, r["account_id"], r["name"], r["email"], r["status"],
+              r["membership_status"], r["last_active"], json.dumps(r["products"]), now)
+             for r in records],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return active_by_product, records
 
 
 # ─── Main entry point (matches the other fetchers' signature) ───────────────────
@@ -146,18 +199,11 @@ def fetch_atlassian_costs(provider, date_from, date_to):
         raise RuntimeError("No products configured for this Atlassian org")
 
     client = AtlassianClient(org_id, directory_id, access_token)
-    raw_users = client.fetch_all_users()
+    tenant_id = provider.get("tenant_id")
 
-    # Count active users per product (one activity call per active user).
-    active_by_product = Counter()
-    for u in raw_users:
-        if (u.get("status") or "").lower() != "active":
-            continue
-        account_id = u.get("accountId")
-        if not account_id:
-            continue
-        for key in client.fetch_user_products(account_id):
-            active_by_product[key] += 1
+    # Fetch the full directory + per-user activity, persist users, and count
+    # active users per product in one pass.
+    active_by_product, _ = sync_atlassian_users(client, org_id, tenant_id)
 
     snapshot_date = datetime.utcnow().strftime("%Y-%m-01")
     rows = []
