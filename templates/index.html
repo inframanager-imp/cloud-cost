@@ -587,10 +587,6 @@
                     </svg>
                     Export CSV
                 </button>
-                <button class="cp-btn-secondary" id="atlassianUsersBtn" style="display:none" onclick="openAtlassianUsers()">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    View Users
-                </button>
             </div>
         </div>
 
@@ -641,6 +637,7 @@
                     <option value="resource_group" id="costGroupByRgOpt">Resource Group</option>
                     <option value="service">Service</option>
                     <option value="resource">Resource (line items)</option>
+                    <option value="user" id="costGroupByUserOpt" style="display:none">User</option>
                 </select>
             </div>
             <div class="cost-filter-field">
@@ -784,6 +781,25 @@
                     <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">
                         Click "Sync Data" on Dashboard to fetch cost data
                     </td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Per-user cost table (Atlassian · Group by = User) -->
+        <div id="atlUserCostWrap" class="table-container cost-table-wrap" style="display:none;overflow-x:auto">
+            <table class="cost-table" style="min-width:700px;table-layout:auto">
+                <thead>
+                    <tr>
+                        <th style="white-space:nowrap">User</th>
+                        <th style="white-space:nowrap">Email</th>
+                        <th style="white-space:nowrap;text-align:center">Status</th>
+                        <th style="white-space:nowrap">Last Active</th>
+                        <th style="white-space:nowrap">Products</th>
+                        <th style="text-align:right;white-space:nowrap">Cost</th>
+                    </tr>
+                </thead>
+                <tbody id="atlUserCostBody">
+                    <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -3998,7 +4014,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260620n"></script>
+<script src="/static/js/app.js?v=20260620o"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

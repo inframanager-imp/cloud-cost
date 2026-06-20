@@ -5045,6 +5045,58 @@ def api_atlassian_users():
     return jsonify({"users": rows, "summary": summary, "has_last_active": has_last_active})
 
 
+@app.route("/api/atlassian/user-costs", methods=["GET"])
+@login_required
+def api_atlassian_user_costs():
+    """Per-user Atlassian cost = sum of per-user price for each subscribed product
+    the (active) user has access to. Tenant-scoped. Returns rows + total."""
+    from atlassian_fetcher import get_cached_price
+    tid = current_tenant_id()
+
+    # Subscribed products → price, across the tenant's Atlassian providers.
+    sub_price = {}   # product_name -> per-user price
+    for pstub in get_cloud_providers(tenant_id=tid):
+        if pstub.get("provider_type") != "atlassian":
+            continue
+        p = get_cloud_provider(pstub["id"], tenant_id=tid) or pstub
+        creds = p.get("credentials_json") or {}
+        if isinstance(creds, str):
+            try: creds = json.loads(creds or "{}")
+            except Exception: creds = {}
+        for prod in creds.get("products", []):
+            pn = prod.get("productName")
+            pl = (prod.get("plan") or "standard").lower()
+            if pn:
+                price, _ = get_cached_price(pn, pl)
+                sub_price[pn] = price or 0.0
+
+    conn = get_db()
+    q = "SELECT name,email,status,last_active,products FROM atlassian_users WHERE "
+    params = []
+    if tid is not None:
+        q += "tenant_id IS ? "; params.append(tid)
+    else:
+        q += "1=1 "
+    raw = [dict(r) for r in conn.execute(q, params).fetchall()]
+    conn.close()
+
+    rows, total = [], 0.0
+    for r in raw:
+        try: prods = json.loads(r["products"] or "[]")
+        except Exception: prods = []
+        active = (r.get("status") or "").lower() == "active"
+        billable = [pn for pn in prods if pn in sub_price] if active else []
+        cost = round(sum(sub_price[pn] for pn in billable), 2)
+        total += cost
+        rows.append({
+            "name": r.get("name"), "email": r.get("email"), "status": r.get("status"),
+            "last_active": r.get("last_active"),
+            "products": billable or prods, "cost": cost,
+        })
+    rows.sort(key=lambda x: (-x["cost"], (x["name"] or "").lower()))
+    return jsonify({"rows": rows, "total": round(total, 2), "count": len(rows)})
+
+
 def _backfill_ce_history(provider, tenant_id, months=12):
     """Fill EMPTY historical months for an AWS account from Cost Explorer.
 

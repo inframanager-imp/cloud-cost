@@ -1335,6 +1335,39 @@ function _renderAtlUsers() {
         `Showing ${rows.length} of ${_atlUsers.length} user${_atlUsers.length !== 1 ? 's' : ''}`;
 }
 
+// Group by → User: per-user cost breakdown rendered into #atlUserCostBody.
+async function renderAtlassianUserCosts() {
+    const body = document.getElementById('atlUserCostBody');
+    const subtitleBar = document.getElementById('costsSubtitleBar');
+    const countChip = document.getElementById('costRowCountChip');
+    if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
+    try {
+        const d = await fetch('/api/atlassian/user-costs').then(r => r.json());
+        const rows = d.rows || [];
+        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} user${rows.length !== 1 ? 's' : ''} · Total <strong>${_money(d.total || 0)}</strong>`;
+        if (countChip) countChip.textContent = `${rows.length} users`;
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No Atlassian users. Sync the Atlassian provider first.</td></tr>';
+            return;
+        }
+        const badge = st => {
+            const active = (st || '').toLowerCase() === 'active';
+            return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${active ? '#c6f6d5' : '#fed7d7'};color:${active ? '#276749' : '#9b2c2c'};text-transform:capitalize">${st ? st.replace(/_/g, ' ') : '—'}</span>`;
+        };
+        body.innerHTML = rows.map(u => `
+            <tr>
+                <td style="font-weight:500">${_esc(u.name || '—')}</td>
+                <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
+                <td style="text-align:center">${badge(u.status)}</td>
+                <td style="color:var(--text-secondary)">${_esc(u.last_active || '—')}</td>
+                <td style="font-size:12px;color:var(--text-secondary)">${(u.products || []).map(_esc).join(', ') || '—'}</td>
+                <td style="text-align:right;font-weight:600">${_money(u.cost || 0)}</td>
+            </tr>`).join('');
+    } catch (e) {
+        if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#c53030">Failed to load per-user costs</td></tr>';
+    }
+}
+
 // Pick the default cloud for the Cost Data page: the first cloud this tenant
 // actually has data for (preferring azure > aws > gcp > openai). An AWS-only
 // tenant defaults to AWS instead of showing an empty Azure view.
@@ -1389,9 +1422,11 @@ async function _updateCostsCloudFilters(cloud) {
     const isAws = cloud === 'aws';
     const lbl = rgLabel(cloud);
 
-    // Atlassian-only: "View Users" button (per-user directory behind the cost).
-    const atlUsersBtn = document.getElementById('atlassianUsersBtn');
-    if (atlUsersBtn) atlUsersBtn.style.display = cloud === 'atlassian' ? '' : 'none';
+    // Atlassian-only: a "User" option in Group By (per-user cost breakdown).
+    const userOpt = document.getElementById('costGroupByUserOpt');
+    const gbEl = document.getElementById('costGroupBy');
+    if (userOpt) userOpt.style.display = cloud === 'atlassian' ? '' : 'none';
+    if (cloud !== 'atlassian' && gbEl && gbEl.value === 'user') gbEl.value = 'resource';
 
     // Group By is shown for every cloud; the toolbar RG dropdown stays hidden
     // (column-header funnel filters replace it).
@@ -1420,6 +1455,21 @@ async function _updateCostsCloudFilters(cloud) {
 }
 
 async function loadCostsTable() {
+    // Atlassian "Group by → User": per-user cost breakdown (separate renderer).
+    const _gb = document.getElementById('costGroupBy')?.value || 'resource';
+    const _userWrap = document.getElementById('atlUserCostWrap');
+    const _mainWrap = document.querySelector('.cost-table-wrap:not(#atlUserCostWrap)');
+    const _subCard  = document.querySelector('.sub-table-card');
+    if (costsSelectedCloud === 'atlassian' && _gb === 'user') {
+        if (_mainWrap) _mainWrap.style.display = 'none';
+        if (_subCard)  _subCard.style.display = 'none';
+        if (_userWrap) _userWrap.style.display = '';
+        return renderAtlassianUserCosts();
+    }
+    if (_userWrap) _userWrap.style.display = 'none';
+    if (_mainWrap) _mainWrap.style.display = '';
+    if (_subCard)  _subCard.style.display = '';
+
     const params = new URLSearchParams();
     const search = document.getElementById('costSearch')?.value;
     const dateFrom = document.getElementById('costDateFrom')?.value;
