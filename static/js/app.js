@@ -1326,14 +1326,18 @@ async function _updateCostsCloudFilters(cloud) {
     const isAws = cloud === 'aws';
     const lbl = rgLabel(cloud);
 
-    // AWS: hide Group By only. The toolbar RG/Account/Service/Resource dropdowns
-    // are hidden — column-header funnel filters replace them — so keep rgWrap hidden.
-    if (groupByWrap) groupByWrap.style.display = isAws ? 'none' : '';
+    // Group By is shown for every cloud; the toolbar RG dropdown stays hidden
+    // (column-header funnel filters replace it).
+    if (groupByWrap) groupByWrap.style.display = '';
     if (rgWrap)      rgWrap.style.display      = 'none';
+    // Relabel the first Group By option per cloud: Azure→Resource Group,
+    // AWS→Region, GCP→Project (the resource_group column holds that dimension).
+    const rgOpt = document.getElementById('costGroupByRgOpt');
+    if (rgOpt) rgOpt.textContent = lbl || 'Resource Group';
 
     // Default all clouds to the full line-item view (Cloud, Month, Subscription,
     // Resource Group, Service, Resource, Cost). Group by can still switch to the
-    // Resource Group / Service summaries (dropdown stays visible for non-AWS).
+    // grouped summaries.
     const groupByEl = document.getElementById('costGroupBy');
     if (groupByEl) groupByEl.value = 'resource';
     if (resTypeWrap) resTypeWrap.style.display  = isAws ? '' : 'none';
@@ -1622,8 +1626,12 @@ function _populateResourceTypeOptions(types) {
     const sel = document.getElementById('costResourceType');
     if (!sel) return;
     const prev = sel.value;
+    // Keep real resource types (EC2 Instance, EBS Volume, Load Balancer…) and drop
+    // instance-size values that AWS stores in resource_type (t2.small, db.t3.medium,
+    // m5.2xlarge…). Real types have no dot; instance sizes are "family.size".
+    const clean = (types || []).filter(t => t && !t.includes('.'));
     const opts = ['<option value="">All</option>'].concat(
-        (types || []).filter(Boolean).sort((a, b) => a.localeCompare(b))
+        clean.sort((a, b) => a.localeCompare(b))
             .map(t => `<option value="${_escAttr(t)}">${_esc(t)}</option>`)
     );
     sel.innerHTML = opts.join('');
