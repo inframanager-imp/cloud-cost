@@ -193,14 +193,18 @@ function navigateTo(page) {
             document.querySelectorAll('[data-costs-cloud]').forEach(b =>
                 b.classList.toggle('active', b.dataset.costsCloud === selectedCloud));
             _updateCostsCloudFilters(selectedCloud);
+            loadCostsTable();
         } else {
-            // Default to Azure when navigating directly (no "All" option)
-            costsSelectedCloud = 'azure';
-            document.querySelectorAll('[data-costs-cloud]').forEach(b =>
-                b.classList.toggle('active', b.dataset.costsCloud === 'azure'));
-            _updateCostsCloudFilters('azure');
+            // Auto-select the first cloud this tenant actually has data for
+            // (e.g. an AWS-only tenant defaults to AWS, not an empty Azure view).
+            _pickDefaultCostsCloud().then(cloud => {
+                costsSelectedCloud = cloud;
+                document.querySelectorAll('[data-costs-cloud]').forEach(b =>
+                    b.classList.toggle('active', b.dataset.costsCloud === cloud));
+                _updateCostsCloudFilters(cloud);
+                loadCostsTable();
+            });
         }
-        loadCostsTable();
     }
     if (page === 'monthly') loadMonthly();
     if (page === 'configs') loadConfigsPage();
@@ -1105,17 +1109,20 @@ function populateCdAccounts(accounts) {
 function resetCostFilters() {
     const search = document.getElementById('costSearch');
     if (search) search.value = '';
-    document.querySelectorAll('[data-costs-cloud]').forEach(b => b.classList.toggle('active', b.dataset.costsCloud === 'azure'));
-    costsSelectedCloud = 'azure';
     cdRgSelected.clear();  cdUpdateTrigger('rg');
     cdSvcSelected.clear(); cdUpdateTrigger('svc');
     cdResSelected.clear(); cdUpdateTrigger('res');
     cdAccSelected.clear(); cdUpdateTrigger('acc');
-    _updateCostsCloudFilters('azure');
     const costsClient = document.getElementById('costsClientFilter');
     if (costsClient) costsClient.value = '';
     costPageOffset = 0;
-    loadCostsTable();
+    // Reset to the tenant's default cloud (the first one it has data for)
+    _pickDefaultCostsCloud().then(cloud => {
+        costsSelectedCloud = cloud;
+        document.querySelectorAll('[data-costs-cloud]').forEach(b => b.classList.toggle('active', b.dataset.costsCloud === cloud));
+        _updateCostsCloudFilters(cloud);
+        loadCostsTable();
+    });
 }
 
 // ─── Per-column header filter popover state (declared before the click handler) ──
@@ -1246,6 +1253,19 @@ function setCostsCloud(btn, cloud) {
     document.querySelectorAll('[data-costs-cloud]').forEach(b => b.classList.toggle('active', b.dataset.costsCloud === cloud));
     _updateCostsCloudFilters(cloud);
     loadCostsTable();
+}
+
+// Pick the default cloud for the Cost Data page: the first cloud this tenant
+// actually has data for (preferring azure > aws > gcp > openai). An AWS-only
+// tenant defaults to AWS instead of showing an empty Azure view.
+async function _pickDefaultCostsCloud() {
+    try {
+        const clouds = await fetch('/api/connected-clouds').then(r => r.json());
+        if (Array.isArray(clouds) && clouds.length) {
+            return ['azure', 'aws', 'gcp', 'openai'].find(c => clouds.includes(c)) || clouds[0];
+        }
+    } catch (e) { /* fall through */ }
+    return 'azure';
 }
 
 // Single calendar range picker for Cost Data. Pick start + end in one calendar;
