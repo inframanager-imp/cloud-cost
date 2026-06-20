@@ -5107,6 +5107,37 @@ def api_atlassian_user_costs():
     return jsonify({"rows": rows, "total": round(total, 2), "count": len(rows), "org_count": org_count})
 
 
+@app.route("/api/atlassian/summary", methods=["GET"])
+@login_required
+def api_atlassian_summary():
+    """Current-month Atlassian user-cost total + per-account breakdown (tenant-scoped).
+    Powers the cost line on the Integrations Jira/Atlassian card."""
+    tid = current_tenant_id()
+    month_start = datetime.utcnow().strftime("%Y-%m-01")
+
+    conn = get_db()
+    q = ("SELECT subscription_id, COALESCE(SUM(cost),0) total FROM cost_data "
+         "WHERE cloud_provider='atlassian' AND date>=? ")
+    params = [month_start]
+    if tid is not None:
+        q += "AND tenant_id IS ? "; params.append(tid)
+    q += "GROUP BY subscription_id ORDER BY total DESC"
+    accts = [dict(r) for r in conn.execute(q, params).fetchall()]
+    conn.close()
+
+    # Map org id → provider display name
+    names = {}
+    for p in get_cloud_providers(tenant_id=tid):
+        if p.get("provider_type") == "atlassian":
+            names[p.get("provider_id")] = p.get("name")
+    for a in accts:
+        a["name"] = names.get(a["subscription_id"], a["subscription_id"])
+        a["total"] = round(a["total"], 2)
+
+    total = round(sum(a["total"] for a in accts), 2)
+    return jsonify({"total": total, "account_count": len(accts), "accounts": accts})
+
+
 @app.route("/api/openai/grouped", methods=["GET"])
 @login_required
 def api_openai_grouped():
