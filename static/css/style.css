@@ -1833,10 +1833,24 @@ select.filter-input option {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.6); z-index: 2000;
     display: flex; align-items: center; justify-content: center;
+    padding: 20px;
 }
 .modal-content {
     background: var(--card-bg); border-radius: 12px; padding: 24px;
     width: 90%; max-width: 600px; border: 1px solid var(--border);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+/* Integration modals (Jira/Bitbucket/Cursor/OpenAI) use .modal-box — give it a
+   solid surface so the page behind doesn't bleed through (was undefined). */
+.modal-box {
+    background: var(--card-bg, var(--bg-primary));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
 .modal-header {

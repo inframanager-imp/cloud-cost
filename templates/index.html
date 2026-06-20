@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v=20260618u">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260508a">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260620a">
     <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507n">
     <link rel="stylesheet" href="/static/css/appearance.css?v=20260507n">
     <script>
@@ -3391,103 +3391,6 @@
 
         </div><!-- /integrations-grid -->
 
-        <!-- ── Jira Users Dashboard ── -->
-        <div id="jira-dashboard" style="display:none;margin-bottom:32px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-                <div style="display:flex;align-items:center;gap:10px">
-                    <div style="width:32px;height:32px;background:#0052cc;border-radius:8px;display:flex;align-items:center;justify-content:center">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84a.84.84 0 00-.84-.84H11.53zM6.77 6.8a4.36 4.36 0 004.34 4.34h1.78v1.72a4.36 4.36 0 004.35 4.34V7.63a.84.84 0 00-.83-.83H6.77zM2 11.6a4.35 4.35 0 004.35 4.34h1.78v1.72A4.35 4.35 0 0012.48 22V12.43a.84.84 0 00-.84-.83H2z"/></svg>
-                    </div>
-                    <div>
-                        <div style="font-weight:700;font-size:15px;color:var(--text)">Jira User Management</div>
-                        <div style="font-size:12px;color:var(--text-muted)" id="jira-dash-subtitle">Loading...</div>
-                    </div>
-                </div>
-                <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="loadJiraUsers()">
-                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-                    Refresh
-                </button>
-            </div>
-
-            <!-- KPI cards -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:20px">
-                <div style="background:linear-gradient(135deg,#0052cc,#0065ff);border-radius:12px;padding:18px 16px;color:#fff;text-align:center">
-                    <div style="font-size:11px;font-weight:700;letter-spacing:1px;opacity:.8;text-transform:uppercase;margin-bottom:6px">Total Licenses</div>
-                    <div style="font-size:32px;font-weight:800" id="jira-stat-total">—</div>
-                    <div style="font-size:11px;opacity:.7;margin-top:4px">User accounts</div>
-                </div>
-                <div style="background:linear-gradient(135deg,#0a7c59,#10a37f);border-radius:12px;padding:18px 16px;color:#fff;text-align:center">
-                    <div style="font-size:11px;font-weight:700;letter-spacing:1px;opacity:.8;text-transform:uppercase;margin-bottom:6px">Active</div>
-                    <div style="font-size:32px;font-weight:800" id="jira-stat-active">—</div>
-                    <div style="font-size:11px;opacity:.7;margin-top:4px">Logged-in users</div>
-                </div>
-                <div style="background:linear-gradient(135deg,#6b46c1,#9f7aea);border-radius:12px;padding:18px 16px;color:#fff;text-align:center">
-                    <div style="font-size:11px;font-weight:700;letter-spacing:1px;opacity:.8;text-transform:uppercase;margin-bottom:6px">Deactivated</div>
-                    <div style="font-size:32px;font-weight:800" id="jira-stat-inactive">—</div>
-                    <div style="font-size:11px;opacity:.7;margin-top:4px">Inactive accounts</div>
-                </div>
-                <div style="background:linear-gradient(135deg,#c05621,#ed8936);border-radius:12px;padding:18px 16px;color:#fff;text-align:center">
-                    <div style="font-size:11px;font-weight:700;letter-spacing:1px;opacity:.8;text-transform:uppercase;margin-bottom:6px">Utilisation</div>
-                    <div style="font-size:32px;font-weight:800" id="jira-stat-pct">—</div>
-                    <div style="font-size:11px;opacity:.7;margin-top:4px">Active / Total</div>
-                </div>
-            </div>
-
-            <!-- Last Active unlock banner (shown when admin token missing or erroring) -->
-            <div id="jira-lastactive-banner" style="display:none;background:linear-gradient(90deg,rgba(245,158,11,.08),rgba(245,158,11,.04));border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px 16px;margin-bottom:14px;flex-direction:column;gap:8px">
-                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-                    <span style="font-size:18px">🕐</span>
-                    <div style="flex:1;min-width:180px">
-                        <div id="jira-lastactive-banner-title" style="font-size:13px;font-weight:600;color:#92400e">Last Active dates not available</div>
-                        <div id="jira-lastactive-banner-sub" style="font-size:12px;color:#a16207;margin-top:2px">Add your <strong>Atlassian Admin API Token</strong> in Configure to see when each user last logged in.</div>
-                    </div>
-                    <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px;border-color:rgba(245,158,11,.4);white-space:nowrap" onclick="openIntgModal('jira')">
-                        Configure →
-                    </button>
-                </div>
-                <div id="jira-lastactive-banner-msg" style="display:none;font-size:11px;font-family:monospace;color:#92400e;background:rgba(245,158,11,.1);border-radius:6px;padding:6px 10px;word-break:break-all"></div>
-            </div>
-
-            <!-- Search + filter -->
-            <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-                <input id="jira-user-search" type="text" placeholder="Search name or email…" class="filter-input" style="flex:1;min-width:180px" oninput="filterJiraUsers()">
-                <select id="jira-user-filter" class="filter-input" style="width:140px" onchange="filterJiraUsers()">
-                    <option value="all">All Users</option>
-                    <option value="active">Active only</option>
-                    <option value="inactive">Deactivated only</option>
-                </select>
-            </div>
-
-            <!-- Users table -->
-            <div class="table-container" style="padding:0;overflow:hidden">
-                <table id="jira-users-table" style="width:100%;border-collapse:collapse;min-width:560px">
-                    <thead>
-                        <tr style="background:var(--card-bg);text-align:left">
-                            <th style="padding:11px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;white-space:nowrap">User</th>
-                            <th style="padding:11px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">Email</th>
-                            <th style="padding:11px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase;text-align:center">Status</th>
-                            <th style="padding:11px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text-muted);text-transform:uppercase">
-                                Last Active
-                                <span id="jira-lastactive-lock" title="Add Atlassian Admin API Token in Configure to enable" style="font-size:11px;cursor:help;opacity:.6"> 🔒</span>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody id="jira-users-tbody">
-                        <tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted)">Loading Jira users…</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <div id="jira-user-count" style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:right"></div>
-        </div>
-
-        <!-- ── Jira not connected hint ── -->
-        <div id="jira-not-connected" style="display:none;background:var(--card-bg);border:1px dashed var(--border);border-radius:12px;padding:24px;text-align:center;margin-bottom:24px">
-            <div style="font-size:24px;margin-bottom:8px">🔵</div>
-            <div style="font-weight:600;color:var(--text);margin-bottom:6px">Jira not connected</div>
-            <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Connect your Jira account to see users, licenses, and activity.</div>
-            <button class="btn btn-primary" style="font-size:13px" onclick="openIntgModal('jira')">Configure Jira →</button>
-        </div>
-
         <!-- ── OpenAI Usage Dashboard ── -->
         <div id="openai-dashboard" style="display:none;margin-bottom:32px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
@@ -3738,23 +3641,9 @@
                         <input type="checkbox" id="jira-enabled" style="width:16px;height:16px;cursor:pointer">
                         <label for="jira-enabled" style="font-size:13px;cursor:pointer">Enable Jira integration</label>
                     </div>
-                    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
-                        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px">User Management — Last Active (optional)</div>
-                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">
-                            Atlassian Admin API Token
-                            <a href="https://admin.atlassian.com/o" target="_blank" style="font-size:11px;color:var(--accent);font-weight:400">Get token ↗</a>
-                        </label>
-                        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-                            <input id="jira-admin-token" type="password" placeholder="atatt3x…" class="form-control" style="flex:1">
-                            <button type="button" class="btn btn-secondary" style="font-size:11px;padding:6px 10px;white-space:nowrap" onclick="testJiraAdminToken()">Test</button>
-                        </div>
-                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">
-                            Organization ID
-                            <span style="font-weight:400"> — shown by Atlassian when you created the key</span>
-                        </label>
-                        <input id="jira-admin-org-id" type="text" placeholder="e.g. a1b2c3d4-e5f6-..." class="form-control" style="margin-bottom:8px">
-                        <div id="jira-admin-test-msg" style="display:none;font-size:12px;padding:8px 10px;border-radius:6px;margin-bottom:6px"></div>
-                        <div style="font-size:11px;color:var(--text-muted);line-height:1.4">The <strong>Organization ID</strong> is displayed by Atlassian right after you create the API key — copy it from that screen.</div>
+                    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;font-size:11px;color:var(--text-muted);line-height:1.5">
+                        💡 Looking for <strong>per-user Atlassian costs</strong>? That now lives under
+                        <strong>Cloud Providers → Add → Atlassian (User Costs)</strong>.
                     </div>
                 </div>
                 <div id="intg-msg-jira" style="display:none;margin-top:12px;padding:10px 12px;border-radius:7px;font-size:13px"></div>
@@ -4048,7 +3937,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260620j"></script>
+<script src="/static/js/app.js?v=20260620k"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -5797,8 +5686,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let _intgSettings = {};
 
-    let _jiraAllUsers = [];
-
     window.loadIntegrations = function() {
         fetch('/api/integrations/settings').then(r => r.json()).then(data => {
             _intgSettings = data;
@@ -5818,27 +5705,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (oaiCfg.api_key) {
                 if (oaiSyncBtn) oaiSyncBtn.style.display = '';
                 if (oaiDashEl) oaiDashEl.style.display = 'block';  // show immediately
-                // Keep OpenAI dashboard above Jira in DOM
-                const jiraDashEl = document.getElementById('jira-dashboard');
-                if (oaiDashEl && jiraDashEl && jiraDashEl.compareDocumentPosition(oaiDashEl) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                    jiraDashEl.parentNode.insertBefore(oaiDashEl, jiraDashEl);
-                }
                 loadOpenAISummary();
             } else {
                 if (oaiSyncBtn) oaiSyncBtn.style.display = 'none';
                 if (oaiDashEl) oaiDashEl.style.display = 'none';
-            }
-            // Show Jira dashboard whenever Jira URL is configured (enabled flag is for automation only)
-            const jiraCfg = data.jira || {};
-            const dash = document.getElementById('jira-dashboard');
-            const hint = document.getElementById('jira-not-connected');
-            if (jiraCfg.url) {
-                if (dash) dash.style.display = 'block';
-                if (hint) hint.style.display = 'none';
-                loadJiraUsers();
-            } else {
-                if (dash) dash.style.display = 'none';
-                if (hint) hint.style.display = 'block';
             }
         }).catch(() => {});
     };
@@ -6117,108 +5987,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (dd && menu && !dd.contains(e.target)) menu.style.display = 'none';
     });
 
-    window.loadJiraUsers = function() {
-        const tbody = document.getElementById('jira-users-tbody');
-        if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--text-muted)">Loading…</td></tr>';
-        document.getElementById('jira-stat-total').textContent = '…';
-        document.getElementById('jira-stat-active').textContent = '…';
-        document.getElementById('jira-stat-inactive').textContent = '…';
-        document.getElementById('jira-stat-pct').textContent = '…';
-
-        fetch('/api/integrations/jira/users').then(r => r.json()).then(data => {
-            if (data.error) {
-                if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="padding:20px;text-align:center;color:#e53e3e">${data.error}</td></tr>`;
-                return;
-            }
-            const s = data.summary || {};
-            document.getElementById('jira-stat-total').textContent   = s.total || 0;
-            document.getElementById('jira-stat-active').textContent   = s.active || 0;
-            document.getElementById('jira-stat-inactive').textContent = s.inactive || 0;
-            document.getElementById('jira-stat-pct').textContent      = s.total ? Math.round((s.active / s.total) * 100) + '%' : '—';
-            document.getElementById('jira-dash-subtitle').textContent = `${s.total} total · ${s.active} active · ${s.inactive} deactivated`;
-
-            // Show/hide the admin token banner and lock icon
-            const banner = document.getElementById('jira-lastactive-banner');
-            const bannerMsg = document.getElementById('jira-lastactive-banner-msg');
-            const bannerTitle = document.getElementById('jira-lastactive-banner-title');
-            const bannerSub   = document.getElementById('jira-lastactive-banner-sub');
-            const lock   = document.getElementById('jira-lastactive-lock');
-            if (banner) banner.style.display = s.has_last_active ? 'none' : 'flex';
-            if (lock)   lock.style.display   = s.has_last_active ? 'none' : '';
-            if (s.admin_error && s.admin_error.startsWith('domain_not_claimed:')) {
-                if (bannerTitle) bannerTitle.textContent = 'Email domain not verified in Atlassian';
-                if (bannerSub) bannerSub.innerHTML = 'Last Active dates require your email domain to be <strong>claimed</strong> in Atlassian admin. Go to <strong>admin.atlassian.com → Security → Verify domain</strong> to claim your domain (e.g. prismxai.com), then retry.';
-                if (bannerMsg) { bannerMsg.style.display = 'none'; }
-            } else if (s.admin_error) {
-                if (bannerTitle) bannerTitle.textContent = 'Last Active dates not available';
-                if (bannerSub) bannerSub.innerHTML = 'Add your <strong>Atlassian Admin API Token</strong> in Configure to see when each user last logged in.';
-                if (bannerMsg) { bannerMsg.textContent = s.admin_error; bannerMsg.style.display = 'block'; }
-            } else {
-                if (bannerTitle) bannerTitle.textContent = 'Last Active dates not available';
-                if (bannerSub) bannerSub.innerHTML = 'Add your <strong>Atlassian Admin API Token</strong> in Configure to see when each user last logged in.';
-                if (bannerMsg) bannerMsg.style.display = 'none';
-            }
-
-            _jiraAllUsers = data.users || [];
-            _renderJiraUsers(_jiraAllUsers, s.has_last_active);
-        }).catch(e => {
-            if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="padding:20px;text-align:center;color:#e53e3e">Failed to load: ${e}</td></tr>`;
-        });
-    };
-
-    function _renderJiraUsers(users, hasLastActive) {
-        const tbody = document.getElementById('jira-users-tbody');
-        if (!tbody) return;
-        if (!users.length) {
-            tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text-muted)">No users found</td></tr>';
-            document.getElementById('jira-user-count').textContent = '';
-            return;
-        }
-        tbody.innerHTML = users.map((u, i) => {
-            const bg = i % 2 === 0 ? '' : 'background:var(--card-bg)';
-            const statusBg  = u.active ? '#c6f6d5' : '#fed7d7';
-            const statusCol = u.active ? '#276749' : '#c53030';
-            const statusTxt = u.active ? 'Active' : 'Deactivated';
-            const initials  = (u.displayName || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-            const avatarBg  = u.active ? '#0052cc' : '#a0aec0';
-            let lastActiveCell;
-            if (hasLastActive) {
-                const la = u.last_active ? u.last_active.slice(0,10) : '—';
-                lastActiveCell = `<td style="padding:10px 14px;font-size:12px;color:var(--text-muted)">${la}</td>`;
-            } else {
-                lastActiveCell = `<td style="padding:10px 14px;font-size:12px;color:var(--text-muted);opacity:.4" title="Add Atlassian Admin API Token in Configure to enable">— 🔒</td>`;
-            }
-            return `<tr style="${bg}">
-                <td style="padding:10px 14px">
-                    <div style="display:flex;align-items:center;gap:10px">
-                        ${u.avatar
-                            ? `<img src="${u.avatar}" width="28" height="28" style="border-radius:50%;flex-shrink:0" onerror="this.style.display='none'">`
-                            : `<div style="width:28px;height:28px;border-radius:50%;background:${avatarBg};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials}</div>`}
-                        <span style="font-size:13px;font-weight:500;color:var(--text)">${u.displayName || '—'}</span>
-                    </div>
-                </td>
-                <td style="padding:10px 14px;font-size:13px;color:var(--text-muted)">${u.email || '—'}</td>
-                <td style="padding:10px 14px;text-align:center">
-                    <span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:${statusBg};color:${statusCol}">${statusTxt}</span>
-                </td>
-                ${lastActiveCell}
-            </tr>`;
-        }).join('');
-        document.getElementById('jira-user-count').textContent = `Showing ${users.length} user${users.length !== 1 ? 's' : ''}`;
-    }
-
-    window.filterJiraUsers = function() {
-        const q      = (document.getElementById('jira-user-search').value || '').toLowerCase();
-        const filter = (document.getElementById('jira-user-filter').value || 'all');
-        const hasLA  = _jiraAllUsers.some(u => u.last_active);
-        const result = _jiraAllUsers.filter(u => {
-            const matchQ = !q || (u.displayName || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
-            const matchF = filter === 'all' || (filter === 'active' ? u.active : !u.active);
-            return matchQ && matchF;
-        });
-        _renderJiraUsers(result, hasLA);
-    };
-
     window.openIntgModal = function(tool) {
         const cfg = (_intgSettings[tool] || {});
         if (tool === 'jira') {
@@ -6230,8 +5998,6 @@ document.addEventListener('DOMContentLoaded', function() {
             _setVal('jira-server-user', cfg.server_user);
             _setVal('jira-server-password', cfg.server_password);
             _setVal('jira-project', cfg.project);
-            _setVal('jira-admin-token', cfg.admin_token);
-            _setVal('jira-admin-org-id', cfg.admin_org_id);
             const sel = document.getElementById('jira-issue-type');
             if (sel) sel.value = cfg.issue_type || 'Task';
             _setChk('jira-enabled', cfg.enabled);
@@ -6272,8 +6038,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 project: _getVal('jira-project'),
                 issue_type: (document.getElementById('jira-issue-type') || {}).value || 'Task',
                 enabled: _getChk('jira-enabled'),
-                admin_token: _getVal('jira-admin-token'),
-                admin_org_id: _getVal('jira-admin-org-id'),
             };
         } else if (tool === 'bitbucket') {
             payload.bitbucket = {
@@ -6321,26 +6085,6 @@ document.addEventListener('DOMContentLoaded', function() {
             _showMsg(tool, d.message || d.error || 'Done', ok);
             _showToast(ok ? '✓ ' + (d.message || 'Connected') : '✗ ' + (d.error || 'Failed'), ok);
         }).catch(e => _showMsg(tool, 'Request failed: ' + e, false));
-    };
-
-    window.testJiraAdminToken = function() {
-        const token = _getVal('jira-admin-token');
-        const msgEl = document.getElementById('jira-admin-test-msg');
-        if (msgEl) { msgEl.style.display = 'block'; msgEl.textContent = 'Testing…'; msgEl.style.background = 'var(--bg)'; msgEl.style.color = 'var(--text-muted)'; msgEl.style.border = '1px solid var(--border)'; }
-        fetch('/api/integrations/jira/test-admin', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ admin_token: token, org_id: _getVal('jira-admin-org-id') })
-        }).then(r => r.json()).then(d => {
-            if (!msgEl) return;
-            const ok = d.ok || false;
-            msgEl.style.display = 'block';
-            msgEl.textContent = d.message || d.error || 'Done';
-            msgEl.style.background = ok ? '#f0fff4' : '#fff5f5';
-            msgEl.style.color      = ok ? '#276749' : '#c53030';
-            msgEl.style.border     = '1px solid ' + (ok ? '#9ae6b4' : '#fc8181');
-        }).catch(e => {
-            if (msgEl) { msgEl.style.display = 'block'; msgEl.textContent = 'Request failed: ' + e; msgEl.style.background = '#fff5f5'; msgEl.style.color = '#c53030'; msgEl.style.border = '1px solid #fc8181'; }
-        });
     };
 
     window.setJiraMode = function(mode) {
