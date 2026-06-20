@@ -1340,11 +1340,12 @@ async function renderAtlassianUserCosts() {
     const body = document.getElementById('atlUserCostBody');
     const subtitleBar = document.getElementById('costsSubtitleBar');
     const countChip = document.getElementById('costRowCountChip');
+    const fmt = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
     try {
         const d = await fetch('/api/atlassian/user-costs').then(r => r.json());
         const rows = d.rows || [];
-        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} user${rows.length !== 1 ? 's' : ''} · Total <strong>${_money(d.total || 0)}</strong>`;
+        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} user${rows.length !== 1 ? 's' : ''} · Total <strong>${fmt(d.total || 0)}</strong>`;
         if (countChip) countChip.textContent = `${rows.length} users`;
         if (!rows.length) {
             body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No Atlassian users. Sync the Atlassian provider first.</td></tr>';
@@ -1361,7 +1362,7 @@ async function renderAtlassianUserCosts() {
                 <td style="text-align:center">${badge(u.status)}</td>
                 <td style="color:var(--text-secondary)">${_esc(u.last_active || '—')}</td>
                 <td style="font-size:12px;color:var(--text-secondary)">${(u.products || []).map(_esc).join(', ') || '—'}</td>
-                <td style="text-align:right;font-weight:600">${_money(u.cost || 0)}</td>
+                <td style="text-align:right;font-weight:600">${fmt(u.cost || 0)}</td>
             </tr>`).join('');
     } catch (e) {
         if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#c53030">Failed to load per-user costs</td></tr>';
