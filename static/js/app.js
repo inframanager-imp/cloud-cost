@@ -50,12 +50,14 @@ const CLOUD_LOGOS = {
     azure:  '<img src="/static/img/azure-logo.svg" alt="Azure" style="height:22px;vertical-align:middle">',
     gcp:    '<img src="/static/img/gcp-logo.svg"   alt="GCP"   style="height:22px;vertical-align:middle">',
     openai: '<svg width="20" height="20" viewBox="0 0 24 24" fill="#10a37f" style="vertical-align:middle"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073z"/></svg>',
+    atlassian: '<svg width="20" height="20" viewBox="0 0 32 32" style="vertical-align:middle"><defs><linearGradient id="atlg" x1="50%" y1="40%" x2="0%" y2="100%"><stop offset="0" stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs><path fill="url(#atlg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/><path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/></svg>',
 };
 const CLOUD_META = {
-    azure:  { icon: '⊞', logo: CLOUD_LOGOS.azure,  label: 'Azure',  color: '#0078d4', groupLabel: { sub: 'Subscription', rg: 'Resource Group', service: 'Service' } },
-    aws:    { icon: '⚙', logo: CLOUD_LOGOS.aws,    label: 'AWS',    color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Region',         service: 'Service' } },
-    gcp:    { icon: '◉', logo: CLOUD_LOGOS.gcp,    label: 'GCP',    color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service' } },
-    openai: { icon: '◈', logo: CLOUD_LOGOS.openai, label: 'OpenAI', color: '#10a37f', groupLabel: { sub: 'Org',          rg: 'Model',          service: 'AI API'   } },
+    azure:     { icon: '⊞', logo: CLOUD_LOGOS.azure,     label: 'Azure',     color: '#0078d4', groupLabel: { sub: 'Subscription', rg: 'Resource Group', service: 'Service' } },
+    aws:       { icon: '⚙', logo: CLOUD_LOGOS.aws,       label: 'AWS',       color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Region',         service: 'Service' } },
+    gcp:       { icon: '◉', logo: CLOUD_LOGOS.gcp,       label: 'GCP',       color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service' } },
+    openai:    { icon: '◈', logo: CLOUD_LOGOS.openai,    label: 'OpenAI',    color: '#10a37f', groupLabel: { sub: 'Org',          rg: 'Model',          service: 'AI API'   } },
+    atlassian: { icon: '◧', logo: CLOUD_LOGOS.atlassian, label: 'Atlassian', color: '#0052cc', groupLabel: { sub: 'Organization', rg: 'Plan',           service: 'Product'  } },
 };
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const CHART_COLORS = () => [
@@ -1279,7 +1281,7 @@ async function _pickDefaultCostsCloud() {
     try {
         const clouds = await fetch('/api/connected-clouds').then(r => r.json());
         if (Array.isArray(clouds) && clouds.length) {
-            return ['azure', 'aws', 'gcp', 'openai'].find(c => clouds.includes(c)) || clouds[0];
+            return ['azure', 'aws', 'gcp', 'openai', 'atlassian'].find(c => clouds.includes(c)) || clouds[0];
         }
     } catch (e) { /* fall through */ }
     return 'azure';
@@ -1875,9 +1877,9 @@ async function loadMonthly() {
             const subs = m.by_subscription || [];
             const byCloud = m.by_cloud || {};
             const cloudTotal = m.total_cost || 1;
-            const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f' };
-            const cloudLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI' };
-            const cloudOrder = ['aws', 'azure', 'gcp', 'openai'];
+            const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f', atlassian: '#0052cc' };
+            const cloudLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', atlassian: 'Atlassian' };
+            const cloudOrder = ['aws', 'azure', 'gcp', 'openai', 'atlassian'];
             const activeCloudKeys = cloudOrder.filter(c => byCloud[c] > 0);
 
             // Cloud breakdown strip
@@ -4649,7 +4651,7 @@ async function _populateCloudProviderSelect(selectId, opts = {}) {
     const allValue = opts.allValue !== undefined ? opts.allValue : '';
     const allLabel = opts.allLabel || 'All Clouds';
     const savedValue = sel.value;
-    const labels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI' };
+    const labels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', atlassian: 'Atlassian' };
     sel.innerHTML = `<option value="${allValue}">${allLabel}</option>`;
     types.forEach(t => {
         const opt = document.createElement('option');

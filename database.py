@@ -504,6 +504,73 @@ def init_db():
                 except Exception as e2:
                     print(f"[DB] cloud_providers migration skipped {col}: {e2}")
 
+    # ── Migration: allow 'atlassian' provider_type on cloud_providers ─────────
+    # The original CHECK only permitted aws/gcp/azure. Atlassian (Jira/Confluence)
+    # is a cost provider too, so relax the CHECK. Schema-agnostic rebuild: reads
+    # the live column list so it stays faithful regardless of prior ALTERs.
+    if _table_exists("cloud_providers"):
+        try:
+            row = cursor.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='cloud_providers'"
+            ).fetchone()
+            create_sql = row[0] if row else ""
+            if create_sql and "'atlassian'" not in create_sql and "CHECK(provider_type" in create_sql:
+                new_sql = create_sql.replace(
+                    "'aws','gcp','azure'", "'aws','gcp','azure','atlassian','openai'"
+                ).replace("CREATE TABLE cloud_providers", "CREATE TABLE cloud_providers_new", 1)
+                cols = [r[1] for r in cursor.execute("PRAGMA table_info(cloud_providers)")]
+                collist = ",".join(cols)
+                cursor.execute("PRAGMA foreign_keys=OFF")
+                cursor.execute(new_sql)
+                cursor.execute(
+                    f"INSERT INTO cloud_providers_new ({collist}) SELECT {collist} FROM cloud_providers"
+                )
+                cursor.execute("DROP TABLE cloud_providers")
+                cursor.execute("ALTER TABLE cloud_providers_new RENAME TO cloud_providers")
+                cursor.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_cp_type_id "
+                    "ON cloud_providers(provider_type, provider_id)"
+                )
+                cursor.execute("PRAGMA foreign_keys=ON")
+                print("[DB] cloud_providers: relaxed CHECK to allow 'atlassian'")
+        except Exception as e2:
+            print(f"[DB] cloud_providers atlassian CHECK migration skipped: {e2}")
+
+    # ── Atlassian per-user price cache (refreshed out-of-band by the scraper) ──
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS atlassian_pricing (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_name   TEXT NOT NULL,
+            plan           TEXT NOT NULL,
+            price_per_user REAL NOT NULL DEFAULT 0.0,
+            currency       TEXT DEFAULT 'USD',
+            users_basis    INTEGER DEFAULT 0,
+            source         TEXT DEFAULT 'seed',
+            scraped_at     TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_atlassian_pricing ON atlassian_pricing(product_name, plan)"
+    )
+    # Seed baseline Atlassian list prices once (the standalone scraper refreshes
+    # these later). jira-software/standard is a real scraped value; rest are list.
+    if cursor.execute("SELECT COUNT(*) FROM atlassian_pricing").fetchone()[0] == 0:
+        cursor.executemany(
+            "INSERT INTO atlassian_pricing(product_name,plan,price_per_user,currency,source) VALUES(?,?,?,?,?)",
+            [
+                ("jira-software", "standard", 9.05, "USD", "seed"),
+                ("jira-software", "premium", 15.25, "USD", "seed"),
+                ("confluence", "standard", 6.05, "USD", "seed"),
+                ("confluence", "premium", 11.55, "USD", "seed"),
+                ("jira-service-management", "standard", 22.05, "USD", "seed"),
+                ("jira-service-management", "premium", 49.35, "USD", "seed"),
+                ("jira-core", "standard", 5.16, "USD", "seed"),
+                ("jira-core", "premium", 10.05, "USD", "seed"),
+                ("jira-work-management", "standard", 5.16, "USD", "seed"),
+                ("jira-work-management", "premium", 10.05, "USD", "seed"),
+            ],
+        )
+
     # ── Migration: per-tenant auto-sync interval ─────────────────────────────
     if _table_exists("tenants"):
         try:
@@ -557,7 +624,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS cloud_providers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            provider_type TEXT NOT NULL CHECK(provider_type IN ('aws','gcp','azure')),
+            provider_type TEXT NOT NULL CHECK(provider_type IN ('aws','gcp','azure','atlassian','openai')),
             name TEXT NOT NULL,
             provider_id TEXT NOT NULL,
             credentials_json TEXT NOT NULL DEFAULT '{}',

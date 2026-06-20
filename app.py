@@ -4232,6 +4232,38 @@ def _run_auto_sync():
                         update_cloud_provider_sync_time(p["id"], error=str(cp_err))
                         print(f"[Auto-Sync] {ptype.upper()} '{pname}' failed: {cp_err}")
 
+                # ── Atlassian (User Costs): monthly per-user snapshot ──────────
+                for ap in get_cloud_providers(enabled_only=True, tenant_id=tid):
+                    if ap.get("provider_type") != "atlassian":
+                        continue
+                    ap_full = get_cloud_provider(ap["id"]) or ap
+                    try:
+                        from atlassian_fetcher import fetch_atlassian_costs
+                        a_records = fetch_atlassian_costs(ap_full, "", "")
+                        a_tid  = ap_full.get("tenant_id", tid)
+                        a_from = datetime.utcnow().strftime("%Y-%m-01")
+                        a_to   = datetime.utcnow().strftime("%Y-%m-%d")
+                        _c = get_db()
+                        _c.execute(
+                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='atlassian' "
+                            "AND subscription_id=? AND tenant_id=?",
+                            (a_from, a_to, ap_full.get("provider_id"), a_tid),
+                        )
+                        if a_records:
+                            _c.executemany(
+                                "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
+                                "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
+                                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                [r + (a_tid,) for r in a_records],
+                            )
+                        _c.commit(); _c.close()
+                        tenant_records += len(a_records)
+                        update_cloud_provider_sync_time(ap_full["id"], error=None)
+                        print(f"[Auto-Sync] ATLASSIAN '{ap_full.get('name')}' (tenant {tname}): {len(a_records)} records")
+                    except Exception as a_err:
+                        update_cloud_provider_sync_time(ap.get("id"), error=str(a_err))
+                        print(f"[Auto-Sync] ATLASSIAN '{ap.get('name')}' failed: {a_err}")
+
                 update_sync_log(sync_id, "success", tenant_records)
                 print(f"[Auto-Sync] Tenant '{tname}': {tenant_records} records")
                 return tenant_records
@@ -4692,8 +4724,8 @@ def api_cloud_providers_create():
     credentials = body.get("credentials", {})
     enabled = bool(body.get("enabled", True))
 
-    if provider_type not in ("aws", "gcp", "azure"):
-        return jsonify({"error": "provider_type must be aws, gcp, or azure"}), 400
+    if provider_type not in ("aws", "gcp", "azure", "atlassian"):
+        return jsonify({"error": "provider_type must be aws, gcp, azure, or atlassian"}), 400
     if not name or not provider_id:
         return jsonify({"error": "name and provider_id are required"}), 400
 
@@ -4908,6 +4940,14 @@ def api_cloud_provider_sync(pk):
             elif provider["provider_type"] == "azure":
                 from azure_fetcher import fetch_azure_costs
                 records = fetch_azure_costs(provider, date_from, date_to)
+            elif provider["provider_type"] == "atlassian":
+                from atlassian_fetcher import fetch_atlassian_costs
+                records = fetch_atlassian_costs(provider, date_from, date_to)
+                # Atlassian is a monthly per-user snapshot dated the 1st of the
+                # current month — narrow the delete window to just this month so
+                # re-syncing overwrites it without wiping earlier months' history.
+                date_from = datetime.utcnow().strftime("%Y-%m-01")
+                date_to   = datetime.utcnow().strftime("%Y-%m-%d")
             else:
                 print(f"[Sync] Unknown provider type: {provider['provider_type']}")
                 return
