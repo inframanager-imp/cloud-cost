@@ -1516,8 +1516,28 @@ async function loadCostsTable() {
         const countChip = document.getElementById('costRowCountChip');
         if (countChip) countChip.textContent = `${costPageTotal.toLocaleString()} records · showing ${from}–${to}`;
         const subtitleBar = document.getElementById('costsSubtitleBar');
+        const _money = v => `${curSym()}${(v || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+        const filteredAmt = _money(totals.total_cost);
+        const hasDimFilter = !!search || rg.length || services.length || resources.length || subs.length
+                             || includeBlankRG || includeBlankService || includeBlankSub;
         if (subtitleBar && costPageTotal > 0) {
-            subtitleBar.textContent = `Showing ${from}–${to} of ${costPageTotal.toLocaleString()} records · ${curSym()}${(totals.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})} filtered total`;
+            const head = `Showing ${from}–${to} of ${costPageTotal.toLocaleString()} records · `;
+            if (!hasDimFilter) {
+                // No dimension filter → this IS the total for the cloud + date range
+                subtitleBar.innerHTML = `${head}Total <strong>${filteredAmt}</strong>`;
+            } else {
+                // A filter is active → make it obvious this is a subset, and show the
+                // unfiltered total (cloud + date [+ client]) for context.
+                subtitleBar.innerHTML = `${head}<strong style="color:var(--accent)">Filtered total ${filteredAmt}</strong>`;
+                const baseParams = new URLSearchParams();
+                if (dateFrom) baseParams.set('date_from', dateFrom);
+                if (dateTo) baseParams.set('date_to', dateTo);
+                if (costsSelectedCloud) baseParams.set('cloud_provider', costsSelectedCloud);
+                if (costsClient) baseParams.set('client_id', costsClient);
+                fetch(`/api/costs/total?${baseParams}`).then(r => r.json()).then(bt => {
+                    subtitleBar.innerHTML = `${head}<strong style="color:var(--accent)">Filtered total ${filteredAmt}</strong> <span style="color:var(--text-tertiary)">(of ${_money(bt.total_cost)} total)</span>`;
+                }).catch(() => {});
+            }
         } else if (subtitleBar) {
             subtitleBar.textContent = 'No records match current filters';
         }
@@ -1573,9 +1593,24 @@ async function loadCostsTable() {
         populateCdMultiselect('rg', filters.resource_groups || []);
         populateCdMultiselect('svc', filters.services || []);
         populateCdMultiselect('res', filters.resources || []);
+        _populateResourceTypeOptions(filters.resource_types || []);
     } catch (err) {
         console.error('Costs load error:', err);
     }
+}
+
+// Populate the AWS "Resource Type" dropdown with every resource type present in
+// the data (instead of a fixed short list), keeping the current selection.
+function _populateResourceTypeOptions(types) {
+    const sel = document.getElementById('costResourceType');
+    if (!sel) return;
+    const prev = sel.value;
+    const opts = ['<option value="">All</option>'].concat(
+        (types || []).filter(Boolean).sort((a, b) => a.localeCompare(b))
+            .map(t => `<option value="${_escAttr(t)}">${_esc(t)}</option>`)
+    );
+    sel.innerHTML = opts.join('');
+    if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
 function clearCostFilters() {

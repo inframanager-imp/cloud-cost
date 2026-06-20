@@ -643,6 +643,17 @@
                     <option value="monthly" selected>Monthly</option>
                 </select>
             </div>
+            <div class="cost-filter-field" id="costResourceTypeWrap" style="display:none">
+                <label class="cost-filter-label">Resource Type</label>
+                <select class="cost-filter-input" id="costResourceType" onchange="loadCostsTable()">
+                    <option value="">All</option>
+                    <option value="EC2 Instance">EC2 Instances</option>
+                    <option value="EBS Volume">EBS Volumes</option>
+                    <option value="NAT Gateway">NAT Gateways</option>
+                    <option value="Load Balancer">Load Balancers</option>
+                    <option value="Network Interface">Network Interfaces</option>
+                </select>
+            </div>
             <div class="cost-filter-field" id="costAccountWrap" style="position:relative;display:none">
                 <label class="cost-filter-label" id="costAccountLabel">Account / Subscription</label>
                 <div class="multiselect" id="cdAccMultiselect">
@@ -719,17 +730,6 @@
             </div>
             <div class="cost-filter-field" style="align-self:flex-end;padding-bottom:1px">
                 <button class="cp-btn-secondary" onclick="resetCostFilters()" style="height:30px;font-size:12px;padding:0 10px">Reset</button>
-            </div>
-            <div class="cost-filter-field" id="costResourceTypeWrap" style="display:none">
-                <label class="cost-filter-label">Resource Type</label>
-                <select class="cost-filter-input" id="costResourceType" onchange="loadCostsTable()">
-                    <option value="">All</option>
-                    <option value="EC2 Instance">EC2 Instances</option>
-                    <option value="EBS Volume">EBS Volumes</option>
-                    <option value="NAT Gateway">NAT Gateways</option>
-                    <option value="Load Balancer">Load Balancers</option>
-                    <option value="Network Interface">Network Interfaces</option>
-                </select>
             </div>
         </div>
 
@@ -4024,7 +4024,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260620b"></script>
+<script src="/static/js/app.js?v=20260620e"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
