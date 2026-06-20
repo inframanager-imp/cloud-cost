@@ -1278,6 +1278,9 @@ function setCostsCloud(btn, cloud) {
 let _atlUsers = [];
 function openAtlassianUsers() {
     const modal = document.getElementById('atlassianUsersModal');
+    // The modal markup lives inside the (hidden) Cloud Providers section; move it
+    // to <body> so it renders when opened from the Cost Data page.
+    if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
     if (modal) modal.style.display = 'flex';
     document.getElementById('atlUsersTbody').innerHTML =
         '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-muted)">Loading…</td></tr>';
