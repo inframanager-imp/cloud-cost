@@ -790,18 +790,28 @@
             <table class="cost-table" style="min-width:700px;table-layout:auto">
                 <thead>
                     <tr>
-                        <th style="white-space:nowrap">User</th>
-                        <th style="white-space:nowrap">Email</th>
-                        <th style="white-space:nowrap;text-align:center">Status</th>
-                        <th style="white-space:nowrap">Last Active</th>
-                        <th style="white-space:nowrap">Products</th>
-                        <th style="text-align:right;white-space:nowrap">Cost</th>
+                        <th class="sortable-th" onclick="_atlSort('name')" style="white-space:nowrap;cursor:pointer">User <span id="atl-sort-name" class="sort-indicator">↕</span></th>
+                        <th class="sortable-th" onclick="_atlSort('email')" style="white-space:nowrap;cursor:pointer">Email <span id="atl-sort-email" class="sort-indicator">↕</span></th>
+                        <th class="sortable-th" onclick="_atlSort('status')" style="white-space:nowrap;cursor:pointer;text-align:center">Status <span id="atl-sort-status" class="sort-indicator">↕</span><svg onclick="event.stopPropagation();_atlOpenFilter(event,'status')" class="col-filter-ic" data-atlf="status" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.55"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></th>
+                        <th class="sortable-th" onclick="_atlSort('last_active')" style="white-space:nowrap;cursor:pointer">Last Active <span id="atl-sort-last_active" class="sort-indicator">↕</span></th>
+                        <th class="sortable-th" onclick="_atlSort('products')" style="white-space:nowrap;cursor:pointer">Products <span id="atl-sort-products" class="sort-indicator">↕</span><svg onclick="event.stopPropagation();_atlOpenFilter(event,'products')" class="col-filter-ic" data-atlf="products" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.55"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></th>
+                        <th class="sortable-th" onclick="_atlSort('cost')" style="text-align:right;white-space:nowrap;cursor:pointer">Cost <span id="atl-sort-cost" class="sort-indicator">↓</span></th>
                     </tr>
                 </thead>
                 <tbody id="atlUserCostBody">
                     <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Per-user filter popover (Status / Products) -->
+        <div id="atlColFilterBackdrop" style="display:none;position:fixed;inset:0;z-index:2099;background:transparent" onclick="_atlCloseFilter()"></div>
+        <div id="atlColFilter" style="display:none;position:fixed;z-index:2100;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px;min-width:200px;max-height:320px;overflow:auto">
+            <div id="atlColFilterList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+            <div style="display:flex;gap:8px;justify-content:space-between;border-top:1px solid var(--border);padding-top:8px">
+                <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px" onclick="_atlClearFilter()">Clear</button>
+                <button class="btn btn-primary" style="font-size:11px;padding:4px 10px" onclick="_atlCloseFilter()">Done</button>
+            </div>
         </div>
 
         <!-- Transparent backdrop: a click anywhere outside the popover closes it -->
@@ -4014,7 +4024,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260620p"></script>
+<script src="/static/js/app.js?v=20260620q"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

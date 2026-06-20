@@ -1336,37 +1336,122 @@ function _renderAtlUsers() {
 }
 
 // Group by → User: per-user cost breakdown rendered into #atlUserCostBody.
+let _atlUserRows = [];
+let _atlUserSort = { col: 'cost', dir: 'desc' };
+const _atlUserFilters = { status: new Set(), products: new Set() };  // empty = no filter
+const _atlMoney = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 async function renderAtlassianUserCosts() {
     const body = document.getElementById('atlUserCostBody');
-    const subtitleBar = document.getElementById('costsSubtitleBar');
-    const countChip = document.getElementById('costRowCountChip');
-    const fmt = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
     try {
         const d = await fetch('/api/atlassian/user-costs').then(r => r.json());
-        const rows = d.rows || [];
-        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} user${rows.length !== 1 ? 's' : ''} · Total <strong>${fmt(d.total || 0)}</strong>`;
-        if (countChip) countChip.textContent = `${rows.length} users`;
-        if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No Atlassian users. Sync the Atlassian provider first.</td></tr>';
-            return;
-        }
-        const badge = st => {
-            const active = (st || '').toLowerCase() === 'active';
-            return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${active ? '#c6f6d5' : '#fed7d7'};color:${active ? '#276749' : '#9b2c2c'};text-transform:capitalize">${st ? st.replace(/_/g, ' ') : '—'}</span>`;
-        };
-        body.innerHTML = rows.map(u => `
-            <tr>
-                <td style="font-weight:500">${_esc(u.name || '—')}</td>
-                <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
-                <td style="text-align:center">${badge(u.status)}</td>
-                <td style="color:var(--text-secondary)">${_esc(u.last_active || '—')}</td>
-                <td style="font-size:12px;color:var(--text-secondary)">${(u.products || []).map(_esc).join(', ') || '—'}</td>
-                <td style="text-align:right;font-weight:600">${fmt(u.cost || 0)}</td>
-            </tr>`).join('');
+        _atlUserRows = d.rows || [];
+        _atlRenderUserRows();
     } catch (e) {
         if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#c53030">Failed to load per-user costs</td></tr>';
     }
+}
+
+function _atlRenderUserRows() {
+    const body = document.getElementById('atlUserCostBody');
+    const subtitleBar = document.getElementById('costsSubtitleBar');
+    const countChip = document.getElementById('costRowCountChip');
+    if (!body) return;
+
+    // Apply column filters
+    let rows = _atlUserRows.filter(u => {
+        if (_atlUserFilters.status.size && !_atlUserFilters.status.has((u.status || '').toLowerCase())) return false;
+        if (_atlUserFilters.products.size && !(u.products || []).some(p => _atlUserFilters.products.has(p))) return false;
+        return true;
+    });
+    // Apply sort
+    const { col, dir } = _atlUserSort;
+    const val = u => col === 'cost' ? (u.cost || 0)
+                   : col === 'products' ? (u.products || []).join(', ')
+                   : (u[col] || '');
+    rows = rows.slice().sort((a, b) => {
+        const va = val(a), vb = val(b);
+        const c = (typeof va === 'number') ? va - vb : String(va).localeCompare(String(vb), undefined, { sensitivity: 'base' });
+        return dir === 'asc' ? c : -c;
+    });
+
+    const total = rows.reduce((s, u) => s + (u.cost || 0), 0);
+    if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} user${rows.length !== 1 ? 's' : ''} · Total <strong>${_atlMoney(total)}</strong>`;
+    if (countChip) countChip.textContent = `${rows.length} users`;
+
+    // Sort indicators
+    ['name', 'email', 'status', 'last_active', 'products', 'cost'].forEach(c => {
+        const el = document.getElementById('atl-sort-' + c);
+        if (el) el.textContent = (c === col) ? (dir === 'asc' ? '↑' : '↓') : '↕';
+    });
+    // Active-filter highlight on funnels
+    document.querySelectorAll('[data-atlf]').forEach(ic => {
+        const on = _atlUserFilters[ic.dataset.atlf]?.size > 0;
+        ic.style.opacity = on ? '1' : '0.55';
+        ic.style.color = on ? 'var(--accent)' : '';
+    });
+
+    if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No users match the filters.</td></tr>';
+        return;
+    }
+    const badge = st => {
+        const active = (st || '').toLowerCase() === 'active';
+        return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${active ? '#c6f6d5' : '#fed7d7'};color:${active ? '#276749' : '#9b2c2c'};text-transform:capitalize">${st ? st.replace(/_/g, ' ') : '—'}</span>`;
+    };
+    body.innerHTML = rows.map(u => `
+        <tr>
+            <td style="font-weight:500">${_esc(u.name || '—')}</td>
+            <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
+            <td style="text-align:center">${badge(u.status)}</td>
+            <td style="color:var(--text-secondary)">${_esc(u.last_active || '—')}</td>
+            <td style="font-size:12px;color:var(--text-secondary)">${(u.products || []).map(_esc).join(', ') || '—'}</td>
+            <td style="text-align:right;font-weight:600">${_atlMoney(u.cost || 0)}</td>
+        </tr>`).join('');
+}
+
+function _atlSort(col) {
+    if (_atlUserSort.col === col) _atlUserSort.dir = _atlUserSort.dir === 'asc' ? 'desc' : 'asc';
+    else _atlUserSort = { col, dir: col === 'cost' ? 'desc' : 'asc' };
+    _atlRenderUserRows();
+}
+
+let _atlFilterKey = null;
+function _atlOpenFilter(ev, key) {
+    _atlFilterKey = key;
+    const pop = document.getElementById('atlColFilter');
+    const list = document.getElementById('atlColFilterList');
+    // Distinct values for this column from the full (unfiltered) row set
+    const vals = new Set();
+    _atlUserRows.forEach(u => {
+        if (key === 'status') vals.add((u.status || '').toLowerCase());
+        else (u.products || []).forEach(p => vals.add(p));
+    });
+    const sel = _atlUserFilters[key];
+    list.innerHTML = [...vals].filter(Boolean).sort().map(v => `
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:2px 0">
+            <input type="checkbox" value="${_escAttr(v)}" ${sel.has(v) ? 'checked' : ''} onchange="_atlToggleFilter('${_escAttr(v)}',this.checked)">
+            <span style="text-transform:${key === 'status' ? 'capitalize' : 'none'}">${_esc(v)}</span>
+        </label>`).join('') || '<div style="font-size:12px;color:var(--text-muted)">No values</div>';
+    const r = ev.currentTarget.getBoundingClientRect();
+    pop.style.left = Math.min(r.left, window.innerWidth - 230) + 'px';
+    pop.style.top = (r.bottom + 6) + 'px';
+    pop.style.display = 'block';
+    document.getElementById('atlColFilterBackdrop').style.display = 'block';
+}
+function _atlToggleFilter(v, on) {
+    if (on) _atlUserFilters[_atlFilterKey].add(v);
+    else _atlUserFilters[_atlFilterKey].delete(v);
+}
+function _atlClearFilter() {
+    if (_atlFilterKey) _atlUserFilters[_atlFilterKey].clear();
+    _atlCloseFilter();
+}
+function _atlCloseFilter() {
+    document.getElementById('atlColFilter').style.display = 'none';
+    document.getElementById('atlColFilterBackdrop').style.display = 'none';
+    _atlRenderUserRows();
 }
 
 // Pick the default cloud for the Cost Data page: the first cloud this tenant
