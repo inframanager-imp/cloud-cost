@@ -1032,7 +1032,7 @@ function cdRenderList(key) {
     if (!list) return;
     const sel = cdSel(key);
     const opts = cdOpts(key);
-    const items = key === 'acc' ? opts : opts.map(o => ({ id: o, label: o === '__BLANK__' ? '(Blank)' : o === '__RESERVATIONS__' ? 'Reservations' : o }));
+    const items = key === 'acc' ? opts : opts.map(o => ({ id: o, label: o === '__BLANK__' ? '(Blank)' : o === '__RESERVATIONS__' ? 'Reservations' : key === 'res' ? _friendlyAwsResource(o) : o }));
     const filtered = items.filter(o => o.label.toLowerCase().includes(query));
     list.innerHTML = filtered.map(o => {
         const checked = sel.has(o.id) ? 'checked' : '';
@@ -1128,6 +1128,23 @@ function resetCostFilters() {
 // ─── Per-column header filter popover state (declared before the click handler) ──
 let _colFilterKey = null;
 
+// Friendly label for an AWS resource ARN — show the family / short name instead
+// of the full ARN in the Resource filter (the full ARN stays the filter value).
+//   arn:aws:ecs:…:task/CA-UAT-CLR/64046c99…  → "CA-UAT-CLR (64046c99)"
+//   arn:aws:elasticloadbalancing:…:loadbalancer/app/my-lb/abc → "my-lb"
+//   arn:aws:rds:…:db:prod-db                 → "prod-db"
+//   other ARNs                               → last path segment
+function _friendlyAwsResource(name) {
+    if (!name || !name.startsWith('arn:')) return name;
+    const parts = name.split(':');
+    const tail = parts.length >= 6 ? parts.slice(5).join(':') : name;   // strip arn:svc:region:acct:
+    if (tail.startsWith('loadbalancer/')) { const p = tail.split('/'); return p[2] || p[p.length - 1]; }
+    if (tail.startsWith('db:'))           { return tail.split(':')[1] || tail; }
+    if (tail.startsWith('task/'))         { const p = tail.split('/'); return p.length >= 3 ? `${p[1]} (${p[2].slice(0, 8)})` : (p[1] || tail); }
+    const seg = tail.split('/').filter(Boolean);
+    return seg.length ? seg[seg.length - 1] : tail;
+}
+
 // Friendly label for a resource name. Azure reservation IDs are bare GUIDs with
 // no name — show "Reservation (xxxxxxxx…)" so the filter list is readable.
 function _friendlyResource(name) {
@@ -1202,7 +1219,7 @@ function renderColFilter() {
     const q = (document.getElementById('colFilterSearch')?.value || '').toLowerCase();
     const sel = cdSel(key);
     const opts = cdOpts(key);
-    const items = key === 'acc' ? opts : opts.map(o => ({ id: o, label: o === '__BLANK__' ? '(Blank)' : o === '__RESERVATIONS__' ? 'Reservations' : o }));
+    const items = key === 'acc' ? opts : opts.map(o => ({ id: o, label: o === '__BLANK__' ? '(Blank)' : o === '__RESERVATIONS__' ? 'Reservations' : key === 'res' ? _friendlyAwsResource(o) : o }));
     const filtered = items.filter(o => o.label.toLowerCase().includes(q));
     const list = document.getElementById('colFilterList');
     if (!list) return;
