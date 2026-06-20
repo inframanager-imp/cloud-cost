@@ -186,6 +186,7 @@ function navigateTo(page) {
         const toEl   = document.getElementById('costDateTo');
         if (fromEl) fromEl.value = firstDay;
         if (toEl)   toEl.value   = today;
+        _initCostDateRangePicker(firstDay, today);
         // Pre-select the cloud if arriving from a cloud card (setCloudFilter sets selectedCloud)
         if (selectedCloud) {
             costsSelectedCloud = selectedCloud;
@@ -1247,6 +1248,34 @@ function setCostsCloud(btn, cloud) {
     loadCostsTable();
 }
 
+// Single calendar range picker for Cost Data. Pick start + end in one calendar;
+// keeps the hidden #costDateFrom / #costDateTo inputs (YYYY-MM-DD) in sync so the
+// rest of loadCostsTable works unchanged.
+let _costRangePicker = null;
+function _initCostDateRangePicker(fromYmd, toYmd) {
+    const el = document.getElementById('costDateRange');
+    if (!el || typeof flatpickr === 'undefined') return;
+    const _toDate = ymd => new Date(ymd + 'T00:00:00');
+    if (_costRangePicker) {
+        _costRangePicker.setDate([_toDate(fromYmd), _toDate(toYmd)], false);
+        return;
+    }
+    _costRangePicker = flatpickr(el, {
+        mode: 'range',
+        dateFormat: 'd/m/y',
+        defaultDate: [_toDate(fromYmd), _toDate(toYmd)],
+        onClose: function (selectedDates) {
+            if (selectedDates.length === 2) {
+                const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                document.getElementById('costDateFrom').value = fmt(selectedDates[0]);
+                document.getElementById('costDateTo').value   = fmt(selectedDates[1]);
+                costPageOffset = 0;
+                loadCostsTable();
+            }
+        }
+    });
+}
+
 async function _updateCostsCloudFilters(cloud) {
     const accountWrap    = document.getElementById('costAccountWrap');
     const accountLabelEl = document.getElementById('costAccountLabel');
@@ -1362,10 +1391,10 @@ async function loadCostsTable() {
         _drillBaseParams = new URLSearchParams(paramsBySub);
 
         // AWS with a specific account selected → show service breakdown; otherwise show by subscription
-        const showServiceBreakdown = costsSelectedCloud === 'aws' && accSelected.length > 0;
-        const subTableUrl = showServiceBreakdown
-            ? `/api/costs/total-by-service?${paramsBySub}`
-            : `/api/costs/total-by-subscription?${paramsBySub}`;
+        // Always show the summary as totals by Subscription (Azure) / Account (AWS) /
+        // Project (GCP) — not a per-service breakdown.
+        const showServiceBreakdown = false;
+        const subTableUrl = `/api/costs/total-by-subscription?${paramsBySub}`;
 
         const [costsResp, totals, totalsBySub] = await Promise.all([
             fetch(`/api/costs?${params}`).then(r => r.json()),

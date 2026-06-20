@@ -32,9 +32,36 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <style>
-        .flatpickr-calendar { font-family: inherit; }
+        .flatpickr-calendar { font-family: inherit; font-size: 12px; }
         .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange { background:#10a37f!important; border-color:#10a37f!important; }
         .flatpickr-day.inRange { background:rgba(16,163,127,.15)!important; border-color:transparent!important; box-shadow:-5px 0 0 rgba(16,163,127,.15),5px 0 0 rgba(16,163,127,.15)!important; }
+        /* The single styled input IS the box now — strip the old wrapper box */
+        .cost-date-range { border: none !important; background: transparent !important; padding: 0 !important; height: auto !important; gap: 0 !important; }
+        /* Styled, compact date-range box: calendar icon left, chevron right */
+        #costDateRange.cd-range-box {
+            width: 172px; box-sizing: border-box;
+            padding: 6px 26px 6px 30px;
+            font-size: 12px; line-height: 1.4;
+            border: 1px solid var(--border-default); border-radius: 6px;
+            background-color: var(--bg-card); color: var(--text-primary);
+            cursor: pointer; outline: none;
+            background-repeat: no-repeat, no-repeat;
+            background-position: left 9px center, right 9px center;
+            background-size: 14px 14px, 10px 6px;
+            background-image:
+              url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7785' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E"),
+              url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+        }
+        #costDateRange.cd-range-box:hover { border-color: var(--border-strong); }
+        /* Compact calendar — smaller days, months, weekdays */
+        .flatpickr-calendar { width: 270px !important; }
+        .flatpickr-days, .flatpickr-days .dayContainer { width: 252px !important; min-width: 252px !important; max-width: 252px !important; }
+        .flatpickr-day { height: 30px; line-height: 30px; max-width: 34px; font-size: 12px; }
+        .flatpickr-weekday { font-size: 10px; }
+        .flatpickr-current-month .cur-month, .flatpickr-current-month input.cur-year { font-size: 13px; font-weight: 600; }
+        .flatpickr-current-month { font-size: 13px; padding-top: 4px; height: 30px; }
+        .flatpickr-months .flatpickr-month { height: 30px; }
+        .flatpickr-rContainer { padding-bottom: 4px; }
         #oai-range-display { cursor:pointer; font-size:11px; padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); white-space:nowrap; min-width:170px; text-align:center; }
     </style>
 </head>
@@ -594,9 +621,11 @@
             <div class="cost-filter-field">
                 <label class="cost-filter-label">Date range</label>
                 <div class="cost-date-range">
-                    <input type="date" class="cost-date-range__input" id="costDateFrom" onchange="loadCostsTable()">
-                    <span class="cost-date-range__sep">&rarr;</span>
-                    <input type="date" class="cost-date-range__input" id="costDateTo" onchange="loadCostsTable()">
+                    <!-- Single calendar range picker (flatpickr). It keeps the hidden
+                         costDateFrom/costDateTo inputs in sync so existing code works. -->
+                    <input type="text" class="cost-date-range__input cd-range-box" id="costDateRange" placeholder="Select date range…" readonly>
+                    <input type="hidden" id="costDateFrom">
+                    <input type="hidden" id="costDateTo">
                 </div>
             </div>
             <div class="cost-filter-field" id="costGroupByWrap">
@@ -3995,7 +4024,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260618z10-test"></script>
+<script src="/static/js/app.js?v=20260620a"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
