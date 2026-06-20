@@ -3890,7 +3890,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260620x"></script>
+<script src="/static/js/app.js?v=20260620y"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -5901,7 +5901,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             if (summary) summary.style.display = 'block';
             const total = document.getElementById('openai-total-cost');
-            if (total) total.textContent = '$' + (data.total_this_month || 0).toFixed(4);
+            if (total) total.textContent = '$' + (data.total_this_month || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
             const statMonth = document.getElementById('oai-stat-month');
             if (statMonth) statMonth.textContent = '$' + (data.total_this_month || 0).toFixed(2);
             const statRec = document.getElementById('oai-stat-records');
