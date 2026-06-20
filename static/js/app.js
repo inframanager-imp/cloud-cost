@@ -1509,10 +1509,15 @@ async function _updateCostsCloudFilters(cloud) {
     const lbl = rgLabel(cloud);
 
     // Atlassian-only: a "User" option in Group By (per-user cost breakdown).
+    // For Atlassian it moves to the TOP of the list and becomes the default.
     const userOpt = document.getElementById('costGroupByUserOpt');
-    const gbEl = document.getElementById('costGroupBy');
-    if (userOpt) userOpt.style.display = cloud === 'atlassian' ? '' : 'none';
-    if (cloud !== 'atlassian' && gbEl && gbEl.value === 'user') gbEl.value = 'resource';
+    const groupByEl = document.getElementById('costGroupBy');
+    const isAtlassian = cloud === 'atlassian';
+    if (userOpt && groupByEl) {
+        userOpt.style.display = isAtlassian ? '' : 'none';
+        if (isAtlassian) groupByEl.insertBefore(userOpt, groupByEl.firstChild); // first
+        else             groupByEl.appendChild(userOpt);                        // back to last
+    }
 
     // Group By is shown for every cloud; the toolbar RG dropdown stays hidden
     // (column-header funnel filters replace it).
@@ -1523,11 +1528,8 @@ async function _updateCostsCloudFilters(cloud) {
     const rgOpt = document.getElementById('costGroupByRgOpt');
     if (rgOpt) rgOpt.textContent = lbl || 'Resource Group';
 
-    // Default all clouds to the full line-item view (Cloud, Month, Subscription,
-    // Resource Group, Service, Resource, Cost). Group by can still switch to the
-    // grouped summaries.
-    const groupByEl = document.getElementById('costGroupBy');
-    if (groupByEl) groupByEl.value = 'resource';
+    // Default: Atlassian → User (per-user view); every other cloud → line items.
+    if (groupByEl) groupByEl.value = isAtlassian ? 'user' : 'resource';
     if (resTypeWrap) resTypeWrap.style.display  = isAws ? '' : 'none';
 
     if (accountLabelEl) accountLabelEl.textContent = cloud ? subLabel(cloud) : 'Account / Subscription';
