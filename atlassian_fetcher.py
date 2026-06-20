@@ -50,10 +50,13 @@ def _derive_status(u: dict) -> str:
     """Map Atlassian's raw user fields to the status shown in Atlassian Admin:
     active / suspended / deactivated / invited / for_deletion.
 
-    The API's `status` field is only active/for_deletion; the rest are derived:
+    The API's `status` field is only active/for_deletion; the rest are derived.
+    The "invited" case can't be decided from the directory object alone (an
+    invited user can have emailVerified true) — it's refined in the sync loop
+    once we know whether the user has ever been active / holds a product seat.
       - suspended    : membershipStatus == suspended
       - deactivated  : accountStatus inactive/deactivated, or deactivatedOn set
-      - invited      : account added but email not verified (not accepted yet)
+      - invited      : email not verified (clearly never accepted)
     """
     if u.get("forDeletion") or (u.get("status") or "").lower() == "for_deletion":
         return "for_deletion"
@@ -155,6 +158,11 @@ def sync_atlassian_users(client, org_id, tenant_id):
             continue
         status = _derive_status(u)
         last_active, product_keys = client.fetch_user_activity(account_id)
+        # Refine "invited": a user that has never been active and holds no product
+        # seat hasn't accepted the invite (Atlassian shows "Invited"), even if the
+        # email is verified. Users with a product seat or real activity stay active.
+        if status == "active" and not last_active and not product_keys:
+            status = "invited"
         if status == "active":
             for key in product_keys:
                 active_by_product[key] += 1
