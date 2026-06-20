@@ -1163,7 +1163,7 @@ function _updateColFilterIndicators() {
     document.querySelectorAll('[data-colf]').forEach(ic => {
         const key = ic.getAttribute('data-colf');
         const active = cdSel(key) && cdSel(key).size > 0;
-        ic.style.opacity = active ? '1' : '0.55';
+        ic.style.opacity = active ? '1' : '0.85';
         ic.style.color   = active ? 'var(--accent)' : '';
         ic.style.fill    = active ? 'var(--accent)' : 'none';
     });
@@ -1403,7 +1403,7 @@ function _atlRenderUserRows() {
     // Active-filter highlight on funnels
     document.querySelectorAll('[data-atlf]').forEach(ic => {
         const on = _atlUserFilters[ic.dataset.atlf]?.size > 0;
-        ic.style.opacity = on ? '1' : '0.55';
+        ic.style.opacity = on ? '1' : '0.85';
         ic.style.color = on ? 'var(--accent)' : '';
     });
 
@@ -1597,7 +1597,7 @@ async function loadCostsTable() {
         subscriptionHeader.style.display = '';
         const subHdrText = costsSelectedCloud ? (subLabel(costsSelectedCloud) || 'Account') : 'Subscription';
         subscriptionHeader.innerHTML = `${subHdrText} <span id="sort-subscription_id" class="sort-indicator">↕</span>` +
-            `<svg onclick="openColFilter(event,'acc')" data-colf="acc" class="col-filter-ic" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.55"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`;
+            `<svg onclick="openColFilter(event,'acc')" data-colf="acc" class="col-filter-ic" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.85"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`;
     }
     // Column order: Cloud, Date, [Subscription, Resource Group] or [Resource Group, Service, Resource], Cost
     if (cloudHeader && dateHeader && cloudHeader.nextElementSibling !== dateHeader) {
