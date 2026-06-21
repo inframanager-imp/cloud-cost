@@ -77,7 +77,12 @@ def sync_cursor(tenant_id):
     client = CursorClient(key)
     members, cycle_start = client.fetch_spend()
     now = datetime.utcnow()
-    month_start = now.strftime("%Y-%m-01")
+    # Cursor bills per billing cycle (e.g. 14th-14th), not per calendar month.
+    # Stamp cost_data at the cycle-start date so it's truthful.
+    if cycle_start:
+        cycle_date = datetime.utcfromtimestamp(int(cycle_start) / 1000).strftime("%Y-%m-%d")
+    else:
+        cycle_date = now.strftime("%Y-%m-01")
 
     conn = get_db()
     try:
@@ -95,10 +100,10 @@ def sync_cursor(tenant_id):
             "fast_premium_requests,synced_at) VALUES(?,?,?,?,?,?,?,?,?)", rows,
         )
 
-        # Mirror into cost_data: one row per member for the current month.
+        # Mirror into cost_data: one row per member, dated at the billing-cycle start.
         conn.execute(
-            "DELETE FROM cost_data WHERE cloud_provider='cursor' AND date=? AND tenant_id IS ?",
-            (month_start, tenant_id),
+            "DELETE FROM cost_data WHERE cloud_provider='cursor' AND tenant_id IS ?",
+            (tenant_id,),
         )
         cost_rows, total = [], 0.0
         for m in members:
@@ -109,7 +114,7 @@ def sync_cursor(tenant_id):
                 "role": m.get("role"), "userId": m.get("userId"),
             })
             cost_rows.append((
-                month_start, m.get("role") or "", "Cursor", "Seat",
+                cycle_date, m.get("role") or "", "Cursor", "Seat",
                 m.get("name") or m.get("email") or "Member",
                 "Usage", "", cost, "USD", "Cursor Team", tags, "cursor", tenant_id,
             ))

@@ -4096,7 +4096,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621f"></script>
+<script src="/static/js/app.js?v=20260621g"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -5900,9 +5900,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!d.has_key) { box.style.display = 'none'; return; }
             box.style.display = 'block';
             const f = v => '$' + (v || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            const fd = s => s ? new Date(s + 'T00:00:00').toLocaleDateString(undefined, {day:'numeric', month:'short'}) : '';
             document.getElementById('cursor-total-cost').textContent = f(d.total);
             const ml = document.getElementById('cursor-members-line');
-            if (ml) ml.textContent = d.members ? `${d.members} members · Included usage ${f(d.included_total)}` : 'Click Sync to pull team spend';
+            if (ml) {
+                const cycle = d.cycle_start ? `Cycle ${fd(d.cycle_start)} – ${fd(d.cycle_end)}` : '';
+                ml.textContent = d.members ? `${d.members} members · Included ${f(d.included_total)}${cycle ? ' · ' + cycle : ''}` : 'Click Sync to pull team spend';
+            }
         }).catch(() => {});
     };
 

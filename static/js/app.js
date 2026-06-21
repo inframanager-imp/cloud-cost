@@ -1360,6 +1360,15 @@ function _atlStatusBadge(st) {
     return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${bg};color:${fg};text-transform:capitalize;white-space:nowrap">${label}</span>`;
 }
 
+// Cursor billing-cycle label (e.g. "cycle 14 Jun – 14 Jul"). Cursor bills per
+// cycle, not calendar month — show the actual window so it's unambiguous.
+let _curCycleInfo = { start: null, end: null };
+function _curCycleLabel() {
+    if (!_curCycleInfo.start) return 'current billing cycle';
+    const f = s => new Date(s + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    return _curCycleInfo.end ? `cycle ${f(_curCycleInfo.start)} – ${f(_curCycleInfo.end)}` : `cycle from ${f(_curCycleInfo.start)}`;
+}
+
 // Cursor Group By → User: live per-member spend (on-demand cost + included showback).
 let _curRows = [];
 let _curTotals = { total: 0, included: 0 };
@@ -1374,6 +1383,7 @@ async function renderCursorUserCosts() {
         const d = await fetch('/api/cursor/user-costs').then(r => r.json());
         _curRows = d.rows || [];
         _curTotals = { total: d.total || 0, included: d.included_total || 0 };
+        _curCycleInfo = { start: d.cycle_start, end: d.cycle_end };
         _curRenderRows();
     } catch (e) {
         if (body) body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#c53030">Failed to load Cursor per-user costs</td></tr>';
@@ -1397,7 +1407,7 @@ function _curRenderRows() {
 
     const onDemand = rows.reduce((s, u) => s + (u.on_demand || 0), 0);
     const included = rows.reduce((s, u) => s + (u.included || 0), 0);
-    if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} member${rows.length !== 1 ? 's' : ''} · <span style="color:var(--text-muted)">current billing cycle</span> · On-Demand <strong>${_curMoney(onDemand)}</strong> <span style="color:var(--text-muted)">· Included usage ${_curMoney(included)}</span>`;
+    if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} member${rows.length !== 1 ? 's' : ''} · <span style="color:var(--text-muted)">${_curCycleLabel()}</span> · On-Demand <strong>${_curMoney(onDemand)}</strong> <span style="color:var(--text-muted)">· Included usage ${_curMoney(included)}</span>`;
     if (countChip) countChip.textContent = `${rows.length} members`;
 
     ['name', 'email', 'role', 'included', 'on_demand'].forEach(c => {
@@ -1471,6 +1481,7 @@ async function renderCursorUsage(by) {
     try {
         const d = await fetch('/api/cursor/usage?by=' + _cuBy).then(r => r.json());
         _cuRows = d.rows || [];
+        _curCycleInfo = { start: d.cycle_start, end: d.cycle_end };
         _cuRenderRows();
     } catch (e) {
         if (body) body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#c53030">Failed to load Cursor usage</td></tr>';
@@ -1499,7 +1510,7 @@ function _cuRenderRows() {
     const od = rows.reduce((s, r) => s + (r.on_demand || 0), 0);
     const inc = rows.reduce((s, r) => s + (r.included || 0), 0);
     const label = _cuBy === 'user_model' ? 'user-model pairs' : 'models';
-    if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} ${label} · <span style="color:var(--text-muted)">current billing cycle</span> · On-Demand <strong>${fmt(od)}</strong> <span style="color:var(--text-muted)">· Included ${fmt(inc)}</span>`;
+    if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} ${label} · <span style="color:var(--text-muted)">${_curCycleLabel()}</span> · On-Demand <strong>${fmt(od)}</strong> <span style="color:var(--text-muted)">· Included ${fmt(inc)}</span>`;
     if (countChip) countChip.textContent = `${rows.length} ${label}`;
     if (!rows.length) {
         body.innerHTML = `<tr><td colspan="${cols.length}" style="text-align:center;padding:40px;color:var(--text-secondary)">No Cursor usage yet — Sync from Integrations → Cursor.</td></tr>`;

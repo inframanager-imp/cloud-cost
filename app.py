@@ -5178,6 +5178,31 @@ def api_openai_grouped():
                     "count": len(rows), "by": by})
 
 
+def _cursor_cycle(tid):
+    """Billing cycle window for Cursor: (start, end) as YYYY-MM-DD. Start = the
+    cost_data date we stamped at the cycle start; end = same day next month."""
+    conn = get_db()
+    q = "SELECT MIN(date) d FROM cost_data WHERE cloud_provider='cursor' "
+    params = []
+    if tid is not None:
+        q += "AND tenant_id IS ? "; params.append(tid)
+    row = conn.execute(q, params).fetchone()
+    conn.close()
+    start = row["d"] if row and row["d"] else None
+    if not start:
+        return None, None
+    try:
+        sd = datetime.strptime(start, "%Y-%m-%d")
+        y, m = (sd.year + 1, 1) if sd.month == 12 else (sd.year, sd.month + 1)
+        try:
+            ed = sd.replace(year=y, month=m)
+        except ValueError:
+            ed = sd.replace(year=y, month=m, day=28)
+        return start, ed.strftime("%Y-%m-%d")
+    except Exception:
+        return start, None
+
+
 @app.route("/api/cursor/sync", methods=["POST"])
 @login_required
 def api_cursor_sync():
@@ -5220,8 +5245,10 @@ def api_cursor_user_costs():
             "requests": r.get("fast_premium_requests") or 0, "cost": on_demand,
         })
     rows.sort(key=lambda x: (-x["cost"], -x["included"], (x["name"] or "").lower()))
+    cs, ce = _cursor_cycle(tid)
     return jsonify({"rows": rows, "total": round(total, 2),
-                    "included_total": round(included_total, 2), "count": len(rows)})
+                    "included_total": round(included_total, 2), "count": len(rows),
+                    "cycle_start": cs, "cycle_end": ce})
 
 
 @app.route("/api/cursor/usage", methods=["GET"])
@@ -5251,7 +5278,9 @@ def api_cursor_usage():
     conn.close()
     od_total = round(sum(x["on_demand"] for x in rows), 2)
     inc_total = round(sum(x["included"] for x in rows), 2)
-    return jsonify({"rows": rows, "total": od_total, "included_total": inc_total, "count": len(rows), "by": by})
+    cs, ce = _cursor_cycle(tid)
+    return jsonify({"rows": rows, "total": od_total, "included_total": inc_total, "count": len(rows),
+                    "by": by, "cycle_start": cs, "cycle_end": ce})
 
 
 @app.route("/api/cursor/summary", methods=["GET"])
@@ -5270,10 +5299,12 @@ def api_cursor_summary():
     row = conn.execute(q, params).fetchone()
     has_key = bool((get_integration_settings(tid or 1).get("cursor_api_key") or "").strip())
     conn.close()
+    cs, ce = _cursor_cycle(tid)
     return jsonify({
         "total": round((row["od"] or 0) / 100.0, 2),          # on-demand (billable)
         "included_total": round((row["incl"] or 0) / 100.0, 2),  # plan usage (showback)
         "members": row["members"], "has_key": has_key,
+        "cycle_start": cs, "cycle_end": ce,
     })
 
 
