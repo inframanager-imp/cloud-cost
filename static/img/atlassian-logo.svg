@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="atlg" x1="50%" y1="40%" x2="0%" y2="100%">
+      <stop offset="0" stop-color="#0052CC"/>
+      <stop offset="1" stop-color="#2684FF"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#atlg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/>
+  <path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/>
+</svg>
