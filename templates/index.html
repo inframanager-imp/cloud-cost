@@ -831,17 +831,27 @@
             <table class="cost-table" style="min-width:640px;table-layout:auto">
                 <thead>
                     <tr>
-                        <th style="white-space:nowrap">User</th>
-                        <th style="white-space:nowrap">Email</th>
-                        <th style="white-space:nowrap;text-align:center">Role</th>
-                        <th style="white-space:nowrap;text-align:right" title="Usage covered by the plan (showback, not extra cost)">Included Usage</th>
-                        <th style="white-space:nowrap;text-align:right" title="On-demand spend beyond the plan — the billable cost">On-Demand Cost</th>
+                        <th class="sortable-th" onclick="_curSort('name')" style="white-space:nowrap;cursor:pointer">User <span id="cur-sort-name" class="sort-indicator">↕</span></th>
+                        <th class="sortable-th" onclick="_curSort('email')" style="white-space:nowrap;cursor:pointer">Email <span id="cur-sort-email" class="sort-indicator">↕</span></th>
+                        <th class="sortable-th" onclick="_curSort('role')" style="white-space:nowrap;cursor:pointer;text-align:center">Role <span id="cur-sort-role" class="sort-indicator">↕</span><svg onclick="event.stopPropagation();_curOpenFilter(event)" class="col-filter-ic" data-curf="role" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.85"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></th>
+                        <th class="sortable-th" onclick="_curSort('included')" style="white-space:nowrap;cursor:pointer;text-align:right" title="Usage covered by the plan (showback, not extra cost)">Included Usage <span id="cur-sort-included" class="sort-indicator">↕</span></th>
+                        <th class="sortable-th" onclick="_curSort('on_demand')" style="white-space:nowrap;cursor:pointer;text-align:right" title="On-demand spend beyond the plan — the billable cost">On-Demand Cost <span id="cur-sort-on_demand" class="sort-indicator">↓</span></th>
                     </tr>
                 </thead>
                 <tbody id="cursorUserBody">
                     <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Cursor Role filter popover -->
+        <div id="curColFilterBackdrop" style="display:none;position:fixed;inset:0;z-index:2099;background:transparent" onclick="_curCloseFilter()"></div>
+        <div id="curColFilter" style="display:none;position:fixed;z-index:2100;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px;min-width:180px;max-height:320px;overflow:auto">
+            <div id="curColFilterList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+            <div style="display:flex;gap:8px;justify-content:space-between;border-top:1px solid var(--border);padding-top:8px">
+                <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px" onclick="_curClearFilter()">Clear</button>
+                <button class="btn btn-primary" style="font-size:11px;padding:4px 10px" onclick="_curCloseFilter()">Done</button>
+            </div>
         </div>
 
         <!-- Per-user filter popover (Status / Products) -->
@@ -4074,7 +4084,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621d"></script>
+<script src="/static/js/app.js?v=20260621e"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

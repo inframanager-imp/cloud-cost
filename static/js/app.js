@@ -1360,34 +1360,99 @@ function _atlStatusBadge(st) {
     return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${bg};color:${fg};text-transform:capitalize;white-space:nowrap">${label}</span>`;
 }
 
-// Cursor Group By → User: live per-member spend (usage value).
+// Cursor Group By → User: live per-member spend (on-demand cost + included showback).
+let _curRows = [];
+let _curTotals = { total: 0, included: 0 };
+let _curSortState = { col: 'on_demand', dir: 'desc' };
+const _curFilters = { role: new Set() };
+const _curMoney = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 async function renderCursorUserCosts() {
+    const body = document.getElementById('cursorUserBody');
+    if (body) body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
+    try {
+        const d = await fetch('/api/cursor/user-costs').then(r => r.json());
+        _curRows = d.rows || [];
+        _curTotals = { total: d.total || 0, included: d.included_total || 0 };
+        _curRenderRows();
+    } catch (e) {
+        if (body) body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#c53030">Failed to load Cursor per-user costs</td></tr>';
+    }
+}
+
+function _curRenderRows() {
     const body = document.getElementById('cursorUserBody');
     const subtitleBar = document.getElementById('costsSubtitleBar');
     const countChip = document.getElementById('costRowCountChip');
-    const fmt = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
-    try {
-        const d = await fetch('/api/cursor/user-costs').then(r => r.json());
-        const rows = d.rows || [];
-        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} member${rows.length !== 1 ? 's' : ''} · <span style="color:var(--text-muted)">current billing cycle</span> · On-Demand <strong>${fmt(d.total || 0)}</strong> <span style="color:var(--text-muted)">· Included usage ${fmt(d.included_total || 0)}</span>`;
-        if (countChip) countChip.textContent = `${rows.length} members`;
-        if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">No Cursor data yet — Sync from Integrations → Cursor.</td></tr>';
-            return;
-        }
-        const roleBadge = r => `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:#ede9fe;color:#6d28d9;text-transform:capitalize">${_esc(r || 'member')}</span>`;
-        body.innerHTML = rows.map(u => `
-            <tr>
-                <td style="font-weight:500">${_esc(u.name || '—')}</td>
-                <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
-                <td style="text-align:center">${roleBadge(u.role)}</td>
-                <td style="text-align:right;color:var(--text-secondary)">${fmt(u.included || 0)}</td>
-                <td style="text-align:right;font-weight:600;color:${(u.on_demand || 0) > 0 ? '#c05621' : 'var(--text-primary)'}">${fmt(u.on_demand || 0)}</td>
-            </tr>`).join('');
-    } catch (e) {
-        if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#c53030">Failed to load Cursor per-user costs</td></tr>';
+    if (!body) return;
+
+    let rows = _curRows.filter(u => !_curFilters.role.size || _curFilters.role.has((u.role || '').toLowerCase()));
+    const { col, dir } = _curSortState;
+    const val = u => (col === 'included' || col === 'on_demand') ? (u[col] || 0) : (u[col] || '');
+    rows = rows.slice().sort((a, b) => {
+        const va = val(a), vb = val(b);
+        const c = (typeof va === 'number') ? va - vb : String(va).localeCompare(String(vb), undefined, { sensitivity: 'base' });
+        return dir === 'asc' ? c : -c;
+    });
+
+    const onDemand = rows.reduce((s, u) => s + (u.on_demand || 0), 0);
+    const included = rows.reduce((s, u) => s + (u.included || 0), 0);
+    if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} member${rows.length !== 1 ? 's' : ''} · <span style="color:var(--text-muted)">current billing cycle</span> · On-Demand <strong>${_curMoney(onDemand)}</strong> <span style="color:var(--text-muted)">· Included usage ${_curMoney(included)}</span>`;
+    if (countChip) countChip.textContent = `${rows.length} members`;
+
+    ['name', 'email', 'role', 'included', 'on_demand'].forEach(c => {
+        const el = document.getElementById('cur-sort-' + c);
+        if (el) el.textContent = (c === col) ? (dir === 'asc' ? '↑' : '↓') : '↕';
+    });
+    document.querySelectorAll('[data-curf]').forEach(ic => {
+        const on = _curFilters[ic.dataset.curf]?.size > 0;
+        ic.style.opacity = on ? '1' : '0.85';
+        ic.style.color = on ? 'var(--accent)' : '';
+        ic.style.fill = on ? 'var(--accent)' : 'none';
+    });
+
+    if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">No members match the filter.</td></tr>';
+        return;
     }
+    const roleBadge = r => `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:#ede9fe;color:#6d28d9;text-transform:capitalize">${_esc(r || 'member')}</span>`;
+    body.innerHTML = rows.map(u => `
+        <tr>
+            <td style="font-weight:500">${_esc(u.name || '—')}</td>
+            <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
+            <td style="text-align:center">${roleBadge(u.role)}</td>
+            <td style="text-align:right;color:var(--text-secondary)">${_curMoney(u.included || 0)}</td>
+            <td style="text-align:right;font-weight:600;color:${(u.on_demand || 0) > 0 ? '#c05621' : 'var(--text-primary)'}">${_curMoney(u.on_demand || 0)}</td>
+        </tr>`).join('');
+}
+
+function _curSort(col) {
+    if (_curSortState.col === col) _curSortState.dir = _curSortState.dir === 'asc' ? 'desc' : 'asc';
+    else _curSortState = { col, dir: (col === 'included' || col === 'on_demand') ? 'desc' : 'asc' };
+    _curRenderRows();
+}
+function _curOpenFilter(ev) {
+    const pop = document.getElementById('curColFilter');
+    const list = document.getElementById('curColFilterList');
+    const vals = [...new Set(_curRows.map(u => (u.role || '').toLowerCase()).filter(Boolean))].sort();
+    const sel = _curFilters.role;
+    list.innerHTML = vals.map(v => `
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:2px 0">
+            <input type="checkbox" value="${_escAttr(v)}" ${sel.has(v) ? 'checked' : ''} onchange="_curToggleFilter('${_escAttr(v)}',this.checked)">
+            <span style="text-transform:capitalize">${_esc(v)}</span>
+        </label>`).join('') || '<div style="font-size:12px;color:var(--text-muted)">No roles</div>';
+    const r = ev.currentTarget.getBoundingClientRect();
+    pop.style.left = Math.min(r.left, window.innerWidth - 200) + 'px';
+    pop.style.top = (r.bottom + 6) + 'px';
+    pop.style.display = 'block';
+    document.getElementById('curColFilterBackdrop').style.display = 'block';
+}
+function _curToggleFilter(v, on) { if (on) _curFilters.role.add(v); else _curFilters.role.delete(v); }
+function _curClearFilter() { _curFilters.role.clear(); _curCloseFilter(); }
+function _curCloseFilter() {
+    document.getElementById('curColFilter').style.display = 'none';
+    document.getElementById('curColFilterBackdrop').style.display = 'none';
+    _curRenderRows();
 }
 
 // OpenAI Group By → Model / API Capability / Spend Category.
