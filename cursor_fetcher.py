@@ -43,8 +43,10 @@ class CursorClient:
 
 
 def _user_cost(m):
-    """Usage-based cost (USD) for a member = (overage + included usage) / 100."""
-    return round((float(m.get("spendCents") or 0) + float(m.get("includedSpendCents") or 0)) / 100.0, 2)
+    """Billable cost (USD) for a member = ON-DEMAND spend only (spendCents).
+    Included/plan usage (includedSpendCents) is covered by the seat subscription,
+    so it is tracked separately for showback, not counted as cost."""
+    return round(float(m.get("spendCents") or 0) / 100.0, 2)
 
 
 def sync_cursor(tenant_id):

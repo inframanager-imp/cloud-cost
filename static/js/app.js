@@ -1370,10 +1370,10 @@ async function renderCursorUserCosts() {
     try {
         const d = await fetch('/api/cursor/user-costs').then(r => r.json());
         const rows = d.rows || [];
-        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} member${rows.length !== 1 ? 's' : ''} · <span style="color:var(--text-muted)">current billing cycle</span> · Total <strong>${fmt(d.total || 0)}</strong>`;
+        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} member${rows.length !== 1 ? 's' : ''} · <span style="color:var(--text-muted)">current billing cycle</span> · On-Demand <strong>${fmt(d.total || 0)}</strong> <span style="color:var(--text-muted)">· Included usage ${fmt(d.included_total || 0)}</span>`;
         if (countChip) countChip.textContent = `${rows.length} members`;
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No Cursor data yet — Sync from Integrations → Cursor.</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">No Cursor data yet — Sync from Integrations → Cursor.</td></tr>';
             return;
         }
         const roleBadge = r => `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:#ede9fe;color:#6d28d9;text-transform:capitalize">${_esc(r || 'member')}</span>`;
@@ -1383,8 +1383,7 @@ async function renderCursorUserCosts() {
                 <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
                 <td style="text-align:center">${roleBadge(u.role)}</td>
                 <td style="text-align:right;color:var(--text-secondary)">${fmt(u.included || 0)}</td>
-                <td style="text-align:right;color:${(u.overage || 0) > 0 ? '#c05621' : 'var(--text-secondary)'}">${fmt(u.overage || 0)}</td>
-                <td style="text-align:right;font-weight:600">${fmt(u.cost || 0)}</td>
+                <td style="text-align:right;font-weight:600;color:${(u.on_demand || 0) > 0 ? '#c05621' : 'var(--text-primary)'}">${fmt(u.on_demand || 0)}</td>
             </tr>`).join('');
     } catch (e) {
         if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#c53030">Failed to load Cursor per-user costs</td></tr>';

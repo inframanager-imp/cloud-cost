@@ -5207,20 +5207,21 @@ def api_cursor_user_costs():
     raw = [dict(r) for r in conn.execute(q, params).fetchall()]
     conn.close()
 
-    rows, total = [], 0.0
+    rows, total, included_total = [], 0.0, 0.0
     for r in raw:
-        spend = float(r.get("spend_cents") or 0)
-        incl  = float(r.get("included_cents") or 0)
-        cost  = round((spend + incl) / 100.0, 2)
-        total += cost
+        on_demand = round(float(r.get("spend_cents") or 0) / 100.0, 2)   # billable cost
+        included  = round(float(r.get("included_cents") or 0) / 100.0, 2) # showback only
+        total += on_demand
+        included_total += included
         rows.append({
             "name": r.get("name") or r.get("email") or "Member",
             "email": r.get("email"), "role": r.get("role"),
-            "overage": round(spend / 100.0, 2), "included": round(incl / 100.0, 2),
-            "requests": r.get("fast_premium_requests") or 0, "cost": cost,
+            "included": included, "on_demand": on_demand,
+            "requests": r.get("fast_premium_requests") or 0, "cost": on_demand,
         })
-    rows.sort(key=lambda x: (-x["cost"], (x["name"] or "").lower()))
-    return jsonify({"rows": rows, "total": round(total, 2), "count": len(rows)})
+    rows.sort(key=lambda x: (-x["cost"], -x["included"], (x["name"] or "").lower()))
+    return jsonify({"rows": rows, "total": round(total, 2),
+                    "included_total": round(included_total, 2), "count": len(rows)})
 
 
 @app.route("/api/cursor/summary", methods=["GET"])
@@ -5228,17 +5229,22 @@ def api_cursor_user_costs():
 def api_cursor_summary():
     """Cursor team total (current month) + member count, for the card."""
     tid = current_tenant_id()
-    month_start = datetime.utcnow().strftime("%Y-%m-01")
     conn = get_db()
-    q = ("SELECT COALESCE(SUM(cost),0) total, COUNT(*) members FROM cost_data "
-         "WHERE cloud_provider='cursor' AND date=? ")
-    params = [month_start]
+    # On-demand total = the billable cost (cost_data); included = showback (cursor_users).
+    q = "SELECT COALESCE(SUM(spend_cents),0) od, COALESCE(SUM(included_cents),0) incl, COUNT(*) members FROM cursor_users WHERE "
+    params = []
     if tid is not None:
-        q += "AND tenant_id IS ? "; params.append(tid)
+        q += "tenant_id IS ? "; params.append(tid)
+    else:
+        q += "1=1 "
     row = conn.execute(q, params).fetchone()
     has_key = bool((get_integration_settings(tid or 1).get("cursor_api_key") or "").strip())
     conn.close()
-    return jsonify({"total": round(row["total"], 2), "members": row["members"], "has_key": has_key})
+    return jsonify({
+        "total": round((row["od"] or 0) / 100.0, 2),          # on-demand (billable)
+        "included_total": round((row["incl"] or 0) / 100.0, 2),  # plan usage (showback)
+        "members": row["members"], "has_key": has_key,
+    })
 
 
 def _backfill_ce_history(provider, tenant_id, months=12):
