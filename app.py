@@ -6106,6 +6106,41 @@ def api_update_integrations():
     return jsonify({"message": "Integration settings saved"})
 
 
+@app.route("/api/integrations/<tool>/disconnect", methods=["POST"])
+@login_required
+def api_integration_disconnect(tool):
+    """Clear an integration's saved config (and its cost data/caches for the
+    manual/live cost SaaS) so the card returns to 'Not connected'."""
+    tid = current_tenant_id()
+    text_cols = {
+        "jira":      ["jira_url", "jira_email", "jira_token", "jira_project", "jira_mode",
+                      "jira_server_user", "jira_server_password", "jira_admin_token", "jira_admin_org_id"],
+        "bitbucket": ["bitbucket_workspace", "bitbucket_repo", "bitbucket_token"],
+        "cursor":    ["cursor_api_key"],
+        "openai":    ["openai_api_key", "openai_org_id"],
+        "twilio":    ["twilio_api_key"],
+        "sendgrid":  ["sendgrid_api_key"],
+    }
+    if tool not in text_cols:
+        return jsonify({"error": "Unknown integration"}), 404
+
+    flat = {c: "" for c in text_cols[tool]}
+    flat[f"{tool}_enabled"] = 0
+    if tool in ("cursor", "twilio", "sendgrid"):
+        flat[f"{tool}_monthly_cost"] = 0
+    update_integration_settings(flat, tid or 1)
+
+    conn = get_db()
+    if tool in ("cursor", "twilio", "sendgrid"):
+        conn.execute("DELETE FROM cost_data WHERE cloud_provider=? AND tenant_id IS ?", (tool, tid))
+    if tool == "cursor":
+        conn.execute("DELETE FROM cursor_users WHERE tenant_id IS ?", (tid,))
+        conn.execute("DELETE FROM cursor_usage WHERE tenant_id IS ?", (tid,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"{tool} disconnected"})
+
+
 @app.route("/api/integrations/test/<tool>", methods=["POST"])
 @login_required
 def api_test_integration(tool):

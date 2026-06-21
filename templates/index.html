@@ -3627,6 +3627,14 @@
         <!-- ── Toast notification ── -->
         <div id="intg-toast" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9999;min-width:260px;max-width:400px;background:#1e2235;color:#fff;border-radius:10px;padding:14px 18px;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.35);border-left:4px solid #48bb78"></div>
 
+        <!-- Per-card manage menu (Enable/Disable, Disconnect) -->
+        <div id="intgMenuBackdrop" style="display:none;position:fixed;inset:0;z-index:2999;background:transparent" onclick="closeIntgMenu()"></div>
+        <div id="intgMenu" style="display:none;position:fixed;z-index:3000;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.22);min-width:170px;padding:5px;overflow:hidden"></div>
+        <style>
+            .intg-menu-item { padding:8px 12px; font-size:13px; cursor:pointer; border-radius:6px; display:flex; align-items:center; gap:8px; color:var(--text); }
+            .intg-menu-item:hover { background:var(--bg); }
+        </style>
+
         <!-- ── Configure Modals ── -->
 
         <!-- Jira Modal -->
@@ -4096,7 +4104,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621k"></script>
+<script src="/static/js/app.js?v=20260621l"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -5884,6 +5892,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     .concat(_intgOrder.filter(t => !_intgConnected[t]))
                     .forEach(t => { const c = document.getElementById('intg-card-' + t); if (c) _grid.appendChild(c); });
             }
+            // Inject a ⋮ manage menu (Enable/Disable, Disconnect) on each card.
+            _intgOrder.forEach(t => {
+                const card = document.getElementById('intg-card-' + t);
+                if (!card || card.querySelector('.intg-kebab')) return;
+                const addBtn = card.querySelector('[onclick*="addIntgAccount"]');
+                if (!addBtn) return;
+                const kb = document.createElement('button');
+                kb.className = 'btn btn-secondary intg-kebab';
+                kb.style.cssText = 'font-size:15px;padding:6px 9px;line-height:1;font-weight:700';
+                kb.title = 'Manage'; kb.textContent = '⋮';
+                kb.onclick = (e) => openIntgMenu(t, e);
+                addBtn.parentElement.appendChild(kb);
+            });
             loadCursorCardCost();
             // Show OpenAI sync button + dashboard if API key is configured
             const oaiCfg = data.openai || {};
@@ -6278,6 +6299,42 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         openIntgModal(tool);
+    };
+
+    // ── Per-card manage menu: Enable/Disable + Disconnect ──────────────────────
+    window.openIntgMenu = function(tool, ev) {
+        ev.stopPropagation();
+        const cfg = _intgSettings[tool] || {};
+        const enabled = !!cfg.enabled;
+        const menu = document.getElementById('intgMenu');
+        menu.innerHTML =
+            `<div class="intg-menu-item" onclick="toggleIntgEnabled('${tool}', ${enabled ? 'false' : 'true'})">${enabled ? '⏸ Disable (suspend)' : '▶ Enable'}</div>` +
+            `<div class="intg-menu-item" style="color:#c53030" onclick="disconnectIntegration('${tool}')">🗑 Disconnect</div>`;
+        const r = ev.currentTarget.getBoundingClientRect();
+        menu.style.left = Math.min(r.left, window.innerWidth - 185) + 'px';
+        menu.style.top = (r.bottom + 6) + 'px';
+        menu.style.display = 'block';
+        document.getElementById('intgMenuBackdrop').style.display = 'block';
+    };
+    window.closeIntgMenu = function() {
+        document.getElementById('intgMenu').style.display = 'none';
+        document.getElementById('intgMenuBackdrop').style.display = 'none';
+    };
+    window.toggleIntgEnabled = function(tool, enable) {
+        closeIntgMenu();
+        fetch('/api/integrations/settings', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [tool]: { enabled: enable } })
+        }).then(() => { _showToast((enable ? '▶ Enabled ' : '⏸ Disabled ') + tool, true); loadIntegrations(); })
+          .catch(() => _showToast('Failed to update ' + tool, false));
+    };
+    window.disconnectIntegration = function(tool) {
+        closeIntgMenu();
+        const extra = ['cursor', 'twilio', 'sendgrid'].includes(tool) ? ' and its cost data' : '';
+        if (!confirm(`Disconnect ${tool}? This clears its saved credentials${extra}.`)) return;
+        fetch('/api/integrations/' + tool + '/disconnect', { method: 'POST' })
+            .then(r => r.json()).then(d => { _showToast(d.error || ('Disconnected ' + tool), !d.error); loadIntegrations(); })
+            .catch(() => _showToast('Failed to disconnect ' + tool, false));
     };
 
     window.closeIntgModal = function(tool) {
