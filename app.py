@@ -5178,6 +5178,69 @@ def api_openai_grouped():
                     "count": len(rows), "by": by})
 
 
+@app.route("/api/cursor/sync", methods=["POST"])
+@login_required
+def api_cursor_sync():
+    """Pull live Cursor team spend → cursor_users + cost_data (tenant-scoped)."""
+    tid = current_tenant_id()
+    try:
+        from cursor_fetcher import sync_cursor
+        result = sync_cursor(tid)
+        return jsonify({"message": f"Synced {result['members']} members", **result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/api/cursor/user-costs", methods=["GET"])
+@login_required
+def api_cursor_user_costs():
+    """Per-user Cursor cost (usage value = overage + included), tenant-scoped."""
+    tid = current_tenant_id()
+    conn = get_db()
+    q = ("SELECT user_id,name,email,role,spend_cents,included_cents,fast_premium_requests "
+         "FROM cursor_users WHERE ")
+    params = []
+    if tid is not None:
+        q += "tenant_id IS ? "; params.append(tid)
+    else:
+        q += "1=1 "
+    raw = [dict(r) for r in conn.execute(q, params).fetchall()]
+    conn.close()
+
+    rows, total = [], 0.0
+    for r in raw:
+        spend = float(r.get("spend_cents") or 0)
+        incl  = float(r.get("included_cents") or 0)
+        cost  = round((spend + incl) / 100.0, 2)
+        total += cost
+        rows.append({
+            "name": r.get("name") or r.get("email") or "Member",
+            "email": r.get("email"), "role": r.get("role"),
+            "overage": round(spend / 100.0, 2), "included": round(incl / 100.0, 2),
+            "requests": r.get("fast_premium_requests") or 0, "cost": cost,
+        })
+    rows.sort(key=lambda x: (-x["cost"], (x["name"] or "").lower()))
+    return jsonify({"rows": rows, "total": round(total, 2), "count": len(rows)})
+
+
+@app.route("/api/cursor/summary", methods=["GET"])
+@login_required
+def api_cursor_summary():
+    """Cursor team total (current month) + member count, for the card."""
+    tid = current_tenant_id()
+    month_start = datetime.utcnow().strftime("%Y-%m-01")
+    conn = get_db()
+    q = ("SELECT COALESCE(SUM(cost),0) total, COUNT(*) members FROM cost_data "
+         "WHERE cloud_provider='cursor' AND date=? ")
+    params = [month_start]
+    if tid is not None:
+        q += "AND tenant_id IS ? "; params.append(tid)
+    row = conn.execute(q, params).fetchone()
+    has_key = bool((get_integration_settings(tid or 1).get("cursor_api_key") or "").strip())
+    conn.close()
+    return jsonify({"total": round(row["total"], 2), "members": row["members"], "has_key": has_key})
+
+
 def _backfill_ce_history(provider, tenant_id, months=12):
     """Fill EMPTY historical months for an AWS account from Cost Explorer.
 
@@ -5918,7 +5981,8 @@ def api_get_integrations():
 
 
 # SaaS integrations that carry a manual / flat monthly cost (no live billing API yet).
-MANUAL_SAAS_DISPLAY = {"cursor": "Cursor", "twilio": "Twilio", "sendgrid": "SendGrid"}
+# Cursor is excluded — it now syncs live per-user spend via cursor_fetcher.
+MANUAL_SAAS_DISPLAY = {"twilio": "Twilio", "sendgrid": "SendGrid"}
 
 
 def _sync_manual_saas_cost(tenant_id):
@@ -5960,11 +6024,16 @@ def api_update_integrations():
                 continue
             flat[col] = v
     update_integration_settings(flat, current_tenant_id() or 1)
-    # Mirror manual SaaS monthly costs (Cursor/Twilio/SendGrid) into cost_data.
+    # Mirror manual SaaS monthly costs (Twilio/SendGrid) into cost_data.
     try:
         _sync_manual_saas_cost(current_tenant_id())
     except Exception as e:
         print(f"[Integrations] manual cost sync failed: {e}")
+    # Cursor: pull live team spend in the background when a key was provided.
+    if "cursor" in body and (body["cursor"] or {}).get("api_key"):
+        _tid = current_tenant_id()
+        from cursor_fetcher import sync_cursor
+        start_background_thread(lambda: sync_cursor(_tid), name="cursor-sync-on-save")
     return jsonify({"message": "Integration settings saved"})
 
 

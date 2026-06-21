@@ -619,6 +619,9 @@
                     <button class="cp-seg cp-seg--cloud" data-costs-cloud="atlassian" onclick="setCostsCloud(this,'atlassian')">
                         <svg width="14" height="14" viewBox="0 0 32 32" class="cp-seg__icon"><defs><linearGradient id="atlsg" x1="50%" y1="40%" x2="0%" y2="100%"><stop offset="0" stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs><path fill="url(#atlsg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/><path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/></svg>Atlassian
                     </button>
+                    <button class="cp-seg cp-seg--cloud" data-costs-cloud="cursor" onclick="setCostsCloud(this,'cursor')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.5" class="cp-seg__icon"><polyline points="16,18 22,12 16,6"/><polyline points="8,6 2,12 8,18"/></svg>Cursor
+                    </button>
                 </div>
             </div>
             <div class="cost-filter-field">
@@ -819,6 +822,25 @@
                 </thead>
                 <tbody id="openaiGroupBody">
                     <tr><td colspan="2" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Cursor per-user cost table (Group by = User) -->
+        <div id="cursorUserWrap" class="table-container cost-table-wrap" style="display:none;overflow-x:auto">
+            <table class="cost-table" style="min-width:640px;table-layout:auto">
+                <thead>
+                    <tr>
+                        <th style="white-space:nowrap">User</th>
+                        <th style="white-space:nowrap">Email</th>
+                        <th style="white-space:nowrap;text-align:center">Role</th>
+                        <th style="white-space:nowrap;text-align:right">Included</th>
+                        <th style="white-space:nowrap;text-align:right">Overage</th>
+                        <th style="white-space:nowrap;text-align:right">Cost</th>
+                    </tr>
+                </thead>
+                <tbody id="cursorUserBody">
+                    <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -3464,13 +3486,15 @@
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('cursor')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('cursor')">Test</button>
+                        <button class="btn btn-secondary" id="cursor-sync-btn" style="font-size:12px;padding:6px 14px;display:none" onclick="syncCursor()">&#8635; Sync</button>
                         <button class="btn btn-secondary" title="Add account" style="font-size:13px;padding:6px 11px;font-weight:700" onclick="addIntgAccount('cursor')">+</button>
                     </div>
                     <div id="cursor-cost-summary" style="display:none;margin-top:10px;padding:8px 10px;background:var(--bg-subtle,#f5f5f5);border-radius:8px">
                         <div style="display:flex;justify-content:space-between;align-items:center">
-                            <span style="font-size:12px;font-weight:600;color:var(--text)">Monthly Cost</span>
+                            <span style="font-size:12px;font-weight:600;color:var(--text)">Team Cost (This Month)</span>
                             <span style="font-size:16px;font-weight:700;color:#6c47ff" id="cursor-total-cost">$0.00</span>
                         </div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-top:3px" id="cursor-members-line"></div>
                     </div>
                 </div>
                 <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
@@ -3748,13 +3772,9 @@
                 </div>
                 <div style="display:flex;flex-direction:column;gap:12px">
                     <div>
-                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Cursor API Key <span style="font-weight:400">(optional)</span></label>
-                        <input id="cursor-api-key" type="password" placeholder="cursor-••••••••••••••••" class="form-control">
-                    </div>
-                    <div>
-                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Monthly Cost (USD)</label>
-                        <input id="cursor-monthly-cost" type="number" min="0" step="0.01" placeholder="e.g. 240" class="form-control">
-                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Flat subscription cost — flows into Cost Data &amp; reports.</div>
+                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Cursor Team Admin API Key</label>
+                        <input id="cursor-api-key" type="password" placeholder="crsr_••••••••••••••••" class="form-control">
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">A <strong>Team</strong>-tab key (Read-only is enough) from Cursor → Settings → API Keys. Pulls live per-user spend.</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;padding:10px 0">
                         <input type="checkbox" id="cursor-enabled" style="width:16px;height:16px;cursor:pointer">
@@ -4055,7 +4075,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621a"></script>
+<script src="/static/js/app.js?v=20260621b"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -5821,8 +5841,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     badge.textContent = configured ? 'Connected' : 'Not connected';
                     badge.className = 'intg-badge ' + (configured ? 'intg-badge-on' : 'intg-badge-off');
                 }
-                // Manual-cost cards: show the monthly cost line when set.
-                if (['cursor','twilio','sendgrid'].includes(tool)) {
+                // Manual-cost cards (Twilio/SendGrid): show the monthly cost line when set.
+                if (['twilio','sendgrid'].includes(tool)) {
                     const box = document.getElementById(tool + '-cost-summary');
                     const amt = document.getElementById(tool + '-total-cost');
                     if (box && amt) {
@@ -5832,6 +5852,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             });
+            loadCursorCardCost();
             // Show OpenAI sync button + dashboard if API key is configured
             const oaiCfg = data.openai || {};
             const oaiSyncBtn = document.getElementById('openai-sync-btn');
@@ -5846,6 +5867,31 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }).catch(() => {});
         loadAtlassianCardCost();
+    };
+
+    // Cursor: live team total (from cursor_users via /api/cursor/summary).
+    window.loadCursorCardCost = function() {
+        fetch('/api/cursor/summary').then(r => r.json()).then(d => {
+            const box = document.getElementById('cursor-cost-summary');
+            const syncBtn = document.getElementById('cursor-sync-btn');
+            if (syncBtn) syncBtn.style.display = d.has_key ? '' : 'none';
+            if (!box) return;
+            if (!d.has_key) { box.style.display = 'none'; return; }
+            box.style.display = 'block';
+            document.getElementById('cursor-total-cost').textContent = '$' + (d.total || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            const ml = document.getElementById('cursor-members-line');
+            if (ml) ml.textContent = d.members ? `${d.members} members · usage this cycle` : 'Click Sync to pull team spend';
+        }).catch(() => {});
+    };
+
+    window.syncCursor = function() {
+        const btn = document.getElementById('cursor-sync-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Syncing…'; }
+        fetch('/api/cursor/sync', { method: 'POST' }).then(r => r.json()).then(d => {
+            _showToast(d.error ? ('✗ ' + d.error) : ('✓ ' + (d.message || 'Synced')), !d.error);
+            loadCursorCardCost();
+        }).catch(e => _showToast('✗ Sync failed: ' + e, false))
+          .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Sync'; } });
     };
 
     // Show the Atlassian user-cost total (+ per-account) on the Jira card.
@@ -6163,7 +6209,6 @@ document.addEventListener('DOMContentLoaded', function() {
             _setChk('bitbucket-enabled', cfg.enabled);
         } else if (tool === 'cursor') {
             _setVal('cursor-api-key', cfg.api_key);
-            _setVal('cursor-monthly-cost', cfg.monthly_cost || '');
             _setChk('cursor-enabled', cfg.enabled);
         } else if (tool === 'twilio') {
             _setVal('twilio-api-key', cfg.api_key);
@@ -6224,7 +6269,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 token: _getVal('bitbucket-token'), enabled: _getChk('bitbucket-enabled'),
             };
         } else if (tool === 'cursor') {
-            payload.cursor = { api_key: _getVal('cursor-api-key'), enabled: _getChk('cursor-enabled'), monthly_cost: parseFloat(_getVal('cursor-monthly-cost')) || 0 };
+            payload.cursor = { api_key: _getVal('cursor-api-key'), enabled: _getChk('cursor-enabled') };
         } else if (tool === 'twilio') {
             payload.twilio = { api_key: _getVal('twilio-api-key'), enabled: _getChk('twilio-enabled'), monthly_cost: parseFloat(_getVal('twilio-monthly-cost')) || 0 };
         } else if (tool === 'sendgrid') {

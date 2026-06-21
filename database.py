@@ -580,6 +580,23 @@ def init_db():
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_atlassian_users ON atlassian_users(tenant_id, org_id)"
     )
+    # ── Cursor team members (per-user spend captured at each cost sync) ────────
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cursor_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id             INTEGER,
+            user_id               TEXT,
+            name                  TEXT,
+            email                 TEXT,
+            role                  TEXT,
+            spend_cents           REAL DEFAULT 0,
+            included_cents        REAL DEFAULT 0,
+            fast_premium_requests INTEGER DEFAULT 0,
+            synced_at             TEXT,
+            UNIQUE(tenant_id, user_id)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cursor_users ON cursor_users(tenant_id)")
     # Seed baseline Atlassian list prices once (the standalone scraper refreshes
     # these later). jira-software/standard is a real scraped value; rest are list.
     if cursor.execute("SELECT COUNT(*) FROM atlassian_pricing").fetchone()[0] == 0:

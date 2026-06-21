@@ -1360,6 +1360,37 @@ function _atlStatusBadge(st) {
     return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${bg};color:${fg};text-transform:capitalize;white-space:nowrap">${label}</span>`;
 }
 
+// Cursor Group By → User: live per-member spend (usage value).
+async function renderCursorUserCosts() {
+    const body = document.getElementById('cursorUserBody');
+    const subtitleBar = document.getElementById('costsSubtitleBar');
+    const countChip = document.getElementById('costRowCountChip');
+    const fmt = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
+    try {
+        const d = await fetch('/api/cursor/user-costs').then(r => r.json());
+        const rows = d.rows || [];
+        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} member${rows.length !== 1 ? 's' : ''} · Total <strong>${fmt(d.total || 0)}</strong>`;
+        if (countChip) countChip.textContent = `${rows.length} members`;
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No Cursor data yet — Sync from Integrations → Cursor.</td></tr>';
+            return;
+        }
+        const roleBadge = r => `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:#ede9fe;color:#6d28d9;text-transform:capitalize">${_esc(r || 'member')}</span>`;
+        body.innerHTML = rows.map(u => `
+            <tr>
+                <td style="font-weight:500">${_esc(u.name || '—')}</td>
+                <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
+                <td style="text-align:center">${roleBadge(u.role)}</td>
+                <td style="text-align:right;color:var(--text-secondary)">${fmt(u.included || 0)}</td>
+                <td style="text-align:right;color:${(u.overage || 0) > 0 ? '#c05621' : 'var(--text-secondary)'}">${fmt(u.overage || 0)}</td>
+                <td style="text-align:right;font-weight:600">${fmt(u.cost || 0)}</td>
+            </tr>`).join('');
+    } catch (e) {
+        if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#c53030">Failed to load Cursor per-user costs</td></tr>';
+    }
+}
+
 // OpenAI Group By → Model / API Capability / Spend Category.
 async function renderOpenAIGrouped(by) {
     const labels = { model: 'Model', capability: 'API Capability', category: 'Spend Category' };
@@ -1517,7 +1548,7 @@ async function _pickDefaultCostsCloud() {
     try {
         const clouds = await fetch('/api/connected-clouds').then(r => r.json());
         if (Array.isArray(clouds) && clouds.length) {
-            return ['azure', 'aws', 'gcp', 'openai', 'atlassian'].find(c => clouds.includes(c)) || clouds[0];
+            return ['azure', 'aws', 'gcp', 'openai', 'atlassian', 'cursor'].find(c => clouds.includes(c)) || clouds[0];
         }
     } catch (e) { /* fall through */ }
     return 'azure';
@@ -1568,11 +1599,11 @@ async function _updateCostsCloudFilters(cloud) {
     // For Atlassian it moves to the TOP of the list and becomes the default.
     const userOpt = document.getElementById('costGroupByUserOpt');
     const groupByEl = document.getElementById('costGroupBy');
-    const isAtlassian = cloud === 'atlassian';
+    const showUser = cloud === 'atlassian' || cloud === 'cursor';  // per-user cost views
     if (userOpt && groupByEl) {
-        userOpt.style.display = isAtlassian ? '' : 'none';
-        if (isAtlassian) groupByEl.insertBefore(userOpt, groupByEl.firstChild); // first
-        else             groupByEl.appendChild(userOpt);                        // back to last
+        userOpt.style.display = showUser ? '' : 'none';
+        if (showUser) groupByEl.insertBefore(userOpt, groupByEl.firstChild); // first
+        else          groupByEl.appendChild(userOpt);                        // back to last
     }
     // OpenAI-only Group By options: Model / API Capability / Spend Category.
     const isOpenai = cloud === 'openai';
@@ -1588,8 +1619,8 @@ async function _updateCostsCloudFilters(cloud) {
     const rgOpt = document.getElementById('costGroupByRgOpt');
     if (rgOpt) rgOpt.textContent = lbl || 'Resource Group';
 
-    // Default: Atlassian → User (per-user view); every other cloud → line items.
-    if (groupByEl) groupByEl.value = isAtlassian ? 'user' : 'resource';
+    // Default: Atlassian/Cursor → User (per-user view); every other cloud → line items.
+    if (groupByEl) groupByEl.value = showUser ? 'user' : 'resource';
     if (resTypeWrap) resTypeWrap.style.display  = isAws ? '' : 'none';
 
     if (accountLabelEl) accountLabelEl.textContent = cloud ? subLabel(cloud) : 'Account / Subscription';
@@ -1609,15 +1640,20 @@ async function loadCostsTable() {
     const _mainWrap = document.getElementById('costsTable')?.closest('.cost-table-wrap');
     const _atlWrap  = document.getElementById('atlUserCostWrap');
     const _oaiWrap  = document.getElementById('openaiGroupWrap');
+    const _curWrap  = document.getElementById('cursorUserWrap');
     const _subCard  = document.querySelector('.sub-table-card');
     const _showOnly = which => {
         if (_mainWrap) _mainWrap.style.display = which === 'main' ? '' : 'none';
         if (_atlWrap)  _atlWrap.style.display  = which === 'atl'  ? '' : 'none';
         if (_oaiWrap)  _oaiWrap.style.display  = which === 'oai'  ? '' : 'none';
+        if (_curWrap)  _curWrap.style.display  = which === 'cur'  ? '' : 'none';
         if (_subCard)  _subCard.style.display  = which === 'main' ? '' : 'none';
     };
     if (costsSelectedCloud === 'atlassian' && _gb === 'user') {
         _showOnly('atl'); return renderAtlassianUserCosts();
+    }
+    if (costsSelectedCloud === 'cursor' && _gb === 'user') {
+        _showOnly('cur'); return renderCursorUserCosts();
     }
     if (costsSelectedCloud === 'openai' && _gb.startsWith('oai_')) {
         _showOnly('oai'); return renderOpenAIGrouped(_gb.replace('oai_', ''));
@@ -2147,8 +2183,8 @@ async function loadMonthly() {
             const byCloud = m.by_cloud || {};
             const cloudTotal = m.total_cost || 1;
             const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f', atlassian: '#0052cc' };
-            const cloudLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', atlassian: 'Atlassian' };
-            const cloudOrder = ['aws', 'azure', 'gcp', 'openai', 'atlassian'];
+            const cloudLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', atlassian: 'Atlassian', cursor: 'Cursor' };
+            const cloudOrder = ['aws', 'azure', 'gcp', 'openai', 'atlassian', 'cursor'];
             const activeCloudKeys = cloudOrder.filter(c => byCloud[c] > 0);
 
             // Cloud breakdown strip
@@ -4920,7 +4956,7 @@ async function _populateCloudProviderSelect(selectId, opts = {}) {
     const allValue = opts.allValue !== undefined ? opts.allValue : '';
     const allLabel = opts.allLabel || 'All Clouds';
     const savedValue = sel.value;
-    const labels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', atlassian: 'Atlassian' };
+    const labels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', atlassian: 'Atlassian', cursor: 'Cursor' };
     sel.innerHTML = `<option value="${allValue}">${allLabel}</option>`;
     types.forEach(t => {
         const opt = document.createElement('option');
