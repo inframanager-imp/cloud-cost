@@ -1370,7 +1370,7 @@ async function renderCursorUserCosts() {
     try {
         const d = await fetch('/api/cursor/user-costs').then(r => r.json());
         const rows = d.rows || [];
-        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} member${rows.length !== 1 ? 's' : ''} · Total <strong>${fmt(d.total || 0)}</strong>`;
+        if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} member${rows.length !== 1 ? 's' : ''} · <span style="color:var(--text-muted)">current billing cycle</span> · Total <strong>${fmt(d.total || 0)}</strong>`;
         if (countChip) countChip.textContent = `${rows.length} members`;
         if (!rows.length) {
             body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No Cursor data yet — Sync from Integrations → Cursor.</td></tr>';
@@ -1464,7 +1464,7 @@ function _atlRenderUserRows() {
     });
 
     const total = rows.reduce((s, u) => s + (u.cost || 0), 0);
-    if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} user${rows.length !== 1 ? 's' : ''} · Total <strong>${_atlMoney(total)}</strong>`;
+    if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} user${rows.length !== 1 ? 's' : ''} · <span style="color:var(--text-muted)">current month</span> · Total <strong>${_atlMoney(total)}</strong>`;
     if (countChip) countChip.textContent = `${rows.length} users`;
 
     // Sort indicators
@@ -1642,12 +1642,16 @@ async function loadCostsTable() {
     const _oaiWrap  = document.getElementById('openaiGroupWrap');
     const _curWrap  = document.getElementById('cursorUserWrap');
     const _subCard  = document.querySelector('.sub-table-card');
+    const _dateField = document.getElementById('costDateRangeField');
     const _showOnly = which => {
         if (_mainWrap) _mainWrap.style.display = which === 'main' ? '' : 'none';
         if (_atlWrap)  _atlWrap.style.display  = which === 'atl'  ? '' : 'none';
         if (_oaiWrap)  _oaiWrap.style.display  = which === 'oai'  ? '' : 'none';
         if (_curWrap)  _curWrap.style.display  = which === 'cur'  ? '' : 'none';
         if (_subCard)  _subCard.style.display  = which === 'main' ? '' : 'none';
+        // Atlassian/Cursor per-user views are a current-cycle snapshot, not
+        // date-filtered — hide the date picker so it doesn't look broken.
+        if (_dateField) _dateField.style.display = (which === 'atl' || which === 'cur') ? 'none' : '';
     };
     if (costsSelectedCloud === 'atlassian' && _gb === 'user') {
         _showOnly('atl'); return renderAtlassianUserCosts();
