@@ -5209,9 +5209,11 @@ def api_cursor_sync():
     """Pull live Cursor team spend → cursor_users + cost_data (tenant-scoped)."""
     tid = current_tenant_id()
     try:
-        from cursor_fetcher import sync_cursor
+        from cursor_fetcher import sync_cursor, backfill_cursor_history
         result = sync_cursor(tid)
-        return jsonify({"message": f"Synced {result['members']} members", **result})
+        # Backfill the last 12 billing cycles in the background (heavy: ~100 calls).
+        start_background_thread(lambda: backfill_cursor_history(tid, 12), name="cursor-backfill")
+        return jsonify({"message": f"Synced {result['members']} members (12-mo history loading…)", **result})
     except Exception as e:
         return jsonify({"error": str(e)}), 502
 

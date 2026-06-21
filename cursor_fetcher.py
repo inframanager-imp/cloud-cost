@@ -14,7 +14,7 @@ The Cursor team API key is read from integration_settings.cursor_api_key
 (tenant-scoped) — entered via Integrations -> Cursor -> Configure.
 """
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 
@@ -64,6 +64,72 @@ def _user_cost(m):
     Included/plan usage (includedSpendCents) is covered by the seat subscription,
     so it is tracked separately for showback, not counted as cost."""
     return round(float(m.get("spendCents") or 0) / 100.0, 2)
+
+
+def _cycle_start_for(dt, cycle_day):
+    """The billing-cycle-start date (the cycle_day of the month) that dt falls in."""
+    if dt.day >= cycle_day:
+        return dt.replace(day=cycle_day, hour=0, minute=0, second=0, microsecond=0)
+    y, m = (dt.year - 1, 12) if dt.month == 1 else (dt.year, dt.month - 1)
+    return dt.replace(year=y, month=m, day=cycle_day, hour=0, minute=0, second=0, microsecond=0)
+
+
+def backfill_cursor_history(tenant_id, cycles=12):
+    """Backfill past billing cycles' on-demand cost from usage events. Writes one
+    aggregate cost_data row per completed cycle (resource_type='Cycle'), dated at
+    each cycle start. The current cycle is left to the per-member sync."""
+    s = get_integration_settings(tenant_id or 1)
+    key = (s.get("cursor_api_key") or "").strip()
+    if not key:
+        raise RuntimeError("No Cursor API key configured")
+    client = CursorClient(key)
+    _, cycle_start = client.fetch_spend()
+    now = datetime.utcnow()
+    cycle_day = (datetime.utcfromtimestamp(int(cycle_start) / 1000).day if cycle_start else 1)
+    cur_cs = _cycle_start_for(now, cycle_day).strftime("%Y-%m-%d")
+
+    start_ms = int((now - timedelta(days=cycles * 31)).timestamp() * 1000)
+    end_ms = int(now.timestamp() * 1000)
+    events = client.fetch_usage_events(start_ms, end_ms, max_pages=200)
+
+    buckets = {}  # cycle_start_str -> {od, inc, events}
+    for e in events:
+        if not e.get("isChargeable"):
+            continue
+        ts = datetime.utcfromtimestamp(int(e["timestamp"]) / 1000)
+        cs = _cycle_start_for(ts, cycle_day).strftime("%Y-%m-%d")
+        if cs == cur_cs:
+            continue  # current cycle = per-member rows
+        b = buckets.setdefault(cs, {"od": 0.0, "inc": 0.0, "events": 0})
+        cents = float(e.get("chargedCents") or 0)
+        if (e.get("kind") or "") == "Usage-based":
+            b["od"] += cents
+        else:
+            b["inc"] += cents
+        b["events"] += 1
+
+    conn = get_db()
+    try:
+        conn.execute(
+            "DELETE FROM cost_data WHERE cloud_provider='cursor' AND resource_type='Cycle' AND tenant_id IS ?",
+            (tenant_id,),
+        )
+        rows = []
+        for cs, b in buckets.items():
+            tags = json.dumps({"includedCents": round(b["inc"], 2), "onDemandCents": round(b["od"], 2),
+                               "events": b["events"], "cycleStart": cs})
+            rows.append((cs, "", "Cursor", "Cycle", "On-demand (cycle)", "Usage", "",
+                         round(b["od"] / 100.0, 2), "USD", "Cursor Team", tags, "cursor", tenant_id))
+        if rows:
+            conn.executemany(
+                "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
+                "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", rows,
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"cycles": len(buckets), "events": len(events)}
 
 
 def sync_cursor(tenant_id):
