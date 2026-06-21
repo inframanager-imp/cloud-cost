@@ -1455,6 +1455,73 @@ function _curCloseFilter() {
     _curRenderRows();
 }
 
+// Cursor Group By → Model / User × Model (usage-events breakdown).
+let _cuRows = [];
+let _cuBy = 'model';
+let _cuSort = { col: 'on_demand', dir: 'desc' };
+const _cuCols = {
+    model:      [['model', 'Model', 'l'], ['included', 'Included', 'r'], ['on_demand', 'On-Demand', 'r'], ['tokens', 'Tokens', 'r'], ['events', 'Events', 'r']],
+    user_model: [['email', 'User', 'l'], ['model', 'Model', 'l'], ['included', 'Included', 'r'], ['on_demand', 'On-Demand', 'r'], ['tokens', 'Tokens', 'r']],
+};
+async function renderCursorUsage(by) {
+    _cuBy = (by === 'user_model') ? 'user_model' : 'model';
+    _cuSort = { col: 'on_demand', dir: 'desc' };
+    const body = document.getElementById('cursorUsageBody');
+    if (body) body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>';
+    try {
+        const d = await fetch('/api/cursor/usage?by=' + _cuBy).then(r => r.json());
+        _cuRows = d.rows || [];
+        _cuRenderRows();
+    } catch (e) {
+        if (body) body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#c53030">Failed to load Cursor usage</td></tr>';
+    }
+}
+function _cuRenderRows() {
+    const head = document.getElementById('cursorUsageHead');
+    const body = document.getElementById('cursorUsageBody');
+    const subtitleBar = document.getElementById('costsSubtitleBar');
+    const countChip = document.getElementById('costRowCountChip');
+    const cols = _cuCols[_cuBy];
+    const fmt = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const num = v => (v || 0).toLocaleString();
+    // Header with sort indicators
+    head.innerHTML = cols.map(([key, label, align]) => {
+        const ind = _cuSort.col === key ? (_cuSort.dir === 'asc' ? '↑' : '↓') : '↕';
+        return `<th class="sortable-th" onclick="_cuSortBy('${key}')" style="cursor:pointer;white-space:nowrap;text-align:${align === 'r' ? 'right' : 'left'}">${label} <span class="sort-indicator">${ind}</span></th>`;
+    }).join('');
+    // Sort
+    const { col, dir } = _cuSort;
+    const rows = _cuRows.slice().sort((a, b) => {
+        const va = a[col], vb = b[col];
+        const c = (typeof va === 'number') ? va - vb : String(va || '').localeCompare(String(vb || ''), undefined, { sensitivity: 'base' });
+        return dir === 'asc' ? c : -c;
+    });
+    const od = rows.reduce((s, r) => s + (r.on_demand || 0), 0);
+    const inc = rows.reduce((s, r) => s + (r.included || 0), 0);
+    const label = _cuBy === 'user_model' ? 'user-model pairs' : 'models';
+    if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} ${label} · <span style="color:var(--text-muted)">current billing cycle</span> · On-Demand <strong>${fmt(od)}</strong> <span style="color:var(--text-muted)">· Included ${fmt(inc)}</span>`;
+    if (countChip) countChip.textContent = `${rows.length} ${label}`;
+    if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="${cols.length}" style="text-align:center;padding:40px;color:var(--text-secondary)">No Cursor usage yet — Sync from Integrations → Cursor.</td></tr>`;
+        return;
+    }
+    body.innerHTML = rows.map(r => '<tr>' + cols.map(([key, , align]) => {
+        let v;
+        if (key === 'tokens' || key === 'events') v = num(r[key]);
+        else if (key === 'included' || key === 'on_demand') v = fmt(r[key]);
+        else v = _esc(r[key] || '—');
+        const style = align === 'r'
+            ? `text-align:right;${key === 'on_demand' ? `font-weight:600;color:${(r.on_demand || 0) > 0 ? '#c05621' : 'var(--text-primary)'}` : 'color:var(--text-secondary)'}`
+            : 'font-weight:500';
+        return `<td style="${style}">${v}</td>`;
+    }).join('') + '</tr>').join('');
+}
+function _cuSortBy(col) {
+    if (_cuSort.col === col) _cuSort.dir = _cuSort.dir === 'asc' ? 'desc' : 'asc';
+    else _cuSort = { col, dir: (col === 'model' || col === 'email') ? 'asc' : 'desc' };
+    _cuRenderRows();
+}
+
 // OpenAI Group By → Model / API Capability / Spend Category.
 async function renderOpenAIGrouped(by) {
     const labels = { model: 'Model', capability: 'API Capability', category: 'Spend Category' };
@@ -1673,6 +1740,10 @@ async function _updateCostsCloudFilters(cloud) {
     const isOpenai = cloud === 'openai';
     document.querySelectorAll('.oai-gb-opt').forEach(o => o.style.display = isOpenai ? '' : 'none');
     if (!isOpenai && groupByEl && (groupByEl.value || '').startsWith('oai_')) groupByEl.value = 'resource';
+    // Cursor-only Group By options: Model / User × Model (usage-events breakdown).
+    const isCursor = cloud === 'cursor';
+    document.querySelectorAll('.cur-gb-opt').forEach(o => o.style.display = isCursor ? '' : 'none');
+    if (!isCursor && groupByEl && (groupByEl.value || '').startsWith('cur_')) groupByEl.value = 'resource';
 
     // Group By is shown for every cloud; the toolbar RG dropdown stays hidden
     // (column-header funnel filters replace it).
@@ -1705,6 +1776,7 @@ async function loadCostsTable() {
     const _atlWrap  = document.getElementById('atlUserCostWrap');
     const _oaiWrap  = document.getElementById('openaiGroupWrap');
     const _curWrap  = document.getElementById('cursorUserWrap');
+    const _curUsageWrap = document.getElementById('cursorUsageWrap');
     const _subCard  = document.querySelector('.sub-table-card');
     const _dateField = document.getElementById('costDateRangeField');
     const _showOnly = which => {
@@ -1712,16 +1784,20 @@ async function loadCostsTable() {
         if (_atlWrap)  _atlWrap.style.display  = which === 'atl'  ? '' : 'none';
         if (_oaiWrap)  _oaiWrap.style.display  = which === 'oai'  ? '' : 'none';
         if (_curWrap)  _curWrap.style.display  = which === 'cur'  ? '' : 'none';
+        if (_curUsageWrap) _curUsageWrap.style.display = which === 'curusage' ? '' : 'none';
         if (_subCard)  _subCard.style.display  = which === 'main' ? '' : 'none';
-        // Atlassian/Cursor per-user views are a current-cycle snapshot, not
-        // date-filtered — hide the date picker so it doesn't look broken.
-        if (_dateField) _dateField.style.display = (which === 'atl' || which === 'cur') ? 'none' : '';
+        // Snapshot views (Atlassian/Cursor current cycle) aren't date-filtered —
+        // hide the date picker so it doesn't look broken.
+        if (_dateField) _dateField.style.display = ['atl', 'cur', 'curusage'].includes(which) ? 'none' : '';
     };
     if (costsSelectedCloud === 'atlassian' && _gb === 'user') {
         _showOnly('atl'); return renderAtlassianUserCosts();
     }
     if (costsSelectedCloud === 'cursor' && _gb === 'user') {
         _showOnly('cur'); return renderCursorUserCosts();
+    }
+    if (costsSelectedCloud === 'cursor' && _gb.startsWith('cur_')) {
+        _showOnly('curusage'); return renderCursorUsage(_gb.replace('cur_', ''));
     }
     if (costsSelectedCloud === 'openai' && _gb.startsWith('oai_')) {
         _showOnly('oai'); return renderOpenAIGrouped(_gb.replace('oai_', ''));

@@ -5224,6 +5224,36 @@ def api_cursor_user_costs():
                     "included_total": round(included_total, 2), "count": len(rows)})
 
 
+@app.route("/api/cursor/usage", methods=["GET"])
+@login_required
+def api_cursor_usage():
+    """Cursor usage events aggregated. by=model → per model; by=user_model → per
+    (user, model). Returns included (showback) + on_demand (cost) + tokens."""
+    by = (request.args.get("by") or "model").lower()
+    tid = current_tenant_id()
+    conn = get_db()
+    where = "tenant_id IS ? " if tid is not None else "1=1 "
+    params = [tid] if tid is not None else []
+    if by == "user_model":
+        sel = ("SELECT email, model, included_cents, on_demand_cents, tokens, events "
+               "FROM cursor_usage WHERE " + where + "ORDER BY on_demand_cents DESC, included_cents DESC")
+        raw = conn.execute(sel, params).fetchall()
+        rows = [{"email": r["email"], "model": r["model"],
+                 "included": round(r["included_cents"]/100.0, 2), "on_demand": round(r["on_demand_cents"]/100.0, 2),
+                 "tokens": r["tokens"], "events": r["events"]} for r in raw]
+    else:  # by model
+        sel = ("SELECT model, SUM(included_cents) inc, SUM(on_demand_cents) od, SUM(tokens) tk, SUM(events) ev "
+               "FROM cursor_usage WHERE " + where + "GROUP BY model ORDER BY od DESC, inc DESC")
+        raw = conn.execute(sel, params).fetchall()
+        rows = [{"model": r["model"], "included": round((r["inc"] or 0)/100.0, 2),
+                 "on_demand": round((r["od"] or 0)/100.0, 2), "tokens": r["tk"] or 0, "events": r["ev"] or 0}
+                for r in raw]
+    conn.close()
+    od_total = round(sum(x["on_demand"] for x in rows), 2)
+    inc_total = round(sum(x["included"] for x in rows), 2)
+    return jsonify({"rows": rows, "total": od_total, "included_total": inc_total, "count": len(rows), "by": by})
+
+
 @app.route("/api/cursor/summary", methods=["GET"])
 @login_required
 def api_cursor_summary():

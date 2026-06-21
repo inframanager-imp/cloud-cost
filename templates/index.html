@@ -644,6 +644,8 @@
                     <option value="oai_model" class="oai-gb-opt" style="display:none">Model</option>
                     <option value="oai_capability" class="oai-gb-opt" style="display:none">API Capability</option>
                     <option value="oai_category" class="oai-gb-opt" style="display:none">Spend Category</option>
+                    <option value="cur_model" class="cur-gb-opt" style="display:none">Model</option>
+                    <option value="cur_user_model" class="cur-gb-opt" style="display:none">User × Model</option>
                 </select>
             </div>
             <div class="cost-filter-field">
@@ -839,6 +841,16 @@
                     </tr>
                 </thead>
                 <tbody id="cursorUserBody">
+                    <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Cursor usage table (Group by = Model / User × Model) -->
+        <div id="cursorUsageWrap" class="table-container cost-table-wrap" style="display:none;overflow-x:auto">
+            <table class="cost-table" style="min-width:640px;table-layout:auto">
+                <thead><tr id="cursorUsageHead"></tr></thead>
+                <tbody id="cursorUsageBody">
                     <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading…</td></tr>
                 </tbody>
             </table>
@@ -4084,7 +4096,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621e"></script>
+<script src="/static/js/app.js?v=20260621f"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
