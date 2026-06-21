@@ -3404,6 +3404,7 @@
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('jira')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('jira')">Test</button>
+                        <button class="btn btn-secondary" title="Add account" style="font-size:13px;padding:6px 11px;font-weight:700" onclick="addIntgAccount('jira')">+</button>
                     </div>
                     <!-- Atlassian user-cost summary (from Cloud Providers → Atlassian) -->
                     <div id="atlassian-cost-summary" style="display:none;margin-top:10px;padding:8px 10px;background:var(--bg-subtle,#f5f5f5);border-radius:8px">
@@ -3437,6 +3438,7 @@
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('bitbucket')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('bitbucket')">Test</button>
+                        <button class="btn btn-secondary" title="Add account" style="font-size:13px;padding:6px 11px;font-weight:700" onclick="addIntgAccount('bitbucket')">+</button>
                     </div>
                 </div>
                 <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
@@ -3462,10 +3464,81 @@
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('cursor')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('cursor')">Test</button>
+                        <button class="btn btn-secondary" title="Add account" style="font-size:13px;padding:6px 11px;font-weight:700" onclick="addIntgAccount('cursor')">+</button>
+                    </div>
+                    <div id="cursor-cost-summary" style="display:none;margin-top:10px;padding:8px 10px;background:var(--bg-subtle,#f5f5f5);border-radius:8px">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <span style="font-size:12px;font-weight:600;color:var(--text)">Monthly Cost</span>
+                            <span style="font-size:16px;font-weight:700;color:#6c47ff" id="cursor-total-cost">$0.00</span>
+                        </div>
                     </div>
                 </div>
                 <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
                     <div style="font-size:11px;color:var(--text-muted)">&#10003; Subscription cost tracking &nbsp;&#10003; Usage metrics &nbsp;&#10003; AI spend alerts</div>
+                </div>
+            </div>
+
+            <!-- Twilio -->
+            <div class="card intg-card" id="intg-card-twilio" style="padding:0;overflow:hidden;border-top:3px solid #f22f46">
+                <div style="padding:20px 20px 14px">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                        <div style="width:42px;height:42px;background:linear-gradient(135deg,#f22f46,#f55c6e);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm-3 13.5a2 2 0 110-4 2 2 0 010 4zm0-5a2 2 0 110-4 2 2 0 010 4zm6 5a2 2 0 110-4 2 2 0 010 4zm0-5a2 2 0 110-4 2 2 0 010 4z"/></svg>
+                        </div>
+                        <div>
+                            <div style="font-weight:700;font-size:15px;color:var(--text)">Twilio</div>
+                            <div style="font-size:12px;color:var(--text-muted)">SMS &amp; Voice</div>
+                        </div>
+                        <div style="margin-left:auto">
+                            <span id="intg-status-twilio" class="intg-badge intg-badge-off">Not connected</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('twilio')">Configure</button>
+                        <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('twilio')">Test</button>
+                        <button class="btn btn-secondary" title="Add account" style="font-size:13px;padding:6px 11px;font-weight:700" onclick="addIntgAccount('twilio')">+</button>
+                    </div>
+                    <div id="twilio-cost-summary" style="display:none;margin-top:10px;padding:8px 10px;background:var(--bg-subtle,#f5f5f5);border-radius:8px">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <span style="font-size:12px;font-weight:600;color:var(--text)">Monthly Cost</span>
+                            <span style="font-size:16px;font-weight:700;color:#f22f46" id="twilio-total-cost">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
+                    <div style="font-size:11px;color:var(--text-muted)">&#10003; Usage cost tracking &nbsp;&#10003; SMS/Voice spend &nbsp;&#10003; Spend alerts</div>
+                </div>
+            </div>
+
+            <!-- SendGrid -->
+            <div class="card intg-card" id="intg-card-sendgrid" style="padding:0;overflow:hidden;border-top:3px solid #1a82e2">
+                <div style="padding:20px 20px 14px">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                        <div style="width:42px;height:42px;background:linear-gradient(135deg,#1a82e2,#4ba3ee);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+                        </div>
+                        <div>
+                            <div style="font-weight:700;font-size:15px;color:var(--text)">SendGrid</div>
+                            <div style="font-size:12px;color:var(--text-muted)">Email Delivery</div>
+                        </div>
+                        <div style="margin-left:auto">
+                            <span id="intg-status-sendgrid" class="intg-badge intg-badge-off">Not connected</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('sendgrid')">Configure</button>
+                        <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('sendgrid')">Test</button>
+                        <button class="btn btn-secondary" title="Add account" style="font-size:13px;padding:6px 11px;font-weight:700" onclick="addIntgAccount('sendgrid')">+</button>
+                    </div>
+                    <div id="sendgrid-cost-summary" style="display:none;margin-top:10px;padding:8px 10px;background:var(--bg-subtle,#f5f5f5);border-radius:8px">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <span style="font-size:12px;font-weight:600;color:var(--text)">Monthly Cost</span>
+                            <span style="font-size:16px;font-weight:700;color:#1a82e2" id="sendgrid-total-cost">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
+                    <div style="font-size:11px;color:var(--text-muted)">&#10003; Email cost tracking &nbsp;&#10003; Delivery metrics &nbsp;&#10003; Spend alerts</div>
                 </div>
             </div>
 
@@ -3488,6 +3561,7 @@
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('openai')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('openai')">Test</button>
                         <button class="btn btn-secondary" id="openai-sync-btn" style="font-size:12px;padding:6px 14px;display:none" onclick="syncOpenAIUsage()">&#8635; Sync Usage</button>
+                        <button class="btn btn-secondary" title="Add account" style="font-size:13px;padding:6px 11px;font-weight:700" onclick="addIntgAccount('openai')">+</button>
                     </div>
                     <!-- Usage summary shown after sync -->
                     <div id="openai-usage-summary" style="display:none;margin-top:10px;padding:8px 10px;background:var(--bg-subtle,#f5f5f5);border-radius:8px">
@@ -3674,8 +3748,13 @@
                 </div>
                 <div style="display:flex;flex-direction:column;gap:12px">
                     <div>
-                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Cursor API Key</label>
+                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Cursor API Key <span style="font-weight:400">(optional)</span></label>
                         <input id="cursor-api-key" type="password" placeholder="cursor-••••••••••••••••" class="form-control">
+                    </div>
+                    <div>
+                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Monthly Cost (USD)</label>
+                        <input id="cursor-monthly-cost" type="number" min="0" step="0.01" placeholder="e.g. 240" class="form-control">
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Flat subscription cost — flows into Cost Data &amp; reports.</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;padding:10px 0">
                         <input type="checkbox" id="cursor-enabled" style="width:16px;height:16px;cursor:pointer">
@@ -3686,6 +3765,84 @@
                 <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
                     <button class="btn btn-secondary" onclick="closeIntgModal('cursor')">Cancel</button>
                     <button class="btn btn-primary" onclick="saveIntegration('cursor')">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Twilio Modal -->
+        <div id="intg-modal-twilio" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeIntgModal('twilio')">
+            <div class="modal-box" style="max-width:440px">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+                    <div style="width:36px;height:36px;background:#f22f46;border-radius:8px;display:flex;align-items:center;justify-content:center">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm-3 13.5a2 2 0 110-4 2 2 0 010 4zm0-5a2 2 0 110-4 2 2 0 010 4zm6 5a2 2 0 110-4 2 2 0 010 4zm0-5a2 2 0 110-4 2 2 0 010 4z"/></svg>
+                    </div>
+                    <div>
+                        <h3 style="margin:0;font-size:16px">Configure Twilio</h3>
+                        <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">SMS &amp; Voice</p>
+                    </div>
+                    <button onclick="closeIntgModal('twilio')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:20px;line-height:1">&times;</button>
+                </div>
+                <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--text-muted);line-height:1.5">
+                    Track Twilio spend. Enter a flat monthly cost now; live usage-API billing can be wired later.
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                    <div>
+                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">API Key / Auth Token <span style="font-weight:400">(optional)</span></label>
+                        <input id="twilio-api-key" type="password" placeholder="••••••••••••••••" class="form-control">
+                    </div>
+                    <div>
+                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Monthly Cost (USD)</label>
+                        <input id="twilio-monthly-cost" type="number" min="0" step="0.01" placeholder="e.g. 150" class="form-control">
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Flows into Cost Data &amp; reports.</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px 0">
+                        <input type="checkbox" id="twilio-enabled" style="width:16px;height:16px;cursor:pointer">
+                        <label for="twilio-enabled" style="font-size:13px;cursor:pointer">Track Twilio costs in dashboard</label>
+                    </div>
+                </div>
+                <div id="intg-msg-twilio" style="display:none;margin-top:12px;padding:10px 12px;border-radius:7px;font-size:13px"></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+                    <button class="btn btn-secondary" onclick="closeIntgModal('twilio')">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveIntegration('twilio')">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SendGrid Modal -->
+        <div id="intg-modal-sendgrid" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeIntgModal('sendgrid')">
+            <div class="modal-box" style="max-width:440px">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+                    <div style="width:36px;height:36px;background:#1a82e2;border-radius:8px;display:flex;align-items:center;justify-content:center">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+                    </div>
+                    <div>
+                        <h3 style="margin:0;font-size:16px">Configure SendGrid</h3>
+                        <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">Email Delivery</p>
+                    </div>
+                    <button onclick="closeIntgModal('sendgrid')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:20px;line-height:1">&times;</button>
+                </div>
+                <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:var(--text-muted);line-height:1.5">
+                    Track SendGrid spend. Enter a flat monthly cost now; live usage-API billing can be wired later.
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                    <div>
+                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">API Key <span style="font-weight:400">(optional)</span></label>
+                        <input id="sendgrid-api-key" type="password" placeholder="SG.••••••••••••••••" class="form-control">
+                    </div>
+                    <div>
+                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Monthly Cost (USD)</label>
+                        <input id="sendgrid-monthly-cost" type="number" min="0" step="0.01" placeholder="e.g. 90" class="form-control">
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Flows into Cost Data &amp; reports.</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px 0">
+                        <input type="checkbox" id="sendgrid-enabled" style="width:16px;height:16px;cursor:pointer">
+                        <label for="sendgrid-enabled" style="font-size:13px;cursor:pointer">Track SendGrid costs in dashboard</label>
+                    </div>
+                </div>
+                <div id="intg-msg-sendgrid" style="display:none;margin-top:12px;padding:10px 12px;border-radius:7px;font-size:13px"></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+                    <button class="btn btn-secondary" onclick="closeIntgModal('sendgrid')">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveIntegration('sendgrid')">Save</button>
                 </div>
             </div>
         </div>
@@ -3898,7 +4055,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260620z"></script>
+<script src="/static/js/app.js?v=20260621a"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -5650,17 +5807,29 @@ document.addEventListener('DOMContentLoaded', function() {
     window.loadIntegrations = function() {
         fetch('/api/integrations/settings').then(r => r.json()).then(data => {
             _intgSettings = data;
-            ['jira','bitbucket','cursor','openai'].forEach(tool => {
+            ['jira','bitbucket','cursor','openai','twilio','sendgrid'].forEach(tool => {
                 const cfg = data[tool] || {};
                 const badge = document.getElementById('intg-status-' + tool);
                 if (badge) {
                     // "Connected" reflects whether credentials are SAVED, not the
                     // enable-automation toggle (which only turns the workflow on/off).
-                    const configured = tool === 'jira'     ? !!cfg.url
-                                     : tool === 'bitbucket' ? !!(cfg.workspace || cfg.token)
-                                     :                        !!cfg.api_key;  // cursor, openai
+                    const configured = tool === 'jira'      ? !!cfg.url
+                                     : tool === 'bitbucket'  ? !!(cfg.workspace || cfg.token)
+                                     : (tool === 'cursor' || tool === 'twilio' || tool === 'sendgrid')
+                                                             ? !!(cfg.api_key || (cfg.monthly_cost > 0))
+                                     :                         !!cfg.api_key;  // openai
                     badge.textContent = configured ? 'Connected' : 'Not connected';
                     badge.className = 'intg-badge ' + (configured ? 'intg-badge-on' : 'intg-badge-off');
+                }
+                // Manual-cost cards: show the monthly cost line when set.
+                if (['cursor','twilio','sendgrid'].includes(tool)) {
+                    const box = document.getElementById(tool + '-cost-summary');
+                    const amt = document.getElementById(tool + '-total-cost');
+                    if (box && amt) {
+                        const c = cfg.monthly_cost || 0;
+                        if (c > 0) { box.style.display = 'block'; amt.textContent = '$' + c.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+                        else box.style.display = 'none';
+                    }
                 }
             });
             // Show OpenAI sync button + dashboard if API key is configured
@@ -5994,7 +6163,16 @@ document.addEventListener('DOMContentLoaded', function() {
             _setChk('bitbucket-enabled', cfg.enabled);
         } else if (tool === 'cursor') {
             _setVal('cursor-api-key', cfg.api_key);
+            _setVal('cursor-monthly-cost', cfg.monthly_cost || '');
             _setChk('cursor-enabled', cfg.enabled);
+        } else if (tool === 'twilio') {
+            _setVal('twilio-api-key', cfg.api_key);
+            _setVal('twilio-monthly-cost', cfg.monthly_cost || '');
+            _setChk('twilio-enabled', cfg.enabled);
+        } else if (tool === 'sendgrid') {
+            _setVal('sendgrid-api-key', cfg.api_key);
+            _setVal('sendgrid-monthly-cost', cfg.monthly_cost || '');
+            _setChk('sendgrid-enabled', cfg.enabled);
         } else if (tool === 'openai') {
             _setVal('openai-api-key', cfg.api_key);
             _setVal('openai-org-id', cfg.org_id);
@@ -6003,6 +6181,21 @@ document.addEventListener('DOMContentLoaded', function() {
         _hideMsg(tool);
         const modal = document.getElementById('intg-modal-' + tool);
         if (modal) modal.style.display = 'flex';
+    };
+
+    // "+" on a card → open that integration's add/config flow. Atlassian is a
+    // Cloud Provider (real multi-account), so it goes to Cloud Providers → Add.
+    window.addIntgAccount = function(tool) {
+        if (tool === 'jira' || tool === 'atlassian') {
+            if (typeof navigateTo === 'function') navigateTo('cloud-providers');
+            setTimeout(() => {
+                if (typeof showProviderModal === 'function') showProviderModal();
+                const sel = document.getElementById('providerType');
+                if (sel) { sel.value = 'atlassian'; if (typeof onProviderTypeChange === 'function') onProviderTypeChange(); }
+            }, 300);
+            return;
+        }
+        openIntgModal(tool);
     };
 
     window.closeIntgModal = function(tool) {
@@ -6031,7 +6224,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 token: _getVal('bitbucket-token'), enabled: _getChk('bitbucket-enabled'),
             };
         } else if (tool === 'cursor') {
-            payload.cursor = { api_key: _getVal('cursor-api-key'), enabled: _getChk('cursor-enabled') };
+            payload.cursor = { api_key: _getVal('cursor-api-key'), enabled: _getChk('cursor-enabled'), monthly_cost: parseFloat(_getVal('cursor-monthly-cost')) || 0 };
+        } else if (tool === 'twilio') {
+            payload.twilio = { api_key: _getVal('twilio-api-key'), enabled: _getChk('twilio-enabled'), monthly_cost: parseFloat(_getVal('twilio-monthly-cost')) || 0 };
+        } else if (tool === 'sendgrid') {
+            payload.sendgrid = { api_key: _getVal('sendgrid-api-key'), enabled: _getChk('sendgrid-enabled'), monthly_cost: parseFloat(_getVal('sendgrid-monthly-cost')) || 0 };
         } else if (tool === 'openai') {
             payload.openai = { api_key: _getVal('openai-api-key'), org_id: _getVal('openai-org-id'), enabled: _getChk('openai-enabled') };
         }

@@ -58,6 +58,9 @@ const CLOUD_META = {
     gcp:       { icon: '◉', logo: CLOUD_LOGOS.gcp,       label: 'GCP',       color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service' } },
     openai:    { icon: '◈', logo: CLOUD_LOGOS.openai,    label: 'OpenAI',    color: '#10a37f', groupLabel: { sub: 'Org',          rg: 'Model',          service: 'AI API'   } },
     atlassian: { icon: '◧', logo: CLOUD_LOGOS.atlassian, label: 'Atlassian', color: '#0052cc', groupLabel: { sub: 'Organization', rg: 'Plan',           service: 'Product'  } },
+    cursor:    { icon: '⌖', logo: '⌖',                   label: 'Cursor',    color: '#7c3aed', groupLabel: { sub: 'Account',      rg: 'Plan',           service: 'Service'  } },
+    twilio:    { icon: '☎', logo: '☎',                   label: 'Twilio',    color: '#f22f46', groupLabel: { sub: 'Account',      rg: 'Plan',           service: 'Service'  } },
+    sendgrid:  { icon: '✉', logo: '✉',                   label: 'SendGrid',  color: '#1a82e2', groupLabel: { sub: 'Account',      rg: 'Plan',           service: 'Service'  } },
 };
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const CHART_COLORS = () => [

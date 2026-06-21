@@ -5910,9 +5910,39 @@ def api_get_integrations():
     return jsonify({
         "jira":      {"url": s.get("jira_url",""), "email": s.get("jira_email",""), "token": mask(s.get("jira_token","")), "project": s.get("jira_project",""), "issue_type": s.get("jira_issue_type","Task"), "enabled": s.get("jira_enabled", False), "mode": s.get("jira_mode","cloud"), "server_user": s.get("jira_server_user",""), "server_password": mask(s.get("jira_server_password",""))},
         "bitbucket": {"workspace": s.get("bitbucket_workspace",""), "repo": s.get("bitbucket_repo",""), "token": mask(s.get("bitbucket_token","")), "enabled": s.get("bitbucket_enabled", False)},
-        "cursor":    {"api_key": mask(s.get("cursor_api_key","")), "enabled": s.get("cursor_enabled", False)},
+        "cursor":    {"api_key": mask(s.get("cursor_api_key","")), "enabled": s.get("cursor_enabled", False), "monthly_cost": s.get("cursor_monthly_cost", 0) or 0},
         "openai":    {"api_key": mask(s.get("openai_api_key","")), "org_id": s.get("openai_org_id",""), "enabled": s.get("openai_enabled", False)},
+        "twilio":    {"api_key": mask(s.get("twilio_api_key","")), "enabled": s.get("twilio_enabled", False), "monthly_cost": s.get("twilio_monthly_cost", 0) or 0},
+        "sendgrid":  {"api_key": mask(s.get("sendgrid_api_key","")), "enabled": s.get("sendgrid_enabled", False), "monthly_cost": s.get("sendgrid_monthly_cost", 0) or 0},
     })
+
+
+# SaaS integrations that carry a manual / flat monthly cost (no live billing API yet).
+MANUAL_SAAS_DISPLAY = {"cursor": "Cursor", "twilio": "Twilio", "sendgrid": "SendGrid"}
+
+
+def _sync_manual_saas_cost(tenant_id):
+    """Mirror each manual-cost SaaS integration's monthly cost into cost_data for
+    the current month, so it flows into Cost Data, the Dashboard, and reports."""
+    s = get_integration_settings(tenant_id or 1)
+    month_start = datetime.utcnow().strftime("%Y-%m-01")
+    conn = get_db()
+    for svc, display in MANUAL_SAAS_DISPLAY.items():
+        cost = float(s.get(f"{svc}_monthly_cost") or 0)
+        conn.execute(
+            "DELETE FROM cost_data WHERE cloud_provider=? AND date=? AND tenant_id IS ?",
+            (svc, month_start, tenant_id),
+        )
+        if cost > 0:
+            conn.execute(
+                "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
+                "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (month_start, "", display, "Subscription", "Monthly subscription",
+                 "Subscription", "", round(cost, 2), "USD", svc, "{}", svc, tenant_id),
+            )
+    conn.commit()
+    conn.close()
 
 
 @app.route("/api/integrations/settings", methods=["POST"])
@@ -5930,6 +5960,11 @@ def api_update_integrations():
                 continue
             flat[col] = v
     update_integration_settings(flat, current_tenant_id() or 1)
+    # Mirror manual SaaS monthly costs (Cursor/Twilio/SendGrid) into cost_data.
+    try:
+        _sync_manual_saas_cost(current_tenant_id())
+    except Exception as e:
+        print(f"[Integrations] manual cost sync failed: {e}")
     return jsonify({"message": "Integration settings saved"})
 
 
@@ -6021,11 +6056,15 @@ def api_test_integration(tool):
         except Exception as e:
             return jsonify({"error": str(e)}), 502
 
-    elif tool == "cursor":
-        key = _pick("api_key", "cursor_api_key")
-        if not key:
-            return jsonify({"error": "Missing Cursor API key"}), 400
-        return jsonify({"ok": True, "message": "Cursor API key saved (usage sync coming soon)"})
+    elif tool in ("cursor", "twilio", "sendgrid"):
+        # Manual-cost integrations — no live billing API yet. Treat as OK if an
+        # API key or a monthly cost is present.
+        key  = _pick("api_key", f"{tool}_api_key")
+        cost = float(s.get(f"{tool}_monthly_cost") or 0)
+        name = {"cursor": "Cursor", "twilio": "Twilio", "sendgrid": "SendGrid"}[tool]
+        if not key and cost <= 0:
+            return jsonify({"error": f"Add an API key or a monthly cost for {name}"}), 400
+        return jsonify({"ok": True, "message": f"{name} configured (manual cost; live billing sync coming soon)"})
 
     return jsonify({"error": "Unknown integration"}), 404
 

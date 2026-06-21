@@ -315,6 +315,14 @@ def init_db():
         ("jira_mode",           "ALTER TABLE integration_settings ADD COLUMN jira_mode TEXT DEFAULT 'cloud'"),
         ("jira_server_user",    "ALTER TABLE integration_settings ADD COLUMN jira_server_user TEXT DEFAULT ''"),
         ("jira_server_password","ALTER TABLE integration_settings ADD COLUMN jira_server_password TEXT DEFAULT ''"),
+        # SaaS integrations with a manual / flat monthly cost
+        ("cursor_monthly_cost", "ALTER TABLE integration_settings ADD COLUMN cursor_monthly_cost REAL DEFAULT 0"),
+        ("twilio_api_key",      "ALTER TABLE integration_settings ADD COLUMN twilio_api_key TEXT DEFAULT ''"),
+        ("twilio_enabled",      "ALTER TABLE integration_settings ADD COLUMN twilio_enabled INTEGER DEFAULT 0"),
+        ("twilio_monthly_cost", "ALTER TABLE integration_settings ADD COLUMN twilio_monthly_cost REAL DEFAULT 0"),
+        ("sendgrid_api_key",    "ALTER TABLE integration_settings ADD COLUMN sendgrid_api_key TEXT DEFAULT ''"),
+        ("sendgrid_enabled",    "ALTER TABLE integration_settings ADD COLUMN sendgrid_enabled INTEGER DEFAULT 0"),
+        ("sendgrid_monthly_cost","ALTER TABLE integration_settings ADD COLUMN sendgrid_monthly_cost REAL DEFAULT 0"),
     ]:
         try:
             cursor.execute(f"SELECT {_col} FROM integration_settings LIMIT 1")
@@ -2328,7 +2336,8 @@ def get_integration_settings(tenant_id=1):
     if not row:
         return {}
     d = dict(row)
-    for k in ("jira_enabled", "bitbucket_enabled", "cursor_enabled", "openai_enabled"):
+    for k in ("jira_enabled", "bitbucket_enabled", "cursor_enabled", "openai_enabled",
+              "twilio_enabled", "sendgrid_enabled"):
         d[k] = bool(d.get(k, 0))
     return d
 
@@ -2341,8 +2350,10 @@ def update_integration_settings(settings, tenant_id=1):
         "jira_admin_token", "jira_admin_org_id",
         "jira_mode", "jira_server_user", "jira_server_password",
         "bitbucket_workspace", "bitbucket_repo", "bitbucket_token", "bitbucket_enabled",
-        "cursor_api_key", "cursor_enabled",
+        "cursor_api_key", "cursor_enabled", "cursor_monthly_cost",
         "openai_api_key", "openai_org_id", "openai_enabled",
+        "twilio_api_key", "twilio_enabled", "twilio_monthly_cost",
+        "sendgrid_api_key", "sendgrid_enabled", "sendgrid_monthly_cost",
     ]
     fields, params = [], []
     for key in allowed:
