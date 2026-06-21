@@ -1360,6 +1360,11 @@ function _atlStatusBadge(st) {
     return `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:${bg};color:${fg};text-transform:capitalize;white-space:nowrap">${label}</span>`;
 }
 
+// Small provider logo prefixes for the dedicated per-user / usage tables, so the
+// cloud is identified on each row (like the Azure cost table's Cloud column).
+const _ATL_LOGO = '<img src="/static/img/atlassian-logo.svg" alt="" style="height:14px;width:14px;vertical-align:-3px;margin-right:7px">';
+const _CUR_LOGO = '<img src="/static/img/cursor-logo.svg" alt="" style="height:14px;width:14px;vertical-align:-3px;margin-right:7px">';
+
 // Cursor billing-cycle label (e.g. "cycle 14 Jun – 14 Jul"). Cursor bills per
 // cycle, not calendar month — show the actual window so it's unambiguous.
 let _curCycleInfo = { start: null, end: null };
@@ -1428,7 +1433,7 @@ function _curRenderRows() {
     const roleBadge = r => `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:#ede9fe;color:#6d28d9;text-transform:capitalize">${_esc(r || 'member')}</span>`;
     body.innerHTML = rows.map(u => `
         <tr>
-            <td style="font-weight:500">${_esc(u.name || '—')}</td>
+            <td style="font-weight:500">${_CUR_LOGO}${_esc(u.name || '—')}</td>
             <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
             <td style="text-align:center">${roleBadge(u.role)}</td>
             <td style="text-align:right;color:var(--text-secondary)">${_curMoney(u.included || 0)}</td>
@@ -1516,11 +1521,11 @@ function _cuRenderRows() {
         body.innerHTML = `<tr><td colspan="${cols.length}" style="text-align:center;padding:40px;color:var(--text-secondary)">No Cursor usage yet — Sync from Integrations → Cursor.</td></tr>`;
         return;
     }
-    body.innerHTML = rows.map(r => '<tr>' + cols.map(([key, , align]) => {
+    body.innerHTML = rows.map(r => '<tr>' + cols.map(([key, , align], ci) => {
         let v;
         if (key === 'tokens' || key === 'events') v = num(r[key]);
         else if (key === 'included' || key === 'on_demand') v = fmt(r[key]);
-        else v = _esc(r[key] || '—');
+        else v = (ci === 0 ? _CUR_LOGO : '') + _esc(r[key] || '—');
         const style = align === 'r'
             ? `text-align:right;${key === 'on_demand' ? `font-weight:600;color:${(r.on_demand || 0) > 0 ? '#c05621' : 'var(--text-primary)'}` : 'color:var(--text-secondary)'}`
             : 'font-weight:500';
@@ -1631,7 +1636,7 @@ function _atlRenderUserRows() {
     body.innerHTML = rows.map(u => `
         <tr>
             ${_atlMultiOrg ? `<td style="color:var(--text-secondary)">${_esc(u.org_name || u.org_id || '—')}</td>` : ''}
-            <td style="font-weight:500">${_esc(u.name || '—')}</td>
+            <td style="font-weight:500">${_ATL_LOGO}${_esc(u.name || '—')}</td>
             <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
             <td style="text-align:center">${_atlStatusBadge(u.status)}</td>
             <td style="color:var(--text-secondary)">${_esc(u.last_active || '—')}</td>
