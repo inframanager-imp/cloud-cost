@@ -6040,7 +6040,6 @@ def api_get_integrations():
             return ""
         return v[:4] + "••••••••" + v[-2:] if len(v) > 6 else "••••••••"
     return jsonify({
-        "jira":      {"url": s.get("jira_url",""), "email": s.get("jira_email",""), "token": mask(s.get("jira_token","")), "project": s.get("jira_project",""), "issue_type": s.get("jira_issue_type","Task"), "enabled": s.get("jira_enabled", False), "mode": s.get("jira_mode","cloud"), "server_user": s.get("jira_server_user",""), "server_password": mask(s.get("jira_server_password",""))},
         "bitbucket": {"workspace": s.get("bitbucket_workspace",""), "repo": s.get("bitbucket_repo",""), "token": mask(s.get("bitbucket_token","")), "enabled": s.get("bitbucket_enabled", False)},
         "cursor":    {"api_key": mask(s.get("cursor_api_key","")), "enabled": s.get("cursor_enabled", False), "monthly_cost": s.get("cursor_monthly_cost", 0) or 0},
         "openai":    {"api_key": mask(s.get("openai_api_key","")), "org_id": s.get("openai_org_id",""), "enabled": s.get("openai_enabled", False)},
@@ -6113,8 +6112,6 @@ def api_integration_disconnect(tool):
     manual/live cost SaaS) so the card returns to 'Not connected'."""
     tid = current_tenant_id()
     text_cols = {
-        "jira":      ["jira_url", "jira_email", "jira_token", "jira_project", "jira_mode",
-                      "jira_server_user", "jira_server_password", "jira_admin_token", "jira_admin_org_id"],
         "bitbucket": ["bitbucket_workspace", "bitbucket_repo", "bitbucket_token"],
         "cursor":    ["cursor_api_key"],
         "openai":    ["openai_api_key", "openai_org_id"],
@@ -6157,38 +6154,7 @@ def api_test_integration(tool):
             return str(v).strip()
         return (s.get(db_key) or "").strip()
 
-    if tool == "jira":
-        import requests as _req
-        url  = _pick("url",  "jira_url").rstrip("/")
-        mode = _pick("mode", "jira_mode") or "cloud"
-        if mode == "server":
-            u = _pick("server_user",     "jira_server_user")
-            p = _pick("server_password", "jira_server_password")
-            if not (url and u and p):
-                return jsonify({"error": "Missing Jira Server URL, username or password"}), 400
-            creds = (u, p)
-        else:
-            email = _pick("email", "jira_email")
-            token = _pick("token", "jira_token")
-            if not url:
-                return jsonify({"error": "Missing Jira URL"}), 400
-            if not email:
-                return jsonify({"error": "Missing Email (username)"}), 400
-            if not token:
-                return jsonify({"error": "Missing API Token"}), 400
-            creds = (email, token)
-        try:
-            r = _req.get(f"{url}/rest/api/3/myself", auth=creds, timeout=10)
-            if r.status_code == 200:
-                data = r.json()
-                return jsonify({"ok": True, "message": f"Connected as {data.get('displayName', creds[0])}"})
-            if r.status_code == 401:
-                return jsonify({"error": "Authentication failed — check email and API token"}), 502
-            return jsonify({"error": f"Jira returned HTTP {r.status_code}"}), 502
-        except Exception as e:
-            return jsonify({"error": f"Connection failed: {str(e)}"}), 502
-
-    elif tool == "bitbucket":
+    if tool == "bitbucket":
         import requests as _req
         token     = _pick("token",     "bitbucket_token")
         workspace = _pick("workspace", "bitbucket_workspace")
