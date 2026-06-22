@@ -47,6 +47,30 @@ def _display(product_key: str) -> str:
     return PRODUCT_DISPLAY.get(product_key, product_key.replace("-", " ").title())
 
 
+# Map the org-level API's product keys (e.g. "jira-software.ondemand",
+# "jira-servicedesk.ondemand") to the base keys we price on.
+_PRODUCT_ALIASES = {
+    "jira-servicedesk":     "jira-service-management",
+    "jira-work-management": "jira-core",
+}
+
+
+def _normalize_product_key(key: str) -> str:
+    """'jira-software.ondemand' / site-scoped keys → base 'jira-software'."""
+    k = (key or "").split(".")[0].strip().lower()
+    return _PRODUCT_ALIASES.get(k, k)
+
+
+def _derive_status_v1(u: dict) -> str:
+    """Status from the org-level users API (account_status: active/inactive/closed)."""
+    st = (u.get("account_status") or u.get("status") or "").lower()
+    if st in ("inactive", "closed", "deactivated"):
+        return "deactivated"
+    if st == "active":
+        return "active"
+    return st or "active"
+
+
 def _derive_status(u: dict) -> str:
     """Map Atlassian's raw user fields to the status shown in Atlassian Admin:
     active / suspended / deactivated / invited / for_deletion.
@@ -96,9 +120,10 @@ class AtlassianClient:
         return resp
 
     def fetch_all_users(self):
-        """Paginated directory fetch — returns ALL users of every status."""
-        url    = (f"{ATLASSIAN_BASE}/admin/v2/orgs/{self.org_id}"
-                  f"/directories/{self.directory_id}/users")
+        """Paginated ORG-LEVEL managed-accounts fetch — needs only org_id + token
+        (no Directory ID). Each user includes account_status and product_access
+        (with per-product last_active), so we don't need per-user activity calls."""
+        url    = f"{ATLASSIAN_BASE}/admin/v1/orgs/{self.org_id}/users"
         params = {"limit": 100}
         users  = []
         while url:
@@ -107,7 +132,7 @@ class AtlassianClient:
                 raise RuntimeError(f"Atlassian user fetch failed [{resp.status_code}]: {resp.text[:300]}")
             data  = resp.json()
             users.extend(data.get("data", []))
-            next_url = data.get("links", {}).get("next")
+            next_url = (data.get("links") or {}).get("next")
             url, params = (next_url, None) if next_url else (None, None)
         return users
 
@@ -154,14 +179,17 @@ def sync_atlassian_users(client, org_id, tenant_id):
     records = []
 
     for u in raw_users:
-        account_id = u.get("accountId")
+        account_id = u.get("account_id") or u.get("accountId")
         if not account_id:
             continue
-        status = _derive_status(u)
-        last_active, product_keys = client.fetch_user_activity(account_id)
-        # Refine "invited": a user that has never been active and holds no product
-        # seat hasn't accepted the invite (Atlassian shows "Invited"), even if the
-        # email is verified. Users with a product seat or real activity stay active.
+        status = _derive_status_v1(u)
+        # product_access is inline on the org-level endpoint: list of
+        # {key, name, last_active}. Collapse per-site duplicates to base keys.
+        access       = u.get("product_access") or []
+        product_keys = sorted({_normalize_product_key(p.get("key")) for p in access if p.get("key")})
+        last_dates   = [p.get("last_active") for p in access if p.get("last_active")]
+        last_active  = u.get("last_active") or (max(last_dates) if last_dates else None)
+        # "invited": active account that has never been active and holds no seat.
         if status == "active" and not last_active and not product_keys:
             status = "invited"
         if status == "active":
@@ -172,7 +200,7 @@ def sync_atlassian_users(client, org_id, tenant_id):
             "name":              u.get("name"),
             "email":             u.get("email"),
             "status":            status,
-            "membership_status": u.get("membershipStatus"),
+            "membership_status": u.get("account_status"),
             "last_active":       last_active,
             "products":          product_keys,
         })
@@ -219,11 +247,11 @@ def fetch_atlassian_costs(provider, date_from, date_to):
             creds = {}
 
     org_id       = creds.get("orgId") or provider.get("provider_id")
-    directory_id = creds.get("directoryId")
+    directory_id = creds.get("directoryId")  # optional — org-level API doesn't need it
     access_token = creds.get("accessToken")
     products     = creds.get("products") or []
-    if not (org_id and directory_id and access_token):
-        raise RuntimeError("Atlassian provider missing orgId / directoryId / accessToken")
+    if not (org_id and access_token):
+        raise RuntimeError("Atlassian provider missing orgId / accessToken")
     if not products:
         raise RuntimeError("No products configured for this Atlassian org")
 

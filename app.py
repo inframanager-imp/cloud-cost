@@ -5014,26 +5014,26 @@ def api_atlassian_user_costs():
 @app.route("/api/atlassian/test", methods=["POST"])
 @login_required
 def api_atlassian_test():
-    """Validate Atlassian Admin credentials (Org ID + Directory ID + token) by
-    hitting the directory users API — used by the Test button on the add form."""
+    """Validate Atlassian credentials (Org ID + Organization API key) by hitting
+    the org-level managed-accounts API — needs no Directory ID."""
     body = request.get_json(silent=True) or {}
     org   = (body.get("orgId") or "").strip()
-    direc = (body.get("directoryId") or "").strip()
     token = (body.get("accessToken") or "").strip()
-    if not (org and direc and token):
-        return jsonify({"error": "Org ID, Directory ID and Admin API token are all required"}), 400
+    if not (org and token):
+        return jsonify({"error": "Org ID and Organization API key are both required"}), 400
     try:
         import requests as _req
-        url = f"https://api.atlassian.com/admin/v2/orgs/{org}/directories/{direc}/users"
+        # Org-level managed-accounts endpoint — needs only org + key (no Directory ID).
+        url = f"https://api.atlassian.com/admin/v1/orgs/{org}/users"
         r = _req.get(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
                      params={"limit": 1}, timeout=15)
         if r.status_code == 200:
-            n = len(r.json().get("data", []))
-            return jsonify({"ok": True, "message": f"✓ Connected — directory reachable ({n} user on first page)"})
+            n = len((r.json() or {}).get("data", []))
+            return jsonify({"ok": True, "message": f"✓ Connected — org reachable ({n} user on first page)"})
         if r.status_code in (401, 403):
-            return jsonify({"error": "Auth failed — check the Admin API token and that it has org access"}), 502
+            return jsonify({"error": "Auth failed — use an Organization API key (admin.atlassian.com → Settings → API keys), not a user API token"}), 502
         if r.status_code == 404:
-            return jsonify({"error": "Not found — check the Org ID and Directory ID"}), 502
+            return jsonify({"error": "Org not found — check the Atlassian Org ID"}), 502
         return jsonify({"error": f"Atlassian returned HTTP {r.status_code}"}), 502
     except Exception as e:
         return jsonify({"error": f"Connection failed: {str(e)}"}), 502
