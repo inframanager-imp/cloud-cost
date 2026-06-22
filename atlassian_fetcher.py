@@ -39,6 +39,7 @@ PRODUCT_DISPLAY = {
     "jira-servicedesk":        "Jira Service Management",
     "jira-service-management": "Jira Service Management",
     "confluence":              "Confluence",
+    "bitbucket":               "Bitbucket",
 }
 
 
