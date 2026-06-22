@@ -4232,6 +4232,55 @@ def _run_auto_sync():
                         update_cloud_provider_sync_time(p["id"], error=str(cp_err))
                         print(f"[Auto-Sync] {ptype.upper()} '{pname}' failed: {cp_err}")
 
+                # ── Azure providers added via Cloud Providers (own credentials) ──
+                # Multi-tenant Azure accounts live in cloud_providers (not the
+                # subscriptions table), so the Azure-subs loop above never touches
+                # them. Sync each here using fetch_azure_costs with the provider's
+                # own SP credentials. Skip any whose provider_id is already an
+                # enabled subscription for this tenant (avoid double-syncing).
+                _sub_ids_for_tenant = {s["subscription_id"] for s in subs}
+                for zp in get_cloud_providers(enabled_only=True, tenant_id=tid):
+                    if zp.get("provider_type") != "azure":
+                        continue
+                    if zp.get("provider_id") in _sub_ids_for_tenant:
+                        continue
+                    zp_full = get_cloud_provider(zp["id"]) or zp
+                    z_pid   = zp_full.get("provider_id")
+                    z_tid   = zp_full.get("tenant_id", tid)
+                    z_name  = zp_full.get("name") or z_pid
+                    _c = get_db()
+                    _zr = _c.execute(
+                        "SELECT MAX(substr(date,1,10)) FROM cost_data WHERE cloud_provider='azure' AND subscription_id=? AND tenant_id=?",
+                        (z_pid, z_tid),
+                    ).fetchone()
+                    _c.close()
+                    latest_z = _zr[0] if _zr and _zr[0] else None
+                    z_from = (datetime.strptime(latest_z, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d") if latest_z \
+                             else (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
+                    try:
+                        from azure_fetcher import fetch_azure_costs
+                        z_records = fetch_azure_costs(zp_full, z_from, date_to)
+                        _c = get_db()
+                        _c.execute(
+                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='azure' "
+                            "AND subscription_id=? AND tenant_id=?",
+                            (z_from, date_to, z_pid, z_tid),
+                        )
+                        if z_records:
+                            _c.executemany(
+                                "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
+                                "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
+                                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                [r + (z_tid,) for r in z_records],
+                            )
+                        _c.commit(); _c.close()
+                        tenant_records += len(z_records)
+                        update_cloud_provider_sync_time(zp_full["id"], error=None)
+                        print(f"[Auto-Sync] AZURE '{z_name}' (tenant {tname}): {len(z_records)} records")
+                    except Exception as z_err:
+                        update_cloud_provider_sync_time(zp.get("id"), error=str(z_err))
+                        print(f"[Auto-Sync] AZURE '{z_name}' (tenant {tname}) failed: {z_err}")
+
                 # ── Atlassian (User Costs): monthly per-user snapshot ──────────
                 for ap in get_cloud_providers(enabled_only=True, tenant_id=tid):
                     if ap.get("provider_type") != "atlassian":
