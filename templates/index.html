@@ -2864,8 +2864,11 @@
                             <div id="atlProductRows" style="display:flex;flex-direction:column;gap:8px"></div>
                             <button type="button" class="btn btn-secondary" style="font-size:12px;padding:5px 12px;margin-top:8px" onclick="addAtlProductRow()">+ Add product</button>
                         </div>
-                        <div style="display:flex;align-items:center;gap:10px">
-                            <button type="button" class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testAtlassian()">Test Connection</button>
+                        <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+                            <button type="button" onclick="testAtlassian()" style="font-size:13px;font-weight:600;padding:8px 16px;border:1.5px solid var(--accent);color:var(--accent);background:transparent;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                Test Connection
+                            </button>
                             <span id="atlTestMsg" style="font-size:12px"></span>
                         </div>
                     </div>
@@ -3941,7 +3944,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621r"></script>
+<script src="/static/js/app.js?v=20260621s"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
