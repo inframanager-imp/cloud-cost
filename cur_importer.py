@@ -166,6 +166,27 @@ def _process_row(row: dict, account_id: str, date_from: str, date_to: str, seen:
     region      = (row.get(_COL_REGION, "") or "").strip() or None
     currency    = row.get(_COL_CURRENCY, "USD") or "USD"
     usage_type  = row.get(_COL_USAGE_TYPE, "") or ""
+    line_type   = (row.get(_COL_LINE_TYPE, "") or "").strip()
+
+    # Tax (e.g. GST on AWS India invoices) is tracked as its own "Tax" line — never
+    # folded into per-service cost. This keeps service cost pre-tax and comparable
+    # across every account (US accounts simply have no Tax rows), matching AWS's
+    # "Total in USD". The tax amount comes straight from AWS's Tax-type CUR rows.
+    if line_type.lower() == "tax":
+        return (
+            date_str,
+            region or None,                              # resource_group = region
+            "Tax",                                       # service_name
+            "Tax",                                       # resource_type
+            None,                                        # resource_name
+            "Tax",                                       # meter_category
+            (description[:200] if description else "Tax"),
+            round(cost, 6),
+            currency,
+            acct,                                        # subscription_id = AWS account ID
+            None,
+            "aws",
+        )
 
     # Use region as resource_group for AWS (meaningful grouping)
     rg = region or None
