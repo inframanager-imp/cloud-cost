@@ -6914,7 +6914,9 @@ function onClientDatePreset() {
     const preset = document.getElementById('clientDatePreset')?.value;
     const customWrap = document.getElementById('clientCustomDateWrap');
     const today = new Date();
-    const fmt = d => d.toISOString().slice(0,10);
+    // Format in LOCAL time — toISOString() converts to UTC and shifts local
+    // midnight (e.g. 1st of month) back a day in UTC+ timezones (off-by-one).
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
     if (preset === 'custom') {
         if (customWrap) customWrap.style.display = 'flex';
@@ -7261,8 +7263,10 @@ async function selectClient(clientId) {
     const today = new Date();
     const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
     const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
-    const lmFrom = lastMonthStart.toISOString().slice(0,10);
-    const lmTo   = lastMonthEnd.toISOString().slice(0,10);
+    // Local-time formatting — toISOString() shifts the boundary day in UTC+ TZs.
+    const _fmtLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const lmFrom = _fmtLocal(lastMonthStart);
+    const lmTo   = _fmtLocal(lastMonthEnd);
 
     const [cur, prev] = await Promise.all([
         fetch(`/api/clients/${clientId}/costs?date_from=${firstDay}&date_to=${todayStr}`).then(r => r.json()).catch(() => ({})),
