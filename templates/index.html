@@ -4001,7 +4001,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621p"></script>
+<script src="/static/js/app.js?v=20260621q"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -6017,7 +6017,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const statMonth = document.getElementById('oai-stat-month');
                 if (statMonth) statMonth.textContent = '$' + totalAll.toFixed(2);
                 const todayEl = document.getElementById('oai-stat-today');
-                const today = new Date().toISOString().slice(0,10);
+                const _td = new Date();
+                const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
                 const todayRow = rows.find(d => d.date === today);
                 if (todayEl) todayEl.textContent = '$' + (todayRow ? todayRow.cost.toFixed(4) : '0.0000');
                 const statRec = document.getElementById('oai-stat-records');

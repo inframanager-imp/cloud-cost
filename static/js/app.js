@@ -4543,7 +4543,9 @@ function ccApplyDatePreset(range) {
     } else {
         return;
     }
-    const fmt = d => d.toISOString().split('T')[0];
+    // Local-time formatting — toISOString() converts to UTC and shifts the
+    // 1st-of-month back a day in UTC+ timezones (off-by-one).
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const fromEl = document.getElementById('ccDateFrom');
     const toEl = document.getElementById('ccDateTo');
     if (fromEl) fromEl.value = fmt(from);
