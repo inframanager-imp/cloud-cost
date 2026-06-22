@@ -161,14 +161,6 @@
             <span class="nav-text">Monthly Costs</span>
         </div>
 
-        <div class="nav-item" data-page="rgroups" onclick="navigateTo('rgroups')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-            </svg>
-            <span class="nav-text">Resource Groups</span>
-        </div>
-
         <div class="nav-item" data-page="compare" onclick="navigateTo('compare')">
             <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
@@ -981,58 +973,6 @@
         </div>
     </section>
 
-
-    <!-- ═══ Resource Groups Page ═════════════════════════════════════════ -->
-    <section id="page-rgroups" class="page-section">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-            <div>
-                <div class="db-breadcrumb">ANALYTICS</div>
-                <h1 style="font-size:22px;font-weight:700;color:var(--text-primary);margin:3px 0 6px">Resource Groups</h1>
-                <p style="font-size:12px;color:var(--text-secondary);margin:0">Cost per resource group / project, broken down by month — across all connected clouds.</p>
-            </div>
-            <button class="btn btn-secondary" onclick="exportRgroupsCsv()" style="font-size:12px"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export CSV</button>
-        </div>
-
-        <!-- Filters -->
-        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px">
-            <div>
-                <label class="cost-filter-label">Cloud</label>
-                <div class="cp-segmented" id="rgCloudSeg">
-                    <button class="cp-seg active" data-rg-cloud="" onclick="setRgCloud(this,'')">All</button>
-                    <button class="cp-seg" data-rg-cloud="azure" onclick="setRgCloud(this,'azure')">Azure</button>
-                    <button class="cp-seg" data-rg-cloud="aws" onclick="setRgCloud(this,'aws')">AWS</button>
-                    <button class="cp-seg" data-rg-cloud="gcp" onclick="setRgCloud(this,'gcp')">GCP</button>
-                </div>
-            </div>
-            <div>
-                <label class="cost-filter-label">Months</label>
-                <select id="rgMonths" class="filter-input" style="width:130px" onchange="loadResourceGroups()">
-                    <option value="3">Last 3</option>
-                    <option value="6" selected>Last 6</option>
-                    <option value="12">Last 12</option>
-                </select>
-            </div>
-            <div>
-                <label class="cost-filter-label">Client</label>
-                <select id="rgClient" class="filter-input" style="min-width:150px" onchange="loadResourceGroups()"></select>
-            </div>
-            <div>
-                <label class="cost-filter-label">Search</label>
-                <input type="text" id="rgSearch" class="filter-input" placeholder="Filter RG / project…" oninput="renderRgroups()" style="width:180px">
-            </div>
-        </div>
-
-        <!-- Commitments (RI / Reservations / Savings Plans / CUDs) summary -->
-        <div id="rgCommitments" style="margin-bottom:16px"></div>
-
-        <div id="rgSummary" style="font-size:13px;color:var(--text-secondary);margin-bottom:8px"></div>
-        <div class="table-container" style="overflow-x:auto">
-            <table>
-                <thead id="rgTableHead"></thead>
-                <tbody id="rgTableBody"><tr><td style="padding:20px;text-align:center;color:var(--text-secondary)">Loading…</td></tr></tbody>
-            </table>
-        </div>
-    </section>
 
 
     <!-- ═══ Compare Page ═════════════════════════════════════════════════ -->
@@ -4001,7 +3941,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621q"></script>
+<script src="/static/js/app.js?v=20260621r"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
