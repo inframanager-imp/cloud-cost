@@ -2848,21 +2848,26 @@
                     <!-- Atlassian (User Costs) credentials -->
                     <div id="atlassianFields" style="display:none;flex-direction:column;gap:10px">
                         <div style="background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border);font-size:12px;color:var(--text-secondary);line-height:1.6">
-                            🔵 Tracks <strong>per-user Atlassian costs</strong> (Jira Software, Confluence, JSM, Bitbucket). We count active users per product from the Atlassian Admin API and multiply by the cached per-user price.<br>
-                            <span style="font-size:11px">You only need the <strong>Org ID</strong> + an <strong>Organization API key</strong> — create both at <a href="https://admin.atlassian.com" target="_blank" style="color:var(--accent)">admin.atlassian.com</a> → Settings → API keys. (Use the <em>Organization</em> API key, not a personal user token.)</span>
+                            🔵 Tracks <strong>per-user Atlassian costs</strong> (Jira Software, Confluence, JSM, Bitbucket). We count active users per product from the Atlassian directory and multiply by the cached per-user price.<br>
+                            <span style="font-size:11px">Create an <strong>Organization API key</strong> at <a href="https://admin.atlassian.com" target="_blank" style="color:var(--accent)">admin.atlassian.com</a> → Settings → API keys (use the <em>Organization</em> key, not a personal user token). The <strong>Directory ID</strong> is shown on the same screen / in the directory URL.</span>
+                        </div>
+                        <div>
+                            <label class="form-label">Directory ID</label>
+                            <input type="text" id="atlDirectoryId" class="filter-input" placeholder="e.g. cef6088f-08cd-4a09-a6aa-…" style="width:100%">
                         </div>
                         <div>
                             <label class="form-label">Organization API Key</label>
                             <input type="password" id="atlAccessToken" class="filter-input" placeholder="paste your Organization API key" style="width:100%" autocomplete="new-password">
                         </div>
-                        <details style="font-size:12px">
-                            <summary style="cursor:pointer;color:var(--text-secondary)">Directory ID (optional — auto-detected)</summary>
-                            <input type="text" id="atlDirectoryId" class="filter-input" placeholder="leave blank — resolved automatically" style="width:100%;margin-top:6px">
-                        </details>
                         <div>
                             <label class="form-label">Products</label>
                             <div id="atlProductRows" style="display:flex;flex-direction:column;gap:8px"></div>
                             <button type="button" class="btn btn-secondary" style="font-size:12px;padding:5px 12px;margin-top:8px" onclick="addAtlProductRow()">+ Add product</button>
+                        </div>
+                        <div>
+                            <label class="form-label">Actual monthly cost <span style="color:var(--text-muted);font-weight:400">(optional — overrides the estimate)</span></label>
+                            <input type="number" step="0.01" id="atlActualCost" class="filter-input" placeholder="e.g. 441.94 — from your Atlassian billing portal" style="width:100%">
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Atlassian has no billing API. Enter the exact amount from your billing portal to match the invoice; leave blank to use the per-user estimate.</div>
                         </div>
                         <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
                             <button type="button" onclick="testAtlassian()" style="font-size:13px;font-weight:600;padding:8px 16px;border:1.5px solid var(--accent);color:var(--accent);background:transparent;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
@@ -3944,7 +3949,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621u"></script>
+<script src="/static/js/app.js?v=20260621v"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -4883,10 +4888,11 @@ function testAtlassian() {
     const set = (t, color) => { if (msg) { msg.textContent = t; msg.style.color = color; } };
     const payload = {
         orgId:       (document.getElementById('providerId').value || '').trim(),
+        directoryId: (document.getElementById('atlDirectoryId').value || '').trim(),
         accessToken: (document.getElementById('atlAccessToken').value || '').trim(),
     };
-    if (!payload.orgId || !payload.accessToken) {
-        set('Enter Org ID and Organization API key first.', '#c05621'); return;
+    if (!payload.orgId || !payload.directoryId || !payload.accessToken) {
+        set('Enter Org ID, Directory ID and Organization API key first.', '#c05621'); return;
     }
     set('Testing…', 'var(--text-muted)');
     fetch('/api/atlassian/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -4928,14 +4934,16 @@ function saveProvider() {
     } else if (type === 'atlassian') {
         const products = _collectAtlProducts();
         if (!products.length) { alert('Add at least one product.'); return; }
+        const _atlActual = parseFloat(document.getElementById('atlActualCost').value);
         credentials = {
             orgId:       pid,
-            directoryId: document.getElementById('atlDirectoryId').value.trim(),  // optional
+            directoryId: document.getElementById('atlDirectoryId').value.trim(),
             accessToken: document.getElementById('atlAccessToken').value.trim(),
             products,
         };
-        if (!credentials.orgId || !credentials.accessToken) {
-            alert('Org ID and Organization API key are required.'); return;
+        if (!isNaN(_atlActual) && _atlActual > 0) credentials.actualMonthlyCost = _atlActual;
+        if (!credentials.orgId || !credentials.directoryId || !credentials.accessToken) {
+            alert('Org ID, Directory ID and Organization API key are required.'); return;
         }
     }
 

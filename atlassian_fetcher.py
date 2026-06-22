@@ -120,10 +120,11 @@ class AtlassianClient:
         return resp
 
     def fetch_all_users(self):
-        """Paginated ORG-LEVEL managed-accounts fetch — needs only org_id + token
-        (no Directory ID). Each user includes account_status and product_access
-        (with per-product last_active), so we don't need per-user activity calls."""
-        url    = f"{ATLASSIAN_BASE}/admin/v1/orgs/{self.org_id}/users"
+        """Paginated DIRECTORY fetch — returns ALL users of every status (needs the
+        Directory ID). This is more complete than the org-level managed-accounts
+        endpoint, which silently omits non-managed users (undercounts billed seats)."""
+        url    = (f"{ATLASSIAN_BASE}/admin/v2/orgs/{self.org_id}"
+                  f"/directories/{self.directory_id}/users")
         params = {"limit": 100}
         users  = []
         while url:
@@ -179,16 +180,14 @@ def sync_atlassian_users(client, org_id, tenant_id):
     records = []
 
     for u in raw_users:
-        account_id = u.get("account_id") or u.get("accountId")
+        account_id = u.get("accountId") or u.get("account_id")
         if not account_id:
             continue
-        status = _derive_status_v1(u)
-        # product_access is inline on the org-level endpoint: list of
-        # {key, name, last_active}. Collapse per-site duplicates to base keys.
-        access       = u.get("product_access") or []
-        product_keys = sorted({_normalize_product_key(p.get("key")) for p in access if p.get("key")})
-        last_dates   = [p.get("last_active") for p in access if p.get("last_active")]
-        last_active  = u.get("last_active") or (max(last_dates) if last_dates else None)
+        status = _derive_status(u)
+        # The directory endpoint doesn't include product access inline — fetch each
+        # user's last-active-dates (which carries their product_access).
+        last_active, raw_keys = client.fetch_user_activity(account_id)
+        product_keys = sorted({_normalize_product_key(k) for k in raw_keys})
         # "invited": active account that has never been active and holds no seat.
         if status == "active" and not last_active and not product_keys:
             status = "invited"
@@ -200,7 +199,7 @@ def sync_atlassian_users(client, org_id, tenant_id):
             "name":              u.get("name"),
             "email":             u.get("email"),
             "status":            status,
-            "membership_status": u.get("account_status"),
+            "membership_status": u.get("membershipStatus"),
             "last_active":       last_active,
             "products":          product_keys,
         })
@@ -247,11 +246,12 @@ def fetch_atlassian_costs(provider, date_from, date_to):
             creds = {}
 
     org_id       = creds.get("orgId") or provider.get("provider_id")
-    directory_id = creds.get("directoryId")  # optional — org-level API doesn't need it
+    directory_id = creds.get("directoryId")
     access_token = creds.get("accessToken")
     products     = creds.get("products") or []
-    if not (org_id and access_token):
-        raise RuntimeError("Atlassian provider missing orgId / accessToken")
+    actual_cost  = creds.get("actualMonthlyCost")  # optional manual override
+    if not (org_id and directory_id and access_token):
+        raise RuntimeError("Atlassian provider missing orgId / directoryId / accessToken")
     if not products:
         raise RuntimeError("No products configured for this Atlassian org")
 
@@ -294,4 +294,27 @@ def fetch_atlassian_costs(provider, date_from, date_to):
             tags,                                # tags
             "atlassian",                         # cloud_provider
         ))
+
+    # Manual override: Atlassian has no billing API, so if an actual monthly cost
+    # is entered (from the billing portal), scale the per-product rows so the TOTAL
+    # matches the real invoice while preserving the per-product/user breakdown.
+    try:
+        actual_cost = float(actual_cost) if actual_cost else 0.0
+    except (TypeError, ValueError):
+        actual_cost = 0.0
+    if actual_cost > 0:
+        computed_total = round(sum(r[7] for r in rows), 2)
+        if computed_total > 0:
+            factor = actual_cost / computed_total
+            scaled = []
+            for r in rows:
+                t = json.loads(r[10]) if r[10] else {}
+                t["estimatedCost"] = r[7]
+                t["actualOverride"] = True
+                scaled.append(r[:7] + (round(r[7] * factor, 2),) + r[8:10] + (json.dumps(t),) + r[11:])
+            rows = scaled
+        else:
+            rows = [(snapshot_date, "Actual", "Atlassian (Actual)", "Actual",
+                     "Actual monthly cost", "actual", "", round(actual_cost, 2),
+                     "USD", org_id, json.dumps({"actualOverride": True}), "atlassian")]
     return rows
