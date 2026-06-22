@@ -2908,7 +2908,8 @@
                     <!-- Atlassian (User Costs) credentials -->
                     <div id="atlassianFields" style="display:none;flex-direction:column;gap:10px">
                         <div style="background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border);font-size:12px;color:var(--text-secondary);line-height:1.6">
-                            🔵 Tracks <strong>per-user Atlassian costs</strong> (Jira Software, Confluence, JSM). We count active users per product from the Atlassian Admin API and multiply by the cached per-user price.
+                            🔵 Tracks <strong>per-user Atlassian costs</strong> (Jira Software, Confluence, JSM, Bitbucket). We count active users per product from the Atlassian Admin API and multiply by the cached per-user price.<br>
+                            <span style="font-size:11px">Find the <strong>Org ID</strong> &amp; <strong>Directory ID</strong> at <a href="https://admin.atlassian.com" target="_blank" style="color:var(--accent)">admin.atlassian.com</a> → Settings → API keys (shown when you create the key), or in your admin URL <code>admin.atlassian.com/o/&lt;orgId&gt;/...</code>.</span>
                         </div>
                         <div>
                             <label class="form-label">Directory ID</label>
@@ -2922,6 +2923,10 @@
                             <label class="form-label">Products</label>
                             <div id="atlProductRows" style="display:flex;flex-direction:column;gap:8px"></div>
                             <button type="button" class="btn btn-secondary" style="font-size:12px;padding:5px 12px;margin-top:8px" onclick="addAtlProductRow()">+ Add product</button>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <button type="button" class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testAtlassian()">Test Connection</button>
+                            <span id="atlTestMsg" style="font-size:12px"></span>
                         </div>
                     </div>
 
@@ -3996,7 +4001,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621n"></script>
+<script src="/static/js/app.js?v=20260621o"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -4928,6 +4933,24 @@ function _collectAtlProducts() {
         productName: r.querySelector('.atl-prod').value,
         plan:        r.querySelector('.atl-plan').value,
     }));
+}
+
+function testAtlassian() {
+    const msg = document.getElementById('atlTestMsg');
+    const set = (t, color) => { if (msg) { msg.textContent = t; msg.style.color = color; } };
+    const payload = {
+        orgId:       (document.getElementById('providerId').value || '').trim(),
+        directoryId: (document.getElementById('atlDirectoryId').value || '').trim(),
+        accessToken: (document.getElementById('atlAccessToken').value || '').trim(),
+    };
+    if (!payload.orgId || !payload.directoryId || !payload.accessToken) {
+        set('Enter Org ID, Directory ID and Admin API token first.', '#c05621'); return;
+    }
+    set('Testing…', 'var(--text-muted)');
+    fetch('/api/atlassian/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        .then(r => r.json())
+        .then(d => set(d.ok ? (d.message || '✓ Connected') : ('✗ ' + (d.error || 'Failed')), d.ok ? '#276749' : '#c53030'))
+        .catch(e => set('✗ Request failed: ' + e, '#c53030'));
 }
 
 function saveProvider() {
