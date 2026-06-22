@@ -533,7 +533,7 @@ async function loadExecutiveSummary() {
                     plugins: { legend: { position: 'top', labels: { color: txtColor, font: { size: 11 }, boxWidth: 16, padding: 12 } } },
                     scales: {
                         x: { grid: { color: gridColor }, ticks: { color: txtColor, font: { size: 11 } } },
-                        y: { grid: { color: gridColor }, ticks: { color: txtColor, font: { size: 11 }, callback: v => '$' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) } }
+                        y: { grid: { color: gridColor }, ticks: { color: txtColor, font: { size: 11 }, callback: v => curSym() + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) } }
                     }
                 }
             });
@@ -894,7 +894,7 @@ async function _renderCoTrendChart(results) {
     renderChart('coTrendChart', 'line', {
         labels: months.map(m => m.label),
         datasets
-    }, 'Monthly Spend', { scales: { y: { ticks: { callback: v => '$'+v.toLocaleString() } } } });
+    }, 'Monthly Spend', { scales: { y: { ticks: { callback: v => curSym()+v.toLocaleString() } } } });
 }
 
 // ─── Costs Table ─────────────────────────────────────────────────────────
@@ -3225,7 +3225,7 @@ function renderChart(canvasId, type, data, title, extraOpts = {}) {
         ds.borderColor = cssVar('--bg-card');
         ds.borderWidth = 1;
         const total = top.reduce((s, r) => s + r.value, 0);
-        extraOpts.centerLabel = { text: '$' + total.toLocaleString(undefined, { maximumFractionDigits: 0 }) };
+        extraOpts.centerLabel = { text: curSym() + total.toLocaleString(undefined, { maximumFractionDigits: 0 }) };
     }
 
     chartInstances[canvasId] = new Chart(ctx, {
