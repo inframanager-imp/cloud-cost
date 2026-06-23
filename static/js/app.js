@@ -56,9 +56,9 @@ const CLOUD_META = {
     azure:     { icon: '⊞', logo: CLOUD_LOGOS.azure,     label: 'Azure',     color: '#0078d4', groupLabel: { sub: 'Subscription', rg: 'Resource Group', service: 'Service' } },
     aws:       { icon: '⚙', logo: CLOUD_LOGOS.aws,       label: 'AWS',       color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Region',         service: 'Service' } },
     gcp:       { icon: '◉', logo: CLOUD_LOGOS.gcp,       label: 'GCP',       color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service' } },
-    openai:    { icon: '◈', logo: CLOUD_LOGOS.openai,    label: 'OpenAI',    color: '#10a37f', groupLabel: { sub: 'Org',          rg: 'Model',          service: 'AI API'   } },
-    atlassian: { icon: '◧', logo: CLOUD_LOGOS.atlassian, label: 'Atlassian', color: '#0052cc', groupLabel: { sub: 'Organization', rg: 'Plan',           service: 'Product'  } },
-    cursor:    { icon: '◧', logo: '<img src="/static/img/cursor-logo.svg" alt="Cursor" style="height:18px;vertical-align:middle">', label: 'Cursor', color: '#111111', groupLabel: { sub: 'Account', rg: 'Plan', service: 'Service' } },
+    openai:    { icon: '◈', logo: CLOUD_LOGOS.openai,    label: 'OpenAI',    color: '#10a37f', groupLabel: { sub: 'API Key / Org', rg: 'Model',  service: 'Service' } },
+    atlassian: { icon: '◧', logo: CLOUD_LOGOS.atlassian, label: 'Atlassian', color: '#0052cc', groupLabel: { sub: 'Organization',  rg: 'Plan',   service: 'Product' } },
+    cursor:    { icon: '◧', logo: '<img src="/static/img/cursor-logo.svg" alt="Cursor" style="height:18px;vertical-align:middle">', label: 'Cursor', color: '#111111', groupLabel: { sub: 'Team / Account', rg: 'Role', service: 'Service' } },
     twilio:    { icon: '☎', logo: '☎',                   label: 'Twilio',    color: '#f22f46', groupLabel: { sub: 'Account',      rg: 'Plan',           service: 'Service'  } },
     sendgrid:  { icon: '✉', logo: '✉',                   label: 'SendGrid',  color: '#1a82e2', groupLabel: { sub: 'Account',      rg: 'Plan',           service: 'Service'  } },
 };
@@ -7409,14 +7409,23 @@ function addClientMappingRow(data) {
     // connected provider (incl. OpenAI/Atlassian/Cursor) is mappable to a client.
     const _cloudOpts = activeClouds().map(c =>
         `<option value="${c}" ${cloud===c?'selected':''}>${CLOUD_META[c].label}</option>`).join('');
+    // Filter-type labels follow each provider's real cost dimensions (e.g. Cursor's
+    // "resource group" is Role; OpenAI's "subscription" is the API key).
+    const _ftLabels = (cl) => {
+        const g = (CLOUD_META[cl] && CLOUD_META[cl].groupLabel) || {};
+        return { subscription_id: g.sub || 'Subscription / Account',
+                 resource_group:  g.rg  || 'Resource Group / Region',
+                 service_name:    g.service || 'Service' };
+    };
+    const _ftL = _ftLabels(cloud);
     row.innerHTML = `
         <select class="filter-input cm-cloud" style="width:110px;font-size:12px;height:32px;flex-shrink:0">
             ${_cloudOpts}
         </select>
         <select class="filter-input cm-filter-type" style="width:160px;font-size:12px;height:32px;flex-shrink:0">
-            <option value="subscription_id" ${ft==='subscription_id'?'selected':''}>Subscription / Account</option>
-            <option value="resource_group"  ${ft==='resource_group' ?'selected':''}>Resource Group / Region</option>
-            <option value="service_name"    ${ft==='service_name'   ?'selected':''}>Service (VM, EC2, DB…)</option>
+            <option value="subscription_id" ${ft==='subscription_id'?'selected':''}>${_ftL.subscription_id}</option>
+            <option value="resource_group"  ${ft==='resource_group' ?'selected':''}>${_ftL.resource_group}</option>
+            <option value="service_name"    ${ft==='service_name'   ?'selected':''}>${_ftL.service_name}</option>
         </select>
         <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
             <div class="cm-multiselect-wrap" style="position:relative">
@@ -7461,7 +7470,15 @@ function addClientMappingRow(data) {
         }
     }
 
-    cloudSel.addEventListener('change', loadOptions);
+    cloudSel.addEventListener('change', () => {
+        const L = _ftLabels(cloudSel.value);
+        if (ftSel.options.length >= 3) {
+            ftSel.options[0].text = L.subscription_id;
+            ftSel.options[1].text = L.resource_group;
+            ftSel.options[2].text = L.service_name;
+        }
+        loadOptions();
+    });
     ftSel.addEventListener('change', loadOptions);
     loadOptions();
 }
