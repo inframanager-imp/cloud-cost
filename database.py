@@ -4045,11 +4045,15 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
     except Exception:
         pass
 
+    CURSOR_SEAT_INCLUDED = 20.0  # Cursor Business plan includes $20 of usage per seat
     def _res_item(r):
-        od   = round(r["total"], 2)
-        incl = incl_map.get(r["resource_name"], 0)
+        od    = round(r["total"], 2)
+        incl  = incl_map.get(r["resource_name"], 0)            # combined included+free
+        inc_u = round(min(CURSOR_SEAT_INCLUDED, incl), 2) if incl else 0  # within $20 plan
+        free  = round(max(0.0, incl - inc_u), 2)               # beyond $20, still free
         return {"name": r["resource_name"], "cost": od, "ondemand": od,
-                "included": incl, "total": round(od + incl, 2)}
+                "included": incl, "included_usage": inc_u, "free_usage": free,
+                "total": round(od + incl, 2)}
 
     conn.close()
     return {

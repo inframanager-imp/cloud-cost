@@ -1463,7 +1463,8 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         if has_incl:
             res_rows += f"""<tr style="background:{bg}">
                 <td style="padding:8px 14px;font-size:13px;color:#1A1A1A">{r['name']}</td>
-                <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">${r.get('included',0):,.2f}</td>
+                <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">${r.get('included_usage',0):,.2f}</td>
+                <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">${r.get('free_usage',0):,.2f}</td>
                 <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">${r.get('ondemand',r['cost']):,.2f}</td>
                 <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">${r.get('total',r['cost']):,.2f}</td>
             </tr>"""
@@ -1477,7 +1478,8 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     res_header = (
         '<tr style="border-bottom:1px solid #E8ECF1">'
         '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:left;text-transform:uppercase">User / Resource</th>'
-        '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Included</th>'
+        '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Included Usage</th>'
+        '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Free Usage</th>'
         '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">On-Demand</th>'
         '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Total</th></tr>'
     ) if has_incl else ''

@@ -7234,7 +7234,7 @@ async function selectClient(clientId) {
             <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
                 <div style="height:100%;width:${barW}%;background:#10a37f;border-radius:3px"></div>
             </div>
-            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)" title="${s.included!=null?('Included '+_fmt$(s.included)+' + On-Demand '+_fmt$(s.ondemand)):''}">${_fmt$(_v)}</span>
+            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)" title="${s.included!=null?('Included '+_fmt$(s.included_usage||0)+' · Free '+_fmt$(s.free_usage||0)+' · On-Demand '+_fmt$(s.ondemand||0)):''}">${_fmt$(_v)}</span>
         </div>`;
     }).join('');
 
