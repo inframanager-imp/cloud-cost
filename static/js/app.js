@@ -7457,7 +7457,7 @@ function addClientMappingRow(data) {
                     <span class="cm-placeholder" style="color:var(--text-secondary);font-size:12px">— Loading… —</span>
                 </div>
                 <svg style="position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg>
-                <div class="cm-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;z-index:9999;max-height:240px;overflow-y:auto;box-shadow:0 6px 20px rgba(0,0,0,.25);margin-top:2px">
+                <div class="cm-dropdown" style="display:none;position:fixed;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;z-index:99999;max-height:280px;overflow-y:auto;box-shadow:0 6px 20px rgba(0,0,0,.25)">
                     <div style="padding:6px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-card);z-index:1">
                         <input type="text" class="cm-search" placeholder="Search…" style="width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--bg)" oninput="filterCmOptions(this)">
                     </div>
@@ -7548,7 +7548,23 @@ function toggleCmDropdown(trigger) {
     document.querySelectorAll('.cm-dropdown').forEach(d => d.style.display = 'none');
     dd.style.display = isOpen ? 'none' : 'block';
     if (!isOpen) {
-        dd.scrollTop = 0;  // always open at the top of the list (not scrolled to a checked item)
+        // position:fixed so the dropdown escapes any card/overflow clipping; place it
+        // under the trigger, flipping above if there isn't room below.
+        const r = trigger.getBoundingClientRect();
+        const vh = window.innerHeight;
+        const spaceBelow = vh - r.bottom;
+        dd.style.width = r.width + 'px';
+        dd.style.left  = r.left + 'px';
+        if (spaceBelow < 200 && r.top > spaceBelow) {
+            dd.style.top = '';
+            dd.style.bottom = (vh - r.top + 2) + 'px';
+            dd.style.maxHeight = Math.min(280, r.top - 12) + 'px';
+        } else {
+            dd.style.bottom = '';
+            dd.style.top = (r.bottom + 2) + 'px';
+            dd.style.maxHeight = Math.min(280, spaceBelow - 12) + 'px';
+        }
+        dd.scrollTop = 0;  // always open at the top of the list
         wrap.querySelector('.cm-search')?.focus({ preventScroll: true });
     }
 }
