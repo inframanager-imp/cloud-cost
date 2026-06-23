@@ -62,6 +62,26 @@ const CLOUD_META = {
     twilio:    { icon: '☎', logo: '☎',                   label: 'Twilio',    color: '#f22f46', groupLabel: { sub: 'Account',      rg: 'Plan',           service: 'Service'  } },
     sendgrid:  { icon: '✉', logo: '✉',                   label: 'SendGrid',  color: '#1a82e2', groupLabel: { sub: 'Account',      rg: 'Plan',           service: 'Service'  } },
 };
+// Canonical provider order — every feature draws its cloud list from this so a
+// new provider only has to be added here + to CLOUD_META to appear everywhere.
+const CLOUD_ORDER = ['azure', 'aws', 'gcp', 'openai', 'atlassian', 'cursor', 'twilio', 'sendgrid'];
+// Clouds this tenant actually has (per /api/connected-clouds), in canonical order.
+// Falls back to the 3 core clouds before connected-clouds has loaded.
+function activeClouds() {
+    const list = CLOUD_ORDER.filter(c => CLOUD_META[c] && (!connectedClouds || connectedClouds.has(c)));
+    return list.length ? list : ['azure', 'aws', 'gcp'];
+}
+// Populate a <select> with the tenant's clouds (optionally an "All" entry first).
+function fillCloudSelect(selectId, { includeAll = false, allLabel = 'All Clouds', allValue = '' } = {}) {
+    const el = document.getElementById(selectId);
+    if (!el) return;
+    const cur = el.value;
+    const opts = (includeAll ? [`<option value="${allValue}">${allLabel}</option>`] : [])
+        .concat(activeClouds().map(c => `<option value="${c}">${CLOUD_META[c].label}</option>`));
+    el.innerHTML = opts.join('');
+    if (cur) el.value = cur;
+}
+
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const CHART_COLORS = () => [
     cssVar('--chart-1'), cssVar('--chart-2'), cssVar('--chart-3'),
@@ -561,10 +581,12 @@ async function loadExecutiveSummary() {
             }).join('');
         }
 
-        // Cloud Donut
-        const cVals   = [kpi.azure||0, kpi.aws||0, kpi.gcp||0];
-        const cLabels = ['Azure','AWS','GCP'];
-        const cColors = ['#0089D6','#FF9900','#34A853'];
+        // Cloud Donut — all providers with spend (from kpi.by_cloud), not just 3
+        const _byCloud = kpi.by_cloud || { azure: kpi.azure||0, aws: kpi.aws||0, gcp: kpi.gcp||0 };
+        const _donutClouds = activeClouds().filter(c => (_byCloud[c] || 0) > 0);
+        const cVals   = _donutClouds.map(c => _byCloud[c] || 0);
+        const cLabels = _donutClouds.map(c => CLOUD_META[c]?.label || c);
+        const cColors = _donutClouds.map(c => CLOUD_META[c]?.color || '#888');
         const active  = cVals.map((v,i) => v > 0 ? i : -1).filter(i => i >= 0);
         if (_exDonutChart) { _exDonutChart.destroy(); _exDonutChart = null; }
         const donutCtx = el('exCloudDonut');
@@ -675,9 +697,9 @@ async function loadCloudOverview() {
     } catch(e) { cloudsInData = ['azure']; }
     if (!cloudsInData.length) cloudsInData = ['azure'];
 
-    // 2. Load per-provider dashboard data in parallel
+    // 2. Load per-provider dashboard data in parallel (all the tenant's clouds)
     const results = await Promise.all(
-        ['azure', 'aws', 'gcp'].map(async (cloud) => {
+        activeClouds().map(async (cloud) => {
             try {
                 const d = await fetch(`/api/dashboard?cloud_provider=${cloud}`).then(r => r.json());
                 return { cloud, data: d, hasData: cloudsInData.includes(cloud) };
@@ -742,10 +764,10 @@ async function loadCloudOverview() {
     const maxProvTotal = Math.max(...Object.values(provTotals));
 
     // Brand palette
-    const cloudColor   = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
-    const sparkStroke  = { azure: 'var(--chart-1,#185FA5)', aws: 'var(--chart-3,#BA7517)', gcp: 'var(--chart-2,#1D9E75)' };
-    const cloudFull    = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud' };
-    const logoH        = { azure: '16', aws: '13', gcp: '16' };
+    const cloudColor   = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f', atlassian: '#0052cc', cursor: '#111111' };
+    const sparkStroke  = { azure: 'var(--chart-1,#185FA5)', aws: 'var(--chart-3,#BA7517)', gcp: 'var(--chart-2,#1D9E75)', openai: '#10a37f', atlassian: '#0052cc', cursor: '#555555' };
+    const cloudFull    = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud', openai: 'OpenAI', atlassian: 'Atlassian', cursor: 'Cursor' };
+    const logoH        = { azure: '16', aws: '13', gcp: '16', openai: '18', atlassian: '18', cursor: '16' };
 
     // 6. Render provider cards
     grid.innerHTML = '';
@@ -759,7 +781,7 @@ async function loadCloudOverview() {
       );
     }
 
-    ['aws', 'azure', 'gcp'].forEach(cloud => {
+    activeClouds().forEach(cloud => {
         const r    = results.find(x => x.cloud === cloud);
         const card = document.createElement('div');
 
@@ -870,11 +892,11 @@ async function _renderCoTrendChart(results) {
         months.push({ label: d.toLocaleString('default',{month:'short',year:'2-digit'}), year: d.getFullYear(), month: d.getMonth()+1 });
     }
 
-    // Fetch monthly data per provider
-    const colors6 = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
+    // Fetch monthly data per provider (all the tenant's clouds)
+    const colors6 = cloudColor;
     const datasets = [];
 
-    await Promise.all(['azure','aws','gcp'].map(async (cloud) => {
+    await Promise.all(activeClouds().map(async (cloud) => {
         const r = results.find(x => x.cloud === cloud);
         if (!r?.hasData) return;
         try {
@@ -885,7 +907,7 @@ async function _renderCoTrendChart(results) {
                 return row ? (row.total_cost || 0) : 0;
             });
             if (vals.some(v => v > 0)) {
-                datasets.push({ label: PROVIDER_META[cloud].label, data: vals, borderColor: colors6[cloud], backgroundColor: colors6[cloud]+'33', fill: true, tension: 0.3, pointRadius: 4 });
+                datasets.push({ label: cloudFull[cloud], data: vals, borderColor: colors6[cloud], backgroundColor: colors6[cloud]+'33', fill: true, tension: 0.3, pointRadius: 4 });
             }
         } catch(e) { /* skip */ }
     }));
@@ -2341,7 +2363,7 @@ async function loadMonthly() {
             const subs = m.by_subscription || [];
             const byCloud = m.by_cloud || {};
             const cloudTotal = m.total_cost || 1;
-            const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f', atlassian: '#0052cc' };
+            const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f', atlassian: '#0052cc', cursor: '#111111' };
             const cloudLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', atlassian: 'Atlassian', cursor: 'Cursor' };
             const cloudOrder = ['aws', 'azure', 'gcp', 'openai', 'atlassian', 'cursor'];
             const activeCloudKeys = cloudOrder.filter(c => byCloud[c] > 0);
@@ -2377,7 +2399,7 @@ async function loadMonthly() {
                     if (!grouped[c]) grouped[c] = [];
                     grouped[c].push(sub);
                 });
-                const cloudGroupOrder = ['azure', 'aws', 'gcp'];
+                const cloudGroupOrder = CLOUD_ORDER;
                 const cloudGroupLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
                 const ACCT_SHOWN = 10;
                 const groupHtml = cloudGroupOrder.filter(c => grouped[c]).map(c => {
@@ -5113,16 +5135,19 @@ async function _getTenantProviderTypes() {
 async function _populateCloudProviderSelect(selectId, opts = {}) {
     const sel = document.getElementById(selectId);
     if (!sel) return;
-    const types = await _getTenantProviderTypes();
+    // Authoritative list = clouds the tenant actually has data/providers for
+    // (covers OpenAI/Cursor which live in integration_settings, not cloud_providers).
+    if (!connectedClouds) {
+        try { connectedClouds = new Set(await fetch('/api/connected-clouds').then(r => r.json())); } catch (e) {}
+    }
     const allValue = opts.allValue !== undefined ? opts.allValue : '';
     const allLabel = opts.allLabel || 'All Clouds';
     const savedValue = sel.value;
-    const labels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', atlassian: 'Atlassian', cursor: 'Cursor' };
     sel.innerHTML = `<option value="${allValue}">${allLabel}</option>`;
-    types.forEach(t => {
+    activeClouds().forEach(t => {
         const opt = document.createElement('option');
         opt.value = t;
-        opt.textContent = labels[t] || t.toUpperCase();
+        opt.textContent = CLOUD_META[t]?.label || t.toUpperCase();
         sel.appendChild(opt);
     });
     if (savedValue && [...sel.options].some(o => o.value === savedValue)) sel.value = savedValue;
@@ -7380,11 +7405,13 @@ function addClientMappingRow(data) {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;flex-wrap:nowrap';
 
+    // Cloud options come from the tenant's actual clouds (activeClouds), so any
+    // connected provider (incl. OpenAI/Atlassian/Cursor) is mappable to a client.
+    const _cloudOpts = activeClouds().map(c =>
+        `<option value="${c}" ${cloud===c?'selected':''}>${CLOUD_META[c].label}</option>`).join('');
     row.innerHTML = `
-        <select class="filter-input cm-cloud" style="width:90px;font-size:12px;height:32px;flex-shrink:0">
-            <option value="azure" ${cloud==='azure'?'selected':''}>Azure</option>
-            <option value="aws"   ${cloud==='aws'  ?'selected':''}>AWS</option>
-            <option value="gcp"   ${cloud==='gcp'  ?'selected':''}>GCP</option>
+        <select class="filter-input cm-cloud" style="width:110px;font-size:12px;height:32px;flex-shrink:0">
+            ${_cloudOpts}
         </select>
         <select class="filter-input cm-filter-type" style="width:160px;font-size:12px;height:32px;flex-shrink:0">
             <option value="subscription_id" ${ft==='subscription_id'?'selected':''}>Subscription / Account</option>

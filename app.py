@@ -879,6 +879,7 @@ def api_executive_summary():
             "gcp": cloud_cur_map.get("gcp", 0),
             "gcp_lm": cloud_lm_map.get("gcp", 0),
             "gcp_mom_pct": mom_pct(cloud_cur_map.get("gcp", 0), lm_partial_map.get("gcp", 0)),
+            "by_cloud": cloud_cur_map,  # current-month total per cloud (all providers)
             "projected": projected,
             "avg_daily": round(avg_daily, 2),
             "days_elapsed": day_of_month,
