@@ -4029,13 +4029,33 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
         base_params
     ).fetchall()
 
+    # Included (plan-covered) cost per Cursor user — cost_data holds on-demand only;
+    # included lives in cursor_users (keyed by name and/or email).
+    incl_map = {}
+    try:
+        for u in conn.execute(
+            "SELECT name, email, COALESCE(included_cents,0) ic FROM cursor_users WHERE tenant_id IS ?",
+            (tenant_id,)
+        ).fetchall():
+            ic = round((u["ic"] or 0) / 100.0, 2)
+            if u["name"]:  incl_map[u["name"]] = ic
+            if u["email"]: incl_map[u["email"]] = ic
+    except Exception:
+        pass
+
+    def _res_item(r):
+        od   = round(r["total"], 2)
+        incl = incl_map.get(r["resource_name"], 0)
+        return {"name": r["resource_name"], "cost": od, "ondemand": od,
+                "included": incl, "total": round(od + incl, 2)}
+
     conn.close()
     return {
         "total": round(total_row["total"], 2),
         "by_service": [{"name": r["service_name"] or "Unknown", "cost": round(r["total"], 2)} for r in by_service],
         "by_subscription": [{"subscription_id": r["subscription_id"], "cost": round(r["total"], 2)} for r in by_subscription],
         "by_cloud": [{"cloud": r["cloud_provider"] or "unknown", "cost": round(r["total"], 2)} for r in by_cloud],
-        "by_resource": [{"name": r["resource_name"], "cost": round(r["total"], 2)} for r in by_resource],
+        "by_resource": [_res_item(r) for r in by_resource],
         "trend": [{"date": r["date"], "cost": round(r["total"], 2)} for r in trend],
     }
 
