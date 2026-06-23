@@ -53,12 +53,12 @@ const CLOUD_LOGOS = {
     atlassian: '<svg width="20" height="20" viewBox="0 0 32 32" style="vertical-align:middle"><defs><linearGradient id="atlg" x1="50%" y1="40%" x2="0%" y2="100%"><stop offset="0" stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs><path fill="url(#atlg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/><path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/></svg>',
 };
 const CLOUD_META = {
-    azure:     { icon: '⊞', logo: CLOUD_LOGOS.azure,     label: 'Azure',     color: '#0078d4', groupLabel: { sub: 'Subscription', rg: 'Resource Group', service: 'Service' } },
-    aws:       { icon: '⚙', logo: CLOUD_LOGOS.aws,       label: 'AWS',       color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Region',         service: 'Service' } },
-    gcp:       { icon: '◉', logo: CLOUD_LOGOS.gcp,       label: 'GCP',       color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service' } },
-    openai:    { icon: '◈', logo: CLOUD_LOGOS.openai,    label: 'OpenAI',    color: '#10a37f', groupLabel: { sub: 'API Key / Org', rg: 'Model',  service: 'Service' } },
-    atlassian: { icon: '◧', logo: CLOUD_LOGOS.atlassian, label: 'Atlassian', color: '#0052cc', groupLabel: { sub: 'Organization',  rg: 'Plan',   service: 'Product' } },
-    cursor:    { icon: '◧', logo: '<img src="/static/img/cursor-logo.svg" alt="Cursor" style="height:18px;vertical-align:middle">', label: 'Cursor', color: '#111111', groupLabel: { sub: 'Team / Account', rg: 'Role', service: 'Service' } },
+    azure:     { icon: '⊞', logo: CLOUD_LOGOS.azure,     label: 'Azure',     color: '#0078d4', groupLabel: { sub: 'Subscription', rg: 'Resource Group', service: 'Service', resource: 'Resource' } },
+    aws:       { icon: '⚙', logo: CLOUD_LOGOS.aws,       label: 'AWS',       color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Region',         service: 'Service', resource: 'Resource' } },
+    gcp:       { icon: '◉', logo: CLOUD_LOGOS.gcp,       label: 'GCP',       color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service', resource: 'Resource' } },
+    openai:    { icon: '◈', logo: CLOUD_LOGOS.openai,    label: 'OpenAI',    color: '#10a37f', groupLabel: { sub: 'API Key / Org', rg: 'Model',  service: 'Service', resource: 'Model / Token' } },
+    atlassian: { icon: '◧', logo: CLOUD_LOGOS.atlassian, label: 'Atlassian', color: '#0052cc', groupLabel: { sub: 'Organization',  rg: 'Plan',   service: 'Product', resource: 'Seat' } },
+    cursor:    { icon: '◧', logo: '<img src="/static/img/cursor-logo.svg" alt="Cursor" style="height:18px;vertical-align:middle">', label: 'Cursor', color: '#111111', groupLabel: { sub: 'Team / Account', rg: 'Role', service: 'Service', resource: 'User' } },
     twilio:    { icon: '☎', logo: '☎',                   label: 'Twilio',    color: '#f22f46', groupLabel: { sub: 'Account',      rg: 'Plan',           service: 'Service'  } },
     sendgrid:  { icon: '✉', logo: '✉',                   label: 'SendGrid',  color: '#1a82e2', groupLabel: { sub: 'Account',      rg: 'Plan',           service: 'Service'  } },
 };
@@ -7415,7 +7415,8 @@ function addClientMappingRow(data) {
         const g = (CLOUD_META[cl] && CLOUD_META[cl].groupLabel) || {};
         return { subscription_id: g.sub || 'Subscription / Account',
                  resource_group:  g.rg  || 'Resource Group / Region',
-                 service_name:    g.service || 'Service' };
+                 service_name:    g.service || 'Service',
+                 resource_name:   g.resource || 'Resource / User' };
     };
     const _ftL = _ftLabels(cloud);
     row.innerHTML = `
@@ -7426,6 +7427,7 @@ function addClientMappingRow(data) {
             <option value="subscription_id" ${ft==='subscription_id'?'selected':''}>${_ftL.subscription_id}</option>
             <option value="resource_group"  ${ft==='resource_group' ?'selected':''}>${_ftL.resource_group}</option>
             <option value="service_name"    ${ft==='service_name'   ?'selected':''}>${_ftL.service_name}</option>
+            <option value="resource_name"   ${ft==='resource_name'  ?'selected':''}>${_ftL.resource_name}</option>
         </select>
         <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
             <div class="cm-multiselect-wrap" style="position:relative">
@@ -7472,10 +7474,11 @@ function addClientMappingRow(data) {
 
     cloudSel.addEventListener('change', () => {
         const L = _ftLabels(cloudSel.value);
-        if (ftSel.options.length >= 3) {
+        if (ftSel.options.length >= 4) {
             ftSel.options[0].text = L.subscription_id;
             ftSel.options[1].text = L.resource_group;
             ftSel.options[2].text = L.service_name;
+            ftSel.options[3].text = L.resource_name;
         }
         loadOptions();
     });

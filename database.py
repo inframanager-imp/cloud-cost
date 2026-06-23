@@ -4026,6 +4026,8 @@ def _mapping_condition(filter_type: str, value: str) -> tuple:
         return ("subscription_id = ?", value)
     elif filter_type == "service_name":
         return ("LOWER(service_name) = LOWER(?)", value)
+    elif filter_type == "resource_name":  # e.g. Cursor per-user, Azure/AWS per-resource
+        return ("LOWER(resource_name) = LOWER(?)", value)
     else:  # resource_group
         return ("LOWER(resource_group) = LOWER(?)", value)
 
@@ -4140,6 +4142,26 @@ def get_client_filter_values(cloud: str, filter_type: str, tenant_id: int) -> li
                 (cloud, tenant_id)
             ).fetchall()
         result = [{"value": r["value"], "label": r["label"] or r["value"]} for r in rows if r["value"]]
+        # Fallback for clouds not in cloud_providers (OpenAI/Cursor live in
+        # integration_settings) — read distinct subscription_id from cost_data.
+        if not result:
+            rows = conn.execute(
+                "SELECT DISTINCT subscription_id as val FROM cost_data "
+                "WHERE cloud_provider=? AND (tenant_id=? OR tenant_id IS NULL) "
+                "AND subscription_id IS NOT NULL AND subscription_id!='' ORDER BY subscription_id LIMIT 500",
+                (cloud, tenant_id)
+            ).fetchall()
+            result = [{"value": r["val"], "label": r["val"]} for r in rows]
+
+    elif filter_type == "resource_name":
+        rows = conn.execute(
+            "SELECT DISTINCT resource_name as val FROM cost_data "
+            "WHERE cloud_provider=? AND (tenant_id=? OR tenant_id IS NULL) "
+            "AND resource_name IS NOT NULL AND resource_name!='' "
+            "ORDER BY resource_name LIMIT 1000",
+            (cloud, tenant_id)
+        ).fetchall()
+        result = [{"value": r["val"], "label": r["val"]} for r in rows]
 
     elif filter_type == "resource_group":
         rows = conn.execute(
