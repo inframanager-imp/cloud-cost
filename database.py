@@ -4011,11 +4011,21 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
         base_params
     ).fetchall()
 
+    # Per-resource breakdown (e.g. Cursor per-user, Azure/AWS per-resource)
+    by_resource = conn.execute(
+        f"SELECT resource_name, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
+        f"AND resource_name IS NOT NULL AND resource_name!='' "
+        f"GROUP BY resource_name HAVING total>0 ORDER BY total DESC LIMIT 15",
+        base_params
+    ).fetchall()
+
     conn.close()
     return {
         "total": round(total_row["total"], 2),
         "by_service": [{"name": r["service_name"] or "Unknown", "cost": round(r["total"], 2)} for r in by_service],
         "by_subscription": [{"subscription_id": r["subscription_id"], "cost": round(r["total"], 2)} for r in by_subscription],
+        "by_resource": [{"name": r["resource_name"], "cost": round(r["total"], 2)} for r in by_resource],
         "trend": [{"date": r["date"], "cost": round(r["total"], 2)} for r in trend],
     }
 

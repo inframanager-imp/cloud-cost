@@ -7223,6 +7223,20 @@ async function selectClient(clientId) {
         </div>`;
     }).join('');
 
+    // Per-user / per-resource breakdown (e.g. Cursor users)
+    const byResource = cur.by_resource || [];
+    const maxRes = byResource[0]?.cost || 1;
+    const resRows = byResource.slice(0, 12).map((s) => {
+        const barW = Math.max(3, Math.round((s.cost / maxRes) * 100));
+        return `<div style="display:grid;grid-template-columns:1fr 90px 70px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle,rgba(0,0,0,.04))">
+            <span style="font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(s.name)}">${_esc(s.name)}</span>
+            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${barW}%;background:#10a37f;border-radius:3px"></div>
+            </div>
+            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)">${_fmt$(s.cost)}</span>
+        </div>`;
+    }).join('');
+
     // Subscription bars
     // Group bySub by cloud provider
     const cloudGrouped = {};
@@ -7317,6 +7331,13 @@ async function selectClient(clientId) {
         <div class="db-card-hdr"><span class="db-card-title">By Cloud Provider</span><span class="db-card-period">This month</span></div>
         ${cloudGroupedArr.length ? subRows : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No data</div>'}
     </div>
+
+    ${byResource.length ? `
+    <!-- By User / Resource -->
+    <div class="db-card" style="margin-bottom:14px">
+        <div class="db-card-hdr"><span class="db-card-title">By User / Resource</span><span class="db-card-period">This month</span></div>
+        ${resRows}
+    </div>` : ''}
 
     `;
 }
@@ -7436,7 +7457,7 @@ function addClientMappingRow(data) {
                     <span class="cm-placeholder" style="color:var(--text-secondary);font-size:12px">— Loading… —</span>
                 </div>
                 <svg style="position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg>
-                <div class="cm-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;z-index:100;max-height:180px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.15);margin-top:2px">
+                <div class="cm-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;z-index:9999;max-height:240px;overflow-y:auto;box-shadow:0 6px 20px rgba(0,0,0,.25);margin-top:2px">
                     <div style="padding:6px 8px;border-bottom:1px solid var(--border)">
                         <input type="text" class="cm-search" placeholder="Search…" style="width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--bg)" oninput="filterCmOptions(this)">
                     </div>
