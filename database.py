@@ -4020,12 +4020,14 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
         base_params
     ).fetchall()
 
-    # Per-resource breakdown (e.g. Cursor per-user, Azure/AWS per-resource)
+    # Per-resource breakdown (e.g. Cursor per-user, Azure/AWS per-resource). No
+    # HAVING total>0 filter — Cursor users with $0 on-demand still carry included
+    # (plan) cost, so every mapped user should appear.
     by_resource = conn.execute(
         f"SELECT resource_name, COALESCE(SUM(cost),0) as total FROM cost_data "
         f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
         f"AND resource_name IS NOT NULL AND resource_name!='' "
-        f"GROUP BY resource_name HAVING total>0 ORDER BY total DESC LIMIT 15",
+        f"GROUP BY resource_name ORDER BY total DESC LIMIT 100",
         base_params
     ).fetchall()
 

@@ -1329,7 +1329,8 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     total = cost_data.get("total", 0)
     by_service = cost_data.get("by_service", [])[:8]
     by_sub = cost_data.get("by_subscription", [])
-    by_resource = cost_data.get("by_resource", [])[:12]
+    by_resource = sorted(cost_data.get("by_resource", []),
+                         key=lambda r: r.get("total", r.get("cost", 0)), reverse=True)[:50]
     trend = cost_data.get("trend", [])
     mappings = client.get("mappings", [])
 

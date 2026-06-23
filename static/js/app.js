@@ -7223,17 +7223,18 @@ async function selectClient(clientId) {
         </div>`;
     }).join('');
 
-    // Per-user / per-resource breakdown (e.g. Cursor users)
-    const byResource = cur.by_resource || [];
-    const maxRes = byResource[0]?.cost || 1;
-    const resRows = byResource.slice(0, 12).map((s) => {
-        const barW = Math.max(3, Math.round((s.cost / maxRes) * 100));
+    // Per-user / per-resource breakdown (e.g. Cursor users) — sort by total (incl+od)
+    const byResource = (cur.by_resource || []).slice().sort((a,b) => (b.total ?? b.cost) - (a.total ?? a.cost));
+    const maxRes = (byResource[0]?.total ?? byResource[0]?.cost) || 1;
+    const resRows = byResource.slice(0, 50).map((s) => {
+        const _v = s.total ?? s.cost;
+        const barW = Math.max(3, Math.round((_v / maxRes) * 100));
         return `<div style="display:grid;grid-template-columns:1fr 90px 70px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle,rgba(0,0,0,.04))">
             <span style="font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(s.name)}">${_esc(s.name)}</span>
             <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
                 <div style="height:100%;width:${barW}%;background:#10a37f;border-radius:3px"></div>
             </div>
-            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)">${_fmt$(s.cost)}</span>
+            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)" title="${s.included!=null?('Included '+_fmt$(s.included)+' + On-Demand '+_fmt$(s.ondemand)):''}">${_fmt$(_v)}</span>
         </div>`;
     }).join('');
 
