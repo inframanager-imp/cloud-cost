@@ -7458,7 +7458,7 @@ function addClientMappingRow(data) {
                 </div>
                 <svg style="position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg>
                 <div class="cm-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;z-index:9999;max-height:240px;overflow-y:auto;box-shadow:0 6px 20px rgba(0,0,0,.25);margin-top:2px">
-                    <div style="padding:6px 8px;border-bottom:1px solid var(--border)">
+                    <div style="padding:6px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-card);z-index:1">
                         <input type="text" class="cm-search" placeholder="Search…" style="width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--bg)" oninput="filterCmOptions(this)">
                     </div>
                     <div class="cm-options" style="padding:4px"></div>
@@ -7547,7 +7547,10 @@ function toggleCmDropdown(trigger) {
     // Close all other dropdowns
     document.querySelectorAll('.cm-dropdown').forEach(d => d.style.display = 'none');
     dd.style.display = isOpen ? 'none' : 'block';
-    if (!isOpen) wrap.querySelector('.cm-search')?.focus();
+    if (!isOpen) {
+        dd.scrollTop = 0;  // always open at the top of the list (not scrolled to a checked item)
+        wrap.querySelector('.cm-search')?.focus({ preventScroll: true });
+    }
 }
 
 function filterCmOptions(input) {
