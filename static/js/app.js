@@ -7223,8 +7223,12 @@ async function selectClient(clientId) {
         </div>`;
     }).join('');
 
-    // Per-user / per-resource breakdown (e.g. Cursor users) — billable (on-demand) focus
-    const byResource = (cur.by_resource || []).slice().sort((a,b) => (b.ondemand ?? b.cost) - (a.ondemand ?? a.cost));
+    // Per-user / per-resource breakdown — only when explicitly mapped by resource/user
+    // (e.g. Cursor by User); otherwise subscription-mapped clients dump raw resource IDs.
+    const _hasResMap = (client.mappings || []).some(m => m.filter_type === 'resource_name');
+    const byResource = _hasResMap
+        ? (cur.by_resource || []).slice().sort((a,b) => (b.ondemand ?? b.cost) - (a.ondemand ?? a.cost))
+        : [];
     const maxRes = (byResource[0]?.ondemand ?? byResource[0]?.cost) || 1;
     const resRows = byResource.slice(0, 50).map((s) => {
         const _v = s.ondemand ?? s.cost;

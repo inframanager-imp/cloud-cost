@@ -1329,8 +1329,12 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     total = cost_data.get("total", 0)
     by_service = cost_data.get("by_service", [])[:8]
     by_sub = cost_data.get("by_subscription", [])
+    # Only show the per-user/resource breakdown when the client is explicitly mapped
+    # by resource_name (e.g. Cursor by User). Subscription/RG/service-mapped clients
+    # (Azure/AWS) would otherwise dump hundreds of raw resource IDs — unwanted noise.
+    _has_resource_mapping = any(m.get("filter_type") == "resource_name" for m in client.get("mappings", []))
     by_resource = sorted(cost_data.get("by_resource", []),
-                         key=lambda r: r.get("total", r.get("cost", 0)), reverse=True)[:50]
+                         key=lambda r: r.get("total", r.get("cost", 0)), reverse=True)[:50] if _has_resource_mapping else []
     trend = cost_data.get("trend", [])
     mappings = client.get("mappings", [])
 
