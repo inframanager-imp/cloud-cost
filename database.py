@@ -4011,6 +4011,15 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
         base_params
     ).fetchall()
 
+    # Per-cloud breakdown — straight from cost_data's cloud_provider (don't infer
+    # the cloud from mappings, which defaults to azure for non-subscription maps).
+    by_cloud = conn.execute(
+        f"SELECT cloud_provider, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
+        f"GROUP BY cloud_provider ORDER BY total DESC",
+        base_params
+    ).fetchall()
+
     # Per-resource breakdown (e.g. Cursor per-user, Azure/AWS per-resource)
     by_resource = conn.execute(
         f"SELECT resource_name, COALESCE(SUM(cost),0) as total FROM cost_data "
@@ -4025,6 +4034,7 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
         "total": round(total_row["total"], 2),
         "by_service": [{"name": r["service_name"] or "Unknown", "cost": round(r["total"], 2)} for r in by_service],
         "by_subscription": [{"subscription_id": r["subscription_id"], "cost": round(r["total"], 2)} for r in by_subscription],
+        "by_cloud": [{"cloud": r["cloud_provider"] or "unknown", "cost": round(r["total"], 2)} for r in by_cloud],
         "by_resource": [{"name": r["resource_name"], "cost": round(r["total"], 2)} for r in by_resource],
         "trend": [{"date": r["date"], "cost": round(r["total"], 2)} for r in trend],
     }

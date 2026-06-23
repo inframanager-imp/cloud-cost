@@ -7237,15 +7237,18 @@ async function selectClient(clientId) {
         </div>`;
     }).join('');
 
-    // Subscription bars
-    // Group bySub by cloud provider
+    // Group by the real cloud_provider from the data (cur.by_cloud), not inferred
+    // from subscription mappings (which mislabels User/Service-mapped clouds as azure).
     const cloudGrouped = {};
-    const CLOUD_FULL = { azure: 'Microsoft Azure', aws: 'Amazon AWS', gcp: 'Google Cloud' };
-    bySub.forEach(s => {
-        const m = (client.mappings || []).find(mp => mp.filter_type === 'subscription_id' && mp.value === s.subscription_id);
-        const cloud = (m?.cloud || 'azure').toLowerCase();
-        cloudGrouped[cloud] = (cloudGrouped[cloud] || 0) + s.cost;
-    });
+    const CLOUD_FULL = { azure: 'Microsoft Azure', aws: 'Amazon AWS', gcp: 'Google Cloud', openai: 'OpenAI', atlassian: 'Atlassian', cursor: 'Cursor' };
+    (cur.by_cloud || []).forEach(c => { cloudGrouped[c.cloud] = (cloudGrouped[c.cloud] || 0) + c.cost; });
+    if (!Object.keys(cloudGrouped).length) {
+        bySub.forEach(s => {
+            const m = (client.mappings || []).find(mp => mp.filter_type === 'subscription_id' && mp.value === s.subscription_id);
+            const cloud = (m?.cloud || 'azure').toLowerCase();
+            cloudGrouped[cloud] = (cloudGrouped[cloud] || 0) + s.cost;
+        });
+    }
     const cloudGroupedArr = Object.entries(cloudGrouped).sort((a,b) => b[1]-a[1]);
     const maxSubCloud = cloudGroupedArr[0]?.[1] || 1;
     const subRows = cloudGroupedArr.map(([cloud, cost], i) => {

@@ -1360,15 +1360,19 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         </tr>"""
 
     # ── By cloud provider with share % ──────────────────────────────────────
-    sub_map = {m.get("value",""): m for m in mappings if m.get("filter_type") == "subscription_id"}
-    cloud_totals = {}
-    for s in by_sub:
-        m = sub_map.get(s.get("subscription_id",""), {})
-        cloud = (m.get("cloud") or "azure").lower()
-        cloud_totals[cloud] = cloud_totals.get(cloud, 0) + s["cost"]
+    # Use the real cloud_provider from the data (by_cloud) rather than inferring it
+    # from subscription mappings (which mislabels User/Service-mapped clouds as azure).
+    cloud_totals = {c["cloud"]: c["cost"] for c in cost_data.get("by_cloud", [])}
+    if not cloud_totals:  # fallback for older callers
+        sub_map = {m.get("value",""): m for m in mappings if m.get("filter_type") == "subscription_id"}
+        for s in by_sub:
+            m = sub_map.get(s.get("subscription_id",""), {})
+            cloud = (m.get("cloud") or "azure").lower()
+            cloud_totals[cloud] = cloud_totals.get(cloud, 0) + s["cost"]
     cloud_totals = sorted(cloud_totals.items(), key=lambda x: x[1], reverse=True)
     max_cloud = cloud_totals[0][1] if cloud_totals else 1
-    CLOUD_LABELS = {"azure": "Microsoft Azure", "aws": "Amazon AWS", "gcp": "Google Cloud"}
+    CLOUD_LABELS = {"azure": "Microsoft Azure", "aws": "Amazon AWS", "gcp": "Google Cloud",
+                    "openai": "OpenAI", "atlassian": "Atlassian", "cursor": "Cursor"}
     cloud_rows = ""
     for i, (cloud, cost) in enumerate(cloud_totals):
         pct = cost / total * 100 if total else 0
