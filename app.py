@@ -4168,6 +4168,18 @@ def _run_auto_sync():
                         update_cloud_provider_sync_time(ap.get("id"), error=str(a_err))
                         print(f"[Auto-Sync] ATLASSIAN '{ap.get('name')}' failed: {a_err}")
 
+                # ── Cursor: live team spend (per-user on-demand) ───────────────
+                # On-demand usage accrues continuously through the cycle, so refresh
+                # it each auto-sync for tenants that have a Cursor API key configured.
+                try:
+                    if (get_integration_settings(tid).get("cursor_api_key") or "").strip():
+                        from cursor_fetcher import sync_cursor
+                        cur_res = sync_cursor(tid)
+                        tenant_records += int((cur_res or {}).get("members", 0))
+                        print(f"[Auto-Sync] CURSOR (tenant {tname}): {cur_res}")
+                except Exception as cur_err:
+                    print(f"[Auto-Sync] CURSOR (tenant {tname}) failed: {cur_err}")
+
                 update_sync_log(sync_id, "success", tenant_records)
                 print(f"[Auto-Sync] Tenant '{tname}': {tenant_records} records")
                 return tenant_records
