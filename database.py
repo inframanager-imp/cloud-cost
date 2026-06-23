@@ -3956,7 +3956,7 @@ def upsert_client_mappings(client_id: int, mappings: list):
         cloud = (m.get("cloud") or "azure").strip().lower()
         filter_type = (m.get("filter_type") or "").strip()
         value = (m.get("value") or "").strip()
-        if filter_type in ("subscription_id", "resource_group") and value:
+        if filter_type in ("subscription_id", "resource_group", "service_name", "resource_name") and value:
             conn.execute(
                 "INSERT INTO client_mappings(client_id, cloud, filter_type, value) VALUES(?,?,?,?)",
                 (client_id, cloud, filter_type, value)
