@@ -1461,12 +1461,13 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     for i, r in enumerate(by_resource):
         bg = "#F7F9FC" if i % 2 == 0 else "#FFFFFF"
         if has_incl:
+            _free = r.get('free_usage', 0)
+            free_disp = "$20+" if _free > 20 else (f"${_free:,.2f}" if _free > 0 else "—")
             res_rows += f"""<tr style="background:{bg}">
                 <td style="padding:8px 14px;font-size:13px;color:#1A1A1A">{r['name']}</td>
                 <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">${r.get('included_usage',0):,.2f}</td>
-                <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">${r.get('free_usage',0):,.2f}</td>
-                <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">${r.get('ondemand',r['cost']):,.2f}</td>
-                <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">${r.get('total',r['cost']):,.2f}</td>
+                <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">{free_disp}</td>
+                <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">${r.get('ondemand',r['cost']):,.2f}</td>
             </tr>"""
         else:
             pct = r["cost"] / total * 100 if total else 0
@@ -1480,8 +1481,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:left;text-transform:uppercase">User / Resource</th>'
         '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Included Usage</th>'
         '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Free Usage</th>'
-        '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">On-Demand</th>'
-        '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Total</th></tr>'
+        '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">On-Demand</th></tr>'
     ) if has_incl else ''
     resource_section = (
         '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
