@@ -1329,6 +1329,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     total = cost_data.get("total", 0)
     by_service = cost_data.get("by_service", [])[:8]
     by_sub = cost_data.get("by_subscription", [])
+    by_resource = cost_data.get("by_resource", [])[:12]
     trend = cost_data.get("trend", [])
     mappings = client.get("mappings", [])
 
@@ -1452,6 +1453,24 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         + cloud_rows + '</table></td></tr></table></td></tr>'
     ) if cloud_rows else ''
 
+    # By user / resource (e.g. Cursor per-user)
+    res_total = sum(r["cost"] for r in by_resource) or 1
+    res_rows = ""
+    for i, r in enumerate(by_resource):
+        pct = r["cost"] / total * 100 if total else 0
+        bg = "#F7F9FC" if i % 2 == 0 else "#FFFFFF"
+        res_rows += f"""<tr style="background:{bg}">
+            <td style="padding:8px 14px;font-size:13px;color:#1A1A1A">{r['name']}</td>
+            <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">${r['cost']:,.2f}</td>
+            <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">{pct:.0f}%</td>
+        </tr>"""
+    resource_section = (
+        '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
+        '<div style="font-size:15px;font-weight:600;color:#1A1A1A;margin-bottom:14px">By User / Resource</div>'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">'
+        + res_rows + '</table></td></tr></table></td></tr>'
+    ) if res_rows else ''
+
     trend_section = (
         '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
         f'<div style="font-size:15px;font-weight:600;color:#1A1A1A;margin-bottom:14px">Daily Cost Trends <span style="font-size:11px;font-weight:400;color:#8A95A1">({date_from} to {date_to})</span></div>'
@@ -1510,6 +1529,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
 
 {svc_section}
 {cloud_section}
+{resource_section}
 {trend_section}
 {manual_block}
 
