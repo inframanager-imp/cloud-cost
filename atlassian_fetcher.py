@@ -120,11 +120,10 @@ class AtlassianClient:
         return resp
 
     def fetch_all_users(self):
-        """Paginated DIRECTORY fetch — returns ALL users of every status (needs the
-        Directory ID). This is more complete than the org-level managed-accounts
-        endpoint, which silently omits non-managed users (undercounts billed seats)."""
-        url    = (f"{ATLASSIAN_BASE}/admin/v2/orgs/{self.org_id}"
-                  f"/directories/{self.directory_id}/users")
+        """ORG-LEVEL managed-accounts fetch (/admin/v1/orgs/{org}/users) — the only
+        Atlassian org-admin user endpoint still available (the v2 directory endpoint
+        now returns 404). Each user carries product_access inline."""
+        url    = f"{ATLASSIAN_BASE}/admin/v1/orgs/{self.org_id}/users"
         params = {"limit": 100}
         users  = []
         while url:
@@ -180,15 +179,15 @@ def sync_atlassian_users(client, org_id, tenant_id):
     records = []
 
     for u in raw_users:
-        account_id = u.get("accountId") or u.get("account_id")
+        account_id = u.get("account_id") or u.get("accountId")
         if not account_id:
             continue
-        status = _derive_status(u)
-        # The directory endpoint doesn't include product access inline — fetch each
-        # user's last-active-dates (which carries their product_access).
-        last_active, raw_keys = client.fetch_user_activity(account_id)
-        product_keys = sorted({_normalize_product_key(k) for k in raw_keys})
-        # "invited": active account that has never been active and holds no seat.
+        status = _derive_status_v1(u)
+        # product_access is inline on the org-level endpoint: {key, last_active}.
+        access       = u.get("product_access") or []
+        product_keys = sorted({_normalize_product_key(p.get("key")) for p in access if p.get("key")})
+        last_dates   = [p.get("last_active") for p in access if p.get("last_active")]
+        last_active  = u.get("last_active") or (max(last_dates) if last_dates else None)
         if status == "active" and not last_active and not product_keys:
             status = "invited"
         if status == "active":
@@ -199,7 +198,7 @@ def sync_atlassian_users(client, org_id, tenant_id):
             "name":              u.get("name"),
             "email":             u.get("email"),
             "status":            status,
-            "membership_status": u.get("membershipStatus"),
+            "membership_status": u.get("account_status"),
             "last_active":       last_active,
             "products":          product_keys,
         })
@@ -250,8 +249,8 @@ def fetch_atlassian_costs(provider, date_from, date_to):
     access_token = creds.get("accessToken")
     products     = creds.get("products") or []
     actual_cost  = creds.get("actualMonthlyCost")  # optional manual override
-    if not (org_id and directory_id and access_token):
-        raise RuntimeError("Atlassian provider missing orgId / directoryId / accessToken")
+    if not (org_id and access_token):
+        raise RuntimeError("Atlassian provider missing orgId / accessToken")
     if not products:
         raise RuntimeError("No products configured for this Atlassian org")
 

@@ -2849,11 +2849,7 @@
                     <div id="atlassianFields" style="display:none;flex-direction:column;gap:10px">
                         <div style="background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border);font-size:12px;color:var(--text-secondary);line-height:1.6">
                             🔵 Tracks <strong>per-user Atlassian costs</strong> (Jira Software, Confluence, JSM, Bitbucket). We count active users per product from the Atlassian directory and multiply by the cached per-user price.<br>
-                            <span style="font-size:11px">Create an <strong>Organization API key</strong> at <a href="https://admin.atlassian.com" target="_blank" style="color:var(--accent)">admin.atlassian.com</a> → Settings → API keys (use the <em>Organization</em> key, not a personal user token). The <strong>Directory ID</strong> is shown on the same screen / in the directory URL.</span>
-                        </div>
-                        <div>
-                            <label class="form-label">Directory ID</label>
-                            <input type="text" id="atlDirectoryId" class="filter-input" placeholder="e.g. cef6088f-08cd-4a09-a6aa-…" style="width:100%">
+                            <span style="font-size:11px">Create an <strong>Organization API key</strong> at <a href="https://admin.atlassian.com" target="_blank" style="color:var(--accent)">admin.atlassian.com</a> → Settings → API keys (use the <em>Organization</em> key, not a personal user token). The org user list undercounts vs your bill — enter the <strong>Actual monthly cost</strong> below to match the invoice exactly.</span>
                         </div>
                         <div>
                             <label class="form-label">Organization API Key</label>
@@ -3949,7 +3945,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260621v"></script>
+<script src="/static/js/app.js?v=20260621w"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -4888,11 +4884,10 @@ function testAtlassian() {
     const set = (t, color) => { if (msg) { msg.textContent = t; msg.style.color = color; } };
     const payload = {
         orgId:       (document.getElementById('providerId').value || '').trim(),
-        directoryId: (document.getElementById('atlDirectoryId').value || '').trim(),
         accessToken: (document.getElementById('atlAccessToken').value || '').trim(),
     };
-    if (!payload.orgId || !payload.directoryId || !payload.accessToken) {
-        set('Enter Org ID, Directory ID and Organization API key first.', '#c05621'); return;
+    if (!payload.orgId || !payload.accessToken) {
+        set('Enter Org ID and Organization API key first.', '#c05621'); return;
     }
     set('Testing…', 'var(--text-muted)');
     fetch('/api/atlassian/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -4937,13 +4932,12 @@ function saveProvider() {
         const _atlActual = parseFloat(document.getElementById('atlActualCost').value);
         credentials = {
             orgId:       pid,
-            directoryId: document.getElementById('atlDirectoryId').value.trim(),
             accessToken: document.getElementById('atlAccessToken').value.trim(),
             products,
         };
         if (!isNaN(_atlActual) && _atlActual > 0) credentials.actualMonthlyCost = _atlActual;
-        if (!credentials.orgId || !credentials.directoryId || !credentials.accessToken) {
-            alert('Org ID, Directory ID and Organization API key are required.'); return;
+        if (!credentials.orgId || !credentials.accessToken) {
+            alert('Org ID and Organization API key are required.'); return;
         }
     }
 
