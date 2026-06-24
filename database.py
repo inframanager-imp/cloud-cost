@@ -2148,8 +2148,15 @@ def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups
         query += " AND tenant_id = ?"
         params.append(tenant_id)
     if cloud_provider is not None:
-        query += " AND cloud_provider = ?"
-        params.append(cloud_provider)
+        if isinstance(cloud_provider, (list, tuple, set)):
+            cps = [c for c in cloud_provider if c]
+            if cps:
+                placeholders = ",".join(["?"] * len(cps))
+                query += f" AND cloud_provider IN ({placeholders})"
+                params.extend(cps)
+        else:
+            query += " AND cloud_provider = ?"
+            params.append(cloud_provider)
 
     row = conn.execute(query, params).fetchone()
     total = round((row["total_cost"] or 0), 2)
