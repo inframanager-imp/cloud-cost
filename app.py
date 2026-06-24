@@ -2916,6 +2916,42 @@ def api_connected_clouds():
     return jsonify(sorted(clouds))
 
 
+@app.route("/api/clouds/default")
+@login_required
+def api_default_cloud():
+    """The cloud a tenant should land on by default — the one with the most spend
+    this month (converted to a common base), falling back to the first connected
+    cloud. Used so pages default to a real cloud instead of 'All'."""
+    tid = current_tenant_id()
+    from currency import get_rates, convert
+    conn = get_db()
+    first = datetime.utcnow().strftime("%Y-%m-01")
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    rows = conn.execute(
+        "SELECT cloud_provider, currency, SUM(cost) tot FROM cost_data "
+        "WHERE tenant_id=? AND substr(date,1,10)>=? AND substr(date,1,10)<=? "
+        "AND cloud_provider IS NOT NULL AND cloud_provider!='' "
+        "GROUP BY cloud_provider, currency",
+        (tid, first, today),
+    ).fetchall()
+    conn.close()
+    rates = get_rates()
+    totals = {}
+    for r in rows:
+        usd = convert(float(r["tot"] or 0), r["currency"] or "USD", "USD", rates)
+        totals[r["cloud_provider"]] = totals.get(r["cloud_provider"], 0) + usd
+    best = max(totals, key=totals.get) if totals else None
+    if not best:
+        # No spend yet — fall back to the first connected cloud.
+        clouds = set(get_distinct_cloud_providers_in_data(tenant_id=tid))
+        for p in get_cloud_providers(enabled_only=True, tenant_id=tid):
+            if p.get("provider_type"):
+                clouds.add(p["provider_type"])
+        order = ["azure", "aws", "gcp", "openai", "atlassian", "cursor"]
+        best = next((c for c in order if c in clouds), (sorted(clouds)[0] if clouds else "azure"))
+    return jsonify({"cloud": best})
+
+
 @app.route("/api/saved-filters", methods=["GET"])
 @login_required
 def api_get_saved_filters():

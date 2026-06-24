@@ -71,6 +71,17 @@ function activeClouds() {
     const list = CLOUD_ORDER.filter(c => CLOUD_META[c] && (!connectedClouds || connectedClouds.has(c)));
     return list.length ? list : ['azure', 'aws', 'gcp'];
 }
+// The cloud to land on by default (biggest-spend, per /api/clouds/default). Cached.
+let _defaultCloud = null;
+async function defaultCloud() {
+    if (_defaultCloud) return _defaultCloud;
+    try {
+        const d = await fetch('/api/clouds/default').then(r => r.json());
+        _defaultCloud = (d && d.cloud) || activeClouds()[0] || 'azure';
+    } catch (e) { _defaultCloud = activeClouds()[0] || 'azure'; }
+    return _defaultCloud;
+}
+
 // Populate a <select> with the tenant's clouds (optionally an "All" entry first).
 function fillCloudSelect(selectId, { includeAll = false, allLabel = 'All Clouds', allValue = '' } = {}) {
     const el = document.getElementById(selectId);
@@ -2618,6 +2629,13 @@ function cmpRemovePeriod(n) {
 
 async function loadCompare() {
     try {
+        // Default to the biggest-spend cloud (no "All") if not already chosen.
+        if (!cmpSelectedCloud) {
+            const dc = await defaultCloud();
+            const chip = document.querySelector(`[data-cmp-cloud="${dc}"]`);
+            if (chip) { setCmpCloud(chip, dc); }
+            else cmpSelectedCloud = dc;
+        }
         const filterParams = new URLSearchParams();
         if (cmpSelectedCloud) filterParams.set('cloud_provider', cmpSelectedCloud);
         else if (selectedCloud) filterParams.set('cloud_provider', selectedCloud);
@@ -2632,11 +2650,22 @@ async function loadCompare() {
         populateCompareDropdowns();
         populateCmpRG(filters.resource_groups || []);
         onCompareModeChange();
-        // Auto-run comparison on page load with default fields
+        // Auto-run the period dropdowns so changing a period re-runs without the button.
+        ['cmpMonth1', 'cmpMonth2', 'cmpGroupBy'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el && !el._cmpAutoBound) { el._cmpAutoBound = true; el.addEventListener('change', cmpAutoRun); }
+        });
         await runComparison();
     } catch (err) {
         console.error('Compare load error:', err);
     }
+}
+
+// Debounced auto-run for Compare (so picking periods/cloud re-compares automatically).
+let _cmpAutoTimer = null;
+function cmpAutoRun() {
+    clearTimeout(_cmpAutoTimer);
+    _cmpAutoTimer = setTimeout(() => { if (typeof runComparison === 'function') runComparison(); }, 350);
 }
 
 let cmpRGOptions = [];       // array of display strings
@@ -2708,6 +2737,7 @@ function setCmpCloud(btn, cloud) {
             populateCmpRG(f.resource_groups || []);
         }).catch(() => populateCmpRG([]));
     }
+    cmpAutoRun();   // auto-apply on cloud change
 }
 
 // ── Account filter for AWS/GCP when grouping by service ──────────────────
@@ -4482,7 +4512,7 @@ async function loadCustomCostPage() {
 
     // Cloud filter buttons
     document.querySelectorAll('#ccCloudsFilter .seg').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             document.querySelectorAll('#ccCloudsFilter .seg').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             ccCloudFilter = btn.dataset.cloud;
@@ -4491,10 +4521,23 @@ async function loadCustomCostPage() {
             ccSelectedSvcs.clear();
             ccUpdateCloudLabels(ccCloudFilter);
             ccRenderList('sub');
-            ccLoadFilters();
+            await ccLoadFilters();
+            ccAutoCalc();   // auto-apply — no Calculate button needed
         });
     });
-    ccUpdateCloudLabels('all'); // init labels
+    // Default to the biggest-spend cloud (no "All"); auto-calculate on landing.
+    defaultCloud().then(dc => {
+        const chips = document.querySelectorAll('#ccCloudsFilter .seg');
+        const target = [...chips].find(b => b.dataset.cloud === dc) || chips[0];
+        if (target) {
+            chips.forEach(b => b.classList.remove('active'));
+            target.classList.add('active');
+            ccCloudFilter = target.dataset.cloud;
+        }
+        ccUpdateCloudLabels(ccCloudFilter);
+        ccRenderList('sub');
+        ccLoadFilters().then(() => ccAutoCalc());
+    });
 
     // Date range seg buttons
     document.querySelectorAll('#ccDateFilter .seg').forEach(btn => {
@@ -4520,6 +4563,7 @@ async function loadCustomCostPage() {
             const custom = document.querySelector('#ccDateFilter .seg[data-range="custom"]');
             if (custom) custom.classList.add('active');
             ccUpdateSelectionPreview();
+            ccAutoCalc();
         });
     });
 
@@ -4577,6 +4621,7 @@ function ccApplyDatePreset(range) {
     const cd = document.getElementById('customDateInputs');
     if (cd) cd.style.display = 'none';
     ccUpdateSelectionPreview();
+    ccAutoCalc();
 }
 
 function ccTogglePanel(type) {
@@ -4710,12 +4755,21 @@ function ccRenderList(type) {
     }).join('');
 }
 
+// Debounced auto-calculate — runs ccCalculate shortly after any filter change so
+// the user doesn't have to click Calculate.
+let _ccAutoTimer = null;
+function ccAutoCalc() {
+    clearTimeout(_ccAutoTimer);
+    _ccAutoTimer = setTimeout(() => { if (typeof ccCalculate === 'function') ccCalculate(); }, 400);
+}
+
 function ccToggleItem(type, item, checkbox) {
     const selected = type === 'sub' ? ccSelectedSubs : (type === 'rg' ? ccSelectedRgs : ccSelectedSvcs);
     if (checkbox.checked) selected.add(item);
     else selected.delete(item);
     ccUpdateCounts();
     if (type === 'sub') ccLoadFilters();
+    ccAutoCalc();
 }
 
 function ccSelectAll(type) {
@@ -4731,6 +4785,7 @@ function ccSelectAll(type) {
     ccRenderList(type);
     ccUpdateCounts();
     if (type === 'sub') ccLoadFilters();
+    ccAutoCalc();
 }
 
 function ccDeselectAll(type) {
@@ -4739,6 +4794,7 @@ function ccDeselectAll(type) {
     ccRenderList(type);
     ccUpdateCounts();
     if (type === 'sub') ccLoadFilters();
+    ccAutoCalc();
 }
 
 function ccFilterList(type) { ccRenderList(type); }

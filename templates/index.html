@@ -994,9 +994,8 @@
                 <div class="filter-bar__field">
                     <span class="micro-label">Cloud</span>
                     <div class="segmented-control segmented-control--small">
-                        <button class="seg active" data-cmp-cloud="" onclick="setCmpCloud(this,'')">All</button>
+                        <button class="seg active" data-cmp-cloud="azure" onclick="setCmpCloud(this,'azure')">Azure</button>
                         <button class="seg" data-cmp-cloud="aws" onclick="setCmpCloud(this,'aws')">AWS</button>
-                        <button class="seg" data-cmp-cloud="azure" onclick="setCmpCloud(this,'azure')">Azure</button>
                         <button class="seg" data-cmp-cloud="gcp" onclick="setCmpCloud(this,'gcp')">GCP</button>
                         <button class="seg" data-cmp-cloud="openai" onclick="setCmpCloud(this,'openai')">OpenAI</button>
                         <button class="seg" data-cmp-cloud="atlassian" onclick="setCmpCloud(this,'atlassian')">Atlassian</button>
@@ -1243,8 +1242,7 @@
                 <div class="filter-bar__field">
                     <span class="micro-label">Clouds</span>
                     <div class="segmented-control segmented-control--small" id="ccCloudsFilter">
-                        <button class="seg active" data-cloud="all">All</button>
-                        <button class="seg" data-cloud="azure">Azure</button>
+                        <button class="seg active" data-cloud="azure">Azure</button>
                         <button class="seg" data-cloud="aws">AWS</button>
                         <button class="seg" data-cloud="gcp">GCP</button>
                         <button class="seg" data-cloud="openai">OpenAI</button>
@@ -3953,7 +3951,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260622i"></script>
+<script src="/static/js/app.js?v=20260622j"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
