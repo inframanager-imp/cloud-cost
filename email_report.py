@@ -910,6 +910,7 @@ def _build_custom_report_html(report):
         date_from=date_from or None,
         date_to=date_to or None,
         tenant_id=tenant_id,
+        cloud_provider=filters.get("cloud_provider") or None,
     )
 
     total_cost = data.get("total_cost", 0)

@@ -1305,6 +1305,8 @@ function setCostsCloud(btn, cloud) {
     costsSelectedCloud = cloud;
     costPageOffset = 0;
     document.querySelectorAll('[data-costs-cloud]').forEach(b => b.classList.toggle('active', b.dataset.costsCloud === cloud));
+    const awsHint = document.getElementById('costsAwsHint');
+    if (awsHint) awsHint.style.display = (cloud === 'aws') ? 'block' : 'none';
     _updateCostsCloudFilters(cloud);
     loadCostsTable();
 }
@@ -5471,6 +5473,32 @@ async function loadCustomReportsList() {
     }
 }
 
+// Load a cloud's accounts/subscriptions + resource groups + services for the
+// custom-report builder (cloud-aware, via the shared filter-values endpoint).
+async function crLoadCloudFilters(cloud) {
+    cloud = cloud || 'azure';
+    crSubMap = {};
+    try {
+        const accts = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=subscription_id`).then(r => r.json());
+        crSubOptions = (accts || []).map(a => a.value);
+        (accts || []).forEach(a => { crSubMap[a.value] = a.label || a.value; });
+    } catch (e) { crSubOptions = []; }
+    try {
+        const rgs = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=resource_group`).then(r => r.json());
+        crRgOptions = (rgs || []).map(a => a.value);
+    } catch (e) { crRgOptions = []; }
+    try {
+        const svcs = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=service_name`).then(r => r.json());
+        crSvcOptions = (svcs || []).map(a => a.value);
+    } catch (e) { crSvcOptions = []; }
+}
+
+async function onCRCloudChange() {
+    crSelectedSubs.clear(); crSelectedRgs.clear(); crSelectedSvcs.clear();
+    await crLoadCloudFilters(document.getElementById('crCloud').value);
+    crRenderAllLists();
+}
+
 async function openCustomReportBuilder(editData) {
     document.getElementById('crBuilderModal').style.display = 'flex';
     document.getElementById('crEditId').value = '';
@@ -5493,20 +5521,15 @@ async function openCustomReportBuilder(editData) {
         cb.checked = ['summary', 'by_service', 'by_rg', 'trend'].includes(cb.value);
     });
 
-    // Load subscriptions
-    try {
-        const subs = await fetch('/api/subscriptions').then(r => r.json());
-        crSubOptions = subs.filter(s => s.enabled).map(s => s.subscription_id);
-        crSubMap = {};
-        subs.filter(s => s.enabled).forEach(s => { crSubMap[s.subscription_id] = s.name; });
-    } catch (e) {}
-
-    // Load RG/services
-    try {
-        const filters = await fetch('/api/filters').then(r => r.json());
-        crRgOptions = filters.resource_groups || [];
-        crSvcOptions = filters.services || [];
-    } catch (e) {}
+    // Populate the Cloud selector + default to the biggest-spend cloud, then load
+    // THAT cloud's accounts/RGs/services (so AWS accounts & GCP projects show too).
+    const crCloudSel = document.getElementById('crCloud');
+    if (crCloudSel) {
+        crCloudSel.innerHTML = activeClouds().map(c => `<option value="${c}">${CLOUD_META[c]?.label || c}</option>`).join('');
+        const dc = (editData && editData.filters && editData.filters.cloud_provider) || await defaultCloud();
+        if ([...crCloudSel.options].some(o => o.value === dc)) crCloudSel.value = dc;
+    }
+    await crLoadCloudFilters(crCloudSel ? crCloudSel.value : await defaultCloud());
 
     crRenderAllLists();
     onCRDateRangeChange();
@@ -5617,6 +5640,7 @@ async function saveCRBuilder() {
         name,
         recipients: document.getElementById('crRecipients').value.trim(),
         filters: {
+            cloud_provider: document.getElementById('crCloud')?.value || '',
             subscription_ids: [...crSelectedSubs],
             resource_groups: [...crSelectedRgs],
             services: [...crSelectedSvcs],

@@ -763,6 +763,11 @@
             </div>
         </div>
 
+        <!-- AWS resource-level limitation note (shown only when AWS is selected) -->
+        <div id="costsAwsHint" style="display:none;font-size:12px;color:var(--text-secondary);margin:0 0 10px;padding:8px 12px;background:rgba(255,153,0,.08);border:1px solid rgba(255,153,0,.25);border-radius:8px">
+            &#8505;&#65039; AWS resource-level detail is available only from when the CUR billing export was connected. Earlier months show service- and account-level totals only (an AWS billing-data limitation).
+        </div>
+
         <!-- Main cost table -->
         <div class="table-container cost-table-wrap" style="overflow-x:auto">
             <table id="costsTable" class="cost-table" style="min-width:700px;table-layout:auto">
@@ -2199,6 +2204,13 @@
                     <div class="email-field">
                         <label>Recipients (comma-separated, leave blank to use global)</label>
                         <input type="text" id="crRecipients" class="filter-input" placeholder="user@company.com">
+                    </div>
+
+                    <div class="email-field-row">
+                        <div class="email-field" style="flex:1">
+                            <label>Cloud</label>
+                            <select id="crCloud" class="filter-input" onchange="onCRCloudChange()"></select>
+                        </div>
                     </div>
 
                     <div class="email-field-row">
@@ -3951,7 +3963,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260622j"></script>
+<script src="/static/js/app.js?v=20260622k"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
