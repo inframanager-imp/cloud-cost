@@ -5655,6 +5655,30 @@ function crToggle(type, item, cb) {
     document.getElementById('crSubCount').textContent = `(${crSelectedSubs.size})`;
     document.getElementById('crRgCount').textContent = `(${crSelectedRgs.size})`;
     document.getElementById('crSvcCount').textContent = `(${crSelectedSvcs.size})`;
+    // Changing the subscription selection re-scopes the RG/Service lists.
+    if (type === 'sub') crReloadScopedFilters();
+}
+
+// Scope the Resource Groups / Services lists to the selected subscriptions
+// (across whatever clouds they belong to). With none selected, fall back to the
+// union across the chosen clouds.
+async function crReloadScopedFilters() {
+    if (crSelectedSubs.size > 0) {
+        try {
+            const ids = [...crSelectedSubs].map(encodeURIComponent).join(',');
+            const f = await fetch(`/api/filters?subscription_ids=${ids}`).then(r => r.json());
+            crRgOptions = (f.resource_groups || []).slice().sort();
+            crSvcOptions = (f.services || []).slice().sort();
+        } catch (e) { /* keep current lists on error */ }
+    } else {
+        await crLoadCloudFilters([...crSelectedClouds]);
+    }
+    crSelectedRgs.clear();
+    crSelectedSvcs.clear();
+    crRenderList('rg');
+    crRenderList('svc');
+    document.getElementById('crRgCount').textContent = `(${crSelectedRgs.size})`;
+    document.getElementById('crSvcCount').textContent = `(${crSelectedSvcs.size})`;
 }
 
 function crFilterList(type) { crRenderList(type); }
