@@ -212,16 +212,22 @@ def sync_cursor(tenant_id):
                 "role": m.get("role"), "userId": m.get("userId"),
             })
             days = daily_od.get(email, {})
-            if days:
-                day_sum = 0.0
-                for day, cents in sorted(days.items()):
-                    c = round(cents / 100.0, 2)
-                    day_sum = round(day_sum + c, 2)
+            weight = sum(days.values())  # total chargeable event cents for this user
+            if cost > 0 and weight > 0:
+                # Distribute the member's AUTHORITATIVE on-demand across their active
+                # days proportionally to event spend. Sum stays exactly == `cost`
+                # (last day absorbs rounding) and every daily value is >= 0.
+                items = sorted(days.items())
+                acc = 0.0
+                for i, (day, cents) in enumerate(items):
+                    if i < len(items) - 1:
+                        c = round(cost * (cents / weight), 2)
+                    else:
+                        c = round(cost - acc, 2)
+                        if c < 0:
+                            c = 0.0
+                    acc = round(acc + c, 2)
                     cost_rows.append((day, role, "Cursor", "Seat", name, "Usage", "", c,
-                                      "USD", "Cursor Team", tags, "cursor", tenant_id))
-                diff = round(cost - day_sum, 2)  # rounding/timing residual
-                if abs(diff) >= 0.01:
-                    cost_rows.append((cycle_date, role, "Cursor", "Seat", name, "Usage", "", diff,
                                       "USD", "Cursor Team", tags, "cursor", tenant_id))
             else:
                 # No day-resolved events — stamp the whole on-demand (often $0) at
