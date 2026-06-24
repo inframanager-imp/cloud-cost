@@ -2208,8 +2208,8 @@
 
                     <div class="email-field-row">
                         <div class="email-field" style="flex:1">
-                            <label>Cloud</label>
-                            <select id="crCloud" class="filter-input" onchange="onCRCloudChange()"></select>
+                            <label>Clouds <span style="font-weight:400;color:var(--text-secondary);font-size:11px">(select one or more)</span></label>
+                            <div id="crCloudChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px"></div>
                         </div>
                     </div>
 
@@ -2244,14 +2244,14 @@
                         <div>
                             <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">Resource Groups <span id="crRgCount" style="color:var(--accent)">(0)</span></label>
                             <div class="multi-select-box" style="max-height:180px">
-                                <div class="multi-select-search"><input type="text" placeholder="Search..." id="crRgSearch" oninput="crFilterList('rg')"></div>
+                                <div class="multi-select-search"><input type="text" placeholder="Search..." id="crRgSearch" autocomplete="off" oninput="crFilterList('rg')"></div>
                                 <div class="multi-select-list" id="crRgList" style="max-height:140px"></div>
                             </div>
                         </div>
                         <div>
                             <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">Services <span id="crSvcCount" style="color:var(--accent)">(0)</span></label>
                             <div class="multi-select-box" style="max-height:180px">
-                                <div class="multi-select-search"><input type="text" placeholder="Search..." id="crSvcSearch" oninput="crFilterList('svc')"></div>
+                                <div class="multi-select-search"><input type="text" placeholder="Search..." id="crSvcSearch" autocomplete="off" oninput="crFilterList('svc')"></div>
                                 <div class="multi-select-list" id="crSvcList" style="max-height:140px"></div>
                             </div>
                         </div>
@@ -3963,7 +3963,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260622k"></script>
+<script src="/static/js/app.js?v=20260622l"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

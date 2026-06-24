@@ -903,6 +903,12 @@ def _build_custom_report_html(report):
     else:
         period_label = f"{date_from} to {date_to}" if date_from and date_to else "All Time"
 
+    # Clouds: new multi-select (cloud_providers list) with legacy single fallback.
+    cloud_providers = filters.get("cloud_providers")
+    if not cloud_providers and filters.get("cloud_provider"):
+        cloud_providers = [filters["cloud_provider"]]
+    cloud_providers = [c for c in (cloud_providers or []) if c] or None
+
     data = get_custom_cost(
         subscription_ids=sub_ids if sub_ids else None,
         resource_groups=rgs if rgs else None,
@@ -910,7 +916,7 @@ def _build_custom_report_html(report):
         date_from=date_from or None,
         date_to=date_to or None,
         tenant_id=tenant_id,
-        cloud_provider=filters.get("cloud_provider") or None,
+        cloud_provider=cloud_providers,
     )
 
     total_cost = data.get("total_cost", 0)

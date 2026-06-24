@@ -1329,8 +1329,15 @@ def get_cost_total(filters=None, tenant_id=None, cloud_provider=None, reporting_
         params.append(tenant_id)
 
     if cloud_provider is not None:
-        query += " AND cloud_provider = ?"
-        params.append(cloud_provider)
+        if isinstance(cloud_provider, (list, tuple, set)):
+            cps = [c for c in cloud_provider if c]
+            if cps:
+                placeholders = ",".join(["?"] * len(cps))
+                query += f" AND cloud_provider IN ({placeholders})"
+                params.extend(cps)
+        else:
+            query += " AND cloud_provider = ?"
+            params.append(cloud_provider)
 
     row = conn.execute(query, params).fetchone()
     conn.close()

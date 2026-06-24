@@ -5473,29 +5473,63 @@ async function loadCustomReportsList() {
     }
 }
 
-// Load a cloud's accounts/subscriptions + resource groups + services for the
-// custom-report builder (cloud-aware, via the shared filter-values endpoint).
-async function crLoadCloudFilters(cloud) {
-    cloud = cloud || 'azure';
+// Clouds selected for the custom-report builder (supports multiple).
+let crSelectedClouds = new Set();
+
+// Load accounts/subscriptions + resource groups + services for ALL selected
+// clouds (union), via the shared filter-values endpoint. When more than one
+// cloud is selected, each option label is tagged with its cloud for clarity.
+async function crLoadCloudFilters(clouds) {
+    const list = (Array.isArray(clouds) ? clouds : [clouds]).filter(Boolean);
+    if (!list.length) list.push('azure');
+    const multi = list.length > 1;
     crSubMap = {};
-    try {
-        const accts = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=subscription_id`).then(r => r.json());
-        crSubOptions = (accts || []).map(a => a.value);
-        (accts || []).forEach(a => { crSubMap[a.value] = a.label || a.value; });
-    } catch (e) { crSubOptions = []; }
-    try {
-        const rgs = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=resource_group`).then(r => r.json());
-        crRgOptions = (rgs || []).map(a => a.value);
-    } catch (e) { crRgOptions = []; }
-    try {
-        const svcs = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=service_name`).then(r => r.json());
-        crSvcOptions = (svcs || []).map(a => a.value);
-    } catch (e) { crSvcOptions = []; }
+    const subs = [], rgSet = new Set(), svcSet = new Set();
+    for (const cloud of list) {
+        const tag = multi ? ` · ${CLOUD_META[cloud]?.label || cloud}` : '';
+        try {
+            const accts = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=subscription_id`).then(r => r.json());
+            (accts || []).forEach(a => { if (!subs.includes(a.value)) subs.push(a.value); crSubMap[a.value] = (a.label || a.value) + tag; });
+        } catch (e) {}
+        try {
+            const rgs = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=resource_group`).then(r => r.json());
+            (rgs || []).forEach(a => rgSet.add(a.value));
+        } catch (e) {}
+        try {
+            const svcs = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=service_name`).then(r => r.json());
+            (svcs || []).forEach(a => svcSet.add(a.value));
+        } catch (e) {}
+    }
+    crSubOptions = subs;
+    crRgOptions = [...rgSet];
+    crSvcOptions = [...svcSet];
 }
 
-async function onCRCloudChange() {
+// Render the cloud multi-select chips (one per connected cloud).
+function crRenderCloudChips() {
+    const box = document.getElementById('crCloudChips');
+    if (!box) return;
+    box.innerHTML = activeClouds().map(c => {
+        const on = crSelectedClouds.has(c);
+        const label = CLOUD_META[c]?.label || c;
+        return `<button type="button" data-cr-cloud="${c}" onclick="crToggleCloud('${c}')"
+            style="font-size:12px;padding:5px 13px;border-radius:16px;cursor:pointer;
+                   border:1px solid ${on ? 'var(--accent)' : 'var(--border)'};
+                   background:${on ? 'var(--accent)' : 'transparent'};
+                   color:${on ? '#fff' : 'var(--text)'};font-weight:${on ? 600 : 400}">${label}</button>`;
+    }).join('');
+}
+
+async function crToggleCloud(cloud) {
+    if (crSelectedClouds.has(cloud)) {
+        if (crSelectedClouds.size === 1) return;   // keep at least one selected
+        crSelectedClouds.delete(cloud);
+    } else {
+        crSelectedClouds.add(cloud);
+    }
+    crRenderCloudChips();
     crSelectedSubs.clear(); crSelectedRgs.clear(); crSelectedSvcs.clear();
-    await crLoadCloudFilters(document.getElementById('crCloud').value);
+    await crLoadCloudFilters([...crSelectedClouds]);
     crRenderAllLists();
 }
 
@@ -5521,15 +5555,23 @@ async function openCustomReportBuilder(editData) {
         cb.checked = ['summary', 'by_service', 'by_rg', 'trend'].includes(cb.value);
     });
 
-    // Populate the Cloud selector + default to the biggest-spend cloud, then load
-    // THAT cloud's accounts/RGs/services (so AWS accounts & GCP projects show too).
-    const crCloudSel = document.getElementById('crCloud');
-    if (crCloudSel) {
-        crCloudSel.innerHTML = activeClouds().map(c => `<option value="${c}">${CLOUD_META[c]?.label || c}</option>`).join('');
-        const dc = (editData && editData.filters && editData.filters.cloud_provider) || await defaultCloud();
-        if ([...crCloudSel.options].some(o => o.value === dc)) crCloudSel.value = dc;
+    // Default selected clouds: saved on the report (cloud_providers / legacy
+    // cloud_provider) when editing, otherwise the biggest-spend cloud.
+    crSelectedClouds = new Set();
+    const active = activeClouds();
+    let savedClouds = [];
+    if (editData && editData.filters) {
+        if (Array.isArray(editData.filters.cloud_providers)) savedClouds = editData.filters.cloud_providers;
+        else if (editData.filters.cloud_provider) savedClouds = [editData.filters.cloud_provider];
     }
-    await crLoadCloudFilters(crCloudSel ? crCloudSel.value : await defaultCloud());
+    savedClouds = savedClouds.filter(c => active.includes(c));
+    if (!savedClouds.length) {
+        const dc = await defaultCloud();
+        savedClouds = [active.includes(dc) ? dc : (active[0] || 'azure')];
+    }
+    savedClouds.forEach(c => crSelectedClouds.add(c));
+    crRenderCloudChips();
+    await crLoadCloudFilters([...crSelectedClouds]);
 
     crRenderAllLists();
     onCRDateRangeChange();
@@ -5640,7 +5682,7 @@ async function saveCRBuilder() {
         name,
         recipients: document.getElementById('crRecipients').value.trim(),
         filters: {
-            cloud_provider: document.getElementById('crCloud')?.value || '',
+            cloud_providers: [...crSelectedClouds],
             subscription_ids: [...crSelectedSubs],
             resource_groups: [...crSelectedRgs],
             services: [...crSelectedSvcs],
