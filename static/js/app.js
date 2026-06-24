@@ -5505,6 +5505,34 @@ async function crLoadCloudFilters(clouds) {
     crSvcOptions = [...svcSet];
 }
 
+// Per-cloud labels for the three filter columns (plural, report-friendly).
+const CR_LABELS = {
+    azure:     { sub: 'Subscriptions', rg: 'Resource Groups', svc: 'Services' },
+    aws:       { sub: 'Accounts',      rg: 'Regions',         svc: 'Services' },
+    gcp:       { sub: 'Projects',      rg: 'Projects',        svc: 'Services' },
+    openai:    { sub: 'API Keys',      rg: 'Models',          svc: 'Services' },
+    atlassian: { sub: 'Organizations', rg: 'Plans',           svc: 'Products' },
+    cursor:    { sub: 'Teams',         rg: 'Roles',           svc: 'Services' },
+};
+
+// Relabel the Subscriptions/Resource-Groups/Services columns to match the
+// selected cloud(s): "Accounts / Regions" for AWS, "Projects" for GCP, etc.
+// When multiple clouds are selected the distinct names are joined with " / ".
+function crUpdateLabels() {
+    const clouds = [...crSelectedClouds];
+    const join = key => {
+        const seen = [];
+        clouds.forEach(c => { const w = (CR_LABELS[c] || CR_LABELS.azure)[key]; if (!seen.includes(w)) seen.push(w); });
+        return seen.join(' / ') || 'Items';
+    };
+    const setLabel = (id, txt) => { const el = document.getElementById(id); if (el && el.childNodes[0]) el.childNodes[0].nodeValue = txt + ' '; };
+    setLabel('crSubLabel', join('sub'));
+    setLabel('crRgLabel', join('rg'));
+    setLabel('crSvcLabel', join('svc'));
+    const rs = document.getElementById('crRgSearch');  if (rs) rs.placeholder = 'Search ' + join('rg').toLowerCase() + '...';
+    const ss = document.getElementById('crSvcSearch'); if (ss) ss.placeholder = 'Search ' + join('svc').toLowerCase() + '...';
+}
+
 // Render the cloud multi-select chips (one per connected cloud).
 function crRenderCloudChips() {
     const box = document.getElementById('crCloudChips');
@@ -5518,6 +5546,7 @@ function crRenderCloudChips() {
                    background:${on ? 'var(--accent)' : 'transparent'};
                    color:${on ? '#fff' : 'var(--text)'};font-weight:${on ? 600 : 400}">${label}</button>`;
     }).join('');
+    crUpdateLabels();
 }
 
 async function crToggleCloud(cloud) {
