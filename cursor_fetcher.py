@@ -166,24 +166,68 @@ def sync_cursor(tenant_id):
             "fast_premium_requests,synced_at) VALUES(?,?,?,?,?,?,?,?,?)", rows,
         )
 
-        # Mirror into cost_data: one row per member, dated at the billing-cycle start.
+        # ── Usage events (fetched ONCE) drive both the daily cost trend and the
+        #    per-(user,model) aggregation below. ─────────────────────────────────
+        events = []
+        try:
+            start_ms = int(cycle_start) if cycle_start else int((now.replace(day=1)).timestamp() * 1000)
+            end_ms = int(now.timestamp() * 1000)
+            events = client.fetch_usage_events(start_ms, end_ms)
+        except Exception as ue:
+            print(f"[Cursor] usage-events fetch failed (non-fatal): {ue}")
+        events_n = len(events)
+
+        # Per-(email, day) on-demand cents from chargeable Usage-based events, so
+        # cost_data carries a real daily breakdown instead of a single cycle-start
+        # point (gives the report a proper Daily Cost Trends range).
+        daily_od = {}  # email(lower) -> { 'YYYY-MM-DD': cents }
+        for e in events:
+            if not e.get("isChargeable") or (e.get("kind") or "") != "Usage-based":
+                continue
+            cents = float(e.get("chargedCents") or 0)
+            ts = e.get("timestamp")
+            if cents <= 0 or not ts:
+                continue
+            email = (e.get("userEmail") or "").lower()
+            day = datetime.utcfromtimestamp(int(ts) / 1000).strftime("%Y-%m-%d")
+            daily_od.setdefault(email, {})
+            daily_od[email][day] = daily_od[email].get(day, 0.0) + cents
+
+        # Mirror into cost_data: one row per (member, day) for on-demand spend.
+        # Any residual vs the member's authoritative on-demand total is reconciled
+        # onto the cycle-start date so per-user totals still match the dashboard.
         conn.execute(
             "DELETE FROM cost_data WHERE cloud_provider='cursor' AND tenant_id IS ?",
             (tenant_id,),
         )
         cost_rows, total = [], 0.0
         for m in members:
-            cost = _user_cost(m)
+            cost = _user_cost(m)  # authoritative on-demand (USD)
             total += cost
+            email = (m.get("email") or "").lower()
+            name = m.get("name") or m.get("email") or "Member"
+            role = m.get("role") or ""
             tags = json.dumps({
                 "spendCents": m.get("spendCents"), "includedSpendCents": m.get("includedSpendCents"),
                 "role": m.get("role"), "userId": m.get("userId"),
             })
-            cost_rows.append((
-                cycle_date, m.get("role") or "", "Cursor", "Seat",
-                m.get("name") or m.get("email") or "Member",
-                "Usage", "", cost, "USD", "Cursor Team", tags, "cursor", tenant_id,
-            ))
+            days = daily_od.get(email, {})
+            if days:
+                day_sum = 0.0
+                for day, cents in sorted(days.items()):
+                    c = round(cents / 100.0, 2)
+                    day_sum = round(day_sum + c, 2)
+                    cost_rows.append((day, role, "Cursor", "Seat", name, "Usage", "", c,
+                                      "USD", "Cursor Team", tags, "cursor", tenant_id))
+                diff = round(cost - day_sum, 2)  # rounding/timing residual
+                if abs(diff) >= 0.01:
+                    cost_rows.append((cycle_date, role, "Cursor", "Seat", name, "Usage", "", diff,
+                                      "USD", "Cursor Team", tags, "cursor", tenant_id))
+            else:
+                # No day-resolved events — stamp the whole on-demand (often $0) at
+                # the cycle start so the member still appears in per-user views.
+                cost_rows.append((cycle_date, role, "Cursor", "Seat", name, "Usage", "", cost,
+                                  "USD", "Cursor Team", tags, "cursor", tenant_id))
         if cost_rows:
             conn.executemany(
                 "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
@@ -192,12 +236,7 @@ def sync_cursor(tenant_id):
             )
 
         # ── Usage events → aggregate per (user, model): included vs on-demand ──
-        events_n = 0
         try:
-            start_ms = int(cycle_start) if cycle_start else int((now.replace(day=1)).timestamp() * 1000)
-            end_ms = int(now.timestamp() * 1000)
-            events = client.fetch_usage_events(start_ms, end_ms)
-            events_n = len(events)
             agg = {}  # (email, model) -> {included, on_demand, tokens, events}
             for e in events:
                 if not e.get("isChargeable"):
