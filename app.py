@@ -1228,6 +1228,66 @@ def api_sync():
                 except Exception as cp_outer_err:
                     print(f"[Sync] Cloud providers sync error (non-fatal): {cp_outer_err}")
 
+            # ── Integration providers (Cursor / OpenAI / Atlassian) ──────────
+            # "Sync All" should refresh everything the tenant has connected, not
+            # just Azure/AWS/GCP. Each is independent and non-fatal.
+            if not target_sub:
+                # Cursor — live per-user on-demand spend
+                try:
+                    if (get_integration_settings(tid).get("cursor_api_key") or "").strip():
+                        sync_status["message"] = f"{mode_label}: syncing Cursor…"
+                        from cursor_fetcher import sync_cursor
+                        cur_res = sync_cursor(tid)
+                        total_records += int((cur_res or {}).get("members", 0))
+                        print(f"[Sync] CURSOR (tenant {tid}): {cur_res}")
+                except Exception as _cur_err:
+                    print(f"[Sync] CURSOR (tenant {tid}) failed (non-fatal): {_cur_err}")
+
+                # OpenAI — usage/cost (last 30 days)
+                try:
+                    if (get_integration_settings(tid).get("openai_api_key") or "").strip():
+                        sync_status["message"] = f"{mode_label}: syncing OpenAI…"
+                        oai_res = _fetch_openai_costs(tid, days=30)
+                        total_records += int((oai_res or {}).get("inserted", 0))
+                        print(f"[Sync] OPENAI (tenant {tid}): {oai_res}")
+                except Exception as _oai_err:
+                    print(f"[Sync] OPENAI (tenant {tid}) failed (non-fatal): {_oai_err}")
+
+                # Atlassian — monthly per-user seat cost
+                try:
+                    from atlassian_fetcher import fetch_atlassian_costs
+                    for ap in get_cloud_providers(enabled_only=True, tenant_id=tid):
+                        if ap.get("provider_type") != "atlassian":
+                            continue
+                        ap_full = get_cloud_provider(ap["id"]) or ap
+                        try:
+                            sync_status["message"] = f"{mode_label}: syncing Atlassian…"
+                            a_records = fetch_atlassian_costs(ap_full, "", "")
+                            a_from = datetime.utcnow().strftime("%Y-%m-01")
+                            a_to   = datetime.utcnow().strftime("%Y-%m-%d")
+                            _c = get_db()
+                            _c.execute(
+                                "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='atlassian' "
+                                "AND subscription_id=? AND tenant_id=?",
+                                (a_from, a_to, ap_full.get("provider_id"), tid),
+                            )
+                            if a_records:
+                                _c.executemany(
+                                    "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
+                                    "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
+                                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                    [r + (tid,) for r in a_records],
+                                )
+                            _c.commit(); _c.close()
+                            total_records += len(a_records)
+                            update_cloud_provider_sync_time(ap_full["id"], error=None)
+                            print(f"[Sync] ATLASSIAN '{ap_full.get('name')}' (tenant {tid}): {len(a_records)} records")
+                        except Exception as _ap_err:
+                            update_cloud_provider_sync_time(ap.get("id"), error=str(_ap_err))
+                            print(f"[Sync] ATLASSIAN '{ap.get('name')}' failed (non-fatal): {_ap_err}")
+                except Exception as _atl_err:
+                    print(f"[Sync] ATLASSIAN (tenant {tid}) failed (non-fatal): {_atl_err}")
+
             sync_status["message"] = f"{mode_label} complete! {total_records} records across {total_subs} subscription(s)."
             sync_status["progress"] = 100
             update_sync_log(sync_id, "success", total_records)
