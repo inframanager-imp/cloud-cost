@@ -5883,10 +5883,13 @@ async function _scLoadProviders() {
     const container = document.getElementById('scProviderCards');
     if (!container) return;
     try {
-        const [providers, subsRaw, histRaw] = await Promise.all([
+        const [providers, subsRaw, histRaw, intgRaw, curSum, oaiSum] = await Promise.all([
             fetch('/api/cloud-providers').then(r => r.json()),
             fetch('/api/subscriptions').then(r => r.json()).catch(() => []),
-            fetch('/api/sync/history').then(r => r.json()).catch(() => [])
+            fetch('/api/sync/history').then(r => r.json()).catch(() => []),
+            fetch('/api/integrations/settings').then(r => r.json()).catch(() => ({})),
+            fetch('/api/cursor/summary').then(r => r.json()).catch(() => ({})),
+            fetch('/api/integrations/openai/summary').then(r => r.json()).catch(() => ({}))
         ]);
 
         const icons = { azure: '⊞', aws: '⚙', gcp: '◉' };
@@ -5955,10 +5958,40 @@ async function _scLoadProviders() {
             </div>`;
         }).join('');
 
+        // Integration providers (Cursor / OpenAI) live in integration_settings,
+        // not cloud_providers, so build their cards separately.
+        const intgCard = (key, name, color, icon, subtitle, lastSyncStr, quickAttr, fullAttr) => `
+        <div class="sc-provider-card" id="sc-pcard-${key}">
+            <div class="sc-provider-header">
+                <span class="sc-logo" style="color:${color}">${icon}</span>
+                <span class="sc-name">${name}</span>
+                <span class="sc-lastsync">${lastSyncStr
+                    ? `<span style="color:var(--green)">✓</span> ${lastSyncStr}`
+                    : '<span style="color:var(--text-secondary)">Never</span>'}</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px">${subtitle}</div>
+            <div class="sc-provider-actions">
+                <button class="btn-mini" ${quickAttr}>Quick Sync</button>
+                <button class="btn-mini" style="background:var(--bg)" ${fullAttr}>Full Sync</button>
+            </div>
+        </div>`;
+
+        let intgCards = '';
+        if (intgRaw && intgRaw.cursor && intgRaw.cursor.api_key) {
+            const members = (curSum && curSum.members) ? `${curSum.members} member${curSum.members !== 1 ? 's' : ''}` : 'Live team spend';
+            intgCards += intgCard('cursor', 'Cursor', '#6c47ff', '◧', members, null,
+                `onclick="scSyncCursor()"`, `onclick="scSyncCursor()"`);
+        }
+        if (intgRaw && intgRaw.openai && intgRaw.openai.api_key) {
+            const last = (oaiSum && oaiSum.last_sync) ? _fmtSyncTime(oaiSum.last_sync) : null;
+            intgCards += intgCard('openai', 'OpenAI', '#10a37f', '◈', 'API usage & cost', last,
+                `onclick="scSyncOpenAI(30)"`, `onclick="scSyncOpenAI(365)"`);
+        }
+
         // Hide the legacy shared-credentials Azure card when this tenant has no
         // subscriptions in it (self-service Azure accounts get their own card below)
         const showAzureCard = subCount > 0;
-        container.innerHTML = (showAzureCard ? azureCard : '') + otherCards
+        container.innerHTML = (showAzureCard ? azureCard : '') + otherCards + intgCards
             || '<div style="font-size:12px;color:var(--text-secondary)">No providers connected yet</div>';
     } catch(e) {
         container.innerHTML = '<div style="font-size:12px;color:var(--red)">Failed to load providers</div>';
@@ -6156,6 +6189,27 @@ function _scMonitorSync() {
             }
         } catch(e) { clearInterval(syncInterval); }
     }, 1000);
+}
+
+// Integration syncs (Cursor / OpenAI) — separate endpoints from cloud providers.
+async function scSyncCursor() {
+    const btns = document.querySelectorAll('#sc-pcard-cursor .btn-mini');
+    btns.forEach(b => { b.disabled = true; });
+    try {
+        const d = await fetch('/api/cursor/sync', { method: 'POST' }).then(r => r.json());
+        showToast(d.error ? ('Cursor sync failed: ' + d.error) : (d.message || 'Cursor synced'), d.error ? 'error' : 'success');
+    } catch (e) { showToast('Cursor sync failed', 'error'); }
+    finally { loadSyncCenter(); }
+}
+
+async function scSyncOpenAI(days) {
+    const btns = document.querySelectorAll('#sc-pcard-openai .btn-mini');
+    btns.forEach(b => { b.disabled = true; });
+    try {
+        const d = await fetch('/api/integrations/openai/sync?days=' + (days || 30), { method: 'POST' }).then(r => r.json());
+        showToast(d.error ? ('OpenAI sync failed: ' + d.error) : (d.message || 'OpenAI synced'), d.error ? 'error' : 'success');
+    } catch (e) { showToast('OpenAI sync failed', 'error'); }
+    finally { loadSyncCenter(); }
 }
 
 async function scSyncProvider(id, name, mode = 'incremental') {
