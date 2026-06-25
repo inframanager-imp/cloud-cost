@@ -7746,6 +7746,11 @@ function addClientMappingRow(data) {
     loadOptions();
 }
 
+// Delimiter (must match database.py _MAP_SUBSEP) for a resource-group value that
+// is scoped to a subscription: "<subscription_id><SEP><resource_group>".
+const CM_SUBSEP = '';
+function cmPretty(v) { const i = (v || '').indexOf(CM_SUBSEP); return i < 0 ? v : v.slice(i + 1); }
+
 function renderCmOptions(row, items, selectedVals) {
     const optionsEl = row.querySelector('.cm-options');
     const trigger   = row.querySelector('.cm-trigger');
@@ -7753,11 +7758,14 @@ function renderCmOptions(row, items, selectedVals) {
         optionsEl.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-secondary)">No data yet</div>';
     } else {
         optionsEl.innerHTML = items.map(i => {
-            const display = i.label && i.label !== i.value ? `${i.label} (${i.value})` : i.value;
+            const compound = (i.value || '').includes(CM_SUBSEP);
+            const chip = i.label || i.value;                 // clean text for the chip
+            const display = compound ? chip                  // never show the raw delimiter value
+                          : (i.label && i.label !== i.value ? `${i.label} (${i.value})` : i.value);
             const checked = selectedVals.includes(i.value);
             return `<label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:12px;cursor:pointer;border-radius:4px;color:var(--text-primary)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
-                <input type="checkbox" value="${_esc(i.value)}" ${checked ? 'checked' : ''} onchange="updateCmTrigger(this.closest('.cm-multiselect-wrap').querySelector('.cm-trigger'))">
-                <span title="${_esc(i.value)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(display)}</span>
+                <input type="checkbox" value="${_esc(i.value)}" data-label="${_esc(chip)}" ${checked ? 'checked' : ''} onchange="updateCmTrigger(this.closest('.cm-multiselect-wrap').querySelector('.cm-trigger'))">
+                <span title="${_esc(display)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(display)}</span>
             </label>`;
         }).join('');
     }
@@ -7766,15 +7774,27 @@ function renderCmOptions(row, items, selectedVals) {
 
 function updateCmTrigger(trigger, preselected) {
     if (!trigger) return;
-    const boxes = trigger.closest('.cm-multiselect-wrap')?.querySelectorAll('.cm-options input[type=checkbox]:checked') || [];
-    const selected = preselected && boxes.length === 0 ? preselected
-        : [...boxes].map(b => b.value);
-    const ph = trigger.querySelector('.cm-placeholder');
+    const wrap = trigger.closest('.cm-multiselect-wrap');
+    const boxes = wrap?.querySelectorAll('.cm-options input[type=checkbox]:checked') || [];
+    let selected;
+    if (preselected && boxes.length === 0) {
+        // Initial render before checkboxes reflect state — map saved values to a
+        // friendly label via the rendered option (falling back to the RG name).
+        selected = preselected.map(v => {
+            let label = cmPretty(v);
+            wrap?.querySelectorAll('.cm-options input[type=checkbox]').forEach(b => {
+                if (b.value === v) label = b.getAttribute('data-label') || label;
+            });
+            return { value: v, label };
+        });
+    } else {
+        selected = [...boxes].map(b => ({ value: b.value, label: b.getAttribute('data-label') || cmPretty(b.value) }));
+    }
     if (selected.length === 0) {
         trigger.innerHTML = `<span class="cm-placeholder" style="color:var(--text-secondary);font-size:12px">— Select —</span>`;
     } else {
-        trigger.innerHTML = selected.map(v =>
-            `<span style="background:var(--accent);color:#fff;border-radius:3px;padding:1px 6px;font-size:11px;white-space:nowrap">${_esc(v)}</span>`
+        trigger.innerHTML = selected.map(s =>
+            `<span title="${_esc(s.value)}" style="background:var(--accent);color:#fff;border-radius:3px;padding:1px 6px;font-size:11px;white-space:nowrap">${_esc(s.label)}</span>`
         ).join('') + '<span class="cm-placeholder" style="display:none"></span>';
     }
 }

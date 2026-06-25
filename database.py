@@ -3991,9 +3991,9 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
     conditions = []
     params = []
     for m in mappings:
-        cond, param = _mapping_condition(m["filter_type"], m["value"])
+        cond, plist = _mapping_condition(m["filter_type"], m["value"])
         conditions.append(cond)
-        params.append(param)
+        params.extend(plist)
 
     mapping_clause = "(" + " OR ".join(conditions) + ")"
     base_params = [date_from, date_to, tenant_id] + params
@@ -4080,16 +4080,25 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
     }
 
 
+# Delimiter for a resource-group value scoped to a subscription:
+# "<subscription_id><resource_group>". Used when the same RG name exists in
+# more than one subscription so the mapping doesn't accidentally match both.
+_MAP_SUBSEP = ""
+
+
 def _mapping_condition(filter_type: str, value: str) -> tuple:
-    """Return (sql_condition, param) for a single mapping row."""
+    """Return (sql_condition, [params]) for a single mapping row."""
     if filter_type == "subscription_id":
-        return ("subscription_id = ?", value)
+        return ("subscription_id = ?", [value])
     elif filter_type == "service_name":
-        return ("LOWER(service_name) = LOWER(?)", value)
+        return ("LOWER(service_name) = LOWER(?)", [value])
     elif filter_type == "resource_name":  # e.g. Cursor per-user, Azure/AWS per-resource
-        return ("LOWER(resource_name) = LOWER(?)", value)
-    else:  # resource_group
-        return ("LOWER(resource_group) = LOWER(?)", value)
+        return ("LOWER(resource_name) = LOWER(?)", [value])
+    else:  # resource_group — may be scoped to a specific subscription (compound value)
+        if value and _MAP_SUBSEP in value:
+            sub_id, rg = value.split(_MAP_SUBSEP, 1)
+            return ("(subscription_id = ? AND LOWER(resource_group) = LOWER(?))", [sub_id, rg])
+        return ("LOWER(resource_group) = LOWER(?)", [value])
 
 
 def build_client_sql_filter(client_id: int) -> tuple:
@@ -4102,9 +4111,9 @@ def build_client_sql_filter(client_id: int) -> tuple:
     conditions = []
     params = []
     for m in mappings:
-        cond, param = _mapping_condition(m["filter_type"], m["value"])
+        cond, plist = _mapping_condition(m["filter_type"], m["value"])
         conditions.append(cond)
-        params.append(param)
+        params.extend(plist)
     return ("AND (" + " OR ".join(conditions) + ")", params)
 
 
@@ -4225,13 +4234,43 @@ def get_client_filter_values(cloud: str, filter_type: str, tenant_id: int) -> li
 
     elif filter_type == "resource_group":
         rows = conn.execute(
-            "SELECT DISTINCT resource_group as val FROM cost_data "
+            "SELECT DISTINCT subscription_id as sub, resource_group as val FROM cost_data "
             "WHERE cloud_provider=? AND (tenant_id=? OR tenant_id IS NULL) "
             "AND resource_group IS NOT NULL AND resource_group!='' "
-            "ORDER BY resource_group LIMIT 500",
+            "ORDER BY resource_group LIMIT 1000",
             (cloud, tenant_id)
         ).fetchall()
-        result = [{"value": r["val"], "label": r["val"]} for r in rows]
+        # Friendly subscription/account names for disambiguation labels.
+        submap = {}
+        for s in conn.execute(
+            "SELECT subscription_id sid, name FROM subscriptions WHERE (tenant_id=? OR tenant_id IS NULL)",
+            (tenant_id,),
+        ).fetchall():
+            if s["sid"]:
+                submap[s["sid"]] = s["name"] or s["sid"]
+        for s in conn.execute(
+            "SELECT provider_id pid, name FROM cloud_providers WHERE (tenant_id=? OR tenant_id IS NULL)",
+            (tenant_id,),
+        ).fetchall():
+            if s["pid"]:
+                submap.setdefault(s["pid"], s["name"] or s["pid"])
+        # Find RG names that appear in more than one subscription — only those need
+        # to be split per-subscription (so a shared RG name doesn't match both).
+        rg_subs = {}
+        for r in rows:
+            rg_subs.setdefault(r["val"], set()).add(r["sub"] or "")
+        result, seen = [], set()
+        for r in rows:
+            rg, sub = r["val"], (r["sub"] or "")
+            if len(rg_subs[rg]) > 1 and sub:
+                val = f"{sub}{_MAP_SUBSEP}{rg}"
+                if val in seen:
+                    continue
+                seen.add(val)
+                result.append({"value": val, "label": f"{rg} · {submap.get(sub, sub[:12])}"})
+            elif rg not in seen:
+                seen.add(rg)
+                result.append({"value": rg, "label": rg})
 
     elif filter_type == "service_name":
         rows = conn.execute(
