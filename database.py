@@ -2137,9 +2137,20 @@ def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups
         query += " AND date <= ?"
         params.append(date_to)
     if resource_groups:
-        placeholders = ",".join(["?"] * len(resource_groups))
-        query += f" AND resource_group IN ({placeholders})"
-        params.extend(resource_groups)
+        # A resource group may be plain, or scoped to a subscription as
+        # "<subscription_id><SEP><resource_group>" when the same RG name exists in
+        # more than one subscription. Expand each into the right condition, OR'd.
+        rg_conds, rg_params = [], []
+        for rg in resource_groups:
+            if rg and _MAP_SUBSEP in rg:
+                sub_id, name = rg.split(_MAP_SUBSEP, 1)
+                rg_conds.append("(subscription_id = ? AND LOWER(resource_group) = LOWER(?))")
+                rg_params.extend([sub_id, name])
+            else:
+                rg_conds.append("LOWER(resource_group) = LOWER(?)")
+                rg_params.append(rg)
+        query += " AND (" + " OR ".join(rg_conds) + ")"
+        params.extend(rg_params)
     if services:
         placeholders = ",".join(["?"] * len(services))
         query += f" AND service_name IN ({placeholders})"

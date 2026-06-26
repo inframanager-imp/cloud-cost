@@ -5485,16 +5485,7 @@ async function loadCustomReportsList() {
 
 // Clouds selected for the custom-report builder (supports multiple).
 let crSelectedClouds = new Set();
-
-// The client-mapping filter-values endpoint splits a resource-group name that is
-// shared across subscriptions into "<subId><SEP><rg>" so a client mapping can be
-// scoped to one subscription. The email report has its own Subscriptions selector
-// (and filters cost_data by the plain resource_group), so strip that scope back to
-// the bare RG name here — both for display and for matching.
-function _crPlainRg(v) {
-    v = v || '';
-    return v.includes(CM_SUBSEP) ? v.split(CM_SUBSEP).slice(1).join(CM_SUBSEP) : v;
-}
+let crRgMap = {};   // resource-group value -> friendly label ("rg · subscription-name")
 
 // Load accounts/subscriptions + resource groups + services for ALL selected
 // clouds (union), via the shared filter-values endpoint. When more than one
@@ -5503,7 +5494,7 @@ async function crLoadCloudFilters(clouds) {
     const list = (Array.isArray(clouds) ? clouds : [clouds]).filter(Boolean);
     if (!list.length) list.push('azure');
     const multi = list.length > 1;
-    crSubMap = {};
+    crSubMap = {}; crRgMap = {};
     const subs = [], rgSet = new Set(), svcSet = new Set();
     for (const cloud of list) {
         const tag = multi ? ` · ${CLOUD_META[cloud]?.label || cloud}` : '';
@@ -5513,7 +5504,10 @@ async function crLoadCloudFilters(clouds) {
         } catch (e) {}
         try {
             const rgs = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=resource_group`).then(r => r.json());
-            (rgs || []).forEach(a => rgSet.add(_crPlainRg(a.value)));  // bare RG name, deduped
+            // Keep the value as-is (plain for unique RGs, "<subId><SEP><rg>" when the
+            // name is shared across subscriptions) and remember its friendly label
+            // ("rg · subscription-name") for display.
+            (rgs || []).forEach(a => { rgSet.add(a.value); crRgMap[a.value] = (a.label || a.value) + tag; });
         } catch (e) {}
         try {
             const svcs = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=service_name`).then(r => r.json());
@@ -5642,7 +5636,7 @@ async function openCustomReportBuilder(editData) {
         document.getElementById('crEnabled').checked = editData.enabled || false;
 
         (fl.subscription_ids || []).forEach(id => { if (crSubOptions.includes(id)) crSelectedSubs.add(id); });
-        (fl.resource_groups || []).forEach(rg => { const p = _crPlainRg(rg); if (crRgOptions.includes(p)) crSelectedRgs.add(p); });
+        (fl.resource_groups || []).forEach(rg => { if (crRgOptions.includes(rg)) crSelectedRgs.add(rg); });
         (fl.services || []).forEach(svc => { if (crSvcOptions.includes(svc)) crSelectedSvcs.add(svc); });
 
         (editData.sections || []).forEach(s => {
@@ -5679,17 +5673,15 @@ function crRenderList(type) {
 
     const searchId = type === 'rg' ? 'crRgSearch' : (type === 'svc' ? 'crSvcSearch' : null);
     const searchVal = searchId ? (document.getElementById(searchId)?.value?.toLowerCase() || '') : '';
-    const filtered = searchVal ? items.filter(i => {
-        const label = type === 'sub' ? (crSubMap[i] || i) : i;
-        return label.toLowerCase().includes(searchVal);
-    }) : items;
+    const labelFor = (i) => type === 'sub' ? (crSubMap[i] || i) : (type === 'rg' ? (crRgMap[i] || i) : i);
+    const filtered = searchVal ? items.filter(i => labelFor(i).toLowerCase().includes(searchVal)) : items;
 
     if (!filtered.length) { el.innerHTML = '<div style="padding:8px;text-align:center;color:var(--text-secondary);font-size:11px">None</div>'; return; }
 
     el.innerHTML = filtered.map(item => {
         const checked = selected.has(item) ? 'checked' : '';
         const esc = item.replace(/"/g, '&quot;').replace(/'/g, "\\'");
-        const label = type === 'sub' ? (crSubMap[item] || item) : item;
+        const label = labelFor(item);
         return `<label class="multi-select-item ${checked ? 'selected' : ''}" style="padding:4px 8px;font-size:12px">
             <input type="checkbox" ${checked} onchange="crToggle('${type}','${esc}',this)">
             <span>${label}</span>
@@ -5704,8 +5696,9 @@ function crToggle(type, item, cb) {
     document.getElementById('crSubCount').textContent = `(${crSelectedSubs.size})`;
     document.getElementById('crRgCount').textContent = `(${crSelectedRgs.size})`;
     document.getElementById('crSvcCount').textContent = `(${crSelectedSvcs.size})`;
-    // Changing the subscription selection re-scopes the RG/Service lists.
-    if (type === 'sub') crReloadScopedFilters();
+    // Note: the RG list already disambiguates shared names by subscription
+    // ("rg · subscription-name"), so we no longer flatten it to plain names when a
+    // subscription is selected — the subscription filter still ANDs in the query.
 }
 
 // Scope the Resource Groups / Services lists to the selected subscriptions
