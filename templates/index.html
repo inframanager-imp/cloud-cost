@@ -2206,6 +2206,11 @@
                         <input type="text" id="crRecipients" class="filter-input" placeholder="user@company.com">
                     </div>
 
+                    <div class="email-field">
+                        <label>Load filters from client <span style="font-weight:400;color:var(--text-secondary);font-size:11px">(optional — auto-fills clouds, accounts, RGs &amp; services)</span></label>
+                        <select id="crClient" class="filter-input" onchange="crApplyClient(this.value)"></select>
+                    </div>
+
                     <div class="email-field-row">
                         <div class="email-field" style="flex:1">
                             <label>Clouds <span style="font-weight:400;color:var(--text-secondary);font-size:11px">(select one or more)</span></label>
@@ -3963,7 +3968,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260622t"></script>
+<script src="/static/js/app.js?v=20260622u"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

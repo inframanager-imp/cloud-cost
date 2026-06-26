@@ -5519,6 +5519,33 @@ async function crLoadCloudFilters(clouds) {
     crSvcOptions = [...svcSet];
 }
 
+// "Load filters from client" — pre-fill the report's clouds/accounts/RGs/services
+// from a client's saved cost mappings, so the user doesn't re-select everything.
+let _crClients = [];
+async function crApplyClient(clientId) {
+    if (!clientId) return;
+    const client = _crClients.find(c => String(c.id) === String(clientId));
+    if (!client) return;
+    const maps = client.mappings || [];
+    const active = activeClouds();
+    const clouds = [...new Set(maps.map(m => m.cloud).filter(Boolean))].filter(c => active.includes(c));
+    crSelectedClouds = new Set(clouds.length ? clouds : [active[0] || 'azure']);
+    crRenderCloudChips();
+    // Load the full per-cloud lists in the same form the mappings were saved in,
+    // so the mapping values match exactly.
+    await crLoadCloudFilters([...crSelectedClouds]);
+    crSelectedSubs.clear(); crSelectedRgs.clear(); crSelectedSvcs.clear();
+    maps.forEach(m => {
+        const v = m.value;
+        if (m.filter_type === 'subscription_id' && crSubOptions.includes(v)) crSelectedSubs.add(v);
+        else if (m.filter_type === 'resource_group' && crRgOptions.includes(v)) crSelectedRgs.add(v);
+        else if (m.filter_type === 'service_name' && crSvcOptions.includes(v)) crSelectedSvcs.add(v);
+        // resource_name mappings (e.g. Cursor per-user) have no report filter — skipped.
+    });
+    crRenderAllLists();
+    if (typeof showToast === 'function') showToast(`Loaded filters from "${client.name}"`, 'success');
+}
+
 // Per-cloud labels for the three filter columns (plural, report-friendly).
 const CR_LABELS = {
     azure:     { sub: 'Subscriptions', rg: 'Resource Groups', svc: 'Services' },
@@ -5615,6 +5642,15 @@ async function openCustomReportBuilder(editData) {
     savedClouds.forEach(c => crSelectedClouds.add(c));
     crRenderCloudChips();
     await crLoadCloudFilters([...crSelectedClouds]);
+
+    // Populate the "Load filters from client" picker (resets to none on open).
+    const crClientSel = document.getElementById('crClient');
+    if (crClientSel) {
+        try { _crClients = (await fetch('/api/clients').then(r => r.json())) || []; } catch (e) { _crClients = []; }
+        crClientSel.innerHTML = '<option value="">— None (manual selection) —</option>' +
+            _crClients.map(c => `<option value="${c.id}">${_esc(c.name)}</option>`).join('');
+        crClientSel.value = '';
+    }
 
     crRenderAllLists();
     onCRDateRangeChange();
