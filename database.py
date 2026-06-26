@@ -4215,23 +4215,32 @@ def get_client_filter_values(cloud: str, filter_type: str, tenant_id: int) -> li
                 "WHERE (tenant_id=? OR tenant_id IS NULL) ORDER BY name",
                 (tenant_id,)
             ).fetchall()
+            result = [{"value": r["value"], "label": r["label"] or r["value"]} for r in rows if r["value"]]
         else:
-            rows = conn.execute(
-                "SELECT provider_id as value, name as label FROM cloud_providers "
-                "WHERE provider_type=? AND (tenant_id=? OR tenant_id IS NULL) ORDER BY name",
+            # Non-Azure billing units. A cloud_provider is one entry, but a single
+            # GCP billing account can span many projects (each its own
+            # subscription_id in cost_data). AWS = one account per provider. So union
+            # the configured providers (for friendly names + accounts with no data
+            # yet) with every distinct billing unit actually present in cost_data.
+            name_map = {}
+            for p in conn.execute(
+                "SELECT provider_id as pid, name FROM cloud_providers "
+                "WHERE provider_type=? AND (tenant_id=? OR tenant_id IS NULL)",
                 (cloud, tenant_id)
-            ).fetchall()
-        result = [{"value": r["value"], "label": r["label"] or r["value"]} for r in rows if r["value"]]
-        # Fallback for clouds not in cloud_providers (OpenAI/Cursor live in
-        # integration_settings) — read distinct subscription_id from cost_data.
-        if not result:
-            rows = conn.execute(
+            ).fetchall():
+                if p["pid"]:
+                    name_map[p["pid"]] = p["name"] or p["pid"]
+            units = [r["val"] for r in conn.execute(
                 "SELECT DISTINCT subscription_id as val FROM cost_data "
                 "WHERE cloud_provider=? AND (tenant_id=? OR tenant_id IS NULL) "
-                "AND subscription_id IS NOT NULL AND subscription_id!='' ORDER BY subscription_id LIMIT 500",
+                "AND subscription_id IS NOT NULL AND subscription_id!='' ORDER BY subscription_id",
                 (cloud, tenant_id)
-            ).fetchall()
-            result = [{"value": r["val"], "label": r["val"]} for r in rows]
+            ).fetchall()]
+            all_ids = list(dict.fromkeys(list(name_map.keys()) + units))
+            result = sorted(
+                [{"value": sid, "label": name_map.get(sid, sid)} for sid in all_ids],
+                key=lambda x: x["label"].lower()
+            )
 
     elif filter_type == "resource_name":
         rows = conn.execute(
