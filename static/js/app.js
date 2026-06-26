@@ -5636,6 +5636,10 @@ async function openCustomReportBuilder(editData) {
         document.getElementById('crEnabled').checked = editData.enabled || false;
 
         (fl.subscription_ids || []).forEach(id => { if (crSubOptions.includes(id)) crSelectedSubs.add(id); });
+        // If subscriptions were saved, re-scope the RG/Service lists to them first
+        // (rebuilds the lists in the same per-subscription form) before restoring
+        // the saved RG/service selections so they match.
+        if (crSelectedSubs.size) await crReloadScopedFilters();
         (fl.resource_groups || []).forEach(rg => { if (crRgOptions.includes(rg)) crSelectedRgs.add(rg); });
         (fl.services || []).forEach(svc => { if (crSvcOptions.includes(svc)) crSelectedSvcs.add(svc); });
 
@@ -5696,22 +5700,42 @@ function crToggle(type, item, cb) {
     document.getElementById('crSubCount').textContent = `(${crSelectedSubs.size})`;
     document.getElementById('crRgCount').textContent = `(${crSelectedRgs.size})`;
     document.getElementById('crSvcCount').textContent = `(${crSelectedSvcs.size})`;
-    // Note: the RG list already disambiguates shared names by subscription
-    // ("rg · subscription-name"), so we no longer flatten it to plain names when a
-    // subscription is selected — the subscription filter still ANDs in the query.
+    // Changing the subscription selection re-scopes the RG/Service lists to only
+    // the selected subscriptions (keeping the "rg · subscription-name" labels).
+    if (type === 'sub') crReloadScopedFilters();
 }
 
 // Scope the Resource Groups / Services lists to the selected subscriptions
 // (across whatever clouds they belong to). With none selected, fall back to the
 // union across the chosen clouds.
 async function crReloadScopedFilters() {
+    crRgMap = {};
     if (crSelectedSubs.size > 0) {
-        try {
-            const ids = [...crSelectedSubs].map(encodeURIComponent).join(',');
-            const f = await fetch(`/api/filters?subscription_ids=${ids}`).then(r => r.json());
-            crRgOptions = (f.resource_groups || []).slice().sort();
-            crSvcOptions = (f.services || []).slice().sort();
-        } catch (e) { /* keep current lists on error */ }
+        const subs = [...crSelectedSubs];
+        // Fetch each subscription's RGs/services separately so we know which sub
+        // each RG belongs to (the union endpoint loses that mapping).
+        const results = await Promise.all(subs.map(sub =>
+            fetch(`/api/filters?subscription_ids=${encodeURIComponent(sub)}`)
+                .then(r => r.json()).then(f => ({ sub, f })).catch(() => ({ sub, f: {} }))
+        ));
+        // Disambiguate only RG names that appear in more than one selected sub.
+        const rgCount = {};
+        results.forEach(({ f }) => (f.resource_groups || []).forEach(rg => { rgCount[rg] = (rgCount[rg] || 0) + 1; }));
+        const rgList = [], seen = new Set(), svcSet = new Set();
+        results.forEach(({ sub, f }) => {
+            const subName = crSubMap[sub] || sub;
+            (f.resource_groups || []).forEach(rg => {
+                if (rgCount[rg] > 1) {
+                    const val = `${sub}${CM_SUBSEP}${rg}`;
+                    if (!seen.has(val)) { seen.add(val); rgList.push(val); crRgMap[val] = `${rg} · ${subName}`; }
+                } else if (!seen.has(rg)) {
+                    seen.add(rg); rgList.push(rg); crRgMap[rg] = rg;
+                }
+            });
+            (f.services || []).forEach(s => svcSet.add(s));
+        });
+        crRgOptions = rgList;
+        crSvcOptions = [...svcSet].sort();
     } else {
         await crLoadCloudFilters([...crSelectedClouds]);
     }
