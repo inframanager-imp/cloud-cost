@@ -4824,6 +4824,16 @@ function ccUpdateCounts() {
     ccUpdateSelectionPreview();
 }
 
+// Cloud-aware filter term for the Custom Cost summary lines: "accounts/regions"
+// for AWS, "projects" for GCP, "subscriptions/resource groups" for Azure, etc.
+function ccTerm(key, count) {
+    const L = (typeof CR_LABELS !== 'undefined' && CR_LABELS[ccCloudFilter]) || { sub: 'Subscriptions', rg: 'Resource Groups', svc: 'Services' };
+    const plural = (L[key] || 'Items').toLowerCase();
+    const singular = plural.replace(/s$/, '');
+    if (!count) return `all ${plural}`;
+    return `${count} ${count > 1 ? plural : singular}`;
+}
+
 function ccUpdateSelectionPreview() {
     const preview = document.getElementById('ccSelectionPreview');
     if (!preview) return;
@@ -4832,9 +4842,9 @@ function ccUpdateSelectionPreview() {
     const hasFilters = ccSelectedSubs.size || ccSelectedRgs.size || ccSelectedSvcs.size || dateFrom || dateTo;
     if (!hasFilters) { preview.style.display = 'none'; return; }
 
-    const subsText = ccSelectedSubs.size ? `${ccSelectedSubs.size} sub${ccSelectedSubs.size > 1 ? 's' : ''}` : 'all subs';
-    const rgsText = ccSelectedRgs.size ? `${ccSelectedRgs.size} RG${ccSelectedRgs.size > 1 ? 's' : ''}` : 'all RGs';
-    const svcsText = ccSelectedSvcs.size ? `${ccSelectedSvcs.size} service${ccSelectedSvcs.size > 1 ? 's' : ''}` : 'all services';
+    const subsText = ccTerm('sub', ccSelectedSubs.size);
+    const rgsText = ccTerm('rg', ccSelectedRgs.size);
+    const svcsText = ccTerm('svc', ccSelectedSvcs.size);
     const rangeText = (dateFrom || dateTo) ? `${dateFrom || '…'} → ${dateTo || '…'}` : 'all dates';
 
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -4889,9 +4899,9 @@ function ccShowSelectionSummary() {
     const dateFrom = document.getElementById('ccDateFrom')?.value || '';
     const dateTo = document.getElementById('ccDateTo')?.value || '';
 
-    const subsText = subCount ? `${subCount} subscription${subCount > 1 ? 's' : ''}` : 'all subscriptions';
-    const rgsText = rgCount ? `${rgCount} resource group${rgCount > 1 ? 's' : ''}` : 'all RGs';
-    const svcsText = svcCount ? `${svcCount} service${svcCount > 1 ? 's' : ''}` : 'all services';
+    const subsText = ccTerm('sub', subCount);
+    const rgsText = ccTerm('rg', rgCount);
+    const svcsText = ccTerm('svc', svcCount);
     const rangeText = (dateFrom || dateTo) ? `${dateFrom || '…'} → ${dateTo || '…'}` : 'all dates';
 
     document.getElementById('ccSummarySubs').textContent = subsText;
