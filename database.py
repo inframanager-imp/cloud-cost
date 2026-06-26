@@ -2115,50 +2115,63 @@ def get_distinct_values(column, subscription_id=None, subscription_ids=None, clo
     return [r[0] for r in rows]
 
 
-def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups=None, services=None, date_from=None, date_to=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
-    """Calculate cost for a custom combination of subscriptions, RGs, and services."""
+def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups=None, services=None, date_from=None, date_to=None, tenant_id=None, cloud_provider=None, reporting_currency=None, client_id=None):
+    """Calculate cost for a custom combination of subscriptions, RGs, and services.
+
+    When client_id is given, scope to that client's saved cost mappings (OR'd, the
+    same way the Clients page computes a client's spend) instead of the manual
+    subscription/RG/service AND filters.
+    """
     conn = get_db()
     _cost = _converted_cost_sql(reporting_currency)
     _base_cost = f"SUM({_cost}) as total_cost, COUNT(*) as records"
     query = f"SELECT {_base_cost} FROM cost_data WHERE 1=1"
     params = []
 
-    if subscription_ids and len(subscription_ids) > 0:
-        placeholders = ",".join(["?"] * len(subscription_ids))
-        query += f" AND subscription_id IN ({placeholders})"
-        params.extend(subscription_ids)
-    elif subscription_id:
-        query += " AND subscription_id = ?"
-        params.append(subscription_id)
+    if client_id:
+        # Client mappings are OR'd (account OR project OR these RGs ...), unlike the
+        # manual AND filters — so a multi-cloud client doesn't collapse to $0.
+        clause, cparams = build_client_sql_filter(client_id)
+        if clause:
+            query += " " + clause
+            params.extend(cparams)
+    else:
+        if subscription_ids and len(subscription_ids) > 0:
+            placeholders = ",".join(["?"] * len(subscription_ids))
+            query += f" AND subscription_id IN ({placeholders})"
+            params.extend(subscription_ids)
+        elif subscription_id:
+            query += " AND subscription_id = ?"
+            params.append(subscription_id)
+        if resource_groups:
+            # A resource group may be plain, or scoped to a subscription as
+            # "<subscription_id><SEP><resource_group>" when the same RG name exists in
+            # more than one subscription. Expand each into the right condition, OR'd.
+            rg_conds, rg_params = [], []
+            for rg in resource_groups:
+                if rg and _MAP_SUBSEP in rg:
+                    sub_id, name = rg.split(_MAP_SUBSEP, 1)
+                    rg_conds.append("(subscription_id = ? AND LOWER(resource_group) = LOWER(?))")
+                    rg_params.extend([sub_id, name])
+                else:
+                    rg_conds.append("LOWER(resource_group) = LOWER(?)")
+                    rg_params.append(rg)
+            query += " AND (" + " OR ".join(rg_conds) + ")"
+            params.extend(rg_params)
+        if services:
+            placeholders = ",".join(["?"] * len(services))
+            query += f" AND service_name IN ({placeholders})"
+            params.extend(services)
     if date_from:
         query += " AND date >= ?"
         params.append(date_from)
     if date_to:
         query += " AND date <= ?"
         params.append(date_to)
-    if resource_groups:
-        # A resource group may be plain, or scoped to a subscription as
-        # "<subscription_id><SEP><resource_group>" when the same RG name exists in
-        # more than one subscription. Expand each into the right condition, OR'd.
-        rg_conds, rg_params = [], []
-        for rg in resource_groups:
-            if rg and _MAP_SUBSEP in rg:
-                sub_id, name = rg.split(_MAP_SUBSEP, 1)
-                rg_conds.append("(subscription_id = ? AND LOWER(resource_group) = LOWER(?))")
-                rg_params.extend([sub_id, name])
-            else:
-                rg_conds.append("LOWER(resource_group) = LOWER(?)")
-                rg_params.append(rg)
-        query += " AND (" + " OR ".join(rg_conds) + ")"
-        params.extend(rg_params)
-    if services:
-        placeholders = ",".join(["?"] * len(services))
-        query += f" AND service_name IN ({placeholders})"
-        params.extend(services)
     if tenant_id is not None:
         query += " AND tenant_id = ?"
         params.append(tenant_id)
-    if cloud_provider is not None:
+    if cloud_provider is not None and not client_id:
         if isinstance(cloud_provider, (list, tuple, set)):
             cps = [c for c in cloud_provider if c]
             if cps:

@@ -5519,31 +5519,38 @@ async function crLoadCloudFilters(clouds) {
     crSvcOptions = [...svcSet];
 }
 
-// "Load filters from client" — pre-fill the report's clouds/accounts/RGs/services
-// from a client's saved cost mappings, so the user doesn't re-select everything.
+// Tie a report to a client. The client's mappings are OR'd (account OR project OR
+// these RGs ...) — unlike the manual AND filters — so we scope the report by the
+// client itself rather than copying mappings into the AND boxes (which collapses a
+// multi-cloud client to $0). The manual filter boxes are hidden in client mode.
 let _crClients = [];
-async function crApplyClient(clientId) {
-    if (!clientId) return;
+let crClientId = '';
+
+function crSetManualVisible(visible, clientName) {
+    const grid = document.getElementById('crManualFilters');
+    const note = document.getElementById('crClientNote');
+    if (grid) grid.style.display = visible ? 'grid' : 'none';
+    if (note) {
+        note.style.display = visible ? 'none' : 'block';
+        if (!visible) {
+            note.innerHTML = `This report is scoped to client <strong>${_esc(clientName || '')}</strong> — it uses that client's full cost mappings (the same total shown on the Clients page). The date range &amp; report sections below still apply.`;
+        }
+    }
+}
+
+function crApplyClient(clientId) {
+    crClientId = clientId || '';
+    if (!clientId) { crSetManualVisible(true); return; }
     const client = _crClients.find(c => String(c.id) === String(clientId));
-    if (!client) return;
+    if (!client) { crClientId = ''; crSetManualVisible(true); return; }
+    // Show the client's clouds as context (chips are informational in client mode).
     const maps = client.mappings || [];
     const active = activeClouds();
     const clouds = [...new Set(maps.map(m => m.cloud).filter(Boolean))].filter(c => active.includes(c));
     crSelectedClouds = new Set(clouds.length ? clouds : [active[0] || 'azure']);
     crRenderCloudChips();
-    // Load the full per-cloud lists in the same form the mappings were saved in,
-    // so the mapping values match exactly.
-    await crLoadCloudFilters([...crSelectedClouds]);
     crSelectedSubs.clear(); crSelectedRgs.clear(); crSelectedSvcs.clear();
-    maps.forEach(m => {
-        const v = m.value;
-        if (m.filter_type === 'subscription_id' && crSubOptions.includes(v)) crSelectedSubs.add(v);
-        else if (m.filter_type === 'resource_group' && crRgOptions.includes(v)) crSelectedRgs.add(v);
-        else if (m.filter_type === 'service_name' && crSvcOptions.includes(v)) crSelectedSvcs.add(v);
-        // resource_name mappings (e.g. Cursor per-user) have no report filter — skipped.
-    });
-    crRenderAllLists();
-    if (typeof showToast === 'function') showToast(`Loaded filters from "${client.name}"`, 'success');
+    crSetManualVisible(false, client.name);
 }
 
 // Per-cloud labels for the three filter columns (plural, report-friendly).
@@ -5643,7 +5650,9 @@ async function openCustomReportBuilder(editData) {
     crRenderCloudChips();
     await crLoadCloudFilters([...crSelectedClouds]);
 
-    // Populate the "Load filters from client" picker (resets to none on open).
+    // Populate the client picker (resets to none / manual on open).
+    crClientId = '';
+    crSetManualVisible(true);
     const crClientSel = document.getElementById('crClient');
     if (crClientSel) {
         try { _crClients = (await fetch('/api/clients').then(r => r.json())) || []; } catch (e) { _crClients = []; }
@@ -5671,13 +5680,19 @@ async function openCustomReportBuilder(editData) {
         document.getElementById('crScheduleTz').value = editData.schedule_tz || 'UTC';
         document.getElementById('crEnabled').checked = editData.enabled || false;
 
-        (fl.subscription_ids || []).forEach(id => { if (crSubOptions.includes(id)) crSelectedSubs.add(id); });
-        // If subscriptions were saved, re-scope the RG/Service lists to them first
-        // (rebuilds the lists in the same per-subscription form) before restoring
-        // the saved RG/service selections so they match.
-        if (crSelectedSubs.size) await crReloadScopedFilters();
-        (fl.resource_groups || []).forEach(rg => { if (crRgOptions.includes(rg)) crSelectedRgs.add(rg); });
-        (fl.services || []).forEach(svc => { if (crSvcOptions.includes(svc)) crSelectedSvcs.add(svc); });
+        // Client-scoped report: restore the client picker and hide manual filters.
+        if (fl.client_id) {
+            if (crClientSel) crClientSel.value = String(fl.client_id);
+            crApplyClient(String(fl.client_id));
+        } else {
+            (fl.subscription_ids || []).forEach(id => { if (crSubOptions.includes(id)) crSelectedSubs.add(id); });
+            // If subscriptions were saved, re-scope the RG/Service lists to them first
+            // (rebuilds the lists in the same per-subscription form) before restoring
+            // the saved RG/service selections so they match.
+            if (crSelectedSubs.size) await crReloadScopedFilters();
+            (fl.resource_groups || []).forEach(rg => { if (crRgOptions.includes(rg)) crSelectedRgs.add(rg); });
+            (fl.services || []).forEach(svc => { if (crSvcOptions.includes(svc)) crSelectedSvcs.add(svc); });
+        }
 
         (editData.sections || []).forEach(s => {
             const cb = document.querySelector(`#crSections input[value="${s}"]`);
@@ -5808,10 +5823,11 @@ async function saveCRBuilder() {
         name,
         recipients: document.getElementById('crRecipients').value.trim(),
         filters: {
-            cloud_providers: [...crSelectedClouds],
-            subscription_ids: [...crSelectedSubs],
-            resource_groups: [...crSelectedRgs],
-            services: [...crSelectedSvcs],
+            client_id: crClientId || '',
+            cloud_providers: crClientId ? [] : [...crSelectedClouds],
+            subscription_ids: crClientId ? [] : [...crSelectedSubs],
+            resource_groups: crClientId ? [] : [...crSelectedRgs],
+            services: crClientId ? [] : [...crSelectedSvcs],
             date_range: document.getElementById('crDateRange').value,
             date_from: document.getElementById('crDateFrom').value,
             date_to: document.getElementById('crDateTo').value,
@@ -6052,7 +6068,8 @@ async function _scLoadProviders() {
         let intgCards = '';
         if (intgRaw && intgRaw.cursor && intgRaw.cursor.api_key) {
             const members = (curSum && curSum.members) ? `${curSum.members} member${curSum.members !== 1 ? 's' : ''}` : 'Live team spend';
-            intgCards += intgCard('cursor', 'Cursor', '#6c47ff', '◧', members, null,
+            const curLast = (curSum && curSum.last_sync) ? _fmtSyncTime(curSum.last_sync) : null;
+            intgCards += intgCard('cursor', 'Cursor', '#6c47ff', '◧', members, curLast,
                 `onclick="scSyncCursor()"`, `onclick="scSyncCursor()"`);
         }
         if (intgRaw && intgRaw.openai && intgRaw.openai.api_key) {

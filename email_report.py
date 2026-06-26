@@ -909,6 +909,9 @@ def _build_custom_report_html(report):
         cloud_providers = [filters["cloud_provider"]]
     cloud_providers = [c for c in (cloud_providers or []) if c] or None
 
+    # When the report is tied to a client, scope by the client's (OR'd) mappings.
+    client_id = filters.get("client_id") or None
+
     data = get_custom_cost(
         subscription_ids=sub_ids if sub_ids else None,
         resource_groups=rgs if rgs else None,
@@ -916,7 +919,8 @@ def _build_custom_report_html(report):
         date_from=date_from or None,
         date_to=date_to or None,
         tenant_id=tenant_id,
-        cloud_provider=cloud_providers,
+        cloud_provider=(None if client_id else cloud_providers),
+        client_id=client_id,
     )
 
     total_cost = data.get("total_cost", 0)
@@ -933,11 +937,21 @@ def _build_custom_report_html(report):
     # Filter summary tags
     filter_tags = []
     filter_tags.append(f"<strong>Period:</strong> {period_label}")
-    filter_tags.append(f"<strong>Subscriptions:</strong> {', '.join(sub_names)}")
-    if rgs:
-        filter_tags.append(f"<strong>Resource Groups:</strong> {', '.join(rgs[:5])}{'...' if len(rgs) > 5 else ''}")
-    if services:
-        filter_tags.append(f"<strong>Services:</strong> {', '.join(services[:5])}{'...' if len(services) > 5 else ''}")
+    if client_id:
+        cname = ""
+        try:
+            from database import get_client
+            _cl = get_client(int(client_id), tenant_id) if str(client_id).isdigit() else None
+            cname = (_cl or {}).get("name", "")
+        except Exception:
+            cname = ""
+        filter_tags.append(f"<strong>Client:</strong> {cname or client_id}")
+    else:
+        filter_tags.append(f"<strong>Subscriptions:</strong> {', '.join(sub_names)}")
+        if rgs:
+            filter_tags.append(f"<strong>Resource Groups:</strong> {', '.join(rgs[:5])}{'...' if len(rgs) > 5 else ''}")
+        if services:
+            filter_tags.append(f"<strong>Services:</strong> {', '.join(services[:5])}{'...' if len(services) > 5 else ''}")
 
     font_stack = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
     ACCENT = "#185FA5"

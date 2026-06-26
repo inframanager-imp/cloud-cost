@@ -5338,7 +5338,8 @@ def api_cursor_summary():
     tid = current_tenant_id()
     conn = get_db()
     # On-demand total = the billable cost (cost_data); included = showback (cursor_users).
-    q = "SELECT COALESCE(SUM(spend_cents),0) od, COALESCE(SUM(included_cents),0) incl, COUNT(*) members FROM cursor_users WHERE "
+    q = ("SELECT COALESCE(SUM(spend_cents),0) od, COALESCE(SUM(included_cents),0) incl, "
+         "COUNT(*) members, MAX(synced_at) last_sync FROM cursor_users WHERE ")
     params = []
     if tid is not None:
         q += "tenant_id IS ? "; params.append(tid)
@@ -5353,6 +5354,7 @@ def api_cursor_summary():
         "included_total": round((row["incl"] or 0) / 100.0, 2),  # plan usage (showback)
         "members": row["members"], "has_key": has_key,
         "cycle_start": cs, "cycle_end": ce,
+        "last_sync": row["last_sync"],
     })
 
 
