@@ -464,6 +464,10 @@ def api_toggle_subscription(sub_id):
 @app.route("/")
 @login_required
 def index():
+    # A super-admin who isn't viewing a specific tenant has no business landing in
+    # the global all-tenants merged view — send them to the tenant list to pick one.
+    if session.get("is_super_admin") and session.get("tenant_id") is None:
+        return redirect(url_for("super_admin_dashboard"))
     is_impersonating = bool(session.get("is_super_admin")) and session.get("tenant_id") is not None
     username = session.get("username", "")
     impersonated_tenant = None
