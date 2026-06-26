@@ -5486,6 +5486,16 @@ async function loadCustomReportsList() {
 // Clouds selected for the custom-report builder (supports multiple).
 let crSelectedClouds = new Set();
 
+// The client-mapping filter-values endpoint splits a resource-group name that is
+// shared across subscriptions into "<subId><SEP><rg>" so a client mapping can be
+// scoped to one subscription. The email report has its own Subscriptions selector
+// (and filters cost_data by the plain resource_group), so strip that scope back to
+// the bare RG name here — both for display and for matching.
+function _crPlainRg(v) {
+    v = v || '';
+    return v.includes(CM_SUBSEP) ? v.split(CM_SUBSEP).slice(1).join(CM_SUBSEP) : v;
+}
+
 // Load accounts/subscriptions + resource groups + services for ALL selected
 // clouds (union), via the shared filter-values endpoint. When more than one
 // cloud is selected, each option label is tagged with its cloud for clarity.
@@ -5503,7 +5513,7 @@ async function crLoadCloudFilters(clouds) {
         } catch (e) {}
         try {
             const rgs = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=resource_group`).then(r => r.json());
-            (rgs || []).forEach(a => rgSet.add(a.value));
+            (rgs || []).forEach(a => rgSet.add(_crPlainRg(a.value)));  // bare RG name, deduped
         } catch (e) {}
         try {
             const svcs = await fetch(`/api/clients/filter-values?cloud=${cloud}&filter_type=service_name`).then(r => r.json());
@@ -5632,7 +5642,7 @@ async function openCustomReportBuilder(editData) {
         document.getElementById('crEnabled').checked = editData.enabled || false;
 
         (fl.subscription_ids || []).forEach(id => { if (crSubOptions.includes(id)) crSelectedSubs.add(id); });
-        (fl.resource_groups || []).forEach(rg => { if (crRgOptions.includes(rg)) crSelectedRgs.add(rg); });
+        (fl.resource_groups || []).forEach(rg => { const p = _crPlainRg(rg); if (crRgOptions.includes(p)) crSelectedRgs.add(p); });
         (fl.services || []).forEach(svc => { if (crSvcOptions.includes(svc)) crSelectedSvcs.add(svc); });
 
         (editData.sections || []).forEach(s => {
