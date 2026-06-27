@@ -5134,18 +5134,36 @@ def api_atlassian_test():
     org   = (body.get("orgId") or "").strip()
     direc = (body.get("directoryId") or "").strip()
     token = (body.get("accessToken") or "").strip()
-    if not (org and direc and token):
-        return jsonify({"error": "Org ID, Directory ID and Organization API key are all required"}), 400
+    if not (org and token):
+        return jsonify({"error": "Org ID and Organization API key are required"}), 400
     try:
         import requests as _req
+        hdr = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        # Auto-discover the Directory ID from the Org ID + API key when not supplied.
+        discovered = False
+        if not direc:
+            dr = _req.get(f"https://api.atlassian.com/admin/v2/orgs/{org}/directories", headers=hdr, timeout=15)
+            if dr.status_code in (401, 403):
+                return jsonify({"error": "Auth failed — use an Organization API key with directory read access (read:directories:admin), not a user API token"}), 502
+            if dr.status_code == 404:
+                return jsonify({"error": "Org not found — check the Org ID (the part after /o/ in your admin URL)"}), 502
+            if dr.status_code != 200:
+                return jsonify({"error": f"Couldn't list directories (HTTP {dr.status_code}) — ensure the key has read:directories:admin"}), 502
+            dirs = (dr.json() or {}).get("data", [])
+            direc = next((d.get("id") for d in dirs if d.get("id")), "")
+            discovered = True
+            if not direc:
+                return jsonify({"error": "No directory found for this org — check the Org ID / API key"}), 502
         url = f"https://api.atlassian.com/admin/v2/orgs/{org}/directories/{direc}/users"
-        r = _req.get(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-                     params={"limit": 1}, timeout=15)
+        r = _req.get(url, headers=hdr, params={"limit": 1}, timeout=15)
         if r.status_code == 200:
             n = len((r.json() or {}).get("data", []))
-            return jsonify({"ok": True, "message": f"✓ Connected — directory reachable ({n} user on first page)"})
+            msg = "✓ Connected — directory reachable"
+            if discovered:
+                msg += " (Directory ID auto-filled)"
+            return jsonify({"ok": True, "message": msg, "directoryId": direc, "discovered": discovered})
         if r.status_code in (401, 403):
-            return jsonify({"error": "Auth failed — use an Organization API key (admin.atlassian.com → Settings → API keys), not a user API token"}), 502
+            return jsonify({"error": "Auth failed — use an Organization API key with directory read access, not a user API token"}), 502
         if r.status_code == 404:
             return jsonify({"error": "Not found — check the Directory ID, and that the Org API key has directory/user-management access"}), 502
         return jsonify({"error": f"Atlassian returned HTTP {r.status_code}"}), 502

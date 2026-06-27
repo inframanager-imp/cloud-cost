@@ -2870,11 +2870,11 @@
                     <div id="atlassianFields" style="display:none;flex-direction:column;gap:10px">
                         <div style="background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border);font-size:12px;color:var(--text-secondary);line-height:1.6">
                             🔵 Tracks <strong>per-user Atlassian costs</strong> (Jira Software, Confluence, JSM, Bitbucket). We count active users per product from the Atlassian directory and multiply by the cached per-user price.<br>
-                            <span style="font-size:11px">Create an <strong>Organization API key</strong> at <a href="https://admin.atlassian.com" target="_blank" style="color:var(--accent)">admin.atlassian.com</a> → Settings → API keys (use the <em>Organization</em> key with <strong>user-management/directory access</strong>, not a personal user token). The <strong>Directory ID</strong> is in your admin directory URL.</span>
+                            <span style="font-size:11px">Create an <strong>Organization API key</strong> at <a href="https://admin.atlassian.com" target="_blank" style="color:var(--accent)">admin.atlassian.com</a> → Settings → API keys (use the <em>Organization</em> key with <strong>directory read access</strong> — e.g. the <code>read:directories:admin</code> scope — not a personal user token). Just enter your <strong>Org ID</strong> + key and click <strong>Test</strong> — we'll auto-detect the Directory ID for you.</span>
                         </div>
                         <div>
-                            <label class="form-label">Directory ID</label>
-                            <input type="text" id="atlDirectoryId" class="filter-input" placeholder="e.g. cef6088f-08cd-4a09-a6aa-…" style="width:100%">
+                            <label class="form-label">Directory ID <span style="font-weight:400;color:var(--text-muted);font-size:11px">(optional — auto-detected when you click Test)</span></label>
+                            <input type="text" id="atlDirectoryId" class="filter-input" placeholder="Leave blank — we'll detect it from your Org ID + API key" style="width:100%">
                         </div>
                         <div>
                             <label class="form-label">Organization API Key</label>
@@ -4946,13 +4946,20 @@ function testAtlassian() {
         directoryId: (document.getElementById('atlDirectoryId').value || '').trim(),
         accessToken: (document.getElementById('atlAccessToken').value || '').trim(),
     };
-    if (!payload.orgId || !payload.directoryId || !payload.accessToken) {
-        set('Enter Org ID, Directory ID and Organization API key first.', '#c05621'); return;
+    if (!payload.orgId || !payload.accessToken) {
+        set('Enter Org ID and Organization API key first (Directory ID is auto-detected).', '#c05621'); return;
     }
     set('Testing…', 'var(--text-muted)');
     fetch('/api/atlassian/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         .then(r => r.json())
-        .then(d => set(d.ok ? (d.message || '✓ Connected') : ('✗ ' + (d.error || 'Failed')), d.ok ? '#276749' : '#c53030'))
+        .then(d => {
+            // Auto-fill the Directory ID if the backend discovered it.
+            if (d.ok && d.directoryId) {
+                const dirEl = document.getElementById('atlDirectoryId');
+                if (dirEl && !dirEl.value.trim()) dirEl.value = d.directoryId;
+            }
+            set(d.ok ? (d.message || '✓ Connected') : ('✗ ' + (d.error || 'Failed')), d.ok ? '#276749' : '#c53030');
+        })
         .catch(e => set('✗ Request failed: ' + e, '#c53030'));
 }
 
@@ -4997,9 +5004,10 @@ function saveProvider() {
             products,
         };
         if (!isNaN(_atlActual) && _atlActual > 0) credentials.actualMonthlyCost = _atlActual;
-        if (!credentials.orgId || !credentials.directoryId || !credentials.accessToken) {
-            alert('Org ID, Directory ID and Organization API key are required.'); return;
+        if (!credentials.orgId || !credentials.accessToken) {
+            alert('Org ID and Organization API key are required.'); return;
         }
+        // Directory ID is optional — auto-discovered from the Org ID + API key on sync.
     }
 
     const payload = { provider_type: type, name, provider_id: pid, credentials };

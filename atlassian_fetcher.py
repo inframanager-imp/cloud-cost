@@ -138,6 +138,15 @@ class AtlassianClient:
             url, params = (next_url, None) if next_url else (None, None)
         return users
 
+    def list_directories(self):
+        """List the org's directories (/admin/v2/orgs/{org}/directories) so the
+        Directory ID can be auto-discovered from just the Org ID + API key."""
+        url = f"{ATLASSIAN_BASE}/admin/v2/orgs/{self.org_id}/directories"
+        resp = self._get(url)
+        if resp.status_code != 200:
+            raise RuntimeError(f"Atlassian directories fetch failed [{resp.status_code}]: {resp.text[:300]}")
+        return (resp.json() or {}).get("data", [])
+
     def fetch_user_activity(self, account_id):
         """Returns (last_active_date_or_None, [product_key, ...]) for a user."""
         url  = (f"{ATLASSIAN_BASE}/admin/v1/orgs/{self.org_id}"
@@ -250,8 +259,17 @@ def fetch_atlassian_costs(provider, date_from, date_to):
     access_token = creds.get("accessToken")
     products     = creds.get("products") or []
     actual_cost  = creds.get("actualMonthlyCost")  # optional manual override
-    if not (org_id and directory_id and access_token):
-        raise RuntimeError("Atlassian provider missing orgId / directoryId / accessToken")
+    if not (org_id and access_token):
+        raise RuntimeError("Atlassian provider missing orgId / accessToken")
+    # Auto-discover the directory id when it wasn't provided.
+    if not directory_id:
+        try:
+            dirs = AtlassianClient(org_id, None, access_token).list_directories()
+            directory_id = next((d.get("id") for d in dirs if d.get("id")), None)
+        except Exception:
+            directory_id = None
+    if not directory_id:
+        raise RuntimeError("Atlassian directoryId missing and could not be auto-discovered — check the Org API key has directory read access")
     if not products:
         raise RuntimeError("No products configured for this Atlassian org")
 
