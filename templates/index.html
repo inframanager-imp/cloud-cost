@@ -4087,8 +4087,11 @@ function loadProviders() {
     Promise.all([
         fetch('/api/cloud-providers').then(r => r.json()),
         fetch('/api/subscriptions').then(r => r.json()).catch(() => []),
-        fetch('/api/sync/history').then(r => r.json()).catch(() => [])
-    ]).then(([providers, subs, hist]) => {
+        fetch('/api/sync/history').then(r => r.json()).catch(() => []),
+        fetch('/api/integrations/settings').then(r => r.json()).catch(() => ({})),
+        fetch('/api/cursor/summary').then(r => r.json()).catch(() => ({})),
+        fetch('/api/integrations/openai/summary').then(r => r.json()).catch(() => ({}))
+    ]).then(([providers, subs, hist, intg, curSum, oaiSum]) => {
         const tbody = document.getElementById('providersTableBody');
         if (!tbody) return;
 
@@ -4150,14 +4153,44 @@ function loadProviders() {
             </tr>`;
         }).join('');
 
-        const total = azureSubs.length + providers.length;
+        // Integration providers (Cursor / OpenAI) live in integration_settings,
+        // not cloud_providers — list them here too when connected.
+        const _syncSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>';
+        const _intgList = [
+            { key: 'cursor', name: 'Cursor', short: 'CU', color: '#6c47ff', sum: curSum, sync: 'scSyncCursor()' },
+            { key: 'openai', name: 'OpenAI', short: 'OP', color: '#10a37f', sum: oaiSum, sync: 'scSyncOpenAI(30)' },
+        ];
+        let intgCount = 0;
+        const intgRows = _intgList.map(m => {
+            const cfg = (intg && intg[m.key]) || {};
+            if (!cfg.api_key) return '';
+            intgCount++;
+            const last = (m.sum && m.sum.last_sync) ? _cpRelativeSync(m.sum.last_sync) : '—';
+            return `<tr data-cloud="${m.key}">
+                <td><div class="acct-cell">
+                    <div class="provider-icon-sm" style="background:${m.color}">${m.short}</div>
+                    <span class="acct-name">${m.name}</span>
+                </div></td>
+                <td class="mono">&mdash;</td>
+                <td><span class="status-pill status-pill--fresh"><span class="status-pill__dot"></span>Active</span></td>
+                <td class="muted">${last}</td>
+                <td class="actions-cell">
+                    <button class="icon-btn-ghost" onclick="${m.sync}" title="Quick Sync">${_syncSvg}</button>
+                    <button class="icon-btn-ghost" onclick="navigateTo('integrations')" title="Manage in Integrations">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    </button>
+                </td>
+            </tr>`;
+        }).join('');
+
+        const total = azureSubs.length + providers.length + intgCount;
         const countChip = document.getElementById('cpAccountCount');
         if (countChip) countChip.textContent = total;
 
-        if (!azureRows && !otherRows) {
+        if (!azureRows && !otherRows && !intgRows) {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-secondary)">No providers configured. Click "Add provider" to get started.</td></tr>';
         } else {
-            tbody.innerHTML = azureRows + otherRows;
+            tbody.innerHTML = azureRows + otherRows + intgRows;
         }
 
         // Wire up search + filter
