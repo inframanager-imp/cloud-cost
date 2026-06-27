@@ -5141,19 +5141,33 @@ def api_atlassian_test():
         hdr = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         # Auto-discover the Directory ID from the Org ID + API key when not supplied.
         discovered = False
+
+        def _dir_id(d):
+            if not isinstance(d, dict):
+                return None
+            return d.get("id") or d.get("directoryId") or d.get("directory_id") or (d.get("attributes") or {}).get("id")
+
         if not direc:
-            dr = _req.get(f"https://api.atlassian.com/admin/v2/orgs/{org}/directories", headers=hdr, timeout=15)
-            if dr.status_code in (401, 403):
-                return jsonify({"error": "Auth failed — use an Organization API key with directory read access (read:directories:admin), not a user API token"}), 502
-            if dr.status_code == 404:
-                return jsonify({"error": "Org not found — check the Org ID (the part after /o/ in your admin URL)"}), 502
-            if dr.status_code != 200:
-                return jsonify({"error": f"Couldn't list directories (HTTP {dr.status_code}) — ensure the key has read:directories:admin"}), 502
-            dirs = (dr.json() or {}).get("data", [])
-            direc = next((d.get("id") for d in dirs if d.get("id")), "")
+            diag = ""
+            for ver in ("v2", "v1"):
+                dr = _req.get(f"https://api.atlassian.com/admin/{ver}/orgs/{org}/directories", headers=hdr, timeout=15)
+                diag = f"[{ver}] HTTP {dr.status_code}: {dr.text[:220]}"
+                if dr.status_code in (401, 403):
+                    return jsonify({"error": "Auth failed — the API key needs directory read access (scope read:directories:admin). " + diag}), 502
+                if dr.status_code == 200:
+                    try:
+                        body = dr.json()
+                    except Exception:
+                        body = {}
+                    items = (body.get("data") or body.get("directories") or
+                             (body if isinstance(body, list) else [])) if isinstance(body, (dict, list)) else []
+                    direc = next((_dir_id(d) for d in (items or []) if _dir_id(d)), "")
+                    if direc:
+                        break
             discovered = True
             if not direc:
-                return jsonify({"error": "No directory found for this org — check the Org ID / API key"}), 502
+                return jsonify({"error": "Couldn't auto-detect the Directory ID. Atlassian returned: " + diag +
+                                " — paste this to support, or enter the Directory ID manually."}), 502
         url = f"https://api.atlassian.com/admin/v2/orgs/{org}/directories/{direc}/users"
         r = _req.get(url, headers=hdr, params={"limit": 1}, timeout=15)
         if r.status_code == 200:
