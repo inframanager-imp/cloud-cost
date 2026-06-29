@@ -3996,7 +3996,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260623a"></script>
+<script src="/static/js/app.js?v=20260623b"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -4187,27 +4187,34 @@ function loadProviders() {
             { key: 'openai', name: 'OpenAI', short: 'OP', color: '#10a37f', sum: oaiSum, sync: 'scSyncOpenAI(30)' },
         ];
         let intgCount = 0;
-        const intgRows = _intgList.map(m => {
+        const _gearSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+        const _intgRowsArr = [];
+        _intgList.forEach(m => {
             const cfg = (intg && intg[m.key]) || {};
-            if (!cfg.api_key) return '';
-            intgCount++;
+            const accts = (cfg.accounts && cfg.accounts.length) ? cfg.accounts.map(a => a.name) : [];
+            if (!cfg.api_key && !accts.length) return;
             const last = (m.sum && m.sum.last_sync) ? _cpRelativeSync(m.sum.last_sync) : '—';
-            return `<tr data-cloud="${m.key}">
-                <td><div class="acct-cell">
-                    <div class="provider-icon-sm" style="background:${m.color}">${m.short}</div>
-                    <span class="acct-name">${m.name}</span>
-                </div></td>
-                <td class="mono">&mdash;</td>
-                <td><span class="status-pill status-pill--fresh"><span class="status-pill__dot"></span>Active</span></td>
-                <td class="muted">${last}</td>
-                <td class="actions-cell">
-                    <button class="icon-btn-ghost" onclick="${m.sync}" title="Quick Sync">${_syncSvg}</button>
-                    <button class="icon-btn-ghost" onclick="navigateTo('integrations')" title="Manage in Integrations">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    </button>
-                </td>
-            </tr>`;
-        }).join('');
+            // Cursor can hold multiple teams (accounts) — list each as its own row,
+            // like Azure subscriptions / AWS accounts. Others stay a single row.
+            const names = (m.key === 'cursor' && accts.length) ? accts : [m.name];
+            names.forEach(acctName => {
+                intgCount++;
+                _intgRowsArr.push(`<tr data-cloud="${m.key}">
+                    <td><div class="acct-cell">
+                        <div class="provider-icon-sm" style="background:${m.color}">${m.short}</div>
+                        <span class="acct-name">${acctName}</span>
+                    </div></td>
+                    <td class="mono">&mdash;</td>
+                    <td><span class="status-pill status-pill--fresh"><span class="status-pill__dot"></span>Active</span></td>
+                    <td class="muted">${last}</td>
+                    <td class="actions-cell">
+                        <button class="icon-btn-ghost" onclick="${m.sync}" title="Quick Sync">${_syncSvg}</button>
+                        <button class="icon-btn-ghost" onclick="navigateTo('integrations')" title="Manage in Integrations">${_gearSvg}</button>
+                    </td>
+                </tr>`);
+            });
+        });
+        const intgRows = _intgRowsArr.join('');
 
         const total = azureSubs.length + providers.length + intgCount;
         const countChip = document.getElementById('cpAccountCount');
