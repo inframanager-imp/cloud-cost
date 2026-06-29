@@ -1412,7 +1412,8 @@ function _curCycleLabel() {
 let _curRows = [];
 let _curTotals = { total: 0, included: 0 };
 let _curSortState = { col: 'on_demand', dir: 'desc' };
-const _curFilters = { role: new Set() };
+const _curFilters = { role: new Set(), team: new Set() };
+let _curFilterCol = 'role';
 const _curMoney = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 async function renderCursorUserCosts() {
@@ -1454,7 +1455,9 @@ function _curRenderRows() {
     const countChip = document.getElementById('costRowCountChip');
     if (!body) return;
 
-    let rows = _curRows.filter(u => !_curFilters.role.size || _curFilters.role.has((u.role || '').toLowerCase()));
+    let rows = _curRows.filter(u =>
+        (!_curFilters.role.size || _curFilters.role.has((u.role || '').toLowerCase())) &&
+        (!_curFilters.team.size || _curFilters.team.has(u.team || 'Cursor Team')));
     const { col, dir } = _curSortState;
     const val = u => (col === 'included' || col === 'on_demand') ? (u[col] || 0) : (u[col] || '');
     rows = rows.slice().sort((a, b) => {
@@ -1501,23 +1504,33 @@ function _curSort(col) {
     _curRenderRows();
 }
 function _curOpenFilter(ev) {
+    const col = ev.currentTarget.dataset.curf || 'role';
+    _curFilterCol = col;
     const pop = document.getElementById('curColFilter');
     const list = document.getElementById('curColFilterList');
-    const vals = [...new Set(_curRows.map(u => (u.role || '').toLowerCase()).filter(Boolean))].sort();
-    const sel = _curFilters.role;
+    // Role values match case-insensitively (lowercased); team keeps its display case.
+    const raw = col === 'role'
+        ? _curRows.map(u => (u.role || '').toLowerCase())
+        : _curRows.map(u => u.team || 'Cursor Team');
+    const vals = [...new Set(raw.filter(Boolean))].sort();
+    const sel = _curFilters[col] || (_curFilters[col] = new Set());
+    const cap = col === 'role' ? 'text-transform:capitalize' : '';
     list.innerHTML = vals.map(v => `
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:2px 0">
             <input type="checkbox" value="${_escAttr(v)}" ${sel.has(v) ? 'checked' : ''} onchange="_curToggleFilter('${_escAttr(v)}',this.checked)">
-            <span style="text-transform:capitalize">${_esc(v)}</span>
-        </label>`).join('') || '<div style="font-size:12px;color:var(--text-muted)">No roles</div>';
+            <span style="${cap}">${_esc(v)}</span>
+        </label>`).join('') || `<div style="font-size:12px;color:var(--text-muted)">No ${col === 'role' ? 'roles' : 'teams'}</div>`;
     const r = ev.currentTarget.getBoundingClientRect();
     pop.style.left = Math.min(r.left, window.innerWidth - 200) + 'px';
     pop.style.top = (r.bottom + 6) + 'px';
     pop.style.display = 'block';
     document.getElementById('curColFilterBackdrop').style.display = 'block';
 }
-function _curToggleFilter(v, on) { if (on) _curFilters.role.add(v); else _curFilters.role.delete(v); }
-function _curClearFilter() { _curFilters.role.clear(); _curCloseFilter(); }
+function _curToggleFilter(v, on) {
+    const s = _curFilters[_curFilterCol] || (_curFilters[_curFilterCol] = new Set());
+    if (on) s.add(v); else s.delete(v);
+}
+function _curClearFilter() { _curFilters[_curFilterCol]?.clear(); _curCloseFilter(); }
 function _curCloseFilter() {
     document.getElementById('curColFilter').style.display = 'none';
     document.getElementById('curColFilterBackdrop').style.display = 'none';
