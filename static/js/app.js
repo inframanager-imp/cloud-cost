@@ -7743,6 +7743,24 @@ const CLIENT_FILTER_LABELS = {
 
 let _cmDlCounter = 0; // unique datalist IDs
 
+// Filter-type <option>s for a client-mapping row, per cloud. "Other Costs" is a
+// special source (manual tools) with Item / Category / Team dimensions.
+function _cmFtOptions(cloud, sel) {
+    let opts;
+    if (cloud === 'othercosts') {
+        opts = [['oc_item', 'Item'], ['oc_category', 'Category'], ['oc_team', 'Team']];
+    } else {
+        const g = (CLOUD_META[cloud] && CLOUD_META[cloud].groupLabel) || {};
+        opts = [
+            ['subscription_id', g.sub || 'Subscription / Account'],
+            ['resource_group',  g.rg  || 'Resource Group / Region'],
+            ['service_name',    g.service || 'Service'],
+            ['resource_name',   g.resource || 'Resource / User'],
+        ];
+    }
+    return opts.map(([v, l]) => `<option value="${v}" ${sel === v ? 'selected' : ''}>${_esc(l)}</option>`).join('');
+}
+
 function addClientMappingRow(data) {
     const container = document.getElementById('clientMappingRows');
     if (!container) return;
@@ -7757,27 +7775,16 @@ function addClientMappingRow(data) {
 
     // Cloud options come from the tenant's actual clouds (activeClouds), so any
     // connected provider (incl. OpenAI/Atlassian/Cursor) is mappable to a client.
+    // Cloud options = the tenant's connected clouds + "Other Costs" (manual tools).
     const _cloudOpts = activeClouds().map(c =>
-        `<option value="${c}" ${cloud===c?'selected':''}>${CLOUD_META[c].label}</option>`).join('');
-    // Filter-type labels follow each provider's real cost dimensions (e.g. Cursor's
-    // "resource group" is Role; OpenAI's "subscription" is the API key).
-    const _ftLabels = (cl) => {
-        const g = (CLOUD_META[cl] && CLOUD_META[cl].groupLabel) || {};
-        return { subscription_id: g.sub || 'Subscription / Account',
-                 resource_group:  g.rg  || 'Resource Group / Region',
-                 service_name:    g.service || 'Service',
-                 resource_name:   g.resource || 'Resource / User' };
-    };
-    const _ftL = _ftLabels(cloud);
+        `<option value="${c}" ${cloud===c?'selected':''}>${CLOUD_META[c].label}</option>`).join('')
+        + `<option value="othercosts" ${cloud==='othercosts'?'selected':''}>Other Costs</option>`;
     row.innerHTML = `
-        <select class="filter-input cm-cloud" style="width:110px;font-size:12px;height:32px;flex-shrink:0">
+        <select class="filter-input cm-cloud" style="width:120px;font-size:12px;height:32px;flex-shrink:0">
             ${_cloudOpts}
         </select>
         <select class="filter-input cm-filter-type" style="width:160px;font-size:12px;height:32px;flex-shrink:0">
-            <option value="subscription_id" ${ft==='subscription_id'?'selected':''}>${_ftL.subscription_id}</option>
-            <option value="resource_group"  ${ft==='resource_group' ?'selected':''}>${_ftL.resource_group}</option>
-            <option value="service_name"    ${ft==='service_name'   ?'selected':''}>${_ftL.service_name}</option>
-            <option value="resource_name"   ${ft==='resource_name'  ?'selected':''}>${_ftL.resource_name}</option>
+            ${_cmFtOptions(cloud, ft)}
         </select>
         <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
             <div class="cm-multiselect-wrap" style="position:relative">
@@ -7823,13 +7830,9 @@ function addClientMappingRow(data) {
     }
 
     cloudSel.addEventListener('change', () => {
-        const L = _ftLabels(cloudSel.value);
-        if (ftSel.options.length >= 4) {
-            ftSel.options[0].text = L.subscription_id;
-            ftSel.options[1].text = L.resource_group;
-            ftSel.options[2].text = L.service_name;
-            ftSel.options[3].text = L.resource_name;
-        }
+        // Rebuild the dimension options for the newly-selected source (Other Costs
+        // uses Item/Category/Team; clouds use their own labels).
+        ftSel.innerHTML = _cmFtOptions(cloudSel.value, ftSel.value);
         loadOptions();
     });
     ftSel.addEventListener('change', loadOptions);

@@ -4003,7 +4003,8 @@ def upsert_client_mappings(client_id: int, mappings: list):
         cloud = (m.get("cloud") or "azure").strip().lower()
         filter_type = (m.get("filter_type") or "").strip()
         value = (m.get("value") or "").strip()
-        if filter_type in ("subscription_id", "resource_group", "service_name", "resource_name") and value:
+        if filter_type in ("subscription_id", "resource_group", "service_name", "resource_name",
+                           "oc_item", "oc_category", "oc_team") and value:
             conn.execute(
                 "INSERT INTO client_mappings(client_id, cloud, filter_type, value) VALUES(?,?,?,?)",
                 (client_id, cloud, filter_type, value)
@@ -4121,6 +4122,10 @@ _MAP_SUBSEP = ""
 
 def _mapping_condition(filter_type: str, value: str) -> tuple:
     """Return (sql_condition, [params]) for a single mapping row."""
+    if (filter_type or "").startswith("oc_"):
+        # "Other Costs" mappings (oc_item / oc_category / oc_team) match manual_costs,
+        # NOT cloud cost_data — so they never contribute to the cloud SQL filter.
+        return ("1=0", [])
     if filter_type == "subscription_id":
         return ("subscription_id = ?", [value])
     elif filter_type == "service_name":
@@ -4215,6 +4220,28 @@ def get_manual_costs(tenant_id: int, client_id=None, month: str = None) -> list:
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_client_manual_costs(client_id: int, tenant_id: int, month: str = None) -> list:
+    """Manual/other costs attributed to a client: directly assigned (client_id) OR
+    matched by the client's 'Other Costs' mappings (oc_item / oc_category / oc_team)."""
+    items = {it["id"]: it for it in get_manual_costs(tenant_id, client_id=client_id, month=month)}
+    oc_maps = [m for m in get_client_mappings(client_id) if (m.get("filter_type") or "").startswith("oc_")]
+    if oc_maps:
+        field_of = {"oc_item": "item_name", "oc_category": "category", "oc_team": "team"}
+        targets = {}  # field -> set of lowercased target values
+        for m in oc_maps:
+            f = field_of.get(m["filter_type"])
+            if f:
+                targets.setdefault(f, set()).add((m["value"] or "").strip().lower())
+        for it in get_manual_costs(tenant_id, client_id=None, month=month):
+            if it["id"] in items:
+                continue
+            for f, vals in targets.items():
+                if str(it.get(f) or "").strip().lower() in vals:
+                    items[it["id"]] = it
+                    break
+    return list(items.values())
 
 
 def get_manual_cost(mc_id: int, tenant_id: int) -> dict:
@@ -4321,6 +4348,16 @@ def get_client_filter_values(cloud: str, filter_type: str, tenant_id: int) -> li
             "AND service_name IS NOT NULL AND service_name!='' "
             "ORDER BY service_name LIMIT 500",
             (cloud, tenant_id)
+        ).fetchall()
+        result = [{"value": r["val"], "label": r["val"]} for r in rows]
+
+    elif filter_type in ("oc_item", "oc_category", "oc_team"):
+        # "Other Costs" mapping dimensions — distinct values from manual_costs.
+        col = {"oc_item": "item_name", "oc_category": "category", "oc_team": "team"}[filter_type]
+        rows = conn.execute(
+            f"SELECT DISTINCT {col} as val FROM manual_costs "
+            f"WHERE tenant_id=? AND {col} IS NOT NULL AND {col}!='' ORDER BY {col} LIMIT 500",
+            (tenant_id,)
         ).fetchall()
         result = [{"value": r["val"], "label": r["val"]} for r in rows]
 

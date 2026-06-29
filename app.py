@@ -60,7 +60,7 @@ from database import (
     build_client_sql_filter, get_client_filter_values,
     # Manually-added costs
     MANUAL_COST_CATEGORIES, create_manual_cost, update_manual_cost, delete_manual_cost,
-    get_manual_costs, get_manual_cost,
+    get_manual_costs, get_manual_cost, get_client_manual_costs,
     # AWS CloudFormation connect
     get_or_create_aws_external_id, save_aws_handshake, get_aws_connection_status,
     # AWS one-click setup tokens
@@ -3737,12 +3737,15 @@ def api_client_costs(client_id):
     return jsonify(get_client_costs(client_id, date_from, date_to, tid))
 
 
-def _manual_costs_with_summary(tenant_id, client_id=None, month=None):
-    """Manual cost entries plus totals converted to the tenant's reporting currency."""
+def _manual_costs_with_summary(tenant_id, client_id=None, month=None, items=None):
+    """Manual cost entries plus totals converted to the tenant's reporting currency.
+    Pass `items` to summarize a pre-fetched list (e.g. a client's assigned +
+    mapping-matched Other Costs); otherwise it fetches by client_id/month."""
     from currency import convert, get_rates, tenant_reporting_currency, symbol as _cur_symbol
     rep_cur = tenant_reporting_currency(tenant_id, get_db)
     rates = get_rates()
-    items = get_manual_costs(tenant_id, client_id=client_id, month=month)
+    if items is None:
+        items = get_manual_costs(tenant_id, client_id=client_id, month=month)
     by_category = {}
     by_client = {}
     by_team = {}
@@ -3865,7 +3868,8 @@ def _send_client_cost_report(client, tenant_id, recipients, date_from=None, date
     client = dict(client)
     client["mappings"] = get_client_mappings(client["id"])
     cost_data = get_client_costs(client["id"], date_from, date_to, tenant_id)
-    cost_data["manual_costs"] = _manual_costs_with_summary(tenant_id, client_id=client["id"], month=f"{date_to[:7]}-01")
+    _mc_items = get_client_manual_costs(client["id"], tenant_id, month=f"{date_to[:7]}-01")
+    cost_data["manual_costs"] = _manual_costs_with_summary(tenant_id, items=_mc_items)
     html = build_client_report_html(client, cost_data, date_from, date_to)
     subject = f"Client Cost Report — {client['name']} ({date_from} to {date_to})"
     send_report_email(recipients=recipients, subject=subject, html_body=html, report_type=report_type, tenant_id=tenant_id or 1)
@@ -3936,6 +3940,8 @@ def api_client_report_preview(client_id):
     date_to   = request.args.get("date_to")   or today.strftime("%Y-%m-%d")
     client["mappings"] = get_client_mappings(client_id)
     cost_data = get_client_costs(client_id, date_from, date_to, tid)
+    _mc_items = get_client_manual_costs(client_id, tid, month=f"{date_to[:7]}-01")
+    cost_data["manual_costs"] = _manual_costs_with_summary(tid, items=_mc_items)
     html = build_client_report_html(client, cost_data, date_from, date_to)
     return Response(html, mimetype="text/html")
 
