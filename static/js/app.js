@@ -1423,10 +1423,29 @@ async function renderCursorUserCosts() {
         _curRows = d.rows || [];
         _curTotals = { total: d.total || 0, included: d.included_total || 0 };
         _curCycleInfo = { start: d.cycle_start, end: d.cycle_end };
+        _curByTeam = d.by_account || [];
+        _curRenderByTeam();
         _curRenderRows();
     } catch (e) {
-        if (body) body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#c53030">Failed to load Cursor per-user costs</td></tr>';
+        if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#c53030">Failed to load Cursor per-user costs</td></tr>';
     }
+}
+
+let _curByTeam = [];
+function _curRenderByTeam() {
+    const card = document.getElementById('cursorByTeamCard');
+    const el = document.getElementById('cursorByTeam');
+    if (!card || !el) return;
+    // Only show the per-team breakdown when there's more than one team.
+    if (!_curByTeam || _curByTeam.length <= 1) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    el.innerHTML = _curByTeam.map(t => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border-subtle,rgba(0,0,0,.05))">
+            <span style="flex:1;font-weight:500;color:var(--text-primary)">${_esc(t.team)}</span>
+            <span style="color:var(--text-secondary);font-size:12px">${t.members} member${t.members !== 1 ? 's' : ''}</span>
+            <span style="color:var(--text-secondary);font-size:12px;min-width:130px;text-align:right">Included ${_curMoney(t.included || 0)}</span>
+            <span style="font-weight:600;min-width:120px;text-align:right;color:${(t.on_demand || 0) > 0 ? '#c05621' : 'var(--text-primary)'}">On-Demand ${_curMoney(t.on_demand || 0)}</span>
+        </div>`).join('');
 }
 
 function _curRenderRows() {
@@ -1449,7 +1468,7 @@ function _curRenderRows() {
     if (subtitleBar) subtitleBar.innerHTML = `Showing ${rows.length} member${rows.length !== 1 ? 's' : ''} · <span style="color:var(--text-muted)">${_curCycleLabel()}</span> · On-Demand <strong>${_curMoney(onDemand)}</strong> <span style="color:var(--text-muted)">· Included usage ${_curMoney(included)}</span>`;
     if (countChip) countChip.textContent = `${rows.length} members`;
 
-    ['name', 'email', 'role', 'included', 'on_demand'].forEach(c => {
+    ['name', 'team', 'email', 'role', 'included', 'on_demand'].forEach(c => {
         const el = document.getElementById('cur-sort-' + c);
         if (el) el.textContent = (c === col) ? (dir === 'asc' ? '↑' : '↓') : '↕';
     });
@@ -1461,13 +1480,14 @@ function _curRenderRows() {
     });
 
     if (!rows.length) {
-        body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">No members match the filter.</td></tr>';
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">No members match the filter.</td></tr>';
         return;
     }
     const roleBadge = r => `<span style="font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;background:#ede9fe;color:#6d28d9;text-transform:capitalize">${_esc(r || 'member')}</span>`;
     body.innerHTML = rows.map(u => `
         <tr>
             <td style="font-weight:500">${_CUR_LOGO}${_esc(u.name || '—')}</td>
+            <td style="color:var(--text-secondary)">${_esc(u.team || 'Cursor Team')}</td>
             <td style="color:var(--text-secondary)">${_esc(u.email || '—')}</td>
             <td style="text-align:center">${roleBadge(u.role)}</td>
             <td style="text-align:right;color:var(--text-secondary)">${_curMoney(u.included || 0)}</td>
@@ -1835,6 +1855,8 @@ async function loadCostsTable() {
         if (_oaiWrap)  _oaiWrap.style.display  = which === 'oai'  ? '' : 'none';
         if (_curWrap)  _curWrap.style.display  = which === 'cur'  ? '' : 'none';
         if (_curUsageWrap) _curUsageWrap.style.display = which === 'curusage' ? '' : 'none';
+        const _curTeamCard = document.getElementById('cursorByTeamCard');
+        if (_curTeamCard && which !== 'cur') _curTeamCard.style.display = 'none';
         if (_subCard)  _subCard.style.display  = which === 'main' ? '' : 'none';
         // Snapshot views (Atlassian/Cursor current cycle) aren't date-filtered —
         // hide the date picker so it doesn't look broken.

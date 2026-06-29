@@ -5316,7 +5316,7 @@ def api_cursor_user_costs():
     """Per-user Cursor cost (usage value = overage + included), tenant-scoped."""
     tid = current_tenant_id()
     conn = get_db()
-    q = ("SELECT user_id,name,email,role,spend_cents,included_cents,fast_premium_requests "
+    q = ("SELECT account,user_id,name,email,role,spend_cents,included_cents,fast_premium_requests "
          "FROM cursor_users WHERE ")
     params = []
     if tid is not None:
@@ -5327,20 +5327,29 @@ def api_cursor_user_costs():
     conn.close()
 
     rows, total, included_total = [], 0.0, 0.0
+    by_team = {}  # team -> {on_demand, included, members}
     for r in raw:
         on_demand = round(float(r.get("spend_cents") or 0) / 100.0, 2)   # billable cost
         included  = round(float(r.get("included_cents") or 0) / 100.0, 2) # showback only
+        team = (r.get("account") or "").strip() or "Cursor Team"
         total += on_demand
         included_total += included
+        bt = by_team.setdefault(team, {"on_demand": 0.0, "included": 0.0, "members": 0})
+        bt["on_demand"] += on_demand; bt["included"] += included; bt["members"] += 1
         rows.append({
             "name": r.get("name") or r.get("email") or "Member",
-            "email": r.get("email"), "role": r.get("role"),
+            "email": r.get("email"), "role": r.get("role"), "team": team,
             "included": included, "on_demand": on_demand,
             "requests": r.get("fast_premium_requests") or 0, "cost": on_demand,
         })
-    rows.sort(key=lambda x: (-x["cost"], -x["included"], (x["name"] or "").lower()))
+    rows.sort(key=lambda x: ((x["team"] or "").lower(), -x["cost"], -x["included"], (x["name"] or "").lower()))
+    by_account = sorted(
+        [{"team": k, "on_demand": round(v["on_demand"], 2), "included": round(v["included"], 2), "members": v["members"]}
+         for k, v in by_team.items()],
+        key=lambda x: -x["on_demand"]
+    )
     cs, ce = _cursor_cycle(tid)
-    return jsonify({"rows": rows, "total": round(total, 2),
+    return jsonify({"rows": rows, "total": round(total, 2), "by_account": by_account,
                     "included_total": round(included_total, 2), "count": len(rows),
                     "cycle_start": cs, "cycle_end": ce})
 
