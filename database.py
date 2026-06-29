@@ -948,6 +948,7 @@ def init_db():
             cost_month TEXT NOT NULL,
             recurring INTEGER NOT NULL DEFAULT 0,
             notes TEXT DEFAULT '',
+            team TEXT DEFAULT '',
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
@@ -955,6 +956,14 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_costs_tenant ON manual_costs(tenant_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_costs_client ON manual_costs(client_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_manual_costs_month ON manual_costs(cost_month)")
+    # Migration: add team tag to existing manual_costs tables.
+    try:
+        cursor.execute("SELECT team FROM manual_costs LIMIT 1")
+    except Exception:
+        try:
+            cursor.execute("ALTER TABLE manual_costs ADD COLUMN team TEXT DEFAULT ''")
+        except Exception:
+            pass
 
     conn.commit()
     conn.close()
@@ -4154,12 +4163,12 @@ def create_manual_cost(data: dict, tenant_id: int) -> int:
     conn = get_db()
     cur = conn.execute(
         """INSERT INTO manual_costs
-           (tenant_id, client_id, item_name, category, amount, currency, cost_month, recurring, notes, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)""",
+           (tenant_id, client_id, item_name, category, amount, currency, cost_month, recurring, notes, team, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)""",
         (tenant_id, data.get("client_id") or None, data["item_name"].strip(),
          data.get("category") or "Other", float(data.get("amount") or 0),
          (data.get("currency") or "USD").upper(), data["cost_month"],
-         1 if data.get("recurring") else 0, data.get("notes", ""))
+         1 if data.get("recurring") else 0, data.get("notes", ""), (data.get("team") or "").strip())
     )
     mc_id = cur.lastrowid
     conn.commit()
@@ -4171,12 +4180,12 @@ def update_manual_cost(mc_id: int, data: dict, tenant_id: int):
     conn = get_db()
     conn.execute(
         """UPDATE manual_costs SET client_id=?, item_name=?, category=?, amount=?, currency=?,
-           cost_month=?, recurring=?, notes=?, updated_at=CURRENT_TIMESTAMP
+           cost_month=?, recurring=?, notes=?, team=?, updated_at=CURRENT_TIMESTAMP
            WHERE id=? AND tenant_id=?""",
         (data.get("client_id") or None, data["item_name"].strip(), data.get("category") or "Other",
          float(data.get("amount") or 0), (data.get("currency") or "USD").upper(),
          data["cost_month"], 1 if data.get("recurring") else 0, data.get("notes", ""),
-         mc_id, tenant_id)
+         (data.get("team") or "").strip(), mc_id, tenant_id)
     )
     conn.commit()
     conn.close()

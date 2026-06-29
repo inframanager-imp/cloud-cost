@@ -3745,6 +3745,7 @@ def _manual_costs_with_summary(tenant_id, client_id=None, month=None):
     items = get_manual_costs(tenant_id, client_id=client_id, month=month)
     by_category = {}
     by_client = {}
+    by_team = {}
     total = 0.0
     for it in items:
         conv = convert(it["amount"], it["currency"], rep_cur, rates)
@@ -3753,6 +3754,8 @@ def _manual_costs_with_summary(tenant_id, client_id=None, month=None):
         by_category[it["category"]] = by_category.get(it["category"], 0) + conv
         cname = it.get("client_name") or "General / Unassigned"
         by_client[cname] = by_client.get(cname, 0) + conv
+        tname = (it.get("team") or "").strip() or "Unassigned"
+        by_team[tname] = by_team.get(tname, 0) + conv
     return {
         "items": items,
         "total": round(total, 2),
@@ -3760,6 +3763,7 @@ def _manual_costs_with_summary(tenant_id, client_id=None, month=None):
         "symbol": _cur_symbol(rep_cur),
         "by_category": [{"category": k, "cost": round(v, 2)} for k, v in sorted(by_category.items(), key=lambda x: -x[1])],
         "by_client": [{"client": k, "cost": round(v, 2)} for k, v in sorted(by_client.items(), key=lambda x: -x[1])],
+        "by_team": [{"team": k, "cost": round(v, 2)} for k, v in sorted(by_team.items(), key=lambda x: -x[1])],
     }
 
 
@@ -3808,6 +3812,7 @@ def api_create_manual_cost():
         "category": body.get("category"), "amount": body.get("amount"),
         "currency": body.get("currency"), "cost_month": cost_month,
         "recurring": body.get("recurring"), "notes": body.get("notes", ""),
+        "team": body.get("team", ""),
     }, tid)
     return jsonify({"id": mc_id}), 201
 
@@ -3837,6 +3842,7 @@ def api_update_manual_cost(mc_id):
         "category": body.get("category"), "amount": body.get("amount"),
         "currency": body.get("currency"), "cost_month": cost_month,
         "recurring": body.get("recurring"), "notes": body.get("notes", ""),
+        "team": body.get("team", ""),
     }, tid)
     return jsonify({"message": "Updated"})
 

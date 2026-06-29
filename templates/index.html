@@ -1631,6 +1631,12 @@
                     <option value="none">General / Unassigned</option>
                 </select>
             </div>
+            <div style="display:flex;align-items:center;gap:8px">
+                <label style="font-size:12px;color:var(--text-secondary)">Team</label>
+                <select id="mcTeamFilter" class="filter-input" style="font-size:12px;height:30px" onchange="_renderOtherCosts(_mcData)">
+                    <option value="">All Teams</option>
+                </select>
+            </div>
         </div>
 
         <!-- Summary cards -->
@@ -1649,6 +1655,12 @@
                     <div style="font-size:12px;color:var(--text-secondary)">No data yet</div>
                 </div>
             </div>
+            <div class="db-card" style="padding:16px;grid-column:span 2">
+                <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">By Team</div>
+                <div id="mcByTeam" style="display:flex;flex-direction:column;gap:6px">
+                    <div style="font-size:12px;color:var(--text-secondary)">No data yet</div>
+                </div>
+            </div>
         </div>
 
         <!-- Table -->
@@ -1657,6 +1669,7 @@
                 <thead>
                     <tr>
                         <th>Client</th>
+                        <th>Team</th>
                         <th>Item</th>
                         <th>Category</th>
                         <th style="text-align:right">Amount</th>
@@ -1667,7 +1680,7 @@
                     </tr>
                 </thead>
                 <tbody id="mcTableBody">
-                    <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-secondary)">Loading…</td></tr>
+                    <tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-secondary)">Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -1691,9 +1704,16 @@
                     </div>
                 </div>
 
-                <div class="email-field" style="margin-bottom:12px">
-                    <label>Item Name</label>
-                    <input type="text" id="mcItemName" class="filter-input" placeholder="e.g. Datadog, Zoom, GitHub Enterprise">
+                <div class="email-field-row" style="margin-bottom:12px">
+                    <div class="email-field" style="flex:1">
+                        <label>Item Name</label>
+                        <input type="text" id="mcItemName" class="filter-input" placeholder="e.g. Datadog, Zoom, GitHub Enterprise">
+                    </div>
+                    <div class="email-field" style="flex:1">
+                        <label>Team <span style="font-weight:400;color:var(--text-muted);font-size:11px">(optional)</span></label>
+                        <input type="text" id="mcTeam" class="filter-input" list="mcTeamList" placeholder="e.g. Platform, Data, QA">
+                        <datalist id="mcTeamList"></datalist>
+                    </div>
                 </div>
 
                 <div class="email-field-row" style="margin-bottom:12px">
@@ -3971,7 +3991,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260622v"></script>
+<script src="/static/js/app.js?v=20260622w"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

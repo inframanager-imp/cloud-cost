@@ -8070,39 +8070,64 @@ async function loadOtherCostsPage() {
     }
 }
 
+function _renderMcBars(el, list, sym) {
+    if (!el) return;
+    if (!list || !list.length) { el.innerHTML = `<div style="font-size:12px;color:var(--text-secondary)">No data yet</div>`; return; }
+    const max = list[0].cost || 1;
+    el.innerHTML = list.map(c => `
+        <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:var(--text-primary);min-width:200px">${_esc(c.label)}</span>
+            <div style="flex:1;background:var(--bg-input,#eee);border-radius:4px;height:8px;overflow:hidden">
+                <div style="height:100%;width:${Math.max(3, c.cost / max * 100)}%;background:var(--accent)"></div>
+            </div>
+            <span style="font-size:12px;font-weight:500;color:var(--text-primary);min-width:90px;text-align:right">${_mcMoney(c.cost, sym)}</span>
+        </div>`).join('');
+}
+
 function _renderOtherCosts(data) {
+    if (!data) return;
     const sym = data.symbol || curSym();
+
+    // Populate the Team filter (preserve selection) + the form's team datalist.
+    const teamSel = document.getElementById('mcTeamFilter');
+    const prevTeam = teamSel ? teamSel.value : '';
+    if (teamSel) {
+        teamSel.innerHTML = '<option value="">All Teams</option>' +
+            (data.by_team || []).map(t => `<option value="${_esc(t.team)}">${_esc(t.team)}</option>`).join('');
+        if ([...teamSel.options].some(o => o.value === prevTeam)) teamSel.value = prevTeam;
+    }
+    const dl = document.getElementById('mcTeamList');
+    if (dl) dl.innerHTML = (data.by_team || []).filter(t => t.team && t.team !== 'Unassigned')
+        .map(t => `<option value="${_esc(t.team)}">`).join('');
+
+    const teamFilter = teamSel ? teamSel.value : '';
+    const allItems = data.items || [];
+    const items = teamFilter ? allItems.filter(it => ((it.team || '').trim() || 'Unassigned') === teamFilter) : allItems;
+
+    // Totals + By Category reflect the current team filter; By Team always full.
+    let total = 0; const byCat = {};
+    items.forEach(it => { total += it.amount_converted || 0; byCat[it.category] = (byCat[it.category] || 0) + (it.amount_converted || 0); });
     const totalEl = document.getElementById('mcTotal');
     const countEl = document.getElementById('mcCount');
-    const catEl = document.getElementById('mcByCategory');
-    if (totalEl) totalEl.textContent = _mcMoney(data.total, sym);
-    if (countEl) countEl.textContent = data.items.length;
+    if (totalEl) totalEl.textContent = _mcMoney(teamFilter ? total : data.total, sym);
+    if (countEl) countEl.textContent = items.length;
 
-    if (catEl) {
-        if (!data.by_category.length) {
-            catEl.innerHTML = `<div style="font-size:12px;color:var(--text-secondary)">No data yet</div>`;
-        } else {
-            const max = data.by_category[0].cost || 1;
-            catEl.innerHTML = data.by_category.map(c => `
-                <div style="display:flex;align-items:center;gap:8px">
-                    <span style="font-size:12px;color:var(--text-primary);min-width:200px">${_esc(c.category)}</span>
-                    <div style="flex:1;background:var(--bg-input,#eee);border-radius:4px;height:8px;overflow:hidden">
-                        <div style="height:100%;width:${Math.max(3, c.cost / max * 100)}%;background:var(--accent)"></div>
-                    </div>
-                    <span style="font-size:12px;font-weight:500;color:var(--text-primary);min-width:90px;text-align:right">${_mcMoney(c.cost, sym)}</span>
-                </div>`).join('');
-        }
-    }
+    const catList = teamFilter
+        ? Object.entries(byCat).map(([k, v]) => ({ label: k, cost: v })).sort((a, b) => b.cost - a.cost)
+        : (data.by_category || []).map(c => ({ label: c.category, cost: c.cost }));
+    _renderMcBars(document.getElementById('mcByCategory'), catList, sym);
+    _renderMcBars(document.getElementById('mcByTeam'), (data.by_team || []).map(t => ({ label: t.team, cost: t.cost })), sym);
 
     const tbody = document.getElementById('mcTableBody');
     if (!tbody) return;
-    if (!data.items.length) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-secondary)">No other costs for this month. Click <strong>+ Add Cost</strong> to add one.</td></tr>`;
+    if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-secondary)">No other costs for this month. Click <strong>+ Add Cost</strong> to add one.</td></tr>`;
         return;
     }
-    tbody.innerHTML = data.items.map(it => `
+    tbody.innerHTML = items.map(it => `
         <tr>
             <td>${_esc(it.client_name || 'General')}</td>
+            <td>${it.team ? _esc(it.team) : '<span style="color:var(--text-secondary)">—</span>'}</td>
             <td>${_esc(it.item_name)}</td>
             <td>${_esc(it.category)}</td>
             <td style="text-align:right;white-space:nowrap">${_mcMoney(it.amount, _mcSymbol(it.currency))} <span style="color:var(--text-secondary);font-size:11px">${it.currency}</span></td>
@@ -8140,6 +8165,7 @@ async function openManualCostForm(id) {
             document.getElementById('mcFormMonth').value = (item.cost_month || '').slice(0, 7);
             document.getElementById('mcRecurring').checked = !!item.recurring;
             document.getElementById('mcNotes').value = item.notes || '';
+            document.getElementById('mcTeam').value = item.team || '';
         }
     } else {
         const filterClient = document.getElementById('mcClientFilter')?.value || '';
@@ -8150,6 +8176,8 @@ async function openManualCostForm(id) {
         document.getElementById('mcFormMonth').value = document.getElementById('mcMonth')?.value || '';
         document.getElementById('mcRecurring').checked = false;
         document.getElementById('mcNotes').value = '';
+        const tf = document.getElementById('mcTeamFilter')?.value || '';
+        document.getElementById('mcTeam').value = tf;   // prefill the team being filtered
         if (_mcCategories && _mcCategories.length) document.getElementById('mcCategory').value = _mcCategories[0];
     }
 
@@ -8171,6 +8199,7 @@ async function saveManualCost() {
         cost_month: document.getElementById('mcFormMonth').value,
         recurring: document.getElementById('mcRecurring').checked,
         notes: document.getElementById('mcNotes').value.trim(),
+        team: document.getElementById('mcTeam').value.trim(),
     };
     if (!body.item_name || !body.cost_month) {
         showToast('Item name and month are required', 'error');
