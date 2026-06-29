@@ -138,11 +138,13 @@ def _sync_one_account(conn, tenant_id, acct_name, key, now):
     separate. The caller clears prior tenant data and commits."""
     client = CursorClient(key)
     members, cycle_start = client.fetch_spend()
-    # Cursor bills per billing cycle (e.g. 14th-14th); stamp at the cycle start.
-    if cycle_start:
-        cycle_date = datetime.utcfromtimestamp(int(cycle_start) / 1000).strftime("%Y-%m-%d")
-    else:
-        cycle_date = now.strftime("%Y-%m-01")
+    # Cursor bills per billing cycle (e.g. 14th-14th), which can start in the PRIOR
+    # calendar month. Members with no day-resolved on-demand events get a single
+    # fallback row — stamp it within the CURRENT month (not the cycle start) so
+    # low/zero-usage members still appear in monthly client reports.
+    _cs = datetime.utcfromtimestamp(int(cycle_start) / 1000) if cycle_start else now.replace(day=1)
+    _month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    cycle_date = max(_cs, _month_start).strftime("%Y-%m-%d")
 
     rows = [(
         tenant_id, acct_name, m.get("userId"), m.get("name"), m.get("email"), m.get("role"),
