@@ -4141,13 +4141,46 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
                 "included": incl, "included_usage": inc_u, "free_usage": free,
                 "total": round(od + incl, 2)}
 
+    by_resource_items = [_res_item(r) for r in by_resource]
+
+    # If this client maps one or more Cursor teams (Team/Account dimension), make the
+    # per-user breakdown show the FULL team roster from cursor_users — including
+    # members with no cost_data row at all — so every seat appears in the report.
+    cursor_teams = [m["value"] for m in mappings
+                    if (m["cloud"] or "").lower() == "cursor" and m["filter_type"] == "subscription_id" and m["value"]]
+    if cursor_teams:
+        have = {(it["name"] or "").lower() for it in by_resource_items}
+        ph = ",".join("?" * len(cursor_teams))
+        try:
+            roster = conn.execute(
+                f"SELECT name, email, COALESCE(spend_cents,0) sc, COALESCE(included_cents,0) ic "
+                f"FROM cursor_users WHERE tenant_id IS ? AND account IN ({ph})",
+                [tenant_id] + cursor_teams
+            ).fetchall()
+        except Exception:
+            roster = []
+        for u in roster:
+            nm = u["name"] or u["email"] or "Member"
+            if nm.lower() in have:
+                continue
+            have.add(nm.lower())
+            # Member absent from the period's cost_data — use the cursor_users snapshot
+            # (its on-demand isn't in cost_data, so no double-count) so they still appear.
+            od   = round((u["sc"] or 0) / 100.0, 2)
+            incl = round((u["ic"] or 0) / 100.0, 2)
+            inc_u = round(min(CURSOR_SEAT_INCLUDED, incl), 2) if incl else 0
+            free  = round(max(0.0, incl - inc_u), 2)
+            by_resource_items.append({"name": nm, "cost": od, "ondemand": od, "included": incl,
+                                      "included_usage": inc_u, "free_usage": free, "total": round(od + incl, 2)})
+        by_resource_items.sort(key=lambda x: (-x["ondemand"], -x["included"], (x["name"] or "").lower()))
+
     conn.close()
     return {
         "total": round(total_row["total"], 2),
         "by_service": [{"name": r["service_name"] or "Unknown", "cost": round(r["total"], 2)} for r in by_service],
         "by_subscription": [{"subscription_id": r["subscription_id"], "cost": round(r["total"], 2)} for r in by_subscription],
         "by_cloud": [{"cloud": r["cloud_provider"] or "unknown", "cost": round(r["total"], 2)} for r in by_cloud],
-        "by_resource": [_res_item(r) for r in by_resource],
+        "by_resource": by_resource_items,
         "trend": [{"date": r["date"], "cost": round(r["total"], 2)} for r in trend],
     }
 
