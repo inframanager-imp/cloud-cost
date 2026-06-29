@@ -3687,12 +3687,11 @@
                     Add your Cursor API key to track subscription and usage costs alongside your cloud spend.
                 </div>
                 <div style="display:flex;flex-direction:column;gap:12px">
-                    <div>
-                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Cursor Team Admin API Key</label>
-                        <input id="cursor-api-key" type="password" placeholder="crsr_••••••••••••••••" class="form-control">
-                        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">A <strong>Team</strong>-tab key (Read-only is enough) from Cursor → Settings → API Keys. Pulls live per-user spend.</div>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:8px;padding:10px 0">
+                    <label style="font-size:12px;font-weight:600;color:var(--text-muted)">Cursor teams</label>
+                    <div id="cursor-accounts-list" style="display:flex;flex-direction:column;gap:8px"></div>
+                    <button type="button" class="btn btn-secondary" style="align-self:flex-start;font-size:12px;padding:6px 12px" onclick="addCursorAccountRow('', false)">+ Add Cursor team</button>
+                    <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Give each team a <strong>display name</strong> and its own <strong>Team-tab API key</strong> (Cursor → Settings → API Keys; read-only is enough). Each team's cost is tracked and shown separately.</div>
+                    <div style="display:flex;align-items:center;gap:8px;padding:6px 0">
                         <input type="checkbox" id="cursor-enabled" style="width:16px;height:16px;cursor:pointer">
                         <label for="cursor-enabled" style="font-size:13px;cursor:pointer">Track Cursor costs in dashboard</label>
                     </div>
@@ -3991,7 +3990,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260622x"></script>
+<script src="/static/js/app.js?v=20260622y"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -6201,6 +6200,30 @@ document.addEventListener('DOMContentLoaded', function() {
         if (dd && menu && !dd.contains(e.target)) menu.style.display = 'none';
     });
 
+    // Cursor multi-account row builder + collector.
+    window.addCursorAccountRow = function(name, keySet) {
+        const list = document.getElementById('cursor-accounts-list');
+        if (!list) return;
+        const row = document.createElement('div');
+        row.className = 'cursor-acct-row';
+        row.style.cssText = 'display:flex;gap:8px;align-items:center';
+        const nm = (name || '').replace(/"/g, '&quot;');
+        row.innerHTML =
+            `<input class="cursor-acct-name form-control" placeholder="Team name (e.g. Gyan Team)" value="${nm}" style="flex:1">
+             <input class="cursor-acct-key form-control" type="password" placeholder="${keySet ? '•••• (leave blank to keep)' : 'crsr_…  API key'}" style="flex:1.4">
+             <button type="button" class="btn btn-secondary" title="Remove" style="padding:6px 11px;color:var(--red)" onclick="this.closest('.cursor-acct-row').remove()">&times;</button>`;
+        list.appendChild(row);
+    };
+    function _collectCursorAccounts() {
+        const out = [];
+        document.querySelectorAll('#cursor-accounts-list .cursor-acct-row').forEach(r => {
+            const name = (r.querySelector('.cursor-acct-name')?.value || '').trim();
+            const key  = (r.querySelector('.cursor-acct-key')?.value || '').trim();
+            if (name) out.push({ name, api_key: key });  // blank key → backend keeps existing by name
+        });
+        return out;
+    }
+
     window.openIntgModal = function(tool) {
         const cfg = (_intgSettings[tool] || {});
         if (tool === 'jira') {
@@ -6221,7 +6244,14 @@ document.addEventListener('DOMContentLoaded', function() {
             _setVal('bitbucket-token', cfg.token);
             _setChk('bitbucket-enabled', cfg.enabled);
         } else if (tool === 'cursor') {
-            _setVal('cursor-api-key', cfg.api_key);
+            const list = document.getElementById('cursor-accounts-list');
+            if (list) {
+                list.innerHTML = '';
+                const accts = cfg.accounts || [];
+                if (accts.length) accts.forEach(a => addCursorAccountRow(a.name, a.key_set));
+                else if (cfg.api_key) addCursorAccountRow('Cursor Team', true);  // legacy single key
+                else addCursorAccountRow('', false);
+            }
             _setChk('cursor-enabled', cfg.enabled);
         } else if (tool === 'twilio') {
             _setVal('twilio-api-key', cfg.api_key);
@@ -6318,7 +6348,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 token: _getVal('bitbucket-token'), enabled: _getChk('bitbucket-enabled'),
             };
         } else if (tool === 'cursor') {
-            payload.cursor = { api_key: _getVal('cursor-api-key'), enabled: _getChk('cursor-enabled') };
+            payload.cursor = { accounts: _collectCursorAccounts(), enabled: _getChk('cursor-enabled') };
         } else if (tool === 'twilio') {
             payload.twilio = { api_key: _getVal('twilio-api-key'), enabled: _getChk('twilio-enabled'), monthly_cost: parseFloat(_getVal('twilio-monthly-cost')) || 0 };
         } else if (tool === 'sendgrid') {
@@ -6353,7 +6383,8 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (tool === 'openai') {
             payload.openai = { api_key: _getVal('openai-api-key') };
         } else if (tool === 'cursor') {
-            payload.cursor = { api_key: _getVal('cursor-api-key') };
+            const accts = _collectCursorAccounts();
+            payload.cursor = { api_key: (accts[0] && accts[0].api_key) || '' };
         }
         fetch('/api/integrations/test/' + tool, {
             method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)

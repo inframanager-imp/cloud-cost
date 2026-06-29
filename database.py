@@ -613,6 +613,23 @@ def init_db():
         )
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cursor_usage ON cursor_usage(tenant_id)")
+    # Migration: per-account tag on cursor tables (multi-team Cursor support).
+    for _tbl in ("cursor_users", "cursor_usage"):
+        try:
+            cursor.execute(f"SELECT account FROM {_tbl} LIMIT 1")
+        except Exception:
+            try:
+                cursor.execute(f"ALTER TABLE {_tbl} ADD COLUMN account TEXT DEFAULT ''")
+            except Exception:
+                pass
+    # Migration: store multiple Cursor accounts (name + key) as JSON.
+    try:
+        cursor.execute("SELECT cursor_accounts FROM integration_settings LIMIT 1")
+    except Exception:
+        try:
+            cursor.execute("ALTER TABLE integration_settings ADD COLUMN cursor_accounts TEXT DEFAULT ''")
+        except Exception:
+            pass
     # Seed baseline Atlassian list prices once (the standalone scraper refreshes
     # these later). jira-software/standard is a real scraped value; rest are list.
     if cursor.execute("SELECT COUNT(*) FROM atlassian_pricing").fetchone()[0] == 0:
@@ -2419,6 +2436,22 @@ def get_integration_settings(tenant_id=1):
     for k in ("jira_enabled", "bitbucket_enabled", "cursor_enabled", "openai_enabled",
               "twilio_enabled", "sendgrid_enabled"):
         d[k] = bool(d.get(k, 0))
+    # Normalize Cursor accounts into a list [{name, api_key}]. Back-compat: a single
+    # legacy cursor_api_key becomes one account named "Cursor Team".
+    accounts = []
+    raw = (d.get("cursor_accounts") or "").strip()
+    if raw:
+        try:
+            for a in (json.loads(raw) or []):
+                nm = (a.get("name") or "").strip()
+                key = (a.get("api_key") or "").strip()
+                if key:
+                    accounts.append({"name": nm or "Cursor Team", "api_key": key})
+        except Exception:
+            accounts = []
+    if not accounts and (d.get("cursor_api_key") or "").strip():
+        accounts = [{"name": "Cursor Team", "api_key": d["cursor_api_key"].strip()}]
+    d["cursor_accounts"] = accounts
     return d
 
 
@@ -2430,7 +2463,7 @@ def update_integration_settings(settings, tenant_id=1):
         "jira_admin_token", "jira_admin_org_id",
         "jira_mode", "jira_server_user", "jira_server_password",
         "bitbucket_workspace", "bitbucket_repo", "bitbucket_token", "bitbucket_enabled",
-        "cursor_api_key", "cursor_enabled", "cursor_monthly_cost",
+        "cursor_api_key", "cursor_enabled", "cursor_monthly_cost", "cursor_accounts",
         "openai_api_key", "openai_org_id", "openai_enabled",
         "twilio_api_key", "twilio_enabled", "twilio_monthly_cost",
         "sendgrid_api_key", "sendgrid_enabled", "sendgrid_monthly_cost",
@@ -2441,6 +2474,11 @@ def update_integration_settings(settings, tenant_id=1):
             val = settings[key]
             if key.endswith("_enabled"):
                 val = 1 if val else 0
+            elif key == "cursor_accounts" and not isinstance(val, str):
+                # Store the accounts list as JSON (keep only name + api_key).
+                val = json.dumps([{"name": (a.get("name") or "").strip(),
+                                   "api_key": (a.get("api_key") or "").strip()}
+                                  for a in (val or []) if (a.get("api_key") or "").strip()])
             fields.append(f"{key}=?")
             params.append(val)
     if not fields:

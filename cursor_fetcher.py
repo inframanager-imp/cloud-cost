@@ -132,145 +132,145 @@ def backfill_cursor_history(tenant_id, cycles=12):
     return {"cycles": len(buckets), "events": len(events)}
 
 
-def sync_cursor(tenant_id):
-    """Fetch Cursor team spend, persist per-user rows, mirror into cost_data, and
-    return {total, members}. Raises if no key or the API rejects it."""
-    s = get_integration_settings(tenant_id or 1)
-    key = (s.get("cursor_api_key") or "").strip()
-    if not key:
-        raise RuntimeError("No Cursor API key configured")
-
+def _sync_one_account(conn, tenant_id, acct_name, key, now):
+    """Fetch + persist ONE Cursor team into the open connection. cost_data rows are
+    tagged with the team's display name (subscription_id) so multiple teams stay
+    separate. The caller clears prior tenant data and commits."""
     client = CursorClient(key)
     members, cycle_start = client.fetch_spend()
-    now = datetime.utcnow()
-    # Cursor bills per billing cycle (e.g. 14th-14th), not per calendar month.
-    # Stamp cost_data at the cycle-start date so it's truthful.
+    # Cursor bills per billing cycle (e.g. 14th-14th); stamp at the cycle start.
     if cycle_start:
         cycle_date = datetime.utcfromtimestamp(int(cycle_start) / 1000).strftime("%Y-%m-%d")
     else:
         cycle_date = now.strftime("%Y-%m-01")
 
-    conn = get_db()
+    rows = [(
+        tenant_id, acct_name, m.get("userId"), m.get("name"), m.get("email"), m.get("role"),
+        float(m.get("spendCents") or 0), float(m.get("includedSpendCents") or 0),
+        int(m.get("fastPremiumRequests") or 0), now.isoformat(),
+    ) for m in members]
+    conn.executemany(
+        "INSERT OR REPLACE INTO cursor_users(tenant_id,account,user_id,name,email,role,spend_cents,"
+        "included_cents,fast_premium_requests,synced_at) VALUES(?,?,?,?,?,?,?,?,?,?)", rows,
+    )
+
+    # Usage events (once) → daily on-demand split + per-(user,model) aggregation.
+    events = []
     try:
-        # Replace the per-user snapshot
-        conn.execute("DELETE FROM cursor_users WHERE tenant_id IS ?", (tenant_id,))
-        rows = []
-        for m in members:
-            rows.append((
-                tenant_id, m.get("userId"), m.get("name"), m.get("email"), m.get("role"),
-                float(m.get("spendCents") or 0), float(m.get("includedSpendCents") or 0),
-                int(m.get("fastPremiumRequests") or 0), now.isoformat(),
-            ))
-        conn.executemany(
-            "INSERT INTO cursor_users(tenant_id,user_id,name,email,role,spend_cents,included_cents,"
-            "fast_premium_requests,synced_at) VALUES(?,?,?,?,?,?,?,?,?)", rows,
-        )
+        start_ms = int(cycle_start) if cycle_start else int((now.replace(day=1)).timestamp() * 1000)
+        end_ms = int(now.timestamp() * 1000)
+        events = client.fetch_usage_events(start_ms, end_ms)
+    except Exception as ue:
+        print(f"[Cursor] usage-events fetch failed for '{acct_name}' (non-fatal): {ue}")
+    events_n = len(events)
 
-        # ── Usage events (fetched ONCE) drive both the daily cost trend and the
-        #    per-(user,model) aggregation below. ─────────────────────────────────
-        events = []
-        try:
-            start_ms = int(cycle_start) if cycle_start else int((now.replace(day=1)).timestamp() * 1000)
-            end_ms = int(now.timestamp() * 1000)
-            events = client.fetch_usage_events(start_ms, end_ms)
-        except Exception as ue:
-            print(f"[Cursor] usage-events fetch failed (non-fatal): {ue}")
-        events_n = len(events)
+    daily_od = {}  # email(lower) -> { 'YYYY-MM-DD': cents }
+    for e in events:
+        if not e.get("isChargeable") or (e.get("kind") or "") != "Usage-based":
+            continue
+        cents = float(e.get("chargedCents") or 0)
+        ts = e.get("timestamp")
+        if cents <= 0 or not ts:
+            continue
+        email = (e.get("userEmail") or "").lower()
+        day = datetime.utcfromtimestamp(int(ts) / 1000).strftime("%Y-%m-%d")
+        daily_od.setdefault(email, {})
+        daily_od[email][day] = daily_od[email].get(day, 0.0) + cents
 
-        # Per-(email, day) on-demand cents from chargeable Usage-based events, so
-        # cost_data carries a real daily breakdown instead of a single cycle-start
-        # point (gives the report a proper Daily Cost Trends range).
-        daily_od = {}  # email(lower) -> { 'YYYY-MM-DD': cents }
-        for e in events:
-            if not e.get("isChargeable") or (e.get("kind") or "") != "Usage-based":
-                continue
-            cents = float(e.get("chargedCents") or 0)
-            ts = e.get("timestamp")
-            if cents <= 0 or not ts:
-                continue
-            email = (e.get("userEmail") or "").lower()
-            day = datetime.utcfromtimestamp(int(ts) / 1000).strftime("%Y-%m-%d")
-            daily_od.setdefault(email, {})
-            daily_od[email][day] = daily_od[email].get(day, 0.0) + cents
-
-        # Mirror into cost_data: one row per (member, day) for on-demand spend.
-        # Any residual vs the member's authoritative on-demand total is reconciled
-        # onto the cycle-start date so per-user totals still match the dashboard.
-        conn.execute(
-            "DELETE FROM cost_data WHERE cloud_provider='cursor' AND tenant_id IS ?",
-            (tenant_id,),
-        )
-        cost_rows, total = [], 0.0
-        for m in members:
-            cost = _user_cost(m)  # authoritative on-demand (USD)
-            total += cost
-            email = (m.get("email") or "").lower()
-            name = m.get("name") or m.get("email") or "Member"
-            role = m.get("role") or ""
-            tags = json.dumps({
-                "spendCents": m.get("spendCents"), "includedSpendCents": m.get("includedSpendCents"),
-                "role": m.get("role"), "userId": m.get("userId"),
-            })
-            days = daily_od.get(email, {})
-            weight = sum(days.values())  # total chargeable event cents for this user
-            if cost > 0 and weight > 0:
-                # Distribute the member's AUTHORITATIVE on-demand across their active
-                # days proportionally to event spend. Sum stays exactly == `cost`
-                # (last day absorbs rounding) and every daily value is >= 0.
-                items = sorted(days.items())
-                acc = 0.0
-                for i, (day, cents) in enumerate(items):
-                    if i < len(items) - 1:
-                        c = round(cost * (cents / weight), 2)
-                    else:
-                        c = round(cost - acc, 2)
-                        if c < 0:
-                            c = 0.0
-                    acc = round(acc + c, 2)
-                    cost_rows.append((day, role, "Cursor", "Seat", name, "Usage", "", c,
-                                      "USD", "Cursor Team", tags, "cursor", tenant_id))
-            else:
-                # No day-resolved events — stamp the whole on-demand (often $0) at
-                # the cycle start so the member still appears in per-user views.
-                cost_rows.append((cycle_date, role, "Cursor", "Seat", name, "Usage", "", cost,
-                                  "USD", "Cursor Team", tags, "cursor", tenant_id))
-        if cost_rows:
-            conn.executemany(
-                "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
-                "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", cost_rows,
-            )
-
-        # ── Usage events → aggregate per (user, model): included vs on-demand ──
-        try:
-            agg = {}  # (email, model) -> {included, on_demand, tokens, events}
-            for e in events:
-                if not e.get("isChargeable"):
-                    continue
-                email = e.get("userEmail") or "unknown"
-                model = e.get("model") or "unknown"
-                kind = (e.get("kind") or "")
-                cents = float(e.get("chargedCents") or 0)
-                tu = e.get("tokenUsage") or {}
-                toks = int((tu.get("inputTokens") or 0) + (tu.get("outputTokens") or 0))
-                a = agg.setdefault((email, model), {"included": 0.0, "on_demand": 0.0, "tokens": 0, "events": 0})
-                if kind == "Usage-based":
-                    a["on_demand"] += cents
+    cost_rows, total = [], 0.0
+    for m in members:
+        cost = _user_cost(m)  # authoritative on-demand (USD)
+        total += cost
+        email = (m.get("email") or "").lower()
+        name = m.get("name") or m.get("email") or "Member"
+        role = m.get("role") or ""
+        tags = json.dumps({
+            "spendCents": m.get("spendCents"), "includedSpendCents": m.get("includedSpendCents"),
+            "role": m.get("role"), "userId": m.get("userId"), "account": acct_name,
+        })
+        days = daily_od.get(email, {})
+        weight = sum(days.values())
+        if cost > 0 and weight > 0:
+            items = sorted(days.items())
+            acc = 0.0
+            for i, (day, cents) in enumerate(items):
+                if i < len(items) - 1:
+                    c = round(cost * (cents / weight), 2)
                 else:
-                    a["included"] += cents
-                a["tokens"] += toks
-                a["events"] += 1
-            conn.execute("DELETE FROM cursor_usage WHERE tenant_id IS ?", (tenant_id,))
-            conn.executemany(
-                "INSERT INTO cursor_usage(tenant_id,email,model,included_cents,on_demand_cents,tokens,events,synced_at) "
-                "VALUES(?,?,?,?,?,?,?,?)",
-                [(tenant_id, em, mo, v["included"], v["on_demand"], v["tokens"], v["events"], now.isoformat())
-                 for (em, mo), v in agg.items()],
-            )
-        except Exception as ue:
-            print(f"[Cursor] usage-events aggregation failed (non-fatal): {ue}")
+                    c = round(cost - acc, 2)
+                    if c < 0:
+                        c = 0.0
+                acc = round(acc + c, 2)
+                cost_rows.append((day, role, "Cursor", "Seat", name, "Usage", "", c,
+                                  "USD", acct_name, tags, "cursor", tenant_id))
+        else:
+            cost_rows.append((cycle_date, role, "Cursor", "Seat", name, "Usage", "", cost,
+                              "USD", acct_name, tags, "cursor", tenant_id))
+    if cost_rows:
+        conn.executemany(
+            "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
+            "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", cost_rows,
+        )
 
+    try:
+        agg = {}  # (email, model) -> {included, on_demand, tokens, events}
+        for e in events:
+            if not e.get("isChargeable"):
+                continue
+            email = e.get("userEmail") or "unknown"
+            model = e.get("model") or "unknown"
+            kind = (e.get("kind") or "")
+            cents = float(e.get("chargedCents") or 0)
+            tu = e.get("tokenUsage") or {}
+            toks = int((tu.get("inputTokens") or 0) + (tu.get("outputTokens") or 0))
+            a = agg.setdefault((email, model), {"included": 0.0, "on_demand": 0.0, "tokens": 0, "events": 0})
+            if kind == "Usage-based":
+                a["on_demand"] += cents
+            else:
+                a["included"] += cents
+            a["tokens"] += toks
+            a["events"] += 1
+        conn.executemany(
+            "INSERT OR REPLACE INTO cursor_usage(tenant_id,account,email,model,included_cents,on_demand_cents,tokens,events,synced_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            [(tenant_id, acct_name, em, mo, v["included"], v["on_demand"], v["tokens"], v["events"], now.isoformat())
+             for (em, mo), v in agg.items()],
+        )
+    except Exception as ue:
+        print(f"[Cursor] usage aggregation failed for '{acct_name}' (non-fatal): {ue}")
+
+    return total, len(members), events_n
+
+
+def sync_cursor(tenant_id):
+    """Fetch ALL configured Cursor teams → cursor_users + cost_data (each team's
+    cost tagged with its display name). Returns {total, members, events, accounts}.
+    Raises if no account is configured or every account fails."""
+    s = get_integration_settings(tenant_id or 1)
+    accounts = s.get("cursor_accounts") or []
+    if not accounts:
+        raise RuntimeError("No Cursor API key configured")
+    now = datetime.utcnow()
+    conn = get_db()
+    grand_total = grand_members = grand_events = 0
+    errors = []
+    try:
+        # Clear the tenant's Cursor data once, then re-write per account.
+        conn.execute("DELETE FROM cursor_users WHERE tenant_id IS ?", (tenant_id,))
+        conn.execute("DELETE FROM cursor_usage WHERE tenant_id IS ?", (tenant_id,))
+        conn.execute("DELETE FROM cost_data WHERE cloud_provider='cursor' AND tenant_id IS ?", (tenant_id,))
+        for acct in accounts:
+            try:
+                t, mem, ev = _sync_one_account(conn, tenant_id, acct["name"], acct["api_key"], now)
+                grand_total += t; grand_members += mem; grand_events += ev
+            except Exception as ae:
+                errors.append(f"{acct.get('name')}: {ae}")
+                print(f"[Cursor] account '{acct.get('name')}' sync failed: {ae}")
         conn.commit()
     finally:
         conn.close()
-    return {"total": round(total, 2), "members": len(members), "events": events_n}
+    if errors and grand_members == 0:
+        raise RuntimeError("; ".join(errors))
+    return {"total": round(grand_total, 2), "members": grand_members,
+            "events": grand_events, "accounts": len(accounts), "errors": errors}

@@ -5299,11 +5299,13 @@ def api_cursor_sync():
     """Pull live Cursor team spend → cursor_users + cost_data (tenant-scoped)."""
     tid = current_tenant_id()
     try:
-        from cursor_fetcher import sync_cursor, backfill_cursor_history
+        from cursor_fetcher import sync_cursor
         result = sync_cursor(tid)
-        # Backfill the last 12 billing cycles in the background (heavy: ~100 calls).
-        start_background_thread(lambda: backfill_cursor_history(tid, 12), name="cursor-backfill")
-        return jsonify({"message": f"Synced {result['members']} members (12-mo history loading…)", **result})
+        n_acct = result.get("accounts", 1)
+        msg = f"Synced {result['members']} members across {n_acct} Cursor account{'s' if n_acct != 1 else ''}"
+        if result.get("errors"):
+            msg += f" ({len(result['errors'])} account(s) had errors)"
+        return jsonify({"message": msg, **result})
     except Exception as e:
         return jsonify({"error": str(e)}), 502
 
@@ -6133,7 +6135,8 @@ def api_get_integrations():
         return v[:4] + "••••••••" + v[-2:] if len(v) > 6 else "••••••••"
     return jsonify({
         "bitbucket": {"workspace": s.get("bitbucket_workspace",""), "repo": s.get("bitbucket_repo",""), "token": mask(s.get("bitbucket_token","")), "enabled": s.get("bitbucket_enabled", False)},
-        "cursor":    {"api_key": mask(s.get("cursor_api_key","")), "enabled": s.get("cursor_enabled", False), "monthly_cost": s.get("cursor_monthly_cost", 0) or 0},
+        "cursor":    {"api_key": mask(s.get("cursor_api_key","")), "enabled": s.get("cursor_enabled", False), "monthly_cost": s.get("cursor_monthly_cost", 0) or 0,
+                      "accounts": [{"name": a.get("name",""), "key_set": bool(a.get("api_key"))} for a in (s.get("cursor_accounts") or [])]},
         "openai":    {"api_key": mask(s.get("openai_api_key","")), "org_id": s.get("openai_org_id",""), "enabled": s.get("openai_enabled", False)},
         "twilio":    {"api_key": mask(s.get("twilio_api_key","")), "enabled": s.get("twilio_enabled", False), "monthly_cost": s.get("twilio_monthly_cost", 0) or 0},
         "sendgrid":  {"api_key": mask(s.get("sendgrid_api_key","")), "enabled": s.get("sendgrid_enabled", False), "monthly_cost": s.get("sendgrid_monthly_cost", 0) or 0},
@@ -6173,6 +6176,21 @@ def _sync_manual_saas_cost(tenant_id):
 @login_required
 def api_update_integrations():
     body = request.get_json(silent=True) or {}
+    # Cursor multi-account: merge blank/masked keys with the existing stored key
+    # (matched by display name) so editing names doesn't wipe keys.
+    if isinstance(body.get("cursor"), dict) and isinstance(body["cursor"].get("accounts"), list):
+        existing = {a.get("name"): a.get("api_key") for a in
+                    get_integration_settings(current_tenant_id() or 1).get("cursor_accounts", [])}
+        merged = []
+        for a in body["cursor"]["accounts"]:
+            nm = (a.get("name") or "").strip()
+            key = (a.get("api_key") or "").strip()
+            if "••••" in key:
+                key = ""
+            key = key or existing.get(nm, "")
+            if nm and key:
+                merged.append({"name": nm, "api_key": key})
+        body["cursor"]["accounts"] = merged
     flat = {}
     for tool, fields in body.items():
         if not isinstance(fields, dict):
@@ -6189,8 +6207,9 @@ def api_update_integrations():
         _sync_manual_saas_cost(current_tenant_id())
     except Exception as e:
         print(f"[Integrations] manual cost sync failed: {e}")
-    # Cursor: pull live team spend in the background when a key was provided.
-    if "cursor" in body and (body["cursor"] or {}).get("api_key"):
+    # Cursor: pull live team spend in the background when a key/account was provided.
+    _cur = body.get("cursor") or {}
+    if "cursor" in body and (_cur.get("api_key") or _cur.get("accounts")):
         _tid = current_tenant_id()
         from cursor_fetcher import sync_cursor
         start_background_thread(lambda: sync_cursor(_tid), name="cursor-sync-on-save")
