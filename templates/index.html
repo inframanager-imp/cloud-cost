@@ -3515,6 +3515,7 @@
                             <span style="font-size:16px;font-weight:700;color:#6c47ff" id="cursor-total-cost">$0.00</span>
                         </div>
                         <div style="font-size:10px;color:var(--text-muted);margin-top:3px" id="cursor-members-line"></div>
+                        <div id="cursor-teams-breakdown" style="margin-top:8px;display:none"></div>
                     </div>
                 </div>
                 <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
@@ -3996,7 +3997,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260623b"></script>
+<script src="/static/js/app.js?v=20260623c"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -4197,8 +4198,13 @@ function loadProviders() {
             // Cursor can hold multiple teams (accounts) — list each as its own row,
             // like Azure subscriptions / AWS accounts. Others stay a single row.
             const names = (m.key === 'cursor' && accts.length) ? accts : [m.name];
+            const isMulti = (m.key === 'cursor' && accts.length);
             names.forEach(acctName => {
                 intgCount++;
+                // Cursor teams can be removed individually (others manage in Integrations).
+                const _delBtn = isMulti
+                    ? `<button class="icon-btn-ghost" onclick="deleteCursorAccount('${acctName.replace(/'/g,"\\'")}')" title="Remove this team" style="color:var(--danger)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>`
+                    : '';
                 _intgRowsArr.push(`<tr data-cloud="${m.key}">
                     <td><div class="acct-cell">
                         <div class="provider-icon-sm" style="background:${m.color}">${m.short}</div>
@@ -4210,6 +4216,7 @@ function loadProviders() {
                     <td class="actions-cell">
                         <button class="icon-btn-ghost" onclick="${m.sync}" title="Quick Sync">${_syncSvg}</button>
                         <button class="icon-btn-ghost" onclick="navigateTo('integrations')" title="Manage in Integrations">${_gearSvg}</button>
+                        ${_delBtn}
                     </td>
                 </tr>`);
             });
@@ -5895,9 +5902,25 @@ document.addEventListener('DOMContentLoaded', function() {
             const fd = s => s ? new Date(s + 'T00:00:00').toLocaleDateString(undefined, {day:'numeric', month:'short'}) : '';
             document.getElementById('cursor-total-cost').textContent = f(d.total);
             const ml = document.getElementById('cursor-members-line');
+            const accts = d.accounts || [];
             if (ml) {
                 const cycle = d.cycle_start ? `Cycle ${fd(d.cycle_start)} – ${fd(d.cycle_end)}` : '';
-                ml.textContent = d.members ? `${d.members} members · Included ${f(d.included_total)}${cycle ? ' · ' + cycle : ''}` : 'Click Sync to pull team spend';
+                const teams = accts.length ? `${accts.length} team${accts.length !== 1 ? 's' : ''} · ` : '';
+                ml.textContent = d.members ? `${teams}${d.members} members · Included ${f(d.included_total)}${cycle ? ' · ' + cycle : ''}` : 'Click Sync to pull team spend';
+            }
+            // Per-team breakdown: one line per Cursor team with its on-demand cost.
+            const tb = document.getElementById('cursor-teams-breakdown');
+            if (tb) {
+                if (accts.length > 1) {
+                    tb.style.display = 'block';
+                    tb.innerHTML = accts.map(a => `
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-top:1px solid var(--border,rgba(0,0,0,.06))">
+                            <span style="font-size:11px;color:var(--text)">${a.name}${a.members ? ` <span style="color:var(--text-muted)">· ${a.members}</span>` : ''}</span>
+                            <span style="font-size:11px;font-weight:600;color:#6c47ff">${f(a.on_demand)}</span>
+                        </div>`).join('');
+                } else {
+                    tb.style.display = 'none';
+                }
             }
         }).catch(() => {});
     };

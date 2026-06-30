@@ -5401,16 +5401,58 @@ def api_cursor_summary():
     else:
         q += "1=1 "
     row = conn.execute(q, params).fetchone()
-    has_key = bool((get_integration_settings(tid or 1).get("cursor_api_key") or "").strip())
+    settings = get_integration_settings(tid or 1)
+    has_key = bool((settings.get("cursor_api_key") or "").strip()) or bool(settings.get("cursor_accounts"))
+
+    # Per-team breakdown: on-demand from cost_data (subscription_id = team name),
+    # members from cursor_users (account). Lists every configured team even at $0.
+    od_by_team = {r["subscription_id"]: round((r["t"] or 0), 2) for r in conn.execute(
+        "SELECT subscription_id, COALESCE(SUM(cost),0) t FROM cost_data "
+        "WHERE cloud_provider='cursor' AND tenant_id IS ? GROUP BY subscription_id", (tid,)
+    ).fetchall()}
+    mem_by_team = {r["account"]: r["n"] for r in conn.execute(
+        "SELECT COALESCE(account,'') account, COUNT(*) n FROM cursor_users "
+        "WHERE tenant_id IS ? GROUP BY account", (tid,)
+    ).fetchall()}
     conn.close()
+    team_names = [a.get("name") for a in (settings.get("cursor_accounts") or []) if a.get("name")]
+    for nm in list(od_by_team) + list(mem_by_team):
+        if nm and nm not in team_names:
+            team_names.append(nm)
+    accounts = [{"name": nm, "on_demand": od_by_team.get(nm, 0.0), "members": mem_by_team.get(nm, 0)}
+                for nm in team_names]
+    accounts.sort(key=lambda x: -x["on_demand"])
+
     cs, ce = _cursor_cycle(tid)
     return jsonify({
         "total": round((row["od"] or 0) / 100.0, 2),          # on-demand (billable)
         "included_total": round((row["incl"] or 0) / 100.0, 2),  # plan usage (showback)
         "members": row["members"], "has_key": has_key,
+        "accounts": accounts, "account_count": len(accounts),
         "cycle_start": cs, "cycle_end": ce,
         "last_sync": row["last_sync"],
     })
+
+
+@app.route("/api/integrations/cursor/account", methods=["DELETE"])
+@login_required
+def api_cursor_delete_account():
+    """Remove one Cursor team (by display name): drop it from cursor_accounts and
+    delete its cost_data / cursor_users / cursor_usage rows for this tenant."""
+    tid = current_tenant_id()
+    name = (request.args.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    settings = get_integration_settings(tid or 1)
+    accounts = [a for a in (settings.get("cursor_accounts") or []) if a.get("name") != name]
+    update_integration_settings({"cursor_accounts": accounts}, tid or 1)
+    conn = get_db()
+    conn.execute("DELETE FROM cost_data WHERE cloud_provider='cursor' AND subscription_id=? AND tenant_id IS ?", (name, tid))
+    conn.execute("DELETE FROM cursor_users WHERE account=? AND tenant_id IS ?", (name, tid))
+    conn.execute("DELETE FROM cursor_usage WHERE account=? AND tenant_id IS ?", (name, tid))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Removed Cursor team '{name}'", "remaining": len(accounts)})
 
 
 def _backfill_ce_history(provider, tenant_id, months=12):

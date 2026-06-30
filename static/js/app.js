@@ -6327,6 +6327,17 @@ async function scSyncCursor() {
     finally { loadSyncCenter(); }
 }
 
+async function deleteCursorAccount(name) {
+    if (!confirm(`Remove the Cursor team "${name}"?\n\nThis deletes its cost data and member rows. The other teams are unaffected.`)) return;
+    try {
+        const d = await fetch(`/api/integrations/cursor/account?name=${encodeURIComponent(name)}`, { method: 'DELETE' }).then(r => r.json());
+        if (d.error) { showToast('Remove failed: ' + d.error, 'error'); return; }
+        showToast(d.message || `Removed ${name}`, 'success');
+        if (typeof loadProviders === 'function') loadProviders();
+        if (typeof loadIntegrations === 'function') loadIntegrations();
+    } catch (e) { showToast('Remove failed', 'error'); }
+}
+
 async function scSyncOpenAI(days) {
     const btns = document.querySelectorAll('#sc-pcard-openai .btn-mini');
     btns.forEach(b => { b.disabled = true; });
