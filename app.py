@@ -5206,7 +5206,8 @@ def api_atlassian_summary():
     month_start = datetime.utcnow().strftime("%Y-%m-01")
 
     conn = get_db()
-    q = ("SELECT subscription_id, COALESCE(SUM(cost),0) total FROM cost_data "
+    q = ("SELECT subscription_id, COALESCE(SUM(cost),0) total, "
+         "COUNT(DISTINCT resource_name) users FROM cost_data "
          "WHERE cloud_provider='atlassian' AND date>=? ")
     params = [month_start]
     if tid is not None:
@@ -5223,9 +5224,12 @@ def api_atlassian_summary():
     for a in accts:
         a["name"] = names.get(a["subscription_id"], a["subscription_id"])
         a["total"] = round(a["total"], 2)
+        a["users"] = a.get("users") or 0
 
     total = round(sum(a["total"] for a in accts), 2)
-    return jsonify({"total": total, "account_count": len(accts), "accounts": accts})
+    total_users = sum(a["users"] for a in accts)
+    return jsonify({"total": total, "account_count": len(accts),
+                    "users": total_users, "accounts": accts})
 
 
 @app.route("/api/openai/grouped", methods=["GET"])
