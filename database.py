@@ -982,6 +982,15 @@ def init_db():
         except Exception:
             pass
 
+    # Migration: per-client report section selection (JSON list of enabled sections).
+    try:
+        cursor.execute("SELECT report_sections FROM clients LIMIT 1")
+    except Exception:
+        try:
+            cursor.execute("ALTER TABLE clients ADD COLUMN report_sections TEXT DEFAULT ''")
+        except Exception:
+            pass
+
     conn.commit()
     conn.close()
     print("[DB] Database initialized successfully.")
@@ -3940,11 +3949,38 @@ def get_aws_connection_status(tenant_id: int, provider_id: str = None) -> dict:
 
 # ─── Client tagging & cost allocation ────────────────────────────────────────
 
-def create_client(name: str, tenant_id: int) -> int:
+# Report sections a client report can include. All enabled by default.
+CLIENT_REPORT_SECTIONS = ["top_services", "by_cloud", "by_user", "trend", "manual"]
+
+
+def _parse_report_sections(raw):
+    """Stored JSON list of enabled section keys -> list. Empty/unset = all sections
+    (backward compatible: existing clients keep showing everything)."""
+    if not raw:
+        return list(CLIENT_REPORT_SECTIONS)
+    try:
+        val = json.loads(raw) if isinstance(raw, str) else raw
+        if isinstance(val, list):
+            return [s for s in val if s in CLIENT_REPORT_SECTIONS]
+    except Exception:
+        pass
+    return list(CLIENT_REPORT_SECTIONS)
+
+
+def _client_row_to_dict(row):
+    d = dict(row)
+    if "report_sections" in d:
+        d["report_sections"] = _parse_report_sections(d.get("report_sections"))
+    else:
+        d["report_sections"] = list(CLIENT_REPORT_SECTIONS)
+    return d
+
+
+def create_client(name: str, tenant_id: int, report_sections=None) -> int:
     conn = get_db()
     cur = conn.execute(
-        "INSERT INTO clients(tenant_id, name) VALUES(?, ?)",
-        (tenant_id, name.strip())
+        "INSERT INTO clients(tenant_id, name, report_sections) VALUES(?, ?, ?)",
+        (tenant_id, name.strip(), json.dumps(report_sections) if report_sections is not None else "")
     )
     client_id = cur.lastrowid
     conn.commit()
@@ -3959,7 +3995,7 @@ def get_clients(tenant_id: int) -> list:
         (tenant_id,)
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_client_row_to_dict(r) for r in rows]
 
 
 def get_scheduled_clients() -> list:
@@ -3979,15 +4015,21 @@ def get_client(client_id: int, tenant_id: int) -> dict:
         (client_id, tenant_id)
     ).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _client_row_to_dict(row) if row else None
 
 
-def update_client(client_id: int, name: str, tenant_id: int):
+def update_client(client_id: int, name: str, tenant_id: int, report_sections=None):
     conn = get_db()
-    conn.execute(
-        "UPDATE clients SET name=? WHERE id=? AND tenant_id=?",
-        (name.strip(), client_id, tenant_id)
-    )
+    if report_sections is not None:
+        conn.execute(
+            "UPDATE clients SET name=?, report_sections=? WHERE id=? AND tenant_id=?",
+            (name.strip(), json.dumps(report_sections), client_id, tenant_id)
+        )
+    else:
+        conn.execute(
+            "UPDATE clients SET name=? WHERE id=? AND tenant_id=?",
+            (name.strip(), client_id, tenant_id)
+        )
     conn.commit()
     conn.close()
 

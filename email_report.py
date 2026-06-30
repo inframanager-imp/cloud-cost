@@ -923,6 +923,19 @@ def _build_custom_report_html(report):
         client_id=client_id,
     )
 
+    # Client-scoped reports: attach the client's "Other Costs" (manual costs matched
+    # by its oc_ mappings). get_custom_cost only covers cloud cost_data, so without
+    # this the Other Costs never appear in the report.
+    if client_id:
+        try:
+            from database import get_client_manual_costs
+            from app import _manual_costs_with_summary
+            _mc_month = (date_to or datetime.utcnow().strftime("%Y-%m-%d"))[:7] + "-01"
+            _mc_items = get_client_manual_costs(int(client_id), tenant_id, month=_mc_month)
+            data["manual_costs"] = _manual_costs_with_summary(tenant_id, items=_mc_items)
+        except Exception as e:
+            print(f"[custom-report] other-costs load failed: {e}")
+
     total_cost = data.get("total_cost", 0)
     total_records = data.get("total_records", 0)
     by_rg = data.get("by_rg", [])
@@ -1116,6 +1129,10 @@ def _build_custom_report_html(report):
   </table>
 </div>
 """
+
+    # Other Tools & Subscriptions (manually-tracked / Other Costs), if any.
+    if manual_section:
+        html += manual_section
 
     html += """
 <div style="border-top:1px solid #E8E8E4;padding-top:16px;margin-top:8px;font-size:11px;color:#8A8A8A;text-align:center">
@@ -1529,6 +1546,17 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
         + manual_section + '</td></tr></table></td></tr>'
     ) if manual_section else ''
+
+    # Per-client report section selection — hide any section the client unchecked.
+    # Missing/empty (legacy clients) defaults to all sections enabled.
+    _enabled = client.get("report_sections")
+    if isinstance(_enabled, list):
+        _enabled = set(_enabled)
+        if "top_services" not in _enabled: svc_section = ""
+        if "by_cloud" not in _enabled: cloud_section = ""
+        if "by_user" not in _enabled: resource_section = ""
+        if "trend" not in _enabled: trend_section = ""
+        if "manual" not in _enabled: manual_block = ""
 
     html = f"""<!DOCTYPE html>
 <html lang="en">

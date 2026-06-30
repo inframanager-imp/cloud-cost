@@ -1490,6 +1490,17 @@
                         <button class="cp-btn-secondary" style="margin-top:8px;font-size:12px" onclick="addClientMappingRow()">+ Add Mapping Row</button>
                     </div>
                 </div>
+                <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Report Sections</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:16px">
+                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="top_services" checked> Top Services Breakdown</label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="by_cloud" checked> By Cloud Provider</label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="by_user" checked> By User / Resource</label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="trend" checked> Daily Cost Trends</label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="manual" checked> Other Tools &amp; Subscriptions</label>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Unchecked sections won't appear in this client's report.</div>
+                </div>
                 <div style="display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
                     <button class="cp-btn-primary" onclick="saveClient()">Save Client</button>
                     <button class="cp-btn-secondary" onclick="closeClientForm()">Cancel</button>
@@ -3998,7 +4009,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260623e"></script>
+<script src="/static/js/app.js?v=20260630a"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

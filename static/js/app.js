@@ -7737,11 +7737,13 @@ function openClientForm(clientId) {
         nameEl.value = client.name;
         editIdEl.value = clientId;
         _renderMappingRows(client.mappings || []);
+        _setClientSections(client.report_sections);
     } else {
         titleEl.textContent = 'New Client';
         nameEl.value = '';
         editIdEl.value = '';
         _renderMappingRows([]);
+        _setClientSections(null);  // new client → all sections checked
     }
     wrap.style.display = '';
     nameEl.focus();
@@ -7750,6 +7752,15 @@ function openClientForm(clientId) {
 function closeClientForm() {
     const wrap = document.getElementById('clientFormWrap');
     if (wrap) wrap.style.display = 'none';
+}
+
+// Tick the Report Sections checkboxes from a client's saved list. null/undefined
+// (new or legacy client) = all checked.
+function _setClientSections(sections) {
+    const sel = Array.isArray(sections) ? new Set(sections) : null;
+    document.querySelectorAll('.client-section-cb').forEach(cb => {
+        cb.checked = sel ? sel.has(cb.value) : true;
+    });
 }
 
 function _renderMappingRows(mappings) {
@@ -8027,6 +8038,8 @@ async function saveClient() {
         });
     });
 
+    const report_sections = [...document.querySelectorAll('.client-section-cb:checked')].map(cb => cb.value);
+
     const editId = editIdEl?.value;
     const url = editId ? `/api/clients/${editId}` : '/api/clients';
     const method = editId ? 'PUT' : 'POST';
@@ -8035,7 +8048,7 @@ async function saveClient() {
         const resp = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, mappings })
+            body: JSON.stringify({ name, mappings, report_sections })
         });
         if (!resp.ok) { const e = await resp.json(); showToast(e.error || 'Save failed', 'error'); return; }
         showToast(`Client "${name}" ${editId ? 'updated' : 'created'}`, 'success');

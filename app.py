@@ -3693,7 +3693,7 @@ def api_create_client():
     name = (body.get("name") or "").strip()
     if not name:
         return jsonify({"error": "name is required"}), 400
-    client_id = create_client(name, tid)
+    client_id = create_client(name, tid, report_sections=body.get("report_sections"))
     mappings = body.get("mappings") or []
     upsert_client_mappings(client_id, mappings)
     return jsonify({"id": client_id, "name": name, "mappings": get_client_mappings(client_id)}), 201
@@ -3709,7 +3709,7 @@ def api_update_client(client_id):
     name = (body.get("name") or "").strip()
     if not name:
         return jsonify({"error": "name is required"}), 400
-    update_client(client_id, name, tid)
+    update_client(client_id, name, tid, report_sections=body.get("report_sections"))
     mappings = body.get("mappings") or []
     upsert_client_mappings(client_id, mappings)
     return jsonify({"id": client_id, "name": name, "mappings": get_client_mappings(client_id)})
@@ -7004,4 +7004,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Could not start config_sync_runner.py: {e}")
 
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=FLASK_THREADED)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=False, threaded=FLASK_THREADED)
