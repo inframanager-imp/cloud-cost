@@ -795,7 +795,7 @@
             <table class="cost-table" style="min-width:700px;table-layout:auto">
                 <thead>
                     <tr>
-                        <th id="atlUserOrgHeader" class="sortable-th" onclick="_atlSort('org_name')" style="white-space:nowrap;cursor:pointer;display:none">Organization <span id="atl-sort-org_name" class="sort-indicator">↕</span></th>
+                        <th id="atlUserOrgHeader" class="sortable-th" onclick="_atlSort('org_name')" style="white-space:nowrap;cursor:pointer;display:none">Organization <span id="atl-sort-org_name" class="sort-indicator">↕</span><svg onclick="event.stopPropagation();_atlOpenFilter(event,'org')" class="col-filter-ic" data-atlf="org" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.85"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></th>
                         <th class="sortable-th" onclick="_atlSort('name')" style="white-space:nowrap;cursor:pointer">User <span id="atl-sort-name" class="sort-indicator">↕</span></th>
                         <th class="sortable-th" onclick="_atlSort('email')" style="white-space:nowrap;cursor:pointer">Email <span id="atl-sort-email" class="sort-indicator">↕</span></th>
                         <th class="sortable-th" onclick="_atlSort('status')" style="white-space:nowrap;cursor:pointer;text-align:center">Status <span id="atl-sort-status" class="sort-indicator">↕</span><svg onclick="event.stopPropagation();_atlOpenFilter(event,'status')" class="col-filter-ic" data-atlf="status" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer;margin-left:6px;vertical-align:middle;opacity:0.85"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></th>
@@ -3998,7 +3998,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260623d"></script>
+<script src="/static/js/app.js?v=20260623e"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

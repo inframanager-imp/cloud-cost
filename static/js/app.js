@@ -1376,7 +1376,7 @@ function _renderAtlUsers() {
 let _atlUserRows = [];
 let _atlMultiOrg = false;
 let _atlUserSort = { col: 'cost', dir: 'desc' };
-const _atlUserFilters = { status: new Set(), products: new Set() };  // empty = no filter
+const _atlUserFilters = { status: new Set(), products: new Set(), org: new Set() };  // empty = no filter
 const _atlMoney = v => '$' + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Coloured status pill matching Atlassian Admin's statuses.
@@ -1664,6 +1664,7 @@ function _atlRenderUserRows() {
     let rows = _atlUserRows.filter(u => {
         if (_atlUserFilters.status.size && !_atlUserFilters.status.has((u.status || '').toLowerCase())) return false;
         if (_atlUserFilters.products.size && !(u.products || []).some(p => _atlUserFilters.products.has(p))) return false;
+        if (_atlUserFilters.org.size && !_atlUserFilters.org.has(u.org_name || u.org_id || '')) return false;
         return true;
     });
     // Apply sort
@@ -1727,6 +1728,7 @@ function _atlOpenFilter(ev, key) {
     const vals = new Set();
     _atlUserRows.forEach(u => {
         if (key === 'status') vals.add((u.status || '').toLowerCase());
+        else if (key === 'org') vals.add(u.org_name || u.org_id || '');
         else (u.products || []).forEach(p => vals.add(p));
     });
     const sel = _atlUserFilters[key];
