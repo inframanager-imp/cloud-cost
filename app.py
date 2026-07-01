@@ -4900,6 +4900,10 @@ def api_cloud_provider_sync(pk):
     date_from = (datetime.utcnow() - timedelta(days=30 * months)).strftime("%Y-%m-%d")
 
     def _do_sync():
+        # date_from/date_to are set in the enclosing scope; the Atlassian branch
+        # below narrows them, so they must be nonlocal or the earlier branches
+        # (AWS/GCP/Azure) hit UnboundLocalError referencing them.
+        nonlocal date_from, date_to
         try:
             credentials = provider.get("credentials_json", {})
             if isinstance(credentials, str):
