@@ -4125,6 +4125,15 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
         base_params
     ).fetchall()
 
+    # Top resource groups (RG / project / region — whatever cost_data.resource_group holds)
+    by_rg = conn.execute(
+        f"SELECT resource_group, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
+        f"AND resource_group IS NOT NULL AND resource_group!='' "
+        f"GROUP BY resource_group ORDER BY total DESC LIMIT 10",
+        base_params
+    ).fetchall()
+
     by_subscription = conn.execute(
         f"SELECT subscription_id, COALESCE(SUM(cost),0) as total FROM cost_data "
         f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
@@ -4220,6 +4229,7 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
     return {
         "total": round(total_row["total"], 2),
         "by_service": [{"name": r["service_name"] or "Unknown", "cost": round(r["total"], 2)} for r in by_service],
+        "by_rg": [{"name": r["resource_group"] or "Unknown", "cost": round(r["total"], 2)} for r in by_rg],
         "by_subscription": [{"subscription_id": r["subscription_id"], "cost": round(r["total"], 2)} for r in by_subscription],
         "by_cloud": [{"cloud": r["cloud_provider"] or "unknown", "cost": round(r["total"], 2)} for r in by_cloud],
         "by_resource": by_resource_items,
