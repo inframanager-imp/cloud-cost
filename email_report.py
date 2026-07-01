@@ -1414,7 +1414,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             cloud = (m.get("cloud") or "azure").lower()
             cloud_totals[cloud] = cloud_totals.get(cloud, 0) + s["cost"]
     cloud_totals = sorted(cloud_totals.items(), key=lambda x: x[1], reverse=True)
-    max_cloud = cloud_totals[0][1] if cloud_totals else 1
+    max_cloud = (cloud_totals[0][1] if cloud_totals else 1) or 1  # avoid /0 when top cloud is $0
     CLOUD_LABELS = {"azure": "Microsoft Azure", "aws": "Amazon AWS", "gcp": "Google Cloud",
                     "openai": "OpenAI", "atlassian": "Atlassian", "cursor": "Cursor"}
     cloud_rows = ""
@@ -1439,18 +1439,49 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     _sorted = sorted(costs)
     median = _sorted[len(_sorted)//2] if _sorted else 0
     spike_threshold = median * 1.6 if median else float("inf")
-    trend_rows = ""
+    chart_pts = []
     for i, r in enumerate(recent):
         is_spike = len(costs) >= 5 and r["cost"] >= spike_threshold and r["cost"] > avg_day
-        bar = max(4, int(r["cost"] / max_t * 100))
-        bg = "#FDECEC" if is_spike else ("#FFFFFF" if i % 2 == 0 else "#F7F9FC")
-        barcol = "#D64545" if is_spike else ACCENT
-        spike_badge = '<span style="font-size:9px;font-weight:700;color:#D64545;margin-left:8px">SPIKE</span>' if is_spike else ""
-        trend_rows += f"""<tr style="background:{bg}">
-            <td style="padding:6px 14px;font-size:12px;color:#525252;white-space:nowrap">{r['date']}</td>
-            <td style="padding:6px 8px;font-size:12px;font-weight:600;text-align:right;white-space:nowrap">${r['cost']:,.2f}{spike_badge}</td>
-            <td style="padding:6px 14px;width:38%"><div style="background:{barcol};height:8px;border-radius:4px;width:{bar}%"></div></td>
-        </tr>"""
+        chart_pts.append((r["date"], r["cost"], is_spike))
+
+    # Horizontal bar chart of the daily trend (spikes in red) — replaces the tall
+    # day-by-day table so the report stays compact.
+    def _svg_daily(pts):
+        if not pts:
+            return ""
+        W, H = 900, 200
+        pl, pr, ptp, pb = 48, 14, 20, 30
+        pw, ph = W - pl - pr, H - ptp - pb
+        mx = max((c for _, c, _ in pts), default=1) or 1
+        n = len(pts)
+        slot = pw / n
+        bw = max(3.0, slot * 0.62)
+        show_all = n <= 16
+        step = max(1, round(n / 14))
+        grid = ""
+        for g in (0.0, 0.5, 1.0):
+            yy = ptp + ph - ph * g
+            grid += f'<line x1="{pl}" y1="{yy:.1f}" x2="{W - pr}" y2="{yy:.1f}" stroke="#EEF1F5"/>'
+            grid += f'<text x="{pl - 6}" y="{yy + 3:.1f}" font-size="8" fill="#8A95A1" text-anchor="end">${mx * g:,.0f}</text>'
+        bars = ""
+        for i, (d, c, sp) in enumerate(pts):
+            bh = (c / mx) * ph
+            x = pl + slot * i + (slot - bw) / 2
+            y = ptp + ph - bh
+            col = "#D64545" if sp else ACCENT
+            bars += f'<rect x="{x:.1f}" y="{y:.1f}" width="{bw:.1f}" height="{max(0.0, bh):.1f}" rx="2" fill="{col}"/>'
+            if sp or show_all:
+                bars += (f'<text x="{x + bw / 2:.1f}" y="{y - 3:.1f}" font-size="8" '
+                         f'font-weight="{700 if sp else 400}" fill="{"#D64545" if sp else "#5A6B7B"}" text-anchor="middle">${c:,.0f}</text>')
+            if i % step == 0 or i == n - 1:
+                bars += f'<text x="{x + bw / 2:.1f}" y="{H - 13}" font-size="8" fill="#8A95A1" text-anchor="middle">{d[5:]}</text>'
+        legend = (f'<rect x="{W - 170}" y="2" width="9" height="9" rx="2" fill="{ACCENT}"/>'
+                  f'<text x="{W - 157}" y="10" font-size="9" fill="#525252">Total Cost</text>'
+                  f'<rect x="{W - 92}" y="2" width="9" height="9" rx="2" fill="#D64545"/>'
+                  f'<text x="{W - 79}" y="10" font-size="9" fill="#525252">Spike</text>')
+        return (f'<svg viewBox="0 0 {W} {H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">'
+                f'{grid}{bars}{legend}</svg>')
+    trend_chart = _svg_daily(chart_pts)
 
     # Manually-tracked costs — present when called from send-report (cost_data
     # carries "manual_costs"); absent in the live preview, in which case the
@@ -1535,12 +1566,8 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     trend_section = (
         '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
         f'<div style="font-size:15px;font-weight:600;color:#1A1A1A;margin-bottom:14px">Daily Cost Trends <span style="font-size:11px;font-weight:400;color:#8A95A1">({date_from} to {date_to})</span></div>'
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">'
-        '<tr style="border-bottom:1px solid #E8ECF1"><th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:left;text-transform:uppercase">Date</th>'
-        '<th style="padding:6px 8px;font-size:10px;font-weight:600;color:#6B7785;text-align:right;text-transform:uppercase">Cost</th>'
-        '<th style="padding:6px 14px;font-size:10px;font-weight:600;color:#6B7785;text-align:left;text-transform:uppercase">Trend</th></tr>'
-        + trend_rows + '</table></td></tr></table></td></tr>'
-    ) if trend_rows else ''
+        + trend_chart + '</td></tr></table></td></tr>'
+    ) if trend_chart else ''
 
     manual_block = (
         '<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:22px 24px">'
