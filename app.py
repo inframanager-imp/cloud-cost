@@ -1187,6 +1187,12 @@ def api_sync():
                                         "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
                                         (p_from, date_to, proj_id, tid),
                                     )
+                                # Non-project GCP charges (Support, tax, adjustments) have no
+                                # project — delete them too, or they duplicate every sync.
+                                conn.execute(
+                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND (subscription_id IS NULL OR subscription_id='') AND tenant_id=?",
+                                    (p_from, date_to, tid),
+                                )
                             else:
                                 conn.execute(
                                     "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
@@ -4166,6 +4172,11 @@ def _run_auto_sync():
                                         "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
                                         (p_from, date_to, proj_id, p_tid),
                                     )
+                                # Non-project GCP charges (Support, tax, adjustments) — delete too.
+                                _c.execute(
+                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND (subscription_id IS NULL OR subscription_id='') AND tenant_id=?",
+                                    (p_from, date_to, p_tid),
+                                )
                             else:
                                 _c.execute(
                                     "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
@@ -4997,6 +5008,12 @@ def api_cloud_provider_sync(pk):
                             "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
                             (date_from, date_to, proj_id, p_tid)
                         )
+                    # Non-project GCP charges (Support, tax, adjustments) have no project —
+                    # delete them too, otherwise they duplicate on every sync.
+                    conn.execute(
+                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND (subscription_id IS NULL OR subscription_id='') AND tenant_id=?",
+                        (date_from, date_to, p_tid)
+                    )
                 else:
                     conn.execute(
                         "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
