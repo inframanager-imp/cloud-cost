@@ -6329,16 +6329,19 @@ async function scSyncCursor() {
     finally { loadSyncCenter(); }
 }
 
-async function deleteCursorAccount(name) {
-    if (!confirm(`Remove the Cursor team "${name}"?\n\nThis deletes its cost data and member rows. The other teams are unaffected.`)) return;
+async function deleteIntgAccount(tool, name) {
+    const label = tool === 'openai' ? 'OpenAI account' : 'Cursor team';
+    if (!confirm(`Remove the ${label} "${name}"?\n\nThis deletes its cost data. The other accounts are unaffected.`)) return;
     try {
-        const d = await fetch(`/api/integrations/cursor/account?name=${encodeURIComponent(name)}`, { method: 'DELETE' }).then(r => r.json());
+        const d = await fetch(`/api/integrations/${tool}/account?name=${encodeURIComponent(name)}`, { method: 'DELETE' }).then(r => r.json());
         if (d.error) { showToast('Remove failed: ' + d.error, 'error'); return; }
         showToast(d.message || `Removed ${name}`, 'success');
         if (typeof loadProviders === 'function') loadProviders();
         if (typeof loadIntegrations === 'function') loadIntegrations();
     } catch (e) { showToast('Remove failed', 'error'); }
 }
+// Back-compat alias.
+async function deleteCursorAccount(name) { return deleteIntgAccount('cursor', name); }
 
 async function scSyncOpenAI(days) {
     const btns = document.querySelectorAll('#sc-pcard-openai .btn-mini');

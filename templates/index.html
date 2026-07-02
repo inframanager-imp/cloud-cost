@@ -3817,7 +3817,7 @@
 
         <!-- OpenAI Modal -->
         <div id="intg-modal-openai" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeIntgModal('openai')">
-            <div class="modal-box" style="max-width:440px">
+            <div class="modal-box" style="max-width:520px">
                 <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
                     <div style="width:36px;height:36px;background:linear-gradient(135deg,#10a37f,#0d8a6b);border-radius:8px;display:flex;align-items:center;justify-content:center">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M22.28 9.78a5.83 5.83 0 00-.5-4.79 5.9 5.9 0 00-6.35-2.83 5.87 5.87 0 00-4.42-1.97 5.9 5.9 0 00-5.62 4.08 5.87 5.87 0 00-3.93 2.85 5.9 5.9 0 00.73 6.92 5.84 5.84 0 00.5 4.79 5.9 5.9 0 006.35 2.83 5.87 5.87 0 004.42 1.97 5.9 5.9 0 005.63-4.09 5.87 5.87 0 003.92-2.85 5.9 5.9 0 00-.73-6.91zm-8.75 12.26a4.36 4.36 0 01-2.8-1.02l.14-.08 4.65-2.68a.77.77 0 00.38-.66v-6.55l1.97 1.13a.07.07 0 010 .06v5.42a4.37 4.37 0 01-4.34 4.38zm-9.35-4.01a4.34 4.34 0 01-.52-2.93l.14.08 4.65 2.69a.77.77 0 00.76 0l5.67-3.27v2.26a.07.07 0 01-.03.06L10.14 19.4a4.37 4.37 0 01-5.96-1.37zm-1.22-9.57a4.34 4.34 0 012.27-1.91v5.51a.77.77 0 00.38.66l5.67 3.27-1.97 1.13a.07.07 0 01-.07 0L4.8 13.7a4.37 4.37 0 01-.84-5.24zm16.17 3.75l-5.67-3.27 1.97-1.13a.07.07 0 01.07 0l4.64 2.68a4.36 4.36 0 01-.68 7.88v-5.5a.77.77 0 00-.33-.66zm1.96-2.95l-.14-.08-4.64-2.69a.77.77 0 00-.77 0L10.43 9.5V7.23a.07.07 0 01.03-.06l4.65-2.68a4.37 4.37 0 016.18 4.52l-.19-.55zm-12.33 4.05l-1.97-1.13a.07.07 0 010-.06V5.7a4.37 4.37 0 017.17-3.35l-.14.08-4.65 2.69a.77.77 0 00-.38.66v6.55l-.03.18zm1.07-2.3L12 9.6l2.16 1.25v2.5L12 14.6l-2.17-1.25v-2.5z"/></svg>
@@ -3829,14 +3829,10 @@
                     <button onclick="closeIntgModal('openai')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:20px;line-height:1">&times;</button>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:12px">
-                    <div>
-                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">API Key <a href="https://platform.openai.com/api-keys" target="_blank" style="font-size:11px;color:var(--accent)">Get key ↗</a></label>
-                        <input id="openai-api-key" type="password" placeholder="sk-••••••••••••••••••••••••" class="form-control">
-                    </div>
-                    <div>
-                        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Organization ID <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-                        <input id="openai-org-id" type="text" placeholder="org-••••••••••••••••" class="form-control">
-                    </div>
+                    <label style="font-size:12px;font-weight:600;color:var(--text-muted)">OpenAI accounts / teams <a href="https://platform.openai.com/api-keys" target="_blank" style="font-size:11px;color:var(--accent)">Get key ↗</a></label>
+                    <div id="openai-accounts-list" style="display:flex;flex-direction:column;gap:8px"></div>
+                    <button type="button" class="btn btn-secondary" style="align-self:flex-start;font-size:12px;padding:6px 12px" onclick="addOpenAIAccountRow('','',false)">+ Add OpenAI account</button>
+                    <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Give each team a <strong>name</strong> + its own <strong>API key</strong> (org‑owner/Admin key recommended). Each team's cost is tracked separately.</div>
                     <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:2px">
                         <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">ChatGPT subscription (seats)</div>
                         <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Billed separately from API usage and not available via the API — enter it here to include it in the OpenAI total.</div>
@@ -4049,7 +4045,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260702a"></script>
+<script src="/static/js/app.js?v=20260702c"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -4249,13 +4245,13 @@ function loadProviders() {
             const last = (m.sum && m.sum.last_sync) ? _cpRelativeSync(m.sum.last_sync) : '—';
             // Cursor can hold multiple teams (accounts) — list each as its own row,
             // like Azure subscriptions / AWS accounts. Others stay a single row.
-            const names = (m.key === 'cursor' && accts.length) ? accts : [m.name];
-            const isMulti = (m.key === 'cursor' && accts.length);
+            const isMulti = ((m.key === 'cursor' || m.key === 'openai') && accts.length);
+            const names = isMulti ? accts : [m.name];
             names.forEach(acctName => {
                 intgCount++;
-                // Cursor teams can be removed individually (others manage in Integrations).
+                // Multi-account teams (Cursor/OpenAI) can be removed individually.
                 const _delBtn = isMulti
-                    ? `<button class="icon-btn-ghost" onclick="deleteCursorAccount('${acctName.replace(/'/g,"\\'")}')" title="Remove this team" style="color:var(--danger)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>`
+                    ? `<button class="icon-btn-ghost" onclick="deleteIntgAccount('${m.key}','${acctName.replace(/'/g,"\\'")}')" title="Remove this team" style="color:var(--danger)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>`
                     : '';
                 _intgRowsArr.push(`<tr data-cloud="${m.key}">
                     <td><div class="acct-cell">
@@ -6387,6 +6383,34 @@ document.addEventListener('DOMContentLoaded', function() {
         ta.value = '';
     };
 
+    // ── OpenAI multi-account rows (name + key + optional org id) ──────────────
+    window.addOpenAIAccountRow = function(name, orgId, keySet) {
+        const list = document.getElementById('openai-accounts-list');
+        if (!list) return;
+        const row = document.createElement('div');
+        row.className = 'openai-acct-row';
+        row.style.cssText = 'border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:7px;background:var(--bg-subtle,#fafafa)';
+        const nm = (name || '').replace(/"/g, '&quot;'), og = (orgId || '').replace(/"/g, '&quot;');
+        row.innerHTML =
+            `<div style="display:flex;gap:8px;align-items:center">
+                 <input class="oai-acct-name form-control" placeholder="Team name (e.g. Prism Team)" value="${nm}" style="flex:1;font-weight:600">
+                 <button type="button" class="btn btn-secondary" title="Remove account" style="padding:5px 10px;color:var(--red);flex:0 0 auto" onclick="this.closest('.openai-acct-row').remove()">&times;</button>
+             </div>
+             <input class="oai-acct-key form-control" type="password" placeholder="${keySet ? '•••• API key (leave blank to keep)' : 'sk-…  API key'}">
+             <input class="oai-acct-org form-control" placeholder="Organization ID (optional)" value="${og}">`;
+        list.appendChild(row);
+    };
+    function _collectOpenAIAccounts() {
+        const out = [];
+        document.querySelectorAll('#openai-accounts-list .openai-acct-row').forEach(r => {
+            const name = (r.querySelector('.oai-acct-name')?.value || '').trim();
+            const key  = (r.querySelector('.oai-acct-key')?.value || '').trim();
+            const org  = (r.querySelector('.oai-acct-org')?.value || '').trim();
+            if (name) out.push({ name, api_key: key, org_id: org });  // blank key → backend keeps existing by name
+        });
+        return out;
+    }
+
     window.openIntgModal = function(tool) {
         const cfg = (_intgSettings[tool] || {});
         if (tool === 'jira') {
@@ -6425,8 +6449,14 @@ document.addEventListener('DOMContentLoaded', function() {
             _setVal('sendgrid-monthly-cost', cfg.monthly_cost || '');
             _setChk('sendgrid-enabled', cfg.enabled);
         } else if (tool === 'openai') {
-            _setVal('openai-api-key', cfg.api_key);
-            _setVal('openai-org-id', cfg.org_id);
+            const al = document.getElementById('openai-accounts-list');
+            if (al) {
+                al.innerHTML = '';
+                const accts = cfg.accounts || [];
+                if (accts.length) accts.forEach(a => addOpenAIAccountRow(a.name, a.org_id, a.key_set));
+                else if (cfg.api_key) addOpenAIAccountRow(cfg.org_id || 'OpenAI', cfg.org_id, true);  // legacy single key
+                else addOpenAIAccountRow('', '', false);
+            }
             _setVal('openai-chatgpt-monthly', cfg.chatgpt_monthly || '');
             _setVal('openai-chatgpt-seats', cfg.chatgpt_seats || '');
             const ml = document.getElementById('openai-members-list');
@@ -6523,7 +6553,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (tool === 'sendgrid') {
             payload.sendgrid = { api_key: _getVal('sendgrid-api-key'), enabled: _getChk('sendgrid-enabled'), monthly_cost: parseFloat(_getVal('sendgrid-monthly-cost')) || 0 };
         } else if (tool === 'openai') {
-            payload.openai = { api_key: _getVal('openai-api-key'), org_id: _getVal('openai-org-id'), enabled: _getChk('openai-enabled'),
+            payload.openai = { accounts: _collectOpenAIAccounts(), enabled: _getChk('openai-enabled'),
                                chatgpt_monthly: parseFloat(_getVal('openai-chatgpt-monthly')) || 0,
                                chatgpt_seats: parseInt(_getVal('openai-chatgpt-seats')) || 0,
                                chatgpt_members: _collectOpenAIMembers() };
@@ -6553,7 +6583,8 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (tool === 'bitbucket') {
             payload.bitbucket = { workspace: _getVal('bitbucket-workspace'), token: _getVal('bitbucket-token') };
         } else if (tool === 'openai') {
-            payload.openai = { api_key: _getVal('openai-api-key') };
+            const a = _collectOpenAIAccounts()[0];
+            payload.openai = { api_key: (a && a.api_key) || '' };
         } else if (tool === 'cursor') {
             const accts = _collectCursorAccounts();
             payload.cursor = { api_key: (accts[0] && accts[0].api_key) || '' };

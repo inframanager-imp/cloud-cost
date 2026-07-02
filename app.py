@@ -5480,6 +5480,25 @@ def api_cursor_delete_account():
     return jsonify({"message": f"Removed Cursor team '{name}'", "remaining": len(accounts)})
 
 
+@app.route("/api/integrations/openai/account", methods=["DELETE"])
+@login_required
+def api_openai_delete_account():
+    """Remove one OpenAI account/team (by display name): drop it from openai_accounts
+    and delete its cost_data usage rows (subscription_id = the account name)."""
+    tid = current_tenant_id()
+    name = (request.args.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    settings = get_integration_settings(tid or 1)
+    accounts = [a for a in (settings.get("openai_accounts") or []) if a.get("name") != name]
+    update_integration_settings({"openai_accounts": accounts}, tid or 1)
+    conn = get_db()
+    conn.execute("DELETE FROM cost_data WHERE cloud_provider='openai' AND service_name!='ChatGPT Subscription' AND subscription_id=? AND tenant_id IS ?", (name, tid))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Removed OpenAI account '{name}'", "remaining": len(accounts)})
+
+
 def _backfill_ce_history(provider, tenant_id, months=12):
     """Fill EMPTY historical months for an AWS account from Cost Explorer.
 
@@ -6228,6 +6247,7 @@ def api_get_integrations():
         "cursor":    {"api_key": mask(s.get("cursor_api_key","")), "enabled": s.get("cursor_enabled", False), "monthly_cost": s.get("cursor_monthly_cost", 0) or 0,
                       "accounts": [{"name": a.get("name",""), "key_set": bool(a.get("api_key"))} for a in (s.get("cursor_accounts") or [])]},
         "openai":    {"api_key": mask(s.get("openai_api_key","")), "org_id": s.get("openai_org_id",""), "enabled": s.get("openai_enabled", False),
+                      "accounts": [{"name": a.get("name",""), "org_id": a.get("org_id",""), "key_set": bool(a.get("api_key"))} for a in (s.get("openai_accounts") or [])],
                       "chatgpt_monthly": s.get("openai_chatgpt_monthly", 0) or 0, "chatgpt_seats": s.get("openai_chatgpt_seats", 0) or 0,
                       "chatgpt_members": _parse_json_list(s.get("openai_chatgpt_members"))},
         "twilio":    {"api_key": mask(s.get("twilio_api_key","")), "enabled": s.get("twilio_enabled", False), "monthly_cost": s.get("twilio_monthly_cost", 0) or 0},
@@ -6344,6 +6364,20 @@ def api_update_integrations():
             if nm and key:
                 merged.append({"name": nm, "api_key": key})
         body["cursor"]["accounts"] = merged
+    # OpenAI multi-account: same blank/masked-key merge by display name.
+    if isinstance(body.get("openai"), dict) and isinstance(body["openai"].get("accounts"), list):
+        existing = {a.get("name"): a.get("api_key") for a in
+                    get_integration_settings(current_tenant_id() or 1).get("openai_accounts", [])}
+        merged = []
+        for a in body["openai"]["accounts"]:
+            nm = (a.get("name") or "").strip()
+            key = (a.get("api_key") or "").strip()
+            if "••••" in key:
+                key = ""
+            key = key or existing.get(nm, "")
+            if nm and key:
+                merged.append({"name": nm, "api_key": key, "org_id": (a.get("org_id") or "").strip()})
+        body["openai"]["accounts"] = merged
     flat = {}
     for tool, fields in body.items():
         if not isinstance(fields, dict):
@@ -6494,24 +6528,12 @@ _OPENAI_PRICING = {
 }
 
 
-def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
-    """Fetch OpenAI usage costs and store in cost_data.
-    Tries /v1/organization/costs (org owner) first, falls back to
-    /v1/usage?date= per day (works for any API key).
-    """
+def _openai_account_records(headers, sub_id, date_from, date_to, tenant_id):
+    """Fetch usage-cost records for ONE OpenAI account, each tagged with
+    subscription_id=sub_id (the account's display name). Tries /v1/organization/costs
+    (org owner) first, else /v1/usage?date= per day. Returns a list of cost_data tuples."""
     import requests as _req, calendar as _cal
-    from datetime import date as _date, timedelta as _td
-
-    s = get_integration_settings(tenant_id or 1)
-    api_key = s.get("openai_api_key", "")
-    if not api_key:
-        raise ValueError("OpenAI API key not configured")
-
-    headers = {"Authorization": f"Bearer {api_key}"}
-    now = datetime.utcnow()
-    date_to = now.date()
-    date_from = date_to - timedelta(days=days)
-    sub_id = s.get("openai_org_id") or "openai"
+    from datetime import timedelta as _td
 
     records = []
 
@@ -6608,28 +6630,58 @@ def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
                 pass
             cur += _td(days=1)
 
-    if not records:
-        _apply_openai_chatgpt_cost(tenant_id)  # keep the ChatGPT subscription line current
-        return {"inserted": 0, "date_from": str(date_from), "date_to": str(date_to)}
+    return records
+
+
+def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
+    """Fetch OpenAI usage for ALL configured accounts into cost_data — each account's
+    cost tagged with its display name (subscription_id) so teams stay separate. Also
+    refreshes the ChatGPT subscription line. Returns a summary."""
+    s = get_integration_settings(tenant_id or 1)
+    accounts = s.get("openai_accounts") or []
+    if not accounts:
+        raise ValueError("OpenAI API key not configured")
+    now = datetime.utcnow()
+    date_to = now.date()
+    date_from = date_to - timedelta(days=days)
+    records, errors = [], []
+    for acct in accounts:
+        api_key = (acct.get("api_key") or "").strip()
+        if not api_key:
+            continue
+        sub_id = (acct.get("name") or "").strip() or (acct.get("org_id") or "OpenAI")
+        headers = {"Authorization": f"Bearer {api_key}"}
+        try:
+            records.extend(_openai_account_records(headers, sub_id, date_from, date_to, tenant_id))
+        except Exception as e:
+            errors.append(f"{sub_id}: {e}")
+            print(f"[OpenAI sync] account '{sub_id}' failed: {e}")
+
+    # Don't wipe existing data if every account errored (transient failure).
+    if not records and errors:
+        _apply_openai_chatgpt_cost(tenant_id)
+        return {"inserted": 0, "accounts": len(accounts), "errors": errors,
+                "date_from": str(date_from), "date_to": str(date_to)}
 
     conn = get_db()
-    # Remove old OpenAI API-usage records for this date range to avoid duplicates.
-    # Exclude the manual ChatGPT subscription line (it's not from the usage API).
+    # Replace all API-usage rows in the range once (exclude the manual ChatGPT line).
     conn.execute(
         "DELETE FROM cost_data WHERE cloud_provider='openai' AND service_name!='ChatGPT Subscription' "
         "AND tenant_id=? AND date BETWEEN ? AND ?",
         (tenant_id, str(date_from), str(date_to))
     )
-    conn.executemany("""
-        INSERT INTO cost_data
-          (date,resource_group,service_name,resource_type,resource_name,
-           meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
-    """, records)
+    if records:
+        conn.executemany("""
+            INSERT INTO cost_data
+              (date,resource_group,service_name,resource_type,resource_name,
+               meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, records)
     conn.commit()
     conn.close()
     _apply_openai_chatgpt_cost(tenant_id)  # (re)write the current-month ChatGPT line
-    return {"inserted": len(records), "date_from": str(date_from), "date_to": str(date_to)}
+    return {"inserted": len(records), "accounts": len(accounts), "errors": errors,
+            "date_from": str(date_from), "date_to": str(date_to)}
 
 
 @app.route("/api/integrations/openai/sync", methods=["POST"])

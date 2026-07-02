@@ -643,6 +643,14 @@ def init_db():
                 cursor.execute(f"ALTER TABLE integration_settings ADD COLUMN {_col} {_decl}")
             except Exception:
                 pass
+    # Migration: multiple OpenAI accounts (name + key + org) as JSON.
+    try:
+        cursor.execute("SELECT openai_accounts FROM integration_settings LIMIT 1")
+    except Exception:
+        try:
+            cursor.execute("ALTER TABLE integration_settings ADD COLUMN openai_accounts TEXT DEFAULT ''")
+        except Exception:
+            pass
     # Migration: custom-range budgets (period='custom' uses these explicit dates).
     for _col in ("start_date", "end_date"):
         try:
@@ -2483,6 +2491,25 @@ def get_integration_settings(tenant_id=1):
     if not accounts and (d.get("cursor_api_key") or "").strip():
         accounts = [{"name": "Cursor Team", "api_key": d["cursor_api_key"].strip()}]
     d["cursor_accounts"] = accounts
+    # Normalize OpenAI accounts into a list [{name, api_key, org_id}]. Back-compat: a
+    # single legacy openai_api_key becomes one account (named after the org id / "OpenAI").
+    oai = []
+    raw_o = (d.get("openai_accounts") or "").strip()
+    if raw_o:
+        try:
+            for a in (json.loads(raw_o) or []):
+                key = (a.get("api_key") or "").strip()
+                if key:
+                    oai.append({"name": (a.get("name") or "").strip() or "OpenAI",
+                                "api_key": key, "org_id": (a.get("org_id") or "").strip()})
+        except Exception:
+            oai = []
+    if not oai and (d.get("openai_api_key") or "").strip():
+        _org = (d.get("openai_org_id") or "").strip()
+        # Use a clean default name; the raw org/key label isn't a friendly team name.
+        _nm = _org if (_org and not _org.lower().startswith(("key_", "sk-", "org-"))) else "OpenAI"
+        oai = [{"name": _nm, "api_key": d["openai_api_key"].strip(), "org_id": _org}]
+    d["openai_accounts"] = oai
     return d
 
 
@@ -2495,7 +2522,7 @@ def update_integration_settings(settings, tenant_id=1):
         "jira_mode", "jira_server_user", "jira_server_password",
         "bitbucket_workspace", "bitbucket_repo", "bitbucket_token", "bitbucket_enabled",
         "cursor_api_key", "cursor_enabled", "cursor_monthly_cost", "cursor_accounts",
-        "openai_api_key", "openai_org_id", "openai_enabled",
+        "openai_api_key", "openai_org_id", "openai_enabled", "openai_accounts",
         "openai_chatgpt_monthly", "openai_chatgpt_seats", "openai_chatgpt_members",
         "twilio_api_key", "twilio_enabled", "twilio_monthly_cost",
         "sendgrid_api_key", "sendgrid_enabled", "sendgrid_monthly_cost",
@@ -2516,6 +2543,12 @@ def update_integration_settings(settings, tenant_id=1):
                 val = json.dumps([{"name": (m.get("name") or "").strip(),
                                    "email": (m.get("email") or "").strip()}
                                   for m in (val or []) if ((m.get("name") or "").strip() or (m.get("email") or "").strip())])
+            elif key == "openai_accounts" and not isinstance(val, str):
+                # Multiple OpenAI accounts/teams (name + api_key + org_id) as JSON.
+                val = json.dumps([{"name": (a.get("name") or "").strip(),
+                                   "api_key": (a.get("api_key") or "").strip(),
+                                   "org_id": (a.get("org_id") or "").strip()}
+                                  for a in (val or []) if (a.get("api_key") or "").strip()])
             fields.append(f"{key}=?")
             params.append(val)
     if not fields:
