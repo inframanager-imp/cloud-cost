@@ -630,6 +630,28 @@ def init_db():
             cursor.execute("ALTER TABLE integration_settings ADD COLUMN cursor_accounts TEXT DEFAULT ''")
         except Exception:
             pass
+    # Migration: ChatGPT (seat-based) subscription on the same OpenAI account —
+    # billed separately from API usage and not available via the API, so it's a
+    # manual monthly amount mirrored into cost_data under cloud_provider='openai'.
+    for _col, _decl in (("openai_chatgpt_monthly", "REAL DEFAULT 0"),
+                        ("openai_chatgpt_seats", "INTEGER DEFAULT 0"),
+                        ("openai_chatgpt_members", "TEXT DEFAULT ''")):
+        try:
+            cursor.execute(f"SELECT {_col} FROM integration_settings LIMIT 1")
+        except Exception:
+            try:
+                cursor.execute(f"ALTER TABLE integration_settings ADD COLUMN {_col} {_decl}")
+            except Exception:
+                pass
+    # Migration: custom-range budgets (period='custom' uses these explicit dates).
+    for _col in ("start_date", "end_date"):
+        try:
+            cursor.execute(f"SELECT {_col} FROM budgets LIMIT 1")
+        except Exception:
+            try:
+                cursor.execute(f"ALTER TABLE budgets ADD COLUMN {_col} TEXT DEFAULT ''")
+            except Exception:
+                pass
     # Seed baseline Atlassian list prices once (the standalone scraper refreshes
     # these later). jira-software/standard is a real scraped value; rest are list.
     if cursor.execute("SELECT COUNT(*) FROM atlassian_pricing").fetchone()[0] == 0:
@@ -2474,6 +2496,7 @@ def update_integration_settings(settings, tenant_id=1):
         "bitbucket_workspace", "bitbucket_repo", "bitbucket_token", "bitbucket_enabled",
         "cursor_api_key", "cursor_enabled", "cursor_monthly_cost", "cursor_accounts",
         "openai_api_key", "openai_org_id", "openai_enabled",
+        "openai_chatgpt_monthly", "openai_chatgpt_seats", "openai_chatgpt_members",
         "twilio_api_key", "twilio_enabled", "twilio_monthly_cost",
         "sendgrid_api_key", "sendgrid_enabled", "sendgrid_monthly_cost",
     ]
@@ -2488,6 +2511,11 @@ def update_integration_settings(settings, tenant_id=1):
                 val = json.dumps([{"name": (a.get("name") or "").strip(),
                                    "api_key": (a.get("api_key") or "").strip()}
                                   for a in (val or []) if (a.get("api_key") or "").strip()])
+            elif key == "openai_chatgpt_members" and not isinstance(val, str):
+                # ChatGPT Business/Team seat members (name + email) as JSON.
+                val = json.dumps([{"name": (m.get("name") or "").strip(),
+                                   "email": (m.get("email") or "").strip()}
+                                  for m in (val or []) if ((m.get("name") or "").strip() or (m.get("email") or "").strip())])
             fields.append(f"{key}=?")
             params.append(val)
     if not fields:
@@ -3248,7 +3276,7 @@ def get_budgets(enabled_only=False, tenant_id=None):
 def create_budget(name, amount, provider_type="all", provider_id="",
                   period="monthly", alert_thresholds=None, alert_channels=None,
                   tenant_id=None, resource_group="", service_name="", scope_label="",
-                  alert_emails=""):
+                  alert_emails="", start_date="", end_date=""):
     if alert_thresholds is None:
         alert_thresholds = [80, 100]
     if alert_channels is None:
@@ -3258,20 +3286,20 @@ def create_budget(name, amount, provider_type="all", provider_id="",
         cur = conn.execute("""
             INSERT INTO budgets(name,provider_type,provider_id,amount,period,
                                 alert_thresholds,alert_channels,tenant_id,
-                                resource_group,service_name,scope_label,alert_emails)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                                resource_group,service_name,scope_label,alert_emails,start_date,end_date)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (name, provider_type, provider_id, amount, period,
               json.dumps(alert_thresholds), json.dumps(alert_channels), tenant_id,
-              resource_group, service_name, scope_label, alert_emails))
+              resource_group, service_name, scope_label, alert_emails, start_date, end_date))
     else:
         cur = conn.execute("""
             INSERT INTO budgets(name,provider_type,provider_id,amount,period,
                                 alert_thresholds,alert_channels,
-                                resource_group,service_name,scope_label,alert_emails)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                                resource_group,service_name,scope_label,alert_emails,start_date,end_date)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (name, provider_type, provider_id, amount, period,
               json.dumps(alert_thresholds), json.dumps(alert_channels),
-              resource_group, service_name, scope_label, alert_emails))
+              resource_group, service_name, scope_label, alert_emails, start_date, end_date))
     budget_id = cur.lastrowid
     conn.commit()
     conn.close()
@@ -3284,7 +3312,8 @@ def update_budget(budget_id, **kwargs):
     params = []
     for k, v in kwargs.items():
         if k in ("name", "amount", "provider_type", "provider_id", "period", "enabled",
-                 "resource_group", "service_name", "scope_label", "alert_emails"):
+                 "resource_group", "service_name", "scope_label", "alert_emails",
+                 "start_date", "end_date"):
             fields.append(f"{k}=?")
             params.append(v)
         elif k in ("alert_thresholds", "alert_channels"):

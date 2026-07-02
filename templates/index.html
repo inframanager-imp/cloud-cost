@@ -3306,14 +3306,28 @@
                         </div>
                         <div>
                             <label class="form-label">Period</label>
-                            <select id="budgetPeriod" class="filter-input" style="width:100%">
+                            <select id="budgetPeriod" class="filter-input" style="width:100%" onchange="onBudgetPeriodChange()">
                                 <option value="daily">Daily</option>
                                 <option value="weekly">Weekly</option>
                                 <option value="monthly" selected>Monthly</option>
                                 <option value="quarterly">Quarterly</option>
                                 <option value="annual">Annual</option>
+                                <option value="custom">Custom range</option>
                             </select>
                         </div>
+                    </div>
+                    <div id="budgetCustomRange" style="display:none;margin-top:12px">
+                        <div style="display:flex;gap:12px">
+                            <div style="flex:1">
+                                <label class="form-label">Start date</label>
+                                <input type="date" id="budgetStartDate" class="filter-input" style="width:100%">
+                            </div>
+                            <div style="flex:1">
+                                <label class="form-label">End date</label>
+                                <input type="date" id="budgetEndDate" class="filter-input" style="width:100%">
+                            </div>
+                        </div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-top:5px">Spend is tracked for this exact window; alerts fire when it crosses your thresholds of the budget.</div>
                     </div>
 
                     <!-- Cloud -->
@@ -3823,6 +3837,32 @@
                         <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Organization ID <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
                         <input id="openai-org-id" type="text" placeholder="org-••••••••••••••••" class="form-control">
                     </div>
+                    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:2px">
+                        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">ChatGPT subscription (seats)</div>
+                        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Billed separately from API usage and not available via the API — enter it here to include it in the OpenAI total.</div>
+                        <div style="display:flex;gap:10px">
+                            <div style="flex:1">
+                                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Monthly cost ($)</label>
+                                <input id="openai-chatgpt-monthly" type="number" min="0" step="0.01" placeholder="0.00" class="form-control">
+                            </div>
+                            <div style="flex:1">
+                                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Seats <span style="color:var(--text-muted)">(optional)</span></label>
+                                <input id="openai-chatgpt-seats" type="number" min="0" step="1" placeholder="0" class="form-control">
+                            </div>
+                        </div>
+                        <div style="margin-top:12px">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                                <label style="font-size:11px;color:var(--text-muted)">Members (monthly cost is split evenly across them)</label>
+                                <button type="button" class="btn btn-secondary" style="font-size:11px;padding:4px 10px" onclick="addOpenAIMemberRow('','')">+ Add member</button>
+                            </div>
+                            <div id="openai-members-list" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
+                            <details style="margin-top:8px">
+                                <summary style="font-size:11px;color:var(--accent);cursor:pointer">Bulk paste (one per line: "Name, email" or just email)</summary>
+                                <textarea id="openai-members-bulk" rows="4" class="form-control" style="margin-top:6px;font-size:12px" placeholder="Alice, alice@prismxai.com&#10;bob@prismxai.com"></textarea>
+                                <button type="button" class="btn btn-secondary" style="font-size:11px;padding:4px 10px;margin-top:6px" onclick="importOpenAIMembers()">Import</button>
+                            </details>
+                        </div>
+                    </div>
                     <div style="display:flex;align-items:center;gap:8px;padding:10px 0">
                         <input type="checkbox" id="openai-enabled" style="width:16px;height:16px;cursor:pointer">
                         <label for="openai-enabled" style="font-size:13px;cursor:pointer">Track OpenAI API costs in dashboard</label>
@@ -4009,7 +4049,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260630a"></script>
+<script src="/static/js/app.js?v=20260702a"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -5512,12 +5552,20 @@ async function onBudgetScopeChange() {
     } catch(e) {}
 }
 
+function onBudgetPeriodChange() {
+    const wrap = document.getElementById('budgetCustomRange');
+    if (wrap) wrap.style.display = document.getElementById('budgetPeriod').value === 'custom' ? 'block' : 'none';
+}
+
 function showBudgetModal() {
     _editBudgetId = null;
     document.getElementById('budgetModalTitle').textContent = 'New Budget';
     document.getElementById('budgetName').value = '';
     document.getElementById('budgetAmount').value = '';
     document.getElementById('budgetPeriod').value = 'monthly';
+    document.getElementById('budgetStartDate').value = '';
+    document.getElementById('budgetEndDate').value = '';
+    onBudgetPeriodChange();
     document.getElementById('budgetProvider').value = 'all';
     _populateCloudProviderSelect('budgetProvider', { allValue: 'all' });
     document.getElementById('chEmail').checked = true;
@@ -5580,9 +5628,18 @@ function saveBudget() {
         scope_label = [projName || 'All projects', service_name].filter(Boolean).join(' › ');
     }
 
+    const _period = document.getElementById('budgetPeriod').value;
+    const _sd = document.getElementById('budgetStartDate').value;
+    const _ed = document.getElementById('budgetEndDate').value;
+    if (_period === 'custom') {
+        if (!_sd || !_ed) { alert('Pick a start and end date for a custom-range budget.'); return; }
+        if (_sd > _ed) { alert('Start date must be on or before the end date.'); return; }
+    }
     const body = {
         name, amount,
-        period: document.getElementById('budgetPeriod').value,
+        period: _period,
+        start_date: _period === 'custom' ? _sd : '',
+        end_date: _period === 'custom' ? _ed : '',
         provider_type: cloud,
         provider_id, resource_group, service_name, scope_label,
         alert_emails: document.getElementById('budgetAlertEmails').value.trim(),
@@ -5629,6 +5686,9 @@ async function editBudget(id) {
         document.getElementById('budgetName').value   = b.name || '';
         document.getElementById('budgetAmount').value = b.amount || '';
         document.getElementById('budgetPeriod').value = b.period || 'monthly';
+        document.getElementById('budgetStartDate').value = b.start_date || '';
+        document.getElementById('budgetEndDate').value = b.end_date || '';
+        onBudgetPeriodChange();
         await _populateCloudProviderSelect('budgetProvider', { allValue: 'all' });
         document.getElementById('budgetProvider').value = b.provider_type || 'all';
         document.getElementById('chEmail').checked = (b.alert_channels || []).includes('email');
@@ -6289,6 +6349,44 @@ document.addEventListener('DOMContentLoaded', function() {
         return out;
     }
 
+    // ── ChatGPT (OpenAI) member list ──────────────────────────────────────────
+    window.addOpenAIMemberRow = function(name, email) {
+        const list = document.getElementById('openai-members-list');
+        if (!list) return;
+        const row = document.createElement('div');
+        row.className = 'oai-member-row';
+        row.style.cssText = 'display:flex;gap:8px;align-items:center';
+        const nm = (name || '').replace(/"/g, '&quot;'), em = (email || '').replace(/"/g, '&quot;');
+        row.innerHTML =
+            `<input class="oai-m-name form-control" placeholder="Name" value="${nm}" style="flex:1">
+             <input class="oai-m-email form-control" placeholder="email@company.com" value="${em}" style="flex:1.4">
+             <button type="button" class="btn btn-secondary" title="Remove" style="padding:6px 11px;color:var(--red)" onclick="this.closest('.oai-member-row').remove()">&times;</button>`;
+        list.appendChild(row);
+    };
+    function _collectOpenAIMembers() {
+        const out = [];
+        document.querySelectorAll('#openai-members-list .oai-member-row').forEach(r => {
+            const name  = (r.querySelector('.oai-m-name')?.value || '').trim();
+            const email = (r.querySelector('.oai-m-email')?.value || '').trim();
+            if (name || email) out.push({ name, email });
+        });
+        return out;
+    }
+    window.importOpenAIMembers = function() {
+        const ta = document.getElementById('openai-members-bulk');
+        if (!ta) return;
+        (ta.value || '').split(/\r?\n/).forEach(line => {
+            line = line.trim();
+            if (!line) return;
+            let name = '', email = '';
+            const m = line.match(/[\w.+-]+@[\w.-]+\.\w+/);
+            if (m) email = m[0];
+            name = line.replace(email, '').replace(/[,;<>]/g, ' ').trim();
+            if (name || email) addOpenAIMemberRow(name, email);
+        });
+        ta.value = '';
+    };
+
     window.openIntgModal = function(tool) {
         const cfg = (_intgSettings[tool] || {});
         if (tool === 'jira') {
@@ -6329,6 +6427,12 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (tool === 'openai') {
             _setVal('openai-api-key', cfg.api_key);
             _setVal('openai-org-id', cfg.org_id);
+            _setVal('openai-chatgpt-monthly', cfg.chatgpt_monthly || '');
+            _setVal('openai-chatgpt-seats', cfg.chatgpt_seats || '');
+            const ml = document.getElementById('openai-members-list');
+            if (ml) { ml.innerHTML = ''; (cfg.chatgpt_members || []).forEach(m => addOpenAIMemberRow(m.name, m.email)); }
+            const bulk = document.getElementById('openai-members-bulk');
+            if (bulk) bulk.value = '';
             _setChk('openai-enabled', cfg.enabled);
         }
         _hideMsg(tool);
@@ -6419,7 +6523,10 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (tool === 'sendgrid') {
             payload.sendgrid = { api_key: _getVal('sendgrid-api-key'), enabled: _getChk('sendgrid-enabled'), monthly_cost: parseFloat(_getVal('sendgrid-monthly-cost')) || 0 };
         } else if (tool === 'openai') {
-            payload.openai = { api_key: _getVal('openai-api-key'), org_id: _getVal('openai-org-id'), enabled: _getChk('openai-enabled') };
+            payload.openai = { api_key: _getVal('openai-api-key'), org_id: _getVal('openai-org-id'), enabled: _getChk('openai-enabled'),
+                               chatgpt_monthly: parseFloat(_getVal('openai-chatgpt-monthly')) || 0,
+                               chatgpt_seats: parseInt(_getVal('openai-chatgpt-seats')) || 0,
+                               chatgpt_members: _collectOpenAIMembers() };
         }
         fetch('/api/integrations/settings', {
             method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)

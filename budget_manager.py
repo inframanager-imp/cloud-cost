@@ -26,9 +26,17 @@ SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
 
 # ─── Spend calculation ────────────────────────────────────────────────────────
 
-def _period_dates(period: str):
-    """Return (start_date_str, end_date_str) for the budget period."""
+def _period_dates(period: str, budget: dict = None):
+    """Return (start_date_str, end_date_str) for the budget period.
+    period='custom' uses the budget's explicit start_date/end_date."""
     today = datetime.utcnow()
+    if period == "custom" and budget:
+        sd = (budget.get("start_date") or "").strip()
+        ed = (budget.get("end_date") or "").strip()
+        if sd and ed:
+            return sd, ed
+        # Missing dates — fall back to month-to-date so it doesn't match everything.
+        return today.replace(day=1).strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
     if period == "daily":
         start = end = today
     elif period == "weekly":
@@ -55,7 +63,7 @@ def _period_dates(period: str):
 
 def get_current_spend(budget: dict) -> float:
     """Query cost_data for the budget's scope and period."""
-    date_from, date_to = _period_dates(budget["period"])
+    date_from, date_to = _period_dates(budget["period"], budget)
     provider_type = budget.get("provider_type", "all")
     provider_id   = budget.get("provider_id", "")
     resource_group = budget.get("resource_group", "")

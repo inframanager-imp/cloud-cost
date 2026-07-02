@@ -6060,6 +6060,8 @@ def api_budgets_create():
         service_name=body.get("service_name", ""),
         scope_label=body.get("scope_label", ""),
         alert_emails=body.get("alert_emails", ""),
+        start_date=body.get("start_date", ""),
+        end_date=body.get("end_date", ""),
     )
     return jsonify({"id": budget_id, "message": "Budget created"})
 
@@ -6084,7 +6086,8 @@ def api_budgets_update(budget_id):
     kwargs = {}
     for field in ("name", "amount", "provider_type", "provider_id", "period",
                   "alert_thresholds", "alert_channels", "enabled",
-                  "resource_group", "service_name", "scope_label", "alert_emails"):
+                  "resource_group", "service_name", "scope_label", "alert_emails",
+                  "start_date", "end_date"):
         if field in body:
             kwargs[field] = body[field]
     update_budget(budget_id, **kwargs)
@@ -6200,6 +6203,17 @@ def api_notification_settings():
 
 # ─── Integrations API ────────────────────────────────────────────────────────
 
+def _parse_json_list(raw):
+    """Parse a stored JSON-list column into a Python list (empty list on any error)."""
+    if not raw:
+        return []
+    try:
+        v = json.loads(raw) if isinstance(raw, str) else raw
+        return v if isinstance(v, list) else []
+    except Exception:
+        return []
+
+
 @app.route("/api/integrations/settings", methods=["GET"])
 @login_required
 def api_get_integrations():
@@ -6213,7 +6227,9 @@ def api_get_integrations():
         "bitbucket": {"workspace": s.get("bitbucket_workspace",""), "repo": s.get("bitbucket_repo",""), "token": mask(s.get("bitbucket_token","")), "enabled": s.get("bitbucket_enabled", False)},
         "cursor":    {"api_key": mask(s.get("cursor_api_key","")), "enabled": s.get("cursor_enabled", False), "monthly_cost": s.get("cursor_monthly_cost", 0) or 0,
                       "accounts": [{"name": a.get("name",""), "key_set": bool(a.get("api_key"))} for a in (s.get("cursor_accounts") or [])]},
-        "openai":    {"api_key": mask(s.get("openai_api_key","")), "org_id": s.get("openai_org_id",""), "enabled": s.get("openai_enabled", False)},
+        "openai":    {"api_key": mask(s.get("openai_api_key","")), "org_id": s.get("openai_org_id",""), "enabled": s.get("openai_enabled", False),
+                      "chatgpt_monthly": s.get("openai_chatgpt_monthly", 0) or 0, "chatgpt_seats": s.get("openai_chatgpt_seats", 0) or 0,
+                      "chatgpt_members": _parse_json_list(s.get("openai_chatgpt_members"))},
         "twilio":    {"api_key": mask(s.get("twilio_api_key","")), "enabled": s.get("twilio_enabled", False), "monthly_cost": s.get("twilio_monthly_cost", 0) or 0},
         "sendgrid":  {"api_key": mask(s.get("sendgrid_api_key","")), "enabled": s.get("sendgrid_enabled", False), "monthly_cost": s.get("sendgrid_monthly_cost", 0) or 0},
     })
@@ -6244,6 +6260,67 @@ def _sync_manual_saas_cost(tenant_id):
                 (month_start, "", display, "Subscription", "Monthly subscription",
                  "Subscription", "", round(cost, 2), "USD", svc, "{}", svc, tenant_id),
             )
+    conn.commit()
+    conn.close()
+
+
+def _apply_openai_chatgpt_cost(tenant_id):
+    """Mirror the manual ChatGPT (seat-based) subscription into cost_data under
+    cloud_provider='openai' for the current month. Tagged service_name='ChatGPT
+    Subscription' so the live API-usage sync leaves it intact. ChatGPT seats are
+    billed separately from API usage and aren't available via the OpenAI API."""
+    s = get_integration_settings(tenant_id or 1)
+    try:
+        monthly = float(s.get("openai_chatgpt_monthly") or 0)
+    except (TypeError, ValueError):
+        monthly = 0.0
+    try:
+        seats = int(s.get("openai_chatgpt_seats") or 0)
+    except (TypeError, ValueError):
+        seats = 0
+    # Parse the ChatGPT member list (JSON of {name,email}).
+    members = []
+    try:
+        _m = s.get("openai_chatgpt_members")
+        if _m:
+            members = [x for x in (json.loads(_m) if isinstance(_m, str) else _m) if (x.get("name") or x.get("email"))]
+    except Exception:
+        members = []
+    month_start = datetime.utcnow().strftime("%Y-%m-01")
+    conn = get_db()
+    conn.execute(
+        "DELETE FROM cost_data WHERE cloud_provider='openai' AND service_name='ChatGPT Subscription' AND date=? AND tenant_id IS ?",
+        (month_start, tenant_id),
+    )
+    if monthly > 0:
+        # Group under the same API-Key/Org the usage rows use, so it sits with the account.
+        row = conn.execute(
+            "SELECT subscription_id FROM cost_data WHERE cloud_provider='openai' AND service_name!='ChatGPT Subscription' "
+            "AND subscription_id IS NOT NULL AND tenant_id IS ? ORDER BY date DESC LIMIT 1",
+            (tenant_id,),
+        ).fetchone()
+        sub_id = (row[0] if row else None) or (s.get("openai_org_id") or "ChatGPT")
+        rows = []
+        if members:
+            # Split the monthly cost evenly per member; last member absorbs rounding.
+            n = len(members)
+            per = round(monthly / n, 2)
+            acc = 0.0
+            for i, m in enumerate(members):
+                c = round(monthly - acc, 2) if i == n - 1 else per
+                acc = round(acc + c, 2)
+                who = (m.get("name") or "").strip() or (m.get("email") or "").strip() or "ChatGPT user"
+                rows.append((month_start, "", "ChatGPT Subscription", "Seat", who,
+                             "Subscription", (m.get("email") or ""), c, "USD", sub_id, "{}", "openai", tenant_id))
+        else:
+            label = f"ChatGPT Subscription ({seats} seats)" if seats else "ChatGPT Subscription"
+            rows.append((month_start, "", "ChatGPT Subscription", "Subscription", label,
+                         "Subscription", "", round(monthly, 2), "USD", sub_id, "{}", "openai", tenant_id))
+        conn.executemany(
+            "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
+            "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", rows,
+        )
     conn.commit()
     conn.close()
 
@@ -6283,6 +6360,12 @@ def api_update_integrations():
         _sync_manual_saas_cost(current_tenant_id())
     except Exception as e:
         print(f"[Integrations] manual cost sync failed: {e}")
+    # Mirror the ChatGPT (seat-based) subscription into cost_data under OpenAI.
+    if "openai" in body:
+        try:
+            _apply_openai_chatgpt_cost(current_tenant_id())
+        except Exception as e:
+            print(f"[Integrations] ChatGPT subscription cost sync failed: {e}")
     # Cursor: pull live team spend in the background when a key/account was provided.
     _cur = body.get("cursor") or {}
     if "cursor" in body and (_cur.get("api_key") or _cur.get("accounts")):
@@ -6526,12 +6609,15 @@ def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
             cur += _td(days=1)
 
     if not records:
+        _apply_openai_chatgpt_cost(tenant_id)  # keep the ChatGPT subscription line current
         return {"inserted": 0, "date_from": str(date_from), "date_to": str(date_to)}
 
     conn = get_db()
-    # Remove old OpenAI records for this date range to avoid duplicates
+    # Remove old OpenAI API-usage records for this date range to avoid duplicates.
+    # Exclude the manual ChatGPT subscription line (it's not from the usage API).
     conn.execute(
-        "DELETE FROM cost_data WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ?",
+        "DELETE FROM cost_data WHERE cloud_provider='openai' AND service_name!='ChatGPT Subscription' "
+        "AND tenant_id=? AND date BETWEEN ? AND ?",
         (tenant_id, str(date_from), str(date_to))
     )
     conn.executemany("""
@@ -6542,6 +6628,7 @@ def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
     """, records)
     conn.commit()
     conn.close()
+    _apply_openai_chatgpt_cost(tenant_id)  # (re)write the current-month ChatGPT line
     return {"inserted": len(records), "date_from": str(date_from), "date_to": str(date_to)}
 
 
