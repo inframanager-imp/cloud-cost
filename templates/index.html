@@ -3641,6 +3641,7 @@
                             <span style="font-size:16px;font-weight:700;color:#10a37f" id="openai-total-cost">$0.00</span>
                         </div>
                         <div style="font-size:10px;color:var(--text-muted);margin-top:3px" id="openai-last-sync"></div>
+                        <div id="openai-accounts-breakdown" style="margin-top:8px;display:none"></div>
                     </div>
                 </div>
                 <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
@@ -4045,7 +4046,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260702c"></script>
+<script src="/static/js/app.js?v=20260702d"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -6283,7 +6284,26 @@ document.addEventListener('DOMContentLoaded', function() {
             const statRec = document.getElementById('oai-stat-records');
             if (statRec) statRec.textContent = data.records || 0;
             const lastSyncEl = document.getElementById('openai-last-sync');
-            if (lastSyncEl) lastSyncEl.textContent = data.last_sync ? 'Last connected: ' + new Date(data.last_sync).toLocaleString() : '';
+            if (lastSyncEl) {
+                const acctN = data.account_count || (data.accounts || []).length;
+                const acctTxt = acctN > 1 ? (acctN + ' accounts · ') : '';
+                lastSyncEl.textContent = acctTxt + (data.last_sync ? 'Last connected: ' + new Date(data.last_sync).toLocaleString() : '');
+            }
+            // Per-account (team) breakdown, like the Cursor card.
+            const oab = document.getElementById('openai-accounts-breakdown');
+            if (oab) {
+                const accts = data.accounts || [];
+                if (accts.length > 1) {
+                    oab.style.display = 'block';
+                    oab.innerHTML = accts.map(a => `
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-top:1px solid var(--border,rgba(0,0,0,.06))">
+                            <span style="font-size:11px;color:var(--text)">${a.name}</span>
+                            <span style="font-size:11px;font-weight:600;color:#10a37f">$${(a.cost || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                        </div>`).join('');
+                } else {
+                    oab.style.display = 'none';
+                }
+            }
             const dashLastSync = document.getElementById('openai-dash-lastsync');
             if (dashLastSync) dashLastSync.textContent = data.last_sync ? 'Last connected: ' + new Date(data.last_sync).toLocaleString() : '';
             if (subtitle && data.top_models && data.top_models.length)

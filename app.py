@@ -6717,11 +6717,24 @@ def api_openai_summary():
         "GROUP BY resource_name ORDER BY total DESC LIMIT 5",
         (tid, month_start, today)
     ).fetchall()
+    # Per-account (team) breakdown — subscription_id holds the account name.
+    acct_rows = conn.execute(
+        "SELECT subscription_id, COALESCE(SUM(cost),0) t FROM cost_data "
+        "WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ? GROUP BY subscription_id",
+        (tid, month_start, today)
+    ).fetchall()
     conn.close()
+    by_acct = {r["subscription_id"]: round(r["t"], 2) for r in acct_rows}
+    names = [a.get("name") for a in (get_integration_settings(tid or 1).get("openai_accounts") or []) if a.get("name")]
+    for nm in list(by_acct):
+        if nm and nm not in names:
+            names.append(nm)
+    accounts = sorted([{"name": nm, "cost": by_acct.get(nm, 0.0)} for nm in names], key=lambda x: -x["cost"])
     return jsonify({
         "total_this_month": round(row["total"], 4),
         "last_sync": row["last_sync"],
         "records": row["records"],
+        "accounts": accounts, "account_count": len(accounts),
         "top_models": [{"name": m["resource_name"], "cost": round(m["total"], 4)} for m in models]
     })
 
