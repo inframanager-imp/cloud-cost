@@ -994,155 +994,174 @@ def _build_custom_report_html(report):
             + manual_rows + '</table>'
             f'<div style="font-size:12px;color:#525252;margin-bottom:28px">Other tools/subscriptions total: <strong>{manual_sym}{manual_total:,.2f}</strong></div>')
 
+    # ── Styled email report (email-safe: nested tables + inline styles + emoji) ──
+    PAGE_BG = "#EEF2F8"; CARD_BD = "#E3E9F2"; BLUE = "#2563EB"; TILE = "#E7EEFB"
+    INK = "#0F2544"; MUT = "#6B7A90"; STRIPE = "#F6F9FE"; TRACK = "#E7ECF3"
+
+    def _tileHTML(emoji, size=40, bg=TILE):
+        return (f'<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+                f'<td width="{size}" height="{size}" align="center" valign="middle" '
+                f'style="width:{size}px;height:{size}px;background:{bg};border-radius:10px;font-size:{int(size*0.46)}px">{emoji}</td></tr></table>')
+
+    def _svc_emoji(nm):
+        n = (nm or "").lower()
+        if "licens" in n: return "🔑"
+        if "virtual machine" in n or "compute" in n: return "🖥️"
+        if "storage" in n or "disk" in n or "blob" in n: return "🗄️"
+        if "bandwidth" in n or "data transfer" in n: return "📶"
+        if "network" in n or "vpn" in n or "gateway" in n or "dns" in n or "cdn" in n: return "🌐"
+        if "sql" in n or "database" in n or "cosmos" in n or "mysql" in n: return "🗃️"
+        if "kubernetes" in n or "container" in n or "registry" in n: return "📦"
+        if "function" in n or "app service" in n or "web app" in n: return "⚡"
+        if "monitor" in n or "log" in n or "insight" in n: return "📈"
+        if "openai" in n or "cognitive" in n: return "🤖"
+        return "🔹"
+
+    def _barHTML(w, col=BLUE):
+        w = max(2, min(100, int(round(w))))
+        cell = f'<td bgcolor="{col}" width="{w}%" height="8" style="background:{col};border-radius:4px;line-height:8px;font-size:1px">&nbsp;</td>'
+        track = f'<td bgcolor="{TRACK}" height="8" style="background:{TRACK};border-radius:4px;line-height:8px;font-size:1px">&nbsp;</td>' if w < 100 else ''
+        return f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>{cell}{track}</tr></table>'
+
+    def _cardHTML(emoji, title, inner):
+        return (f'<tr><td style="padding-bottom:14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+                f'style="background:#FFFFFF;border:1px solid {CARD_BD};border-radius:14px"><tr><td style="padding:20px 22px">'
+                f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:14px"><tr>'
+                f'<td valign="middle">{_tileHTML(emoji, 30)}</td>'
+                f'<td valign="middle" style="padding-left:10px;font-size:16px;font-weight:800;color:{INK}">{title}</td></tr></table>'
+                f'{inner}</td></tr></table></td></tr>')
+
+    def _rankTable(head_label, items, emoji_fn=None):
+        mx = (items[0]["cost"] or 1) if items else 1
+        body = ""
+        for i, it in enumerate(items[:15]):
+            bg = "#FFFFFF" if i % 2 == 0 else STRIPE
+            pct = (it["cost"] / total_cost * 100) if total_cost > 0 else 0
+            ic = (f'<span style="font-size:15px">{emoji_fn(it["name"])}</span>&nbsp;&nbsp;' if emoji_fn else '')
+            body += (f'<tr style="background:{bg}">'
+                     f'<td style="padding:9px 14px;font-size:13px;color:{INK}">{ic}{it["name"]}</td>'
+                     f'<td style="padding:9px 8px;width:36%">{_barHTML(it["cost"] / mx * 100)}</td>'
+                     f'<td style="padding:9px 14px;font-size:13px;font-weight:700;color:{INK};text-align:right;white-space:nowrap">${it["cost"]:,.2f}</td>'
+                     f'<td style="padding:9px 14px;font-size:12px;color:{MUT};text-align:right;white-space:nowrap">{pct:.1f}%</td></tr>')
+        head = (f'<tr style="border-bottom:1px solid #EDF1F7">'
+                f'<th style="padding:8px 14px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:{MUT};text-align:left">{head_label}</th>'
+                f'<th style="padding:8px 8px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:{MUT};text-align:left">Share</th>'
+                f'<th style="padding:8px 14px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:{MUT};text-align:right">Cost</th>'
+                f'<th style="padding:8px 14px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:{MUT};text-align:right">%</th></tr>')
+        return f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">{head}{body}</table>'
+
+    # Meta cards (Period + Client/Subscriptions + Resource Groups)
+    _client_name = ""
+    if client_id:
+        try:
+            from database import get_client as _gc
+            _client_name = (_gc(int(client_id), tenant_id) or {}).get("name", "") if str(client_id).isdigit() else ""
+        except Exception:
+            _client_name = ""
+    _meta = [("📅", "Period", period_label)]
+    if client_id:
+        _meta.append(("🏢", "Client", _client_name or str(client_id)))
+    else:
+        _meta.append(("💳", "Subscriptions", ", ".join(sub_names)))
+        _rgv = (", ".join(rgs[:3]) + ("…" if len(rgs) > 3 else "")) if rgs else "All resource groups"
+        _meta.append(("📁", "Resource Groups", _rgv))
+    _mw = round(100 / len(_meta))
+    _meta_cells = "".join(
+        f'<td width="{_mw}%" valign="top" style="padding:0 5px">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid {CARD_BD};border-radius:12px"><tr><td style="padding:13px 15px">'
+        f'<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td valign="middle">{_tileHTML(e, 32)}</td>'
+        f'<td valign="middle" style="padding-left:10px"><div style="font-size:11px;color:{MUT}">{lb}</div>'
+        f'<div style="font-size:14px;font-weight:700;color:{INK};margin-top:2px">{v}</div></td></tr></table>'
+        f'</td></tr></table></td>'
+        for e, lb, v in _meta)
+
     html = f"""<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#FAFAF9;font-family:{font_stack}">
-<div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#FAFAF9">{report_name} — ${total_cost:,.0f} total · Generated {now.strftime('%-d %b %Y')}</div>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#FAFAF9">
-<tr><td align="center" style="padding:32px 16px">
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:{PAGE_BG};font-family:{font_stack}">
+<div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:{PAGE_BG}">{report_name} — ${total_cost:,.0f} total</div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:{PAGE_BG}">
+<tr><td align="center" style="padding:28px 14px">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="680" style="max-width:680px;width:100%">
 
 <!-- Header -->
-<tr><td style="padding-bottom:12px">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-         style="background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px">
-    <tr><td style="padding:24px 28px">
-      <div style="font-size:11px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">Custom report</div>
-      <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:3px">{report_name}</div>
-      <div style="font-size:12px;color:#8A8A8A;margin-top:5px">Generated {now.strftime('%-d %B %Y at %H:%M UTC')}</div>
-    </td></tr>
-  </table>
+<tr><td style="padding-bottom:14px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid {CARD_BD};border-radius:14px"><tr>
+    <td style="padding:22px 24px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td valign="middle">{_tileHTML('📊', 46)}</td>
+      <td valign="middle" style="padding-left:14px">
+        <div style="font-size:11px;color:{BLUE};letter-spacing:.08em;text-transform:uppercase;font-weight:700">Custom report</div>
+        <div style="font-size:22px;color:{INK};font-weight:800;margin-top:2px">{report_name}</div>
+        <div style="font-size:12px;color:{MUT};margin-top:4px">📅 Generated {now.strftime('%-d %B %Y at %H:%M UTC')}</div>
+      </td>
+    </tr></table></td>
+  </tr></table>
 </td></tr>
 
-<!-- Body card -->
-<tr><td>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-       style="background:#FFFFFF;border:1px solid #E8E8E4;border-radius:12px">
-<tr><td style="padding:24px 28px">
-
-<!-- Filter summary -->
-<div style="background:#F7F7F5;border:1px solid #E8E8E4;border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:12px;color:#525252;line-height:1.8">
-  {'<br>'.join(filter_tags)}
-</div>
+<!-- Meta cards -->
+<tr><td style="padding:0 0 14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 -5px"><tr>{_meta_cells}</tr></table></td></tr>
 """
 
     if "summary" in sections:
+        _bars = "".join(
+            f'<td width="14" valign="bottom" style="padding:0 2px"><div style="width:11px;height:{h}px;background:{c};border-radius:3px"></div></td>'
+            for h, c in [(16, "#BFD4FA"), (30, BLUE), (42, "#93B4F7"), (56, BLUE)])
         html += f"""
-<div style="background:#F7F7F5;border:1px solid #E8E8E4;border-radius:10px;padding:20px;margin-bottom:20px;text-align:center">
-  <div style="font-size:11px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500;margin-bottom:6px">Total cost</div>
-  <div style="font-size:32px;font-weight:500;color:#1A1A1A;letter-spacing:-0.02em">${total_cost:,.2f}</div>
-  <div style="font-size:12px;color:#8A8A8A;margin-top:6px">{total_records:,} records &bull; {len(by_rg)} resource groups &bull; {len(by_service)} services</div>
-</div>
+<tr><td style="padding-bottom:14px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EFF4FE;border:1px solid #D6E4FB;border-radius:14px"><tr>
+    <td style="padding:22px 24px" valign="middle"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td valign="middle"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="54" height="54" align="center" valign="middle" style="width:54px;height:54px;background:{BLUE};border-radius:27px;color:#FFFFFF;font-size:24px;font-weight:700">$</td></tr></table></td>
+      <td valign="middle" style="padding-left:16px">
+        <div style="font-size:11px;color:{BLUE};letter-spacing:.08em;text-transform:uppercase;font-weight:700">Total cost</div>
+        <div style="font-size:34px;color:{INK};font-weight:800;margin-top:2px">${total_cost:,.2f}</div>
+        <div style="font-size:12px;color:{MUT};margin-top:4px">{total_records:,} records &bull; {len(by_rg)} resource group{'s' if len(by_rg) != 1 else ''} &bull; {len(by_service)} services</div>
+      </td>
+    </tr></table></td>
+    <td align="right" valign="bottom" style="padding:22px 24px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>{_bars}</tr></table></td>
+  </tr></table>
+</td></tr>
 """
 
     if "by_service" in sections and by_service:
-        rows = ""
-        max_svc = by_service[0]["cost"] if by_service else 1
-        for i, s in enumerate(by_service[:15]):
-            bg = "#FFFFFF" if i % 2 == 0 else "#F7F7F5"
-            pct = (s["cost"] / total_cost * 100) if total_cost > 0 else 0
-            bar_w = max(3, int((s["cost"] / (max_svc or 1)) * 55))
-            col = RANK_COLS[min(i, len(RANK_COLS)-1)]
-            rows += f'''<tr style="background:{bg}">
-                <td style="padding:9px 14px;font-size:13px;color:#1A1A1A">{s["name"]}</td>
-                <td style="padding:9px 8px;width:44%">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-                    <td bgcolor="{col}" width="{bar_w}%" height="7" style="background:{col};border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
-                    <td bgcolor="#EBEBEB" height="7" style="background:#EBEBEB;border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
-                  </tr></table>
-                </td>
-                <td style="padding:9px 14px;font-size:13px;font-weight:500;color:#1A1A1A;text-align:right">${s["cost"]:,.2f}</td>
-                <td style="padding:9px 14px;font-size:12px;color:#8A8A8A;text-align:right">{pct:.1f}%</td>
-            </tr>'''
-        html += f"""
-<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Cost by service</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:24px">
-  <tr style="background:#F0F0EE">
-    <th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:left">Service</th>
-    <th style="padding:9px 8px;font-size:11px;font-weight:500;color:#525252;text-align:left">Share</th>
-    <th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th>
-    <th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:right">%</th>
-  </tr>
-  {rows}
-</table>
-"""
+        html += _cardHTML("🥧", "Cost by service", _rankTable("Service", by_service, _svc_emoji))
 
     if "by_rg" in sections and by_rg:
-        rows = ""
-        max_rg_cost = by_rg[0]["cost"] if by_rg else 1
-        for i, r in enumerate(by_rg[:15]):
-            bg = "#FFFFFF" if i % 2 == 0 else "#F7F7F5"
-            pct = (r["cost"] / total_cost * 100) if total_cost > 0 else 0
-            bar_w = max(3, int((r["cost"] / (max_rg_cost or 1)) * 55))
-            col = RANK_COLS[min(i, len(RANK_COLS)-1)]
-            rows += f'''<tr style="background:{bg}">
-                <td style="padding:9px 14px;font-size:13px;color:#1A1A1A">{r["name"]}</td>
-                <td style="padding:9px 8px;width:44%">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-                    <td bgcolor="{col}" width="{bar_w}%" height="7" style="background:{col};border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
-                    <td bgcolor="#EBEBEB" height="7" style="background:#EBEBEB;border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
-                  </tr></table>
-                </td>
-                <td style="padding:9px 14px;font-size:13px;font-weight:500;color:#1A1A1A;text-align:right">${r["cost"]:,.2f}</td>
-                <td style="padding:9px 14px;font-size:12px;color:#8A8A8A;text-align:right">{pct:.1f}%</td>
-            </tr>'''
-        html += f"""
-<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Cost by resource group</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:24px">
-  <tr style="background:#F0F0EE">
-    <th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:left">Resource group</th>
-    <th style="padding:9px 8px;font-size:11px;font-weight:500;color:#525252;text-align:left">Share</th>
-    <th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th>
-    <th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:right">%</th>
-  </tr>
-  {rows}
-</table>
-"""
+        html += _cardHTML("📦", "Cost by resource group", _rankTable("Resource group", by_rg))
 
     if "trend" in sections and daily_trend:
-        count = min(30, len(daily_trend))
-        recent = daily_trend[-count:]
-        max_cost_t = max((d["cost"] for d in recent), default=1) or 1
-        rows = ""
+        recent = daily_trend[-min(30, len(daily_trend)):]
+        mxt = max((d["cost"] for d in recent), default=1) or 1
+        trows = ""
         for i, d in enumerate(recent):
-            bg = "#FFFFFF" if i % 2 == 0 else "#F7F7F5"
-            bar_w = max(4, int(d["cost"] / max_cost_t * 100))
-            rows += f"""
-<tr style="background:{bg}">
-  <td style="padding:6px 12px;font-size:12px;color:#525252;white-space:nowrap">{d["date"]}</td>
-  <td style="padding:6px 8px;font-size:12px;color:#1A1A1A;font-weight:500;text-align:right;white-space:nowrap">${d["cost"]:,.2f}</td>
-  <td style="padding:6px 12px;width:40%">
-    <div style="background:{ACCENT};height:8px;border-radius:4px;width:{bar_w}%"></div>
-  </td>
-</tr>"""
-        html += f"""
-<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Daily spend</div>
-<div style="background:#F7F7F5;border-radius:10px;overflow:hidden;margin-bottom:24px">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse">
-    <tr style="background:#EEEDE8">
-      <td style="padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A8A8A">Date</td>
-      <td style="padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A8A8A;text-align:right">Cost</td>
-      <td style="padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A8A8A"></td>
-    </tr>
-    {rows}
-  </table>
-</div>
-"""
+            bg = "#FFFFFF" if i % 2 == 0 else STRIPE
+            trows += (f'<tr style="background:{bg}">'
+                      f'<td style="padding:8px 14px;font-size:12px;color:{INK};white-space:nowrap">📅&nbsp;&nbsp;{d["date"]}</td>'
+                      f'<td style="padding:8px 12px;font-size:13px;font-weight:700;color:{INK};text-align:right;white-space:nowrap">${d["cost"]:,.2f}</td>'
+                      f'<td style="padding:8px 14px;width:46%">{_barHTML(d["cost"] / mxt * 100)}</td></tr>')
+        _daily = (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">'
+                  f'<tr style="border-bottom:1px solid #EDF1F7"><th style="padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:{MUT};text-align:left">Date</th>'
+                  f'<th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:{MUT};text-align:right">Cost</th>'
+                  f'<th style="padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:{MUT};text-align:left"></th></tr>{trows}</table>')
+        html += _cardHTML("📅", "Daily spend", _daily)
 
     # Other Tools & Subscriptions (manually-tracked / Other Costs), if any.
-    if manual_section:
-        html += manual_section
+    if manual_rows:
+        _mtbl = (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">'
+                 f'<tr style="border-bottom:1px solid #EDF1F7"><th style="padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:{MUT};text-align:left">Item</th>'
+                 f'<th style="padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:{MUT};text-align:left">Category</th>'
+                 f'<th style="padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:{MUT};text-align:right">Cost</th></tr>'
+                 f'{manual_rows}'
+                 f'<tr><td colspan="2" style="padding:9px 14px;font-size:12px;color:{MUT}">Total</td>'
+                 f'<td style="padding:9px 14px;font-size:13px;font-weight:700;color:{INK};text-align:right">{manual_sym}{manual_total:,.2f}</td></tr></table>')
+        html += _cardHTML("🧾", "Other Tools &amp; Subscriptions", _mtbl)
 
     html += """
-<div style="border-top:1px solid #E8E8E4;padding-top:16px;margin-top:8px;font-size:11px;color:#8A8A8A;text-align:center">
-  This report was generated automatically by Cloud Cost Analyzer.
-</div>
-</td></tr>
+<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EAF7EE;border:1px solid #CBECD6;border-radius:12px"><tr>
+  <td align="center" style="padding:14px;font-size:12px;color:#3B7A54">✅ This report was generated automatically by Cloud Cost Analyzer.</td>
+</tr></table></td></tr>
+
 </table>
 </td></tr>
 </table>
-</td></tr></table>
 </body></html>
 """
     return html
