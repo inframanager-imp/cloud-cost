@@ -167,7 +167,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
 
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#FAFAF9">
 <tr><td align="center" style="padding:32px 16px">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="680" style="max-width:680px;width:100%">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="884" style="max-width:884px;width:100%">
 
 <!-- ── HEADER ── -->
 <tr><td style="padding-bottom:12px">
@@ -1081,7 +1081,7 @@ def _build_custom_report_html(report):
 <div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:{PAGE_BG}">{report_name} — ${total_cost:,.0f} total</div>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:{PAGE_BG}">
 <tr><td align="center" style="padding:28px 14px">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="680" style="max-width:680px;width:100%">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="884" style="max-width:884px;width:100%">
 
 <!-- Header -->
 <tr><td style="padding-bottom:14px">
@@ -1128,19 +1128,39 @@ def _build_custom_report_html(report):
         html += _cardHTML("📦", "Cost by resource group", _rankTable("Resource group", by_rg))
 
     if "trend" in sections and daily_trend:
-        recent = daily_trend[-min(30, len(daily_trend)):]
-        mxt = max((d["cost"] for d in recent), default=1) or 1
-        trows = ""
+        recent = daily_trend[-min(31, len(daily_trend)):]
+        costs = [d["cost"] for d in recent]
+        mxt = max(costs, default=1) or 1
+        n = len(recent)
+        avg = sum(costs) / n if n else 0
+        srt = sorted(costs)
+        median = srt[n // 2] if n else 0
+        spike_thr = median * 1.6 if median else float("inf")
+        pk = max(recent, key=lambda d: d["cost"]) if recent else {"cost": 0, "date": ""}
+        step = max(1, round(n / 8))
+        CHART_H = 132
+        bars = labels = ""
+        any_spike = False
         for i, d in enumerate(recent):
-            bg = "#FFFFFF" if i % 2 == 0 else STRIPE
-            trows += (f'<tr style="background:{bg}">'
-                      f'<td style="padding:8px 14px;font-size:12px;color:{INK};white-space:nowrap">📅&nbsp;&nbsp;{d["date"]}</td>'
-                      f'<td style="padding:8px 12px;font-size:13px;font-weight:700;color:{INK};text-align:right;white-space:nowrap">${d["cost"]:,.2f}</td>'
-                      f'<td style="padding:8px 14px;width:46%">{_barHTML(d["cost"] / mxt * 100)}</td></tr>')
-        _daily = (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse">'
-                  f'<tr style="border-bottom:1px solid #EDF1F7"><th style="padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:{MUT};text-align:left">Date</th>'
-                  f'<th style="padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;color:{MUT};text-align:right">Cost</th>'
-                  f'<th style="padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:{MUT};text-align:left"></th></tr>{trows}</table>')
+            h = max(2, round(d["cost"] / mxt * CHART_H))
+            is_spike = n >= 5 and d["cost"] >= spike_thr and d["cost"] > avg
+            any_spike = any_spike or is_spike
+            col = "#DC2626" if is_spike else BLUE
+            # Each bar = a bottom-aligned nested-table cell with a bgcolor block (email-safe).
+            bars += (f'<td valign="bottom" style="padding:0 1px">'
+                     f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>'
+                     f'<td height="{h}" bgcolor="{col}" style="height:{h}px;background:{col};border-radius:3px 3px 0 0;line-height:1px;font-size:1px">&nbsp;</td>'
+                     f'</tr></table></td>')
+            lbl = d["date"][5:] if (i % step == 0 or i == n - 1) else ""
+            labels += f'<td align="center" style="padding:5px 0 0;font-size:9px;color:{MUT};white-space:nowrap">{lbl}</td>'
+        legend = ' &bull; <span style="color:#DC2626">■</span> spike day' if any_spike else ""
+        _daily = (
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:{CHART_H}px">'
+            f'<tr valign="bottom">{bars}</tr></table>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>{labels}</tr></table>'
+            f'<div style="margin-top:12px;font-size:11px;color:{MUT};border-top:1px solid #EDF1F7;padding-top:10px">'
+            f'Peak <b style="color:{INK}">${pk["cost"]:,.2f}</b> on {pk["date"]} &bull; '
+            f'Avg <b style="color:{INK}">${avg:,.2f}</b>/day{legend}</div>')
         html += _cardHTML("📅", "Daily spend", _daily)
 
     # Other Tools & Subscriptions (manually-tracked / Other Costs), if any.
