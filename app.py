@@ -147,6 +147,13 @@ ACTIVITY_SYNC_INLINE_MODE = os.getenv("ACTIVITY_SYNC_INLINE_MODE", "false").lowe
 ACTIVITY_SYNC_SUBPROCESS = os.getenv("ACTIVITY_SYNC_SUBPROCESS", "true").lower() in ("true", "1", "yes")
 EMAIL_SCHEDULER_ENABLED = os.getenv("EMAIL_SCHEDULER_ENABLED", "true").lower() in ("true", "1", "yes")
 
+# Incremental sync look-back: every sync refetches this many days behind each
+# account's latest date. Wider than a couple of days so a transient per-account
+# sync failure self-heals on the next run instead of leaving a permanent gap,
+# and so recent-day cost restatement (AWS AmortizedCost, GCP late arrivals) is
+# picked up. Override via env if needed.
+COST_SYNC_LOOKBACK_DAYS = int(os.getenv("COST_SYNC_LOOKBACK_DAYS", "10"))
+
 SYNC_SETTINGS_FILE = os.path.join(os.getenv("DATA_DIR", "/app/data"), "sync_settings.json")
 
 def _load_sync_settings():
@@ -970,7 +977,7 @@ def api_sync():
         else:
             latest = get_latest_cost_date(subscription_id=sub_id)
             if latest:
-                date_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
+                date_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=COST_SYNC_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
             else:
                 date_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
 
@@ -1129,7 +1136,7 @@ def api_sync():
                         if is_full:
                             return (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
                         if latest:
-                            return (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
+                            return (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=COST_SYNC_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
                         return (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
 
                     def _sync_one_provider(provider):
@@ -4081,7 +4088,7 @@ def _run_auto_sync():
                         sub_id = sub["subscription_id"]
                         latest = get_latest_cost_date(subscription_id=sub_id)
                         if latest:
-                            date_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d")
+                            date_from = (datetime.strptime(latest, "%Y-%m-%d") - timedelta(days=COST_SYNC_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
                         else:
                             date_from = (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
 
@@ -4125,7 +4132,7 @@ def _run_auto_sync():
                     ).fetchone()
                     _c.close()
                     latest_p = _row[0] if _row and _row[0] else None
-                    p_from = (datetime.strptime(latest_p, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d") if latest_p \
+                    p_from = (datetime.strptime(latest_p, "%Y-%m-%d") - timedelta(days=COST_SYNC_LOOKBACK_DAYS)).strftime("%Y-%m-%d") if latest_p \
                              else (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
 
                     try:
@@ -4234,7 +4241,7 @@ def _run_auto_sync():
                     ).fetchone()
                     _c.close()
                     latest_z = _zr[0] if _zr and _zr[0] else None
-                    z_from = (datetime.strptime(latest_z, "%Y-%m-%d") - timedelta(days=2)).strftime("%Y-%m-%d") if latest_z \
+                    z_from = (datetime.strptime(latest_z, "%Y-%m-%d") - timedelta(days=COST_SYNC_LOOKBACK_DAYS)).strftime("%Y-%m-%d") if latest_z \
                              else (datetime.utcnow() - timedelta(days=months * 30)).strftime("%Y-%m-%d")
                     try:
                         from azure_fetcher import fetch_azure_costs

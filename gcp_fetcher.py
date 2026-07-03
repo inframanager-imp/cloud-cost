@@ -105,9 +105,12 @@ def _fetch_via_bigquery(credentials_cfg: dict, date_from: str, date_to: str, pro
 
     if is_detailed:
         # Net cost = cost + credits (credits.amount values are negative = savings).
-        # Partition scan is widened by +4 days beyond date_to because GCP billing
-        # data for a given usage day can arrive in BigQuery up to 72-96 hours later.
+        # Partition scan is widened by +7 days beyond date_to because GCP billing
+        # data for a given usage day can arrive in BigQuery up to a week later
+        # (esp. for a closed month being reconciled against the finalized invoice).
         # usage_start_time filter ensures we only return rows for the requested range.
+        # We keep net-negative lines (HAVING != 0) so fully-credited SKUs still
+        # subtract their credit from the project total — matching the netted invoice.
         query = f"""
             SELECT
               DATE(usage_start_time)                                     AS date,
@@ -121,13 +124,13 @@ def _fetch_via_bigquery(credentials_cfg: dict, date_from: str, date_to: str, pro
               currency
             FROM {full_table}
             WHERE DATE(_PARTITIONTIME) BETWEEN '{date_from}'
-                AND DATE_ADD('{date_to}', INTERVAL 4 DAY)
+                AND DATE_ADD('{date_to}', INTERVAL 7 DAY)
               AND DATE(usage_start_time) BETWEEN '{date_from}' AND '{date_to}'
               AND cost_type != 'rounding_error'
             GROUP BY 1,2,3,4,5,7
             HAVING SUM(cost) + SUM(IFNULL(
               (SELECT SUM(c.amount) FROM UNNEST(credits) AS c), 0
-            )) > 0
+            )) != 0
             ORDER BY 1
         """
     else:
