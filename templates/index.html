@@ -1121,21 +1121,17 @@
             <!-- Row 2c: Custom date ranges (visible when mode=custom) -->
             <div class="filter-bar__row cmp-custom" style="display:none;margin-top:10px;flex-wrap:wrap">
                 <div class="filter-bar__field">
-                    <span class="micro-label">Period 1 From</span>
-                    <input type="date" class="filter-bar__select" id="cmpCustom1From">
-                </div>
-                <div class="filter-bar__field">
-                    <span class="micro-label">Period 1 To</span>
-                    <input type="date" class="filter-bar__select" id="cmpCustom1To">
+                    <span class="micro-label">Period 1</span>
+                    <input type="text" class="filter-bar__select" id="cmpCustom1Pick" placeholder="Select range" style="min-width:165px">
+                    <input type="hidden" id="cmpCustom1From">
+                    <input type="hidden" id="cmpCustom1To">
                 </div>
                 <span class="period-arrow">→</span>
                 <div class="filter-bar__field">
-                    <span class="micro-label">Period 2 From</span>
-                    <input type="date" class="filter-bar__select" id="cmpCustom2From">
-                </div>
-                <div class="filter-bar__field">
-                    <span class="micro-label">Period 2 To</span>
-                    <input type="date" class="filter-bar__select" id="cmpCustom2To">
+                    <span class="micro-label">Period 2</span>
+                    <input type="text" class="filter-bar__select" id="cmpCustom2Pick" placeholder="Select range" style="min-width:165px">
+                    <input type="hidden" id="cmpCustom2From">
+                    <input type="hidden" id="cmpCustom2To">
                 </div>
             </div>
         </div>
@@ -1283,9 +1279,9 @@
 
                 <!-- Custom date inputs (shown only when Custom selected) -->
                 <div class="filter-bar__custom-dates" id="customDateInputs" style="display:none">
-                    <input type="date" class="cost-filter-input" id="ccDateFrom">
-                    <span style="color:var(--text-tertiary);font-size:11px;flex-shrink:0">→</span>
-                    <input type="date" class="cost-filter-input" id="ccDateTo">
+                    <input type="text" class="cost-filter-input" id="ccRangePick" placeholder="Select range" style="min-width:170px">
+                    <input type="hidden" id="ccDateFrom">
+                    <input type="hidden" id="ccDateTo">
                 </div>
 
                 <!-- Subscriptions (hidden for GCP/AWS where sub=project/account shown in RG) -->
@@ -1528,9 +1524,9 @@
                 </select>
             </div>
             <div id="clientCustomDateWrap" style="display:none;display:flex;gap:6px;align-items:center">
-                <input type="date" id="clientDateFrom" class="filter-input" style="font-size:12px;height:30px">
-                <span style="font-size:12px;color:var(--text-secondary)">to</span>
-                <input type="date" id="clientDateTo" class="filter-input" style="font-size:12px;height:30px">
+                <input type="text" id="clientRangePick" class="filter-input" style="font-size:12px;height:30px;min-width:170px" placeholder="Select range">
+                <input type="hidden" id="clientDateFrom">
+                <input type="hidden" id="clientDateTo">
                 <button class="cp-btn-secondary" style="height:30px;font-size:12px" onclick="applyClientDateFilter()">Apply</button>
             </div>
             <div style="margin-left:auto;display:flex;gap:8px">
@@ -1985,12 +1981,10 @@
                     </div>
                 </div>
                 <div class="cost-filter-field">
-                    <label class="cost-filter-label">From</label>
-                    <input type="date" class="cost-filter-input" id="actDateFrom" onchange="loadActivityTable()">
-                </div>
-                <div class="cost-filter-field">
-                    <label class="cost-filter-label">To</label>
-                    <input type="date" class="cost-filter-input" id="actDateTo" onchange="loadActivityTable()">
+                    <label class="cost-filter-label">Date range</label>
+                    <input type="text" class="cost-filter-input" id="actRangePick" placeholder="All time" style="min-width:170px">
+                    <input type="hidden" id="actDateFrom">
+                    <input type="hidden" id="actDateTo">
                 </div>
                 <div class="cost-filter-field">
                     <label class="cost-filter-label">User</label>
@@ -2175,13 +2169,12 @@
                             </select>
                         </div>
                         <div class="email-field" style="flex:1;display:none" id="emReportFromGroup">
-                            <label>From</label>
-                            <input type="date" id="emReportDateFrom" class="filter-input">
+                            <label>Date range</label>
+                            <input type="text" id="emReportRangePick" class="filter-input" placeholder="Select range">
+                            <input type="hidden" id="emReportDateFrom">
+                            <input type="hidden" id="emReportDateTo">
                         </div>
-                        <div class="email-field" style="flex:1;display:none" id="emReportToGroup">
-                            <label>To</label>
-                            <input type="date" id="emReportDateTo" class="filter-input">
-                        </div>
+                        <div class="email-field" style="flex:1;display:none" id="emReportToGroup"></div>
                     </div>
                     <div class="email-field">
                         <label>Cloud Provider</label>
@@ -2274,13 +2267,12 @@
                             </select>
                         </div>
                         <div class="email-field" style="flex:1" id="crDateFromGroup" style="display:none">
-                            <label>From</label>
-                            <input type="date" id="crDateFrom" class="filter-input">
+                            <label>Date range</label>
+                            <input type="text" id="crRangePick" class="filter-input" placeholder="Select range">
+                            <input type="hidden" id="crDateFrom">
+                            <input type="hidden" id="crDateTo">
                         </div>
-                        <div class="email-field" style="flex:1" id="crDateToGroup" style="display:none">
-                            <label>To</label>
-                            <input type="date" id="crDateTo" class="filter-input">
-                        </div>
+                        <div class="email-field" style="flex:1" id="crDateToGroup" style="display:none"></div>
                     </div>
 
                     <div id="crClientNote" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);border-radius:8px;font-size:12px;color:var(--text-secondary)"></div>
@@ -3162,13 +3154,11 @@
                     <div style="background:var(--bg);border-radius:10px;padding:18px">
                         <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:12px">Step 4 — Import your billing data</div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-                            <div>
-                                <label class="form-label">Date From <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>
-                                <input type="date" id="curDateFrom" class="filter-input" style="width:100%">
-                            </div>
-                            <div>
-                                <label class="form-label">Date To <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>
-                                <input type="date" id="curDateTo" class="filter-input" style="width:100%">
+                            <div style="grid-column:1 / -1">
+                                <label class="form-label">Date range <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>
+                                <input type="text" id="curRangePick" class="filter-input" style="width:100%" placeholder="Select range">
+                                <input type="hidden" id="curDateFrom">
+                                <input type="hidden" id="curDateTo">
                             </div>
                         </div>
                         <!-- Billing period picker -->
@@ -3326,12 +3316,10 @@
                     <div id="budgetCustomRange" style="display:none;margin-top:12px">
                         <div style="display:flex;gap:12px">
                             <div style="flex:1">
-                                <label class="form-label">Start date</label>
-                                <input type="date" id="budgetStartDate" class="filter-input" style="width:100%">
-                            </div>
-                            <div style="flex:1">
-                                <label class="form-label">End date</label>
-                                <input type="date" id="budgetEndDate" class="filter-input" style="width:100%">
+                                <label class="form-label">Date range</label>
+                                <input type="text" id="budgetRangePick" class="filter-input" style="width:100%" placeholder="Select range">
+                                <input type="hidden" id="budgetStartDate">
+                                <input type="hidden" id="budgetEndDate">
                             </div>
                         </div>
                         <div style="font-size:11px;color:var(--text-muted);margin-top:5px">Spend is tracked for this exact window; alerts fire when it crosses your thresholds of the budget.</div>
@@ -4053,7 +4041,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260704b"></script>
+<script src="/static/js/app.js?v=20260704c"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -5558,7 +5546,9 @@ async function onBudgetScopeChange() {
 
 function onBudgetPeriodChange() {
     const wrap = document.getElementById('budgetCustomRange');
-    if (wrap) wrap.style.display = document.getElementById('budgetPeriod').value === 'custom' ? 'block' : 'none';
+    const isCustom = document.getElementById('budgetPeriod').value === 'custom';
+    if (wrap) wrap.style.display = isCustom ? 'block' : 'none';
+    if (isCustom && typeof initRangePicker === 'function') initRangePicker('budgetRangePick', 'budgetStartDate', 'budgetEndDate');
 }
 
 function showBudgetModal() {

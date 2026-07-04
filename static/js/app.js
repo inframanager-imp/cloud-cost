@@ -1814,6 +1814,41 @@ function _initCostDateRangePicker(fromYmd, toYmd) {
     });
 }
 
+// Generic single-input date-range picker (same UX as Cost Data's) for any
+// from/to pair. The hidden from/to inputs stay the YYYY-MM-DD source of truth
+// so all existing read/write code keeps working; picking a range writes them
+// and dispatches 'change' on both. Idempotent: re-call to resync the visible
+// input after setting the hidden inputs programmatically.
+const _rangePickUX = {};
+function initRangePicker(pickId, fromId, toId, onChange) {
+    const el = document.getElementById(pickId);
+    const fromEl = document.getElementById(fromId);
+    const toEl = document.getElementById(toId);
+    if (!el || !fromEl || !toEl || typeof flatpickr === 'undefined') return;
+    const _toDate = ymd => new Date(ymd + 'T00:00:00');
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const cur = (fromEl.value && toEl.value) ? [_toDate(fromEl.value), _toDate(toEl.value)] : [];
+    if (_rangePickUX[pickId]) {
+        if (cur.length) _rangePickUX[pickId].setDate(cur, false);
+        else _rangePickUX[pickId].clear();
+        return;
+    }
+    _rangePickUX[pickId] = flatpickr(el, {
+        mode: 'range',
+        dateFormat: 'd/m/y',
+        defaultDate: cur,
+        onClose: function (selectedDates) {
+            if (selectedDates.length === 2) {
+                fromEl.value = fmt(selectedDates[0]);
+                toEl.value = fmt(selectedDates[1]);
+                fromEl.dispatchEvent(new Event('change'));
+                toEl.dispatchEvent(new Event('change'));
+                if (onChange) onChange();
+            }
+        }
+    });
+}
+
 async function _updateCostsCloudFilters(cloud) {
     const accountWrap    = document.getElementById('costAccountWrap');
     const accountLabelEl = document.getElementById('costAccountLabel');
@@ -2944,6 +2979,10 @@ function onCompareModeChange() {
     document.querySelectorAll('.cmp-custom').forEach((el) => {
         el.style.display = mode === 'custom' ? '' : 'none';
     });
+    if (mode === 'custom') {
+        initRangePicker('cmpCustom1Pick', 'cmpCustom1From', 'cmpCustom1To');
+        initRangePicker('cmpCustom2Pick', 'cmpCustom2From', 'cmpCustom2To');
+    }
     if (mode === 'monthly') onCmpExtraPeriodToggle();
 }
 
@@ -3793,6 +3832,7 @@ function setActCloud(btn, cloud) {
 }
 
 async function loadActivityPage() {
+    initRangePicker('actRangePick', 'actDateFrom', 'actDateTo', loadActivityTable);
     try {
         await loadActivityAutoSyncStatus();
         const filters = await fetch('/api/activity/filters').then(r => r.json());
@@ -4314,6 +4354,7 @@ function resetActivityFilters() {
   const s = document.getElementById('actSearch'); if (s) s.value = '';
   const df = document.getElementById('actDateFrom'); if (df) df.value = '';
   const dt = document.getElementById('actDateTo'); if (dt) dt.value = '';
+  initRangePicker('actRangePick', 'actDateFrom', 'actDateTo', loadActivityTable);
   const st = document.getElementById('actStatus'); if (st) st.value = '';
   const lv = document.getElementById('actLevel'); if (lv) lv.value = '';
   loadActivityTable();
@@ -4651,6 +4692,7 @@ async function loadCustomCostPage() {
                 btn.classList.add('active');
                 const cd = document.getElementById('customDateInputs');
                 if (cd) cd.style.display = 'flex';
+                initRangePicker('ccRangePick', 'ccDateFrom', 'ccDateTo');
                 ccUpdateSelectionPreview();
             } else {
                 ccApplyDatePreset(range);
@@ -5235,6 +5277,7 @@ async function ccApplyFilterData(saved) {
         if (c) c.classList.add('active');
         const cd = document.getElementById('customDateInputs');
         if (cd) cd.style.display = 'flex';
+        initRangePicker('ccRangePick', 'ccDateFrom', 'ccDateTo');
     }
 
     ccSelectedSubs.clear();
@@ -5368,7 +5411,8 @@ function onEmailReportDateRangeChange() {
     const range = document.getElementById('emReportDateRange').value;
     const show = range === 'custom';
     document.getElementById('emReportFromGroup').style.display = show ? '' : 'none';
-    document.getElementById('emReportToGroup').style.display = show ? '' : 'none';
+    document.getElementById('emReportToGroup').style.display = 'none';
+    if (show) initRangePicker('emReportRangePick', 'emReportDateFrom', 'emReportDateTo');
 }
 
 async function saveEmailSettings() {
@@ -5757,6 +5801,7 @@ async function openCustomReportBuilder(editData) {
     document.getElementById('crDateRange').value = 'this_month';
     document.getElementById('crDateFrom').value = '';
     document.getElementById('crDateTo').value = '';
+    if (_rangePickUX['crRangePick']) _rangePickUX['crRangePick'].clear();
     document.getElementById('crSchedule').value = 'none';
     document.getElementById('crScheduleDay').value = '1';
     setScheduleTime('crScheduleTime', 8, 0);
@@ -5812,6 +5857,7 @@ async function openCustomReportBuilder(editData) {
         document.getElementById('crDateRange').value = fl.date_range || 'this_month';
         document.getElementById('crDateFrom').value = fl.date_from || '';
         document.getElementById('crDateTo').value = fl.date_to || '';
+        onCRDateRangeChange();
         document.getElementById('crSchedule').value = editData.schedule || 'none';
         document.getElementById('crScheduleDay').value = editData.schedule_day ?? 1;
         setScheduleTime('crScheduleTime', editData.schedule_hour ?? 8, editData.schedule_minute ?? 0);
@@ -5941,7 +5987,8 @@ function crFilterList(type) { crRenderList(type); }
 function onCRDateRangeChange() {
     const isCustom = document.getElementById('crDateRange').value === 'custom';
     document.getElementById('crDateFromGroup').style.display = isCustom ? '' : 'none';
-    document.getElementById('crDateToGroup').style.display = isCustom ? '' : 'none';
+    document.getElementById('crDateToGroup').style.display = 'none';
+    if (isCustom) initRangePicker('crRangePick', 'crDateFrom', 'crDateTo');
 }
 
 function onCRScheduleChange() {
@@ -6763,6 +6810,7 @@ function _initNavContextMenu() {
 document.addEventListener('DOMContentLoaded', async () => {
     initAppearanceToggle();
     initUiThemeTrial();
+    initRangePicker('curRangePick', 'curDateFrom', 'curDateTo'); // CUR-import modal (no programmatic setters)
     _scLoadAutoSync();   // load auto-sync state into drawer + badge on startup
     _scLoadStatus();     // update sidebar global status
     await initCloudFilter();   // hide cloud UI for unconnected clouds (before first page render)
@@ -7418,6 +7466,7 @@ function onClientDatePreset() {
 
     if (preset === 'custom') {
         if (customWrap) customWrap.style.display = 'flex';
+        initRangePicker('clientRangePick', 'clientDateFrom', 'clientDateTo');
         return;
     }
     if (customWrap) customWrap.style.display = 'none';
