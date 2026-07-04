@@ -1139,25 +1139,41 @@ def _build_custom_report_html(report):
         pk = max(recent, key=lambda d: d["cost"]) if recent else {"cost": 0, "date": ""}
         step = max(1, round(n / 8))
         CHART_H = 132
+        _short = lambda v: (f"${v/1000:.1f}k" if v >= 1000 else f"${v:.0f}")
         bars = labels = ""
         any_spike = False
         for i, d in enumerate(recent):
-            h = max(2, round(d["cost"] / mxt * CHART_H))
+            # Reserve ~14px headroom so a value label above the tallest bar still fits.
+            h = max(2, round(d["cost"] / mxt * (CHART_H - 14)))
             is_spike = n >= 5 and d["cost"] >= spike_thr and d["cost"] > avg
             any_spike = any_spike or is_spike
             col = "#DC2626" if is_spike else BLUE
+            # Cost label above spikes (and the single peak day) so the $ is readable.
+            show_val = is_spike or d["date"] == pk["date"]
+            vlabel = (f'<div style="font-size:8px;font-weight:700;color:{col};text-align:center;'
+                      f'line-height:1;padding-bottom:2px;white-space:nowrap">{_short(d["cost"])}</div>' if show_val else '')
             # Each bar = a bottom-aligned nested-table cell with a bgcolor block (email-safe).
-            bars += (f'<td valign="bottom" style="padding:0 1px">'
+            bars += (f'<td valign="bottom" style="padding:0 1px">{vlabel}'
                      f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>'
                      f'<td height="{h}" bgcolor="{col}" style="height:{h}px;background:{col};border-radius:3px 3px 0 0;line-height:1px;font-size:1px">&nbsp;</td>'
                      f'</tr></table></td>')
             lbl = d["date"][5:] if (i % step == 0 or i == n - 1) else ""
             labels += f'<td align="center" style="padding:5px 0 0;font-size:9px;color:{MUT};white-space:nowrap">{lbl}</td>'
         legend = ' &bull; <span style="color:#DC2626">■</span> spike day' if any_spike else ""
+        # Y-axis: max at top, mid in middle, $0 at baseline (two half-height rows).
+        yax = (f'<td width="44" valign="top" style="width:44px">'
+               f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:{CHART_H}px">'
+               f'<tr><td height="{CHART_H//2}" valign="top" style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;line-height:1">{_short(mxt)}</td></tr>'
+               f'<tr><td height="{CHART_H//2}" valign="middle" style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;line-height:1">{_short(mxt/2)}</td></tr>'
+               f'</table>'
+               f'<div style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;margin-top:-8px">$0</div></td>')
         _daily = (
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:{CHART_H}px">'
-            f'<tr valign="bottom">{bars}</tr></table>'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>{labels}</tr></table>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
+            f'<tr valign="bottom">{yax}<td>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:{CHART_H}px;border-bottom:2px solid #E7ECF3">'
+            f'<tr valign="bottom">{bars}</tr></table></td></tr>'
+            f'<tr><td></td><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>{labels}</tr></table></td></tr>'
+            f'</table>'
             f'<div style="margin-top:12px;font-size:11px;color:{MUT};border-top:1px solid #EDF1F7;padding-top:10px">'
             f'Peak <b style="color:{INK}">${pk["cost"]:,.2f}</b> on {pk["date"]} &bull; '
             f'Avg <b style="color:{INK}">${avg:,.2f}</b>/day{legend}</div>')
