@@ -6071,6 +6071,7 @@ async function _scLoadProviders() {
                 ${syncErrIsPending(p.sync_error)
                     ? `<div style="font-size:11px;color:#f59e0b;margin-bottom:8px;word-break:break-all">⏳ ${_esc(syncErrText(p.sync_error).slice(0,160))}</div>`
                     : (p.sync_error ? `<div style="font-size:11px;color:var(--red);margin-bottom:8px;word-break:break-all">${_esc(p.sync_error.slice(0,120))}</div>` : '')}
+                ${p.data_stale ? `<div style="font-size:11px;color:#f59e0b;margin-bottom:8px" title="Syncs are succeeding but the billing source has produced no new rows — check the cloud-side billing export">⚠ No new data since ${_esc(p.latest_data_date || '?')} — check billing export</div>` : ''}
                 <div class="sc-provider-actions">
                     <button class="btn-mini" id="sc-sync-btn-${p.id}"
                         onclick="scSyncProvider(${p.id}, '${_escAttr(p.name)}')">

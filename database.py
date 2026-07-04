@@ -3185,8 +3185,38 @@ def get_cloud_providers(enabled_only=False, tenant_id=None):
         q += " WHERE " + " AND ".join(conditions)
     q += " ORDER BY provider_type, name"
     rows = conn.execute(q, params).fetchall()
+
+    # Latest ingested data date per provider so the UI can flag connections whose
+    # sync "succeeds" but whose source has stopped producing rows (e.g. a tenant's
+    # GCP billing export silently breaking). AWS accounts map 1:1 to
+    # subscription_id; GCP/Azure connections can cover many projects/subs, so
+    # those fall back to the provider-type-wide latest for the tenant.
+    acct_latest = {(r["cloud_provider"], r["tenant_id"], r["subscription_id"]): r["mx"] for r in conn.execute(
+        "SELECT cloud_provider, tenant_id, subscription_id, MAX(substr(date,1,10)) AS mx "
+        "FROM cost_data GROUP BY cloud_provider, tenant_id, subscription_id")}
+    type_latest = {(r["cloud_provider"], r["tenant_id"]): r["mx"] for r in conn.execute(
+        "SELECT cloud_provider, tenant_id, MAX(substr(date,1,10)) AS mx "
+        "FROM cost_data GROUP BY cloud_provider, tenant_id")}
     conn.close()
-    return [dict(r) for r in rows]
+
+    out = []
+    for r in rows:
+        d = dict(r)
+        latest = acct_latest.get((d["provider_type"], d["tenant_id"], d["provider_id"])) \
+                 or type_latest.get((d["provider_type"], d["tenant_id"]))
+        d["latest_data_date"] = latest
+        stale = False
+        if latest and d.get("enabled"):
+            try:
+                lag = (datetime.utcnow() - datetime.strptime(latest, "%Y-%m-%d")).days
+                # Billing exports lag 1-3 days normally; beyond that the source
+                # has likely stopped producing data even if syncs report success.
+                stale = lag > (4 if d["provider_type"] == "gcp" else 3)
+            except Exception:
+                pass
+        d["data_stale"] = stale
+        out.append(d)
+    return out
 
 
 def get_cloud_provider(provider_id_pk, tenant_id=None):
