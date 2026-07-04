@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cost Drilldown</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="/static/vendor/chart.umd.min.js?v=4.4.7"></script>
     <style>
         body { background: var(--bg-primary); padding: 24px; }
         .dd-container { max-width: 1200px; margin: 0 auto; }
@@ -71,6 +71,12 @@
 </div>
 
 <script>
+// Surface any uncaught JS error on the page instead of an eternal "Loading...".
+window.onerror = function (msg) {
+    var l = document.getElementById('ddLoading'), e = document.getElementById('ddError');
+    if (l) l.style.display = 'none';
+    if (e) { e.style.display = 'block'; e.textContent = 'Page error: ' + msg; }
+};
 const chartInstances = {};
 const DD_COLORS = ['#4f6ef7', '#2ecc71', '#e67e22', '#9b59b6', '#1abc9c', '#e74c3c'];
 
