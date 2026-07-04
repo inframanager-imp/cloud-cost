@@ -579,6 +579,13 @@
                     </svg>
                     Export CSV
                 </button>
+                <button class="cp-btn-secondary" onclick="saveCostViewAsReport()" title="Create a custom report from the current filters">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                        <polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/>
+                    </svg>
+                    Save as Report
+                </button>
             </div>
         </div>
 
@@ -4046,7 +4053,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260704a"></script>
+<script src="/static/js/app.js?v=20260704b"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

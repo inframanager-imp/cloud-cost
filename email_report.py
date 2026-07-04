@@ -1189,6 +1189,14 @@ def _build_custom_report_html(report):
                  f'<tr><td colspan="2" style="padding:9px 14px;font-size:12px;color:{MUT}">Total</td>'
                  f'<td style="padding:9px 14px;font-size:13px;font-weight:700;color:{INK};text-align:right">{manual_sym}{manual_total:,.2f}</td></tr></table>')
         html += _cardHTML("🧾", "Other Tools &amp; Subscriptions", _mtbl)
+    elif client_id:
+        # Client-linked report with no matching manual costs: say so explicitly,
+        # so an empty section reads as "nothing recorded this period" rather
+        # than silently disappearing (one-off entries only count in their own
+        # month; recurring ones carry forward).
+        html += _cardHTML("🧾", "Other Tools &amp; Subscriptions",
+            f'<div style="font-size:12px;color:{MUT};padding:2px 0 6px">No other costs recorded for this period. '
+            f'One-off entries appear only in their own month; mark an entry as recurring to carry it forward.</div>')
 
     html += """
 <tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EAF7EE;border:1px solid #CBECD6;border-radius:12px"><tr>

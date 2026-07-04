@@ -215,13 +215,29 @@ function navigateTo(page) {
         const y = now.getFullYear();
         const m = String(now.getMonth() + 1).padStart(2, '0');
         const d = String(now.getDate()).padStart(2, '0');
-        const firstDay = `${y}-${m}-01`;
-        const today    = `${y}-${m}-${d}`;
+        // A pending view (e.g. "Open in Cost Data" from a custom report) overrides
+        // the default this-month range / cloud / client. Consumed once.
+        const pv = window._pendingCostView || null;
+        window._pendingCostView = null;
+        const firstDay = pv?.date_from || `${y}-${m}-01`;
+        const today    = pv?.date_to   || `${y}-${m}-${d}`;
         const fromEl = document.getElementById('costDateFrom');
         const toEl   = document.getElementById('costDateTo');
         if (fromEl) fromEl.value = firstDay;
         if (toEl)   toEl.value   = today;
         _initCostDateRangePicker(firstDay, today);
+        if (pv) {
+            const cs = document.getElementById('costsClientFilter');
+            if (cs) cs.value = pv.client_id || '';
+            if (typeof selectedClient !== 'undefined') selectedClient = pv.client_id || '';
+            const cl = pv.cloud || costsSelectedCloud;
+            costsSelectedCloud = cl;
+            document.querySelectorAll('[data-costs-cloud]').forEach(b =>
+                b.classList.toggle('active', b.dataset.costsCloud === cl));
+            _updateCostsCloudFilters(cl);
+            loadCostsTable();
+            return;
+        }
         // Pre-select the cloud if arriving from a cloud card (setCloudFilter sets selectedCloud)
         if (selectedCloud) {
             costsSelectedCloud = selectedCloud;
@@ -3397,6 +3413,54 @@ function exportCSV() {
     window.location.href = `/api/export?${params}`;
 }
 
+// "Save as Report": create a custom report from the Cost Data page's current
+// filters (cloud, dates, client, accounts/RGs/services), so users don't have
+// to rebuild the same view in the report builder.
+async function saveCostViewAsReport() {
+    const clientSel = document.getElementById('costsClientFilter');
+    const clientId = clientSel?.value || '';
+    const clientName = clientId ? (clientSel.options[clientSel.selectedIndex]?.text || '') : '';
+    const dateFrom = document.getElementById('costDateFrom')?.value || '';
+    const dateTo = document.getElementById('costDateTo')?.value || '';
+    const defName = clientName ? `${clientName} Cost Report`
+        : `${(CLOUD_META[costsSelectedCloud]?.label || 'All Clouds')} Cost Report`;
+    const name = prompt('Report name:', defName);
+    if (!name || !name.trim()) return;
+
+    const body = {
+        name: name.trim(),
+        recipients: '',
+        filters: clientId ? {
+            client_id: clientId, cloud_providers: [], subscription_ids: [],
+            resource_groups: [], services: [],
+            date_range: (dateFrom && dateTo) ? 'custom' : 'this_month',
+            date_from: dateFrom, date_to: dateTo,
+        } : {
+            client_id: '',
+            cloud_providers: costsSelectedCloud ? [costsSelectedCloud] : [],
+            subscription_ids: [...cdAccSelected].filter(v => v !== '__BLANK__'),
+            resource_groups: [...cdRgSelected].filter(v => v !== '__BLANK__'),
+            services: [...cdSvcSelected].filter(v => v !== '__BLANK__'),
+            date_range: (dateFrom && dateTo) ? 'custom' : 'this_month',
+            date_from: dateFrom, date_to: dateTo,
+        },
+        sections: ['summary', 'by_service', 'by_rg', 'trend'],
+        schedule: 'none', schedule_day: 1, schedule_hour: 8, schedule_minute: 0,
+        schedule_tz: 'UTC', enabled: false,
+    };
+    try {
+        const resp = await fetch('/api/custom-reports', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'save failed');
+        showToast(`Report "${name.trim()}" created — find it under Custom Cost`, 'success');
+    } catch (err) {
+        showToast('Failed to save report: ' + err.message, 'error');
+    }
+}
+
 // ─── Chatbot ─────────────────────────────────────────────────────────────
 let chatChartCount = 0;
 
@@ -5469,9 +5533,43 @@ let crSelectedSubs = new Set();
 let crSelectedRgs = new Set();
 let crSelectedSvcs = new Set();
 
+let _crReportsCache = {};
+
+// "Open in Cost Data": jump to the Cost Data page with this report's filters
+// applied (cloud, date window, client), for drilling into the line items
+// behind a report number.
+function openReportInCostData(rid) {
+    const r = _crReportsCache[rid];
+    if (!r) { showToast('Report not loaded', 'error'); return; }
+    const fl = r.filters || {};
+    const today = new Date();
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    let from = '', to = '';
+    const dr = fl.date_range || 'this_month';
+    if (dr === 'last_month') {
+        const end = new Date(today.getFullYear(), today.getMonth(), 0);
+        from = fmt(new Date(end.getFullYear(), end.getMonth(), 1)); to = fmt(end);
+    } else if (dr === 'last_30' || dr === 'last_90') {
+        const s = new Date(today); s.setDate(s.getDate() - (dr === 'last_30' ? 30 : 90));
+        from = fmt(s); to = fmt(today);
+    } else if (fl.date_from && fl.date_to) {
+        from = fl.date_from; to = fl.date_to;
+    } else {
+        from = fmt(new Date(today.getFullYear(), today.getMonth(), 1)); to = fmt(today);
+    }
+    window._pendingCostView = {
+        date_from: from, date_to: to,
+        client_id: fl.client_id || '',
+        cloud: (fl.cloud_providers && fl.cloud_providers.length === 1) ? fl.cloud_providers[0] : '',
+    };
+    navigateTo('costs');
+}
+
 async function loadCustomReportsList() {
     try {
         const reports = await fetch('/api/custom-reports').then(r => r.json());
+        _crReportsCache = {};
+        reports.forEach(r => { _crReportsCache[r.id] = r; });
         const el = document.getElementById('customReportsList');
         if (!reports.length) {
             el.innerHTML = _emptyState('info',
@@ -5505,6 +5603,9 @@ async function loadCustomReportsList() {
                     </button>
                     <button class="btn-mini" onclick="previewCustomReport(${r.id})" title="Preview" style="color:var(--accent)">
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                    <button class="btn-mini" onclick="openReportInCostData(${r.id})" title="Open in Cost Data">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                     </button>
                     <button class="btn-mini" onclick="editCustomReport(${r.id})" title="Edit">
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
