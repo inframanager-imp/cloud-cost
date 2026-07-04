@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cost Drilldown</title>
+    <link rel="stylesheet" href="/static/css/tokens.css">
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/appearance.css">
     <script src="/static/vendor/chart.umd.min.js?v=4.4.7"></script>
     <style>
         body { background: var(--bg-primary); padding: 24px; }
@@ -305,7 +307,9 @@ async function loadDrilldown() {
             'Daily Trend'
         );
 
-        const tabKeys = Object.keys(ddData).filter((k) => k !== 'daily_trend');
+        // Only real breakdown lists become tabs (skips daily_trend chart data and
+        // scalar metadata like currency_symbol, which would crash renderTab).
+        const tabKeys = Object.keys(ddData).filter((k) => k !== 'daily_trend' && Array.isArray(ddData[k]));
         document.getElementById('ddTabs').innerHTML = tabKeys
             .map(
                 (key, i) =>
