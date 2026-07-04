@@ -3855,7 +3855,7 @@
                             <div id="openai-members-list" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
                             <details style="margin-top:8px">
                                 <summary style="font-size:11px;color:var(--accent);cursor:pointer">Bulk paste (one per line: "Name, email" or just email)</summary>
-                                <textarea id="openai-members-bulk" rows="4" class="form-control" style="margin-top:6px;font-size:12px" placeholder="Alice, alice@prismxai.com&#10;bob@prismxai.com"></textarea>
+                                <textarea id="openai-members-bulk" rows="4" class="form-control" style="margin-top:6px;font-size:12px" placeholder="Alice, alice@example.com&#10;bob@example.com"></textarea>
                                 <button type="button" class="btn btn-secondary" style="font-size:11px;padding:4px 10px;margin-top:6px" onclick="importOpenAIMembers()">Import</button>
                             </details>
                         </div>
@@ -6350,7 +6350,7 @@ document.addEventListener('DOMContentLoaded', function() {
         row.style.cssText = 'display:flex;gap:8px;align-items:center';
         const nm = (name || '').replace(/"/g, '&quot;');
         row.innerHTML =
-            `<input class="cursor-acct-name form-control" placeholder="Team name (e.g. Gyan Team)" value="${nm}" style="flex:1">
+            `<input class="cursor-acct-name form-control" placeholder="Team name (e.g. Engineering Team)" value="${nm}" style="flex:1">
              <input class="cursor-acct-key form-control" type="password" placeholder="${keySet ? '•••• (leave blank to keep)' : 'crsr_…  API key'}" style="flex:1.4">
              <button type="button" class="btn btn-secondary" title="Remove" style="padding:6px 11px;color:var(--red)" onclick="this.closest('.cursor-acct-row').remove()">&times;</button>`;
         list.appendChild(row);
@@ -6413,7 +6413,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const nm = (name || '').replace(/"/g, '&quot;'), og = (orgId || '').replace(/"/g, '&quot;');
         row.innerHTML =
             `<div style="display:flex;gap:8px;align-items:center">
-                 <input class="oai-acct-name form-control" placeholder="Team name (e.g. Prism Team)" value="${nm}" style="flex:1;font-weight:600">
+                 <input class="oai-acct-name form-control" placeholder="Team name (e.g. Platform Team)" value="${nm}" style="flex:1;font-weight:600">
                  <button type="button" class="btn btn-secondary" title="Remove account" style="padding:5px 10px;color:var(--red);flex:0 0 auto" onclick="this.closest('.openai-acct-row').remove()">&times;</button>
              </div>
              <input class="oai-acct-key form-control" type="password" placeholder="${keySet ? '•••• API key (leave blank to keep)' : 'sk-…  API key'}">

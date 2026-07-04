@@ -75,7 +75,7 @@ const chartInstances = {};
 const DD_COLORS = ['#4f6ef7', '#2ecc71', '#e67e22', '#9b59b6', '#1abc9c', '#e74c3c'];
 
 // Friendly resource name: strip AWS ARN prefix to the trailing resource id.
-// e.g. "arn:aws:rds:us-east-2:319640437000:db:prism-2-0" -> "prism-2-0".
+// e.g. "arn:aws:rds:us-east-2:123456789012:db:my-db-1" -> "my-db-1".
 // Non-ARN names (S3 buckets, GCP/Azure resources) are returned unchanged.
 function ddShortName(name) {
     if (!name) return name;
