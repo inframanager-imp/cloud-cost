@@ -792,10 +792,10 @@ async function loadCloudOverview() {
     const maxProvTotal = Math.max(...Object.values(provTotals));
 
     // Brand palette
-    const cloudColor   = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f', atlassian: '#0052cc', cursor: '#111111' };
-    const sparkStroke  = { azure: 'var(--chart-1,#185FA5)', aws: 'var(--chart-3,#BA7517)', gcp: 'var(--chart-2,#1D9E75)', openai: '#10a37f', atlassian: '#0052cc', cursor: '#555555' };
-    const cloudFull    = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud', openai: 'OpenAI', atlassian: 'Atlassian', cursor: 'Cursor' };
-    const logoH        = { azure: '16', aws: '13', gcp: '16', openai: '18', atlassian: '18', cursor: '16' };
+    const cloudColor   = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f', chatgpt: '#0d0d0d', atlassian: '#0052cc', cursor: '#111111' };
+    const sparkStroke  = { azure: 'var(--chart-1,#185FA5)', aws: 'var(--chart-3,#BA7517)', gcp: 'var(--chart-2,#1D9E75)', openai: '#10a37f', chatgpt: '#555555', atlassian: '#0052cc', cursor: '#555555' };
+    const cloudFull    = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud', openai: 'OpenAI', chatgpt: 'ChatGPT', atlassian: 'Atlassian', cursor: 'Cursor' };
+    const logoH        = { azure: '16', aws: '13', gcp: '16', openai: '18', chatgpt: '18', atlassian: '18', cursor: '16' };
 
     // 6. Render provider cards
     grid.innerHTML = '';
