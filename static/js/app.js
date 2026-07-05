@@ -2782,6 +2782,17 @@ function setCmpCloud(btn, cloud) {
                 <option value="service_name">Service</option>
                 <option value="subscription_id">Project</option>
                 <option value="resource_name">Resource Name</option>`;
+        } else if (cloud && cloud !== 'azure' && CLOUD_META[cloud]) {
+            // Integration providers (OpenAI/ChatGPT/Atlassian/Cursor): use their
+            // own dimension names (e.g. OpenAI → API Key/Org · Project · Model).
+            const gl = CLOUD_META[cloud].groupLabel || {};
+            const opts = [
+                `<option value="service_name">${gl.service || 'Service'}</option>`,
+                `<option value="subscription_id">${gl.sub || 'Account'}</option>`,
+            ];
+            if (gl.rg && gl.rg !== gl.sub) opts.push(`<option value="resource_group">${gl.rg}</option>`);
+            opts.push(`<option value="resource_name">${gl.resource || 'Resource Name'}</option>`);
+            groupBySel.innerHTML = opts.join('');
         } else {
             groupBySel.innerHTML = `
                 <option value="service_name">Service</option>
