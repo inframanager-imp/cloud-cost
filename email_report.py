@@ -1702,6 +1702,29 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         if "trend" not in _enabled: trend_section = ""
         if "manual" not in _enabled: manual_block = ""
 
+    # Previous-period comparison for the Total Cost KPI: the same number of
+    # days immediately before this report's window. Best-effort — omitted
+    # when there is no prior data or the lookup fails.
+    _prev_line = ""
+    try:
+        _d1 = datetime.strptime(date_from, "%Y-%m-%d")
+        _d2 = datetime.strptime(date_to, "%Y-%m-%d")
+        _ndays = (_d2 - _d1).days + 1
+        _p_to = (_d1 - timedelta(days=1)).strftime("%Y-%m-%d")
+        _p_from = (_d1 - timedelta(days=_ndays)).strftime("%Y-%m-%d")
+        from database import get_client_costs as _gcc
+        _prev_total = float((_gcc(int(client.get("id")), _p_from, _p_to, client.get("tenant_id") or 1) or {}).get("total") or 0)
+        if _prev_total > 0:
+            _pct = (total - _prev_total) / _prev_total * 100
+            _up = _pct >= 0
+            _col = "#C0392B" if _up else "#1D9E75"   # cost up = red, down = green
+            _arr = "&#9650;" if _up else "&#9660;"
+            _lbl = f"previous {_ndays} days" if _ndays != 30 and _ndays != 31 else "previous month"
+            _prev_line = (f'<div style="font-size:11px;font-weight:700;color:{_col};margin-top:5px">'
+                          f'{_arr} {abs(_pct):.1f}% vs {_lbl}</div>')
+    except Exception as _pe:
+        print(f"[client-report] prev-period compare failed: {_pe}")
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1711,16 +1734,25 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
 <tr><td align="center" style="padding:28px 16px">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="880" style="max-width:880px;width:100%">
 
-<!-- Header banner -->
+<!-- Header banner: gradient hero with highlighted client badge -->
 <tr><td style="padding-bottom:14px">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-         style="background-color:#0E4C8A;background-image:linear-gradient(135deg,#0E4C8A,#1A6FB5);border-radius:12px">
-    <tr><td style="padding:24px 30px;text-align:center">
-      <div style="font-size:12px;color:#BBD6F0;letter-spacing:0.12em;text-transform:uppercase;font-weight:600">&#9729; Cloud Cost Analyzer</div>
-      <div style="font-size:26px;color:#FFFFFF;font-weight:700;letter-spacing:-0.01em;margin-top:6px">Cloud Cost Overview</div>
-      <div style="font-size:14px;color:#FFFFFF;font-weight:600;margin-top:6px">{client.get('name','')}</div>
-      <div style="font-size:12px;color:#D6E6F6;margin-top:4px">Date: {_df} to {_dt}</div>
-    </td></tr>
+         style="background-color:#2E3ED8;background-image:linear-gradient(115deg,#1E40D8 0%,#4F2EDC 55%,#8A2BE2 100%);border-radius:16px">
+    <tr>
+      <td width="70" style="padding:20px 0 0 22px;font-size:34px;color:rgba(255,255,255,.14);vertical-align:top">&#9729;</td>
+      <td style="padding:26px 10px;text-align:center">
+        <div style="font-size:12px;color:#C9D6FF;letter-spacing:0.14em;text-transform:uppercase;font-weight:700">&#9729; Cloud Cost Analyzer</div>
+        <div style="font-size:28px;color:#FFFFFF;font-weight:800;letter-spacing:-0.01em;margin-top:6px">Cloud Cost Overview</div>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top:12px"><tr>
+          <td style="background:rgba(255,255,255,.13);border:2px solid rgba(255,255,255,.55);border-radius:12px;padding:8px 22px">
+            <span style="font-size:17px;vertical-align:middle">&#127970;</span>
+            <span style="font-size:20px;color:#FFFFFF;font-weight:800;letter-spacing:.02em;vertical-align:middle">&nbsp;{client.get('name','')}</span>
+          </td>
+        </tr></table>
+        <div style="font-size:12px;color:#DCE4FF;margin-top:10px">&#128197; Date: {_df} to {_dt}</div>
+      </td>
+      <td width="70" style="padding:0 22px 20px 0;font-size:34px;color:rgba(255,255,255,.14);vertical-align:bottom;text-align:right">&#9729;</td>
+    </tr>
   </table>
 </td></tr>
 
@@ -1731,7 +1763,8 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
       <table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:16px 12px;text-align:center">
         <div style="font-size:10px;color:#6B7785;letter-spacing:0.05em;text-transform:uppercase;font-weight:600">Total Cost</div>
         <div style="font-size:22px;color:#0E4C8A;font-weight:700;margin-top:6px">${total:,.2f}</div>
-        <div style="font-size:10px;color:#8A95A1;margin-top:4px">{_df} to {_dt}</div>
+        {_prev_line}
+        <div style="font-size:10px;color:#8A95A1;margin-top:4px">&#128197; {_df} to {_dt}</div>
       </td></tr></table>
     </td>
     {_cloud_cells}
