@@ -223,7 +223,7 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 /* Pin the stats row to the card bottom so every card's numbers align across the grid. */
 .provider-status__stats { margin-top: auto; }
 .provider-status__stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
-.provider-status .stat-value { font-size: 16px; font-weight: 600; }
+.provider-status .stat-value { font-size: 16px; font-weight: 600; white-space: nowrap; }
 
 .stat-label { font-size: 10px; color: var(--text-tertiary); letter-spacing: 0.04em; text-transform: uppercase; }
 .stat-value { font-size: 14px; font-weight: 500; color: var(--text-primary); font-variant-numeric: tabular-nums; margin-top: 2px; }

@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v=20260705d">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v=20260705e">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260620a">
     <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507n">
     <link rel="stylesheet" href="/static/css/appearance.css?v=20260507n">
@@ -4117,8 +4117,10 @@ function renderFreshnessCards(providers) {
         let latestRelative = latestRaw || '—';
         if (latestRaw) {
             const diff = Math.round((Date.now() - new Date(latestRaw)) / 86400000);
-            // diff < 0 = rows dated in the future (e.g. AWS month-end fees) — show the date itself.
-            latestRelative = diff < 0 ? latestRaw : diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : `${diff} days ago`;
+            // diff < 0 = rows dated in the future (e.g. AWS month-end fees) — show a compact date.
+            const _d = new Date(latestRaw);
+            const _short = `${_d.getDate()} ${_d.toLocaleString('en', { month: 'short' })}`;
+            latestRelative = diff < 0 ? _short : diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : `${diff} days ago`;
         }
         return `
         <div class="provider-status" style="--ps-accent:${color}">
