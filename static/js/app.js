@@ -57,6 +57,7 @@ const CLOUD_META = {
     aws:       { icon: '⚙', logo: CLOUD_LOGOS.aws,       label: 'AWS',       color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Region',         service: 'Service', resource: 'Resource' } },
     gcp:       { icon: '◉', logo: CLOUD_LOGOS.gcp,       label: 'GCP',       color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service', resource: 'Resource' } },
     openai:    { icon: '◈', logo: CLOUD_LOGOS.openai,    label: 'OpenAI',    color: '#10a37f', groupLabel: { sub: 'API Key / Org', rg: 'Model',  service: 'Service', resource: 'Model / Token' } },
+    chatgpt:   { icon: '◈', logo: '<img src="/static/img/chatgpt-logo.svg" alt="ChatGPT" style="height:20px;vertical-align:middle">', label: 'ChatGPT', color: '#0d0d0d', groupLabel: { sub: 'Team', rg: 'Team', service: 'Service', resource: 'Member' } },
     atlassian: { icon: '◧', logo: CLOUD_LOGOS.atlassian, label: 'Atlassian', color: '#0052cc', groupLabel: { sub: 'Organization',  rg: 'Plan',   service: 'Product', resource: 'Seat' } },
     cursor:    { icon: '◧', logo: '<img src="/static/img/cursor-logo.svg" alt="Cursor" style="height:18px;vertical-align:middle">', label: 'Cursor', color: '#111111', groupLabel: { sub: 'Team / Account', rg: 'Role', service: 'Service', resource: 'User' } },
     twilio:    { icon: '☎', logo: '☎',                   label: 'Twilio',    color: '#f22f46', groupLabel: { sub: 'Account',      rg: 'Plan',           service: 'Service'  } },
@@ -64,7 +65,7 @@ const CLOUD_META = {
 };
 // Canonical provider order — every feature draws its cloud list from this so a
 // new provider only has to be added here + to CLOUD_META to appear everywhere.
-const CLOUD_ORDER = ['azure', 'aws', 'gcp', 'openai', 'atlassian', 'cursor', 'twilio', 'sendgrid'];
+const CLOUD_ORDER = ['azure', 'aws', 'gcp', 'openai', 'chatgpt', 'atlassian', 'cursor', 'twilio', 'sendgrid'];
 // Clouds this tenant actually has (per /api/connected-clouds), in canonical order.
 // Falls back to the 3 core clouds before connected-clouds has loaded.
 function activeClouds() {
@@ -2464,7 +2465,7 @@ async function loadMonthly() {
             const subs = m.by_subscription || [];
             const byCloud = m.by_cloud || {};
             const cloudTotal = m.total_cost || 1;
-            const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f', atlassian: '#0052cc', cursor: '#111111' };
+            const cloudColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4', openai: '#10a37f', chatgpt: '#0d0d0d', atlassian: '#0052cc', cursor: '#111111' };
             const cloudLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', atlassian: 'Atlassian', cursor: 'Cursor' };
             const cloudOrder = ['aws', 'azure', 'gcp', 'openai', 'atlassian', 'cursor'];
             const activeCloudKeys = cloudOrder.filter(c => byCloud[c] > 0);
@@ -2501,7 +2502,7 @@ async function loadMonthly() {
                     grouped[c].push(sub);
                 });
                 const cloudGroupOrder = CLOUD_ORDER;
-                const cloudGroupLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', cursor: 'Cursor', atlassian: 'Atlassian' };
+                const cloudGroupLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', chatgpt: 'ChatGPT', cursor: 'Cursor', atlassian: 'Atlassian' };
                 const ACCT_SHOWN = 10;
                 const groupHtml = cloudGroupOrder.filter(c => grouped[c]).map(c => {
                     const color = cloudColors[c];

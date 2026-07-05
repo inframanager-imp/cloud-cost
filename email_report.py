@@ -1486,7 +1486,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     cloud_totals = sorted(cloud_totals.items(), key=lambda x: x[1], reverse=True)
     max_cloud = (cloud_totals[0][1] if cloud_totals else 1) or 1  # avoid /0 when top cloud is $0
     CLOUD_LABELS = {"azure": "Microsoft Azure", "aws": "Amazon AWS", "gcp": "Google Cloud",
-                    "openai": "OpenAI", "atlassian": "Atlassian", "cursor": "Cursor"}
+                    "openai": "OpenAI", "chatgpt": "ChatGPT", "atlassian": "Atlassian", "cursor": "Cursor"}
     cloud_rows = ""
     for i, (cloud, cost) in enumerate(cloud_totals):
         pct = cost / total * 100 if total else 0
@@ -1611,7 +1611,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
 
     # ── Per-cloud KPI card cells (Total + each applicable cloud) ─────────────
     CLOUD_KPI_LABELS = {"azure": "Azure Cost", "aws": "AWS Cost", "gcp": "GCP Cost",
-                        "openai": "OpenAI Cost", "atlassian": "Atlassian Cost", "cursor": "Cursor Cost"}
+                        "openai": "OpenAI Cost", "chatgpt": "ChatGPT Cost", "atlassian": "Atlassian Cost", "cursor": "Cursor Cost"}
     _cloud_cells = ""
     for cloud, ccost in cloud_totals[:4]:
         _cloud_cells += ('<td style="padding:0 4px 14px;vertical-align:top">'

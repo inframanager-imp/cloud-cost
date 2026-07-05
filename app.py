@@ -6303,8 +6303,10 @@ def _apply_openai_chatgpt_cost(tenant_id):
     teams = s.get("openai_chatgpt_teams") or []
     month_start = datetime.utcnow().strftime("%Y-%m-01")
     conn = get_db()
+    # ChatGPT is its own provider now; the IN() also clears rows written under
+    # 'openai' by older builds so re-saving migrates them.
     conn.execute(
-        "DELETE FROM cost_data WHERE cloud_provider='openai' AND service_name='ChatGPT Subscription' AND date=? AND tenant_id IS ?",
+        "DELETE FROM cost_data WHERE cloud_provider IN ('openai','chatgpt') AND service_name='ChatGPT Subscription' AND date=? AND tenant_id IS ?",
         (month_start, tenant_id),
     )
     rows = []
@@ -6330,11 +6332,11 @@ def _apply_openai_chatgpt_cost(tenant_id):
                 acc = round(acc + c, 2)
                 who = (m.get("name") or "").strip() or (m.get("email") or "").strip() or "ChatGPT user"
                 rows.append((month_start, "", "ChatGPT Subscription", "Seat", who,
-                             "Subscription", (m.get("email") or ""), c, "USD", sub_id, "{}", "openai", tenant_id))
+                             "Subscription", (m.get("email") or ""), c, "USD", sub_id, "{}", "chatgpt", tenant_id))
         else:
             label = f"ChatGPT Subscription ({seats} seats)" if seats else "ChatGPT Subscription"
             rows.append((month_start, "", "ChatGPT Subscription", "Subscription", label,
-                         "Subscription", "", round(monthly, 2), "USD", sub_id, "{}", "openai", tenant_id))
+                         "Subscription", "", round(monthly, 2), "USD", sub_id, "{}", "chatgpt", tenant_id))
     if rows:
         conn.executemany(
             "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
@@ -6440,7 +6442,7 @@ def api_integration_disconnect(tool):
         conn.execute("DELETE FROM cost_data WHERE cloud_provider=? AND tenant_id IS ?", (tool, tid))
     if tool == "chatgpt":
         # Remove the mirrored subscription rows for the current month.
-        conn.execute("DELETE FROM cost_data WHERE cloud_provider='openai' AND service_name='ChatGPT Subscription' "
+        conn.execute("DELETE FROM cost_data WHERE cloud_provider IN ('openai','chatgpt') AND service_name='ChatGPT Subscription' "
                      "AND date=? AND tenant_id IS ?", (datetime.utcnow().strftime("%Y-%m-01"), tid))
     if tool == "cursor":
         conn.execute("DELETE FROM cursor_users WHERE tenant_id IS ?", (tid,))

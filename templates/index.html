@@ -3679,7 +3679,7 @@
                     </div>
                 </div>
                 <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
-                    <div style="font-size:11px;color:var(--text-muted)">&#10003; Seat cost tracking &nbsp;&#10003; Per-member split &nbsp;&#10003; Shows under OpenAI in Cost Data</div>
+                    <div style="font-size:11px;color:var(--text-muted)">&#10003; Seat cost tracking &nbsp;&#10003; Per-member split &nbsp;&#10003; Own ChatGPT view in Cost Data</div>
                 </div>
             </div>
 
@@ -3896,7 +3896,7 @@
                     <button onclick="closeIntgModal('chatgpt')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:20px;line-height:1">&times;</button>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:12px">
-                    <div style="font-size:11px;color:var(--text-muted)">Billed separately from API usage and not available via any API — enter each workspace/team's subscription here. It appears under OpenAI in Cost Data as "ChatGPT Subscription", grouped by team name.</div>
+                    <div style="font-size:11px;color:var(--text-muted)">Billed separately from API usage and not available via any API — enter each workspace/team's subscription here. It appears as its own ChatGPT cloud in Cost Data, grouped by team name.</div>
                     <div id="chatgpt-teams-list" style="display:flex;flex-direction:column;gap:10px;max-height:420px;overflow:auto"></div>
                     <button type="button" class="btn btn-secondary" style="align-self:flex-start;font-size:12px;padding:6px 12px" onclick="addChatgptTeamRow()">+ Add ChatGPT team</button>
                 </div>
@@ -4080,7 +4080,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260705a"></script>
+<script src="/static/js/app.js?v=20260705b"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -4136,12 +4136,12 @@ function renderFreshnessCards(providers) {
         return;
     }
     const fullNames = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud',
-                        openai: 'OpenAI', cursor: 'Cursor', atlassian: 'Atlassian' };
+                        openai: 'OpenAI', chatgpt: 'ChatGPT', cursor: 'Cursor', atlassian: 'Atlassian' };
     const brandColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4',
-                          openai: '#10a37f', cursor: '#6c47ff', atlassian: '#0052cc' };
+                          openai: '#10a37f', chatgpt: '#0d0d0d', cursor: '#6c47ff', atlassian: '#0052cc' };
     const taglines = { azure: 'Subscriptions & resource groups', aws: 'Accounts via Cost Explorer / CUR',
-                       gcp: 'Projects via BigQuery export', openai: 'API platform & ChatGPT subscription',
-                       cursor: 'AI editor usage', atlassian: 'Jira · Confluence · Bitbucket' };
+                       gcp: 'Projects via BigQuery export', openai: 'API platform · usage-based',
+                       chatgpt: 'Seat-based subscription', cursor: 'AI editor usage', atlassian: 'Jira · Confluence · Bitbucket' };
     container.innerHTML = providers.map(p => {
         const cp = (p.cloud_provider || '').toLowerCase();
         const health = p.is_stale ? 'stale' : 'fresh';
