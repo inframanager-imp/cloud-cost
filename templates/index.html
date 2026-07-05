@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v=20260618u">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v=20260705d">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260620a">
     <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507n">
     <link rel="stylesheet" href="/static/css/appearance.css?v=20260507n">
@@ -2484,10 +2484,14 @@
 
         <!-- Page Header -->
         <div class="cp-page-header">
-            <div class="cp-page-header__left">
-                <div class="cp-breadcrumb">SETUP</div>
-                <h1 class="cp-page-title">Cloud providers</h1>
-                <div class="cp-page-subtitle" id="cpSubtitle">Loading providers…</div>
+            <div class="cp-page-header__left" style="display:flex;align-items:center;gap:14px">
+                <div style="width:46px;height:46px;border-radius:12px;background:var(--accent-subtle,rgba(52,81,209,.1));display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+                </div>
+                <div>
+                    <h1 class="cp-page-title" style="margin:0">Cloud Providers</h1>
+                    <div class="cp-page-subtitle" id="cpSubtitle">Manage and monitor your cloud provider accounts</div>
+                </div>
             </div>
             <div class="cp-page-header__right">
                 <button class="cp-btn-secondary" onclick="openSyncCenter()">
@@ -2501,14 +2505,16 @@
             </div>
         </div>
 
-        <!-- Upsell Banner -->
-        <div class="upsell-banner">
-            <div class="upsell-banner__icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <!-- Upsell Banner (hidden by JS when all integrations are already connected) -->
+        <div class="upsell-banner" id="cpUpsellBanner">
+            <div class="upsell-banner__logos">
+                <span class="ub-logo"><img src="/static/img/atlassian-logo.svg" alt=""></span>
+                <span class="ub-logo"><img src="/static/img/cursor-logo.svg" alt=""></span>
+                <span class="ub-logo"><img src="/static/img/openai-logo.svg" alt=""></span>
             </div>
             <div class="upsell-banner__body">
                 <div class="upsell-banner__title">Connect dev tools &amp; SaaS</div>
-                <div class="upsell-banner__sub">Atlassian · Bitbucket · Cursor · OpenAI — track costs &amp; send alerts.</div>
+                <div class="upsell-banner__sub">Atlassian · Bitbucket · Cursor · OpenAI — track subscription costs and get spend alerts alongside your cloud bills.</div>
             </div>
             <a class="upsell-banner__action" onclick="navigateTo('integrations')" style="cursor:pointer">Open integrations →</a>
         </div>
@@ -2543,7 +2549,7 @@
                         <th>ID</th>
                         <th>Status</th>
                         <th>Last sync</th>
-                        <th></th>
+                        <th style="text-align:right">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="providersTableBody">
@@ -4096,32 +4102,34 @@ function renderFreshnessCards(providers) {
         container.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;grid-column:1/-1">No billing data ingested yet. Add a provider and run a sync.</p>';
         return;
     }
-    const fullNames = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud' };
-    const shortLabels = { azure: 'Az', aws: 'AW', gcp: 'G' };
-    const bgColors = { azure: 'var(--azure)', aws: 'var(--aws)', gcp: 'var(--gcp)' };
+    const fullNames = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud',
+                        openai: 'OpenAI', cursor: 'Cursor', atlassian: 'Atlassian' };
+    const brandColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4',
+                          openai: '#10a37f', cursor: '#6c47ff', atlassian: '#0052cc' };
+    const taglines = { azure: 'Subscriptions & resource groups', aws: 'Accounts via Cost Explorer / CUR',
+                       gcp: 'Projects via BigQuery export', openai: 'API usage & ChatGPT seats',
+                       cursor: 'AI editor usage', atlassian: 'Jira · Confluence · Bitbucket' };
     container.innerHTML = providers.map(p => {
         const cp = (p.cloud_provider || '').toLowerCase();
         const health = p.is_stale ? 'stale' : 'fresh';
+        const color = brandColors[cp] || 'var(--accent)';
         const latestRaw = ((p.latest_date || '').toString().split('T')[0]) || '';
         let latestRelative = latestRaw || '—';
         if (latestRaw) {
             const diff = Math.round((Date.now() - new Date(latestRaw)) / 86400000);
-            latestRelative = diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : `${diff} days ago`;
+            // diff < 0 = rows dated in the future (e.g. AWS month-end fees) — show the date itself.
+            latestRelative = diff < 0 ? latestRaw : diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : `${diff} days ago`;
         }
         return `
-        <div class="provider-status">
-            <div class="provider-status__head">
-                <div class="provider-status__brand">
-                    <div class="provider-status__icon" style="background:${bgColors[cp]||'var(--accent)'};">${shortLabels[cp]||cp.substring(0,2).toUpperCase()}</div>
-                    <div>
-                        <div class="provider-status__name">${fullNames[cp]||cp}</div>
-                        <div class="provider-status__sub">${p.account_count ?? '—'} accounts</div>
-                    </div>
-                </div>
+        <div class="provider-status" style="--ps-accent:${color}">
+            <div class="provider-status__toprow">
+                <div class="provider-status__logo"><img src="/static/img/${cp}-logo.svg" alt="" onerror="this.parentNode.textContent='${cp.substring(0,2).toUpperCase()}'"></div>
                 <span class="status-pill status-pill--${health}">
                     <span class="status-pill__dot"></span>${health.charAt(0).toUpperCase()+health.slice(1)}
                 </span>
             </div>
+            <div class="provider-status__name">${fullNames[cp]||cp}</div>
+            <div class="provider-status__sub">${taglines[cp]||''}</div>
             <div class="provider-status__stats">
                 <div>
                     <div class="stat-label">Records</div>
@@ -4129,7 +4137,7 @@ function renderFreshnessCards(providers) {
                 </div>
                 <div>
                     <div class="stat-label">Latest data</div>
-                    <div class="stat-value">${latestRelative}</div>
+                    <div class="stat-value" ${p.is_stale ? 'style="color:#e67e22"' : ''}>${latestRelative}</div>
                 </div>
             </div>
         </div>`;
@@ -4140,8 +4148,8 @@ function renderFreshnessCards(providers) {
 let _editProviderId = null;
 
 function _cpTruncateId(s) {
-    if (!s || s.length <= 15) return s;
-    return s.slice(0, 8) + '…' + s.slice(-6);
+    if (!s || s.length <= 36) return s;   // full UUIDs / AWS account ids fit as-is
+    return s.slice(0, 16) + '…' + s.slice(-8);
 }
 
 function _cpRelativeSync(iso) {
@@ -4166,6 +4174,13 @@ function loadProviders() {
         const tbody = document.getElementById('providersTableBody');
         if (!tbody) return;
 
+        // Hide the "connect dev tools" upsell once the tools are actually connected.
+        const _hasCursor = !!(intg?.cursor?.accounts?.length || intg?.cursor?.enabled);
+        const _hasOpenai = !!(intg?.openai?.accounts?.length || intg?.openai?.enabled);
+        const _hasAtlassian = providers.some(p => p.provider_type === 'atlassian');
+        const _ub = document.getElementById('cpUpsellBanner');
+        if (_ub && _hasCursor && _hasOpenai && _hasAtlassian) _ub.style.display = 'none';
+
         const lastAzure = hist.find(h => h.status === 'success' || h.status === 'running');
         const azureLastSync = lastAzure ? (lastAzure.sync_end || lastAzure.sync_start || null) : null;
         const bgColors = { azure: 'var(--azure)', aws: 'var(--aws)', gcp: 'var(--gcp)' };
@@ -4177,7 +4192,7 @@ function loadProviders() {
             const safeId = s.subscription_id.replace(/[^a-z0-9]/gi,'_');
             return `<tr data-cloud="azure" id="cp-row-az-${safeId}">
                 <td><div class="acct-cell">
-                    <div class="provider-icon-sm" style="background:var(--azure)">Az</div>
+                    <div class="provider-icon-sm provider-icon-sm--logo"><img src="/static/img/azure-logo.svg" alt=""></div>
                     <span class="acct-name">${s.name || s.subscription_id}</span>
                 </div></td>
                 <td class="mono">${_cpTruncateId(s.subscription_id)}</td>
@@ -4203,7 +4218,7 @@ function loadProviders() {
             const status = p.enabled ? 'fresh' : 'paused';
             return `<tr data-cloud="${cp}" id="cp-row-${p.id}">
                 <td><div class="acct-cell">
-                    <div class="provider-icon-sm" style="background:${bgColors[cp]||'var(--accent)'}">${shortLabels[cp]||cp.substring(0,2).toUpperCase()}</div>
+                    <div class="provider-icon-sm provider-icon-sm--logo"><img src="/static/img/${cp}-logo.svg" alt="" onerror="this.parentNode.textContent='${(shortLabels[cp]||cp.substring(0,2).toUpperCase())}'"></div>
                     <span class="acct-name">${p.name}</span>
                 </div></td>
                 <td class="mono">${_cpTruncateId(p.provider_id)}</td>
@@ -4251,7 +4266,7 @@ function loadProviders() {
                     : '';
                 _intgRowsArr.push(`<tr data-cloud="${m.key}">
                     <td><div class="acct-cell">
-                        <div class="provider-icon-sm" style="background:${m.color}">${m.short}</div>
+                        <div class="provider-icon-sm provider-icon-sm--logo"><img src="/static/img/${m.key}-logo.svg" alt="" onerror="this.parentNode.textContent='${m.short}'"></div>
                         <span class="acct-name">${acctName}</span>
                     </div></td>
                     <td class="mono">&mdash;</td>
