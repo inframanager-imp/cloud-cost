@@ -154,6 +154,21 @@ EMAIL_SCHEDULER_ENABLED = os.getenv("EMAIL_SCHEDULER_ENABLED", "true").lower() i
 # picked up. Override via env if needed.
 COST_SYNC_LOOKBACK_DAYS = int(os.getenv("COST_SYNC_LOOKBACK_DAYS", "10"))
 
+
+def _sync_delete_window(records, win_from, win_to):
+    """Clamp a sync's delete-then-reinsert range to the dates the API actually
+    returned. Returns (from, to) strings, or None when nothing came back —
+    callers must then SKIP the delete, so a failed/empty/partial fetch can never
+    wipe existing history beyond what it is about to rewrite."""
+    if not records:
+        return None
+    dates = sorted({str(r[0])[:10] for r in records if r and r[0]})
+    if not dates:
+        return None
+    lo = max(dates[0], str(win_from)[:10])
+    hi = min(dates[-1], str(win_to)[:10])
+    return (lo, hi) if lo <= hi else None
+
 SYNC_SETTINGS_FILE = os.path.join(os.getenv("DATA_DIR", "/app/data"), "sync_settings.json")
 
 def _load_sync_settings():
@@ -997,14 +1012,16 @@ def api_sync():
             all_records.extend(records)
             current_from = chunk_to + timedelta(days=1)
 
-        # Only delete old records AFTER successful fetch
+        # Only delete old records AFTER successful fetch, clamped to the dates
+        # actually returned so a partial fetch can't wipe uncovered days.
         if all_records:
             if is_full:
                 clear_cost_data(subscription_id=sub_id)
             else:
                 latest = get_latest_cost_date(subscription_id=sub_id)
                 if latest:
-                    delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
+                    _d0, _d1 = _sync_delete_window(all_records, date_from, date_to) or (date_from, date_to)
+                    delete_cost_data_by_date(_d0, _d1, subscription_id=sub_id)
             count = insert_cost_records(all_records, tenant_id=tid)
         else:
             count = 0  # Nothing fetched — keep existing data intact
@@ -1187,24 +1204,27 @@ def api_sync():
                                 records = fetch_gcp_costs(provider, p_from, date_to)
 
                             conn = get_db()
-                            if ptype == "gcp":
-                                project_ids = list({r[9] for r in (records or []) if r[9]})
-                                for proj_id in project_ids:
+                            _win = _sync_delete_window(records, p_from, date_to)
+                            if _win:
+                                _d0, _d1 = _win
+                                if ptype == "gcp":
+                                    project_ids = list({r[9] for r in (records or []) if r[9]})
+                                    for proj_id in project_ids:
+                                        conn.execute(
+                                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
+                                            (_d0, _d1, proj_id, tid),
+                                        )
+                                    # Non-project GCP charges (Support, tax, adjustments) have no
+                                    # project — delete them too, or they duplicate every sync.
                                     conn.execute(
-                                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
-                                        (p_from, date_to, proj_id, tid),
+                                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND (subscription_id IS NULL OR subscription_id='') AND tenant_id=?",
+                                        (_d0, _d1, tid),
                                     )
-                                # Non-project GCP charges (Support, tax, adjustments) have no
-                                # project — delete them too, or they duplicate every sync.
-                                conn.execute(
-                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND (subscription_id IS NULL OR subscription_id='') AND tenant_id=?",
-                                    (p_from, date_to, tid),
-                                )
-                            else:
-                                conn.execute(
-                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
-                                    (p_from, date_to, ptype, pid, tid),
-                                )
+                                else:
+                                    conn.execute(
+                                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                                        (_d0, _d1, ptype, pid, tid),
+                                    )
                             if records:
                                 conn.executemany(
                                     "INSERT INTO cost_data (date,resource_group,service_name,resource_type,"
@@ -4105,7 +4125,8 @@ def _run_auto_sync():
 
                         if all_sub_recs:
                             if latest:
-                                delete_cost_data_by_date(date_from, date_to, subscription_id=sub_id)
+                                _d0, _d1 = _sync_delete_window(all_sub_recs, date_from, date_to) or (date_from, date_to)
+                                delete_cost_data_by_date(_d0, _d1, subscription_id=sub_id)
                             tenant_records += insert_cost_records(all_sub_recs, tenant_id=tid)
                         update_subscription_sync_time(sub_id, "cost")
                     except Exception as sub_err:
@@ -4173,22 +4194,25 @@ def _run_auto_sync():
 
                         if records is not None:
                             _c = get_db()
-                            if ptype == "gcp":
-                                for proj_id in list({r[9] for r in records if r[9]}):
+                            _win = _sync_delete_window(records, p_from, date_to)
+                            if _win:
+                                _d0, _d1 = _win
+                                if ptype == "gcp":
+                                    for proj_id in list({r[9] for r in records if r[9]}):
+                                        _c.execute(
+                                            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
+                                            (_d0, _d1, proj_id, p_tid),
+                                        )
+                                    # Non-project GCP charges (Support, tax, adjustments) — delete too.
                                     _c.execute(
-                                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
-                                        (p_from, date_to, proj_id, p_tid),
+                                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND (subscription_id IS NULL OR subscription_id='') AND tenant_id=?",
+                                        (_d0, _d1, p_tid),
                                     )
-                                # Non-project GCP charges (Support, tax, adjustments) — delete too.
-                                _c.execute(
-                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND (subscription_id IS NULL OR subscription_id='') AND tenant_id=?",
-                                    (p_from, date_to, p_tid),
-                                )
-                            else:
-                                _c.execute(
-                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
-                                    (p_from, date_to, ptype, pid, p_tid),
-                                )
+                                else:
+                                    _c.execute(
+                                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
+                                        (_d0, _d1, ptype, pid, p_tid),
+                                    )
                             if records:
                                 _c.executemany(
                                     "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
@@ -5024,24 +5048,25 @@ def api_cloud_provider_sync(pk):
                 p_tid = provider.get("tenant_id", 1)
                 conn = get_db()
                 cloud = provider["provider_type"]
+                _d0, _d1 = _sync_delete_window(records, date_from, date_to) or (date_from, date_to)
                 if cloud == "gcp":
                     # Delete only the project IDs present in this fetch — avoid wiping other GCP projects
                     project_ids = list({r[9] for r in records if r[9]})
                     for proj_id in project_ids:
                         conn.execute(
                             "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND subscription_id=? AND tenant_id=?",
-                            (date_from, date_to, proj_id, p_tid)
+                            (_d0, _d1, proj_id, p_tid)
                         )
                     # Non-project GCP charges (Support, tax, adjustments) have no project —
                     # delete them too, otherwise they duplicate on every sync.
                     conn.execute(
                         "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='gcp' AND (subscription_id IS NULL OR subscription_id='') AND tenant_id=?",
-                        (date_from, date_to, p_tid)
+                        (_d0, _d1, p_tid)
                     )
                 else:
                     conn.execute(
                         "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider=? AND subscription_id=? AND tenant_id=?",
-                        (date_from, date_to, cloud, provider["provider_id"], p_tid)
+                        (_d0, _d1, cloud, provider["provider_id"], p_tid)
                     )
                 conn.commit()
                 conn.close()
