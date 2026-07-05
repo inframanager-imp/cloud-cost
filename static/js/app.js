@@ -2501,7 +2501,7 @@ async function loadMonthly() {
                     grouped[c].push(sub);
                 });
                 const cloudGroupOrder = CLOUD_ORDER;
-                const cloudGroupLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
+                const cloudGroupLabels = { azure: 'Azure', aws: 'AWS', gcp: 'GCP', openai: 'OpenAI', cursor: 'Cursor', atlassian: 'Atlassian' };
                 const ACCT_SHOWN = 10;
                 const groupHtml = cloudGroupOrder.filter(c => grouped[c]).map(c => {
                     const color = cloudColors[c];
@@ -2519,7 +2519,7 @@ async function loadMonthly() {
                     return `<div style="margin-top:5px">
                         <div style="display:flex;align-items:center;gap:5px;margin-bottom:1px">
                             <img src="/static/img/${c}-logo.svg" style="height:${c==='aws'?'9':'11'}px;flex-shrink:0">
-                            <span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.06em">${cloudGroupLabels[c]}</span>
+                            <span style="font-size:10px;font-weight:700;color:${color || 'var(--text-secondary)'};text-transform:uppercase;letter-spacing:.06em">${cloudGroupLabels[c] || CLOUD_META[c]?.label || c.toUpperCase()}</span>
                         </div>
                         ${items}
                     </div>`;
