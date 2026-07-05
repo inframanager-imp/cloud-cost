@@ -6547,6 +6547,16 @@ def _openai_account_records(headers, sub_id, date_from, date_to, tenant_id):
 
     records = []
 
+    # Project id → name map so costs can be grouped per OpenAI project
+    # (platform.openai.com → Projects). Best-effort: needs an admin/org key.
+    proj_names = {}
+    try:
+        pr = _req.get("https://api.openai.com/v1/organization/projects?limit=100", headers=headers, timeout=15)
+        if pr.status_code == 200:
+            proj_names = {p["id"]: (p.get("name") or p["id"]) for p in pr.json().get("data", []) if p.get("id")}
+    except Exception:
+        pass
+
     # ── Method 1: /v1/organization/costs (requires org owner) ────────────────
     # Chunk into 30-day windows to avoid API timeouts on large date ranges
     CHUNK_DAYS = 30
@@ -6562,7 +6572,7 @@ def _openai_account_records(headers, sub_id, date_from, date_to, tenant_id):
             costs_url = (
                 f"https://api.openai.com/v1/organization/costs"
                 f"?start_time={chunk_start_ts}&end_time={chunk_end_ts}"
-                f"&bucket_width=1d&limit=31&group_by[]=line_item"
+                f"&bucket_width=1d&limit=31&group_by[]=line_item&group_by[]=project_id"
             )
             r = _req.get(costs_url, headers=headers, timeout=20)
             if r.status_code == 200:
@@ -6576,7 +6586,9 @@ def _openai_account_records(headers, sub_id, date_from, date_to, tenant_id):
                         if cost_val <= 0:
                             continue
                         line_item = result.get("line_item") or "API Usage"
-                        records.append((bucket_date, None, "OpenAI", "AI API", line_item,
+                        _pid = result.get("project_id") or ""
+                        proj = proj_names.get(_pid, _pid)  # name if known, else raw id
+                        records.append((bucket_date, proj or None, "OpenAI", "AI API", line_item,
                                         "Token Usage", line_item, cost_val, "USD",
                                         sub_id, None, "openai", tenant_id))
             else:

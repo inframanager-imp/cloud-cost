@@ -56,7 +56,7 @@ const CLOUD_META = {
     azure:     { icon: '⊞', logo: CLOUD_LOGOS.azure,     label: 'Azure',     color: '#0078d4', groupLabel: { sub: 'Subscription', rg: 'Resource Group', service: 'Service', resource: 'Resource' } },
     aws:       { icon: '⚙', logo: CLOUD_LOGOS.aws,       label: 'AWS',       color: '#ff9900', groupLabel: { sub: 'Account',      rg: 'Region',         service: 'Service', resource: 'Resource' } },
     gcp:       { icon: '◉', logo: CLOUD_LOGOS.gcp,       label: 'GCP',       color: '#4285f4', groupLabel: { sub: 'Project',      rg: 'Project',        service: 'Service', resource: 'Resource' } },
-    openai:    { icon: '◈', logo: CLOUD_LOGOS.openai,    label: 'OpenAI',    color: '#10a37f', groupLabel: { sub: 'API Key / Org', rg: 'Model',  service: 'Service', resource: 'Model / Token' } },
+    openai:    { icon: '◈', logo: CLOUD_LOGOS.openai,    label: 'OpenAI',    color: '#10a37f', groupLabel: { sub: 'API Key / Org', rg: 'Project',  service: 'Service', resource: 'Model / Token' } },
     chatgpt:   { icon: '◈', logo: '<img src="/static/img/chatgpt-logo.svg" alt="ChatGPT" style="height:20px;vertical-align:middle">', label: 'ChatGPT', color: '#0d0d0d', groupLabel: { sub: 'Team', rg: 'Team', service: 'Service', resource: 'Member' } },
     atlassian: { icon: '◧', logo: CLOUD_LOGOS.atlassian, label: 'Atlassian', color: '#0052cc', groupLabel: { sub: 'Organization',  rg: 'Plan',   service: 'Product', resource: 'Seat' } },
     cursor:    { icon: '◧', logo: '<img src="/static/img/cursor-logo.svg" alt="Cursor" style="height:18px;vertical-align:middle">', label: 'Cursor', color: '#111111', groupLabel: { sub: 'Team / Account', rg: 'Role', service: 'Service', resource: 'User' } },
