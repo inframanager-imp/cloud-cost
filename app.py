@@ -4303,13 +4303,30 @@ def _run_auto_sync():
                 # On-demand usage accrues continuously through the cycle, so refresh
                 # it each auto-sync for tenants that have a Cursor API key configured.
                 try:
-                    if (get_integration_settings(tid).get("cursor_api_key") or "").strip():
+                    _intg_s = get_integration_settings(tid)
+                    if (_intg_s.get("cursor_api_key") or "").strip() or _intg_s.get("cursor_accounts"):
                         from cursor_fetcher import sync_cursor
                         cur_res = sync_cursor(tid)
                         tenant_records += int((cur_res or {}).get("members", 0))
                         print(f"[Auto-Sync] CURSOR (tenant {tname}): {cur_res}")
                 except Exception as cur_err:
                     print(f"[Auto-Sync] CURSOR (tenant {tname}) failed: {cur_err}")
+
+                # ── OpenAI: per-team API usage (also re-mirrors the ChatGPT
+                # subscription, which keeps seat rows present after month rollover).
+                try:
+                    _intg_s = get_integration_settings(tid)
+                    if _intg_s.get("openai_accounts"):
+                        oa_res = _fetch_openai_costs(tid, 7)
+                        tenant_records += int((oa_res or {}).get("inserted", 0) or 0)
+                        print(f"[Auto-Sync] OPENAI (tenant {tname}): inserted={oa_res.get('inserted')} errors={oa_res.get('errors')}")
+                    elif _intg_s.get("openai_chatgpt_teams"):
+                        # ChatGPT-only tenant: no API usage to fetch, but keep the
+                        # current month's seat rows mirrored.
+                        _apply_openai_chatgpt_cost(tid)
+                        print(f"[Auto-Sync] CHATGPT (tenant {tname}): subscription re-mirrored")
+                except Exception as oa_err:
+                    print(f"[Auto-Sync] OPENAI (tenant {tname}) failed: {oa_err}")
 
                 update_sync_log(sync_id, "success", tenant_records)
                 print(f"[Auto-Sync] Tenant '{tname}': {tenant_records} records")
