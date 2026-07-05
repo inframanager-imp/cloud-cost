@@ -1614,8 +1614,10 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
                         "openai": "OpenAI Cost", "chatgpt": "ChatGPT Cost", "atlassian": "Atlassian Cost", "cursor": "Cursor Cost"}
     _cloud_cells = ""
     for cloud, ccost in cloud_totals[:4]:
-        _cloud_cells += ('<td style="padding:0 4px 14px;vertical-align:top">'
-                         '<table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:16px 12px;text-align:center">'
+        # height:100% + middle-aligned inner cell keeps these cards the same
+        # height as the taller Total Cost card (which carries extra compare lines).
+        _cloud_cells += ('<td style="padding:0 4px 14px;vertical-align:top;height:100%">'
+                         '<table role="presentation" width="100%" height="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px;height:100%"><tr><td style="padding:16px 12px;text-align:center;vertical-align:middle">'
                          f'<div style="font-size:10px;color:#6B7785;letter-spacing:.05em;text-transform:uppercase;font-weight:600">{CLOUD_KPI_LABELS.get(cloud, cloud.upper() + " Cost")}</div>'
                          f'<div style="font-size:21px;color:#1A1A1A;font-weight:700;margin-top:6px">${ccost:,.2f}</div>'
                          '<div style="font-size:10px;color:#8A95A1;margin-top:4px">based on applicable</div>'
@@ -1770,8 +1772,8 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
 <!-- KPI cards: Total + per-cloud -->
 <tr><td style="padding-bottom:0">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-    <td style="padding:0 4px 14px;vertical-align:top">
-      <table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td style="padding:16px 12px;text-align:center">
+    <td style="padding:0 4px 14px;vertical-align:top;height:100%">
+      <table role="presentation" width="100%" height="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px;height:100%"><tr><td style="padding:16px 12px;text-align:center;vertical-align:middle">
         <div style="font-size:10px;color:#6B7785;letter-spacing:0.05em;text-transform:uppercase;font-weight:600">Total Cost</div>
         <div style="font-size:22px;color:#0E4C8A;font-weight:700;margin-top:6px">${total:,.2f}</div>
         {_prev_line}
