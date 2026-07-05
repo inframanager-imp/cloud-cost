@@ -4802,8 +4802,15 @@ function ccUpdateCloudLabels(cloud) {
         azure: { sub: 'Subscriptions', subPh: 'All subscriptions', subSearch: 'Search subscriptions...', rg: 'Resource Groups', rgPh: 'All resource groups', rgSearch: 'Search resource groups...', showSub: true },
         aws:   { sub: 'Accounts',      subPh: 'All accounts',      subSearch: 'Search accounts...',      rg: 'Regions',         rgPh: 'All regions',         rgSearch: 'Search regions...',         showSub: true },
         gcp:   { sub: 'Projects',      subPh: 'All projects',      subSearch: 'Search projects...',      rg: 'Projects',        rgPh: 'All projects',        rgSearch: 'Search projects...',        showSub: false },
+        openai:    { sub: 'Teams',     subPh: 'All teams',         subSearch: 'Search teams...',         rg: 'Projects',        rgPh: 'All projects',        rgSearch: 'Search projects...',        showSub: true },
+        chatgpt:   { sub: 'Teams',     subPh: 'All teams',         subSearch: 'Search teams...',         rg: 'Teams',           rgPh: 'All teams',           rgSearch: 'Search teams...',           showSub: true, showRg: false },
+        atlassian: { sub: 'Organizations', subPh: 'All organizations', subSearch: 'Search organizations...', rg: 'Plans',       rgPh: 'All plans',           rgSearch: 'Search plans...',           showSub: true },
+        cursor:    { sub: 'Teams',     subPh: 'All teams',         subSearch: 'Search teams...',         rg: 'Roles',           rgPh: 'All roles',           rgSearch: 'Search roles...',           showSub: true },
     };
     const l = labels[cloud] || labels.all;
+    // Hide the RG multiselect for clouds where that dimension doesn't exist.
+    const rgField = document.getElementById('ccRgField');
+    if (rgField) rgField.style.display = (l.showRg === false) ? 'none' : '';
 
     // Update sub field
     const subField = document.getElementById('ccSubField');
