@@ -1713,6 +1713,12 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         _d2 = datetime.strptime(date_to, "%Y-%m-%d")
         _ndays = (_d2 - _d1).days + 1
         import calendar as _cal2
+
+        def _month_back(_d):
+            # Same date one month earlier, day clamped to that month's length.
+            _y, _m = (_d.year, _d.month - 1) if _d.month > 1 else (_d.year - 1, 12)
+            return _d.replace(year=_y, month=_m, day=min(_d.day, _cal2.monthrange(_y, _m)[1]))
+
         _month_end = _cal2.monthrange(_d1.year, _d1.month)[1]
         if _d1.day == 1 and _d2.day == _month_end and _d1.month == _d2.month:
             # Exact calendar month → compare against the full previous month.
@@ -1720,8 +1726,9 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             _p_from = _p_end_month.strftime("%Y-%m-01")
             _p_to = _p_end_month.strftime("%Y-%m-%d")
         else:
-            _p_to = (_d1 - timedelta(days=1)).strftime("%Y-%m-%d")
-            _p_from = (_d1 - timedelta(days=_ndays)).strftime("%Y-%m-%d")
+            # Same date range, one month earlier (1-6 Jun compares to 1-6 May).
+            _p_from = _month_back(_d1).strftime("%Y-%m-%d")
+            _p_to = _month_back(_d2).strftime("%Y-%m-%d")
         from database import get_client_costs as _gcc
         _prev_total = float((_gcc(int(client.get("id")), _p_from, _p_to, client.get("tenant_id") or 1) or {}).get("total") or 0)
         if _prev_total > 0:
@@ -1729,7 +1736,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             _up = _pct >= 0
             _col = "#C0392B" if _up else "#1D9E75"   # cost up = red, down = green
             _arr = "&#9650;" if _up else "&#9660;"
-            _lbl = f"previous {_ndays} days" if _ndays != 30 and _ndays != 31 else "previous month"
+            _lbl = "previous month" if (_d1.day == 1 and _d2.day == _month_end and _d1.month == _d2.month) else "same period last month"
             _prev_line = (f'<div style="font-size:11px;font-weight:700;color:{_col};margin-top:5px">'
                           f'{_arr} {abs(_pct):.1f}% vs {_lbl}</div>'
                           f'<div style="font-size:10px;color:#6B7785;margin-top:2px">'
