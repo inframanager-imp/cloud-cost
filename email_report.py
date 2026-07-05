@@ -1721,7 +1721,10 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             _arr = "&#9650;" if _up else "&#9660;"
             _lbl = f"previous {_ndays} days" if _ndays != 30 and _ndays != 31 else "previous month"
             _prev_line = (f'<div style="font-size:11px;font-weight:700;color:{_col};margin-top:5px">'
-                          f'{_arr} {abs(_pct):.1f}% vs {_lbl}</div>')
+                          f'{_arr} {abs(_pct):.1f}% vs {_lbl}</div>'
+                          f'<div style="font-size:10px;color:#6B7785;margin-top:2px">'
+                          f'Previous: <span style="font-weight:700;color:#0E4C8A">${_prev_total:,.2f}</span>'
+                          f' ({_fmt_d(_p_from)} to {_fmt_d(_p_to)})</div>')
     except Exception as _pe:
         print(f"[client-report] prev-period compare failed: {_pe}")
 
