@@ -1710,8 +1710,16 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         _d1 = datetime.strptime(date_from, "%Y-%m-%d")
         _d2 = datetime.strptime(date_to, "%Y-%m-%d")
         _ndays = (_d2 - _d1).days + 1
-        _p_to = (_d1 - timedelta(days=1)).strftime("%Y-%m-%d")
-        _p_from = (_d1 - timedelta(days=_ndays)).strftime("%Y-%m-%d")
+        import calendar as _cal2
+        _month_end = _cal2.monthrange(_d1.year, _d1.month)[1]
+        if _d1.day == 1 and _d2.day == _month_end and _d1.month == _d2.month:
+            # Exact calendar month → compare against the full previous month.
+            _p_end_month = _d1 - timedelta(days=1)
+            _p_from = _p_end_month.strftime("%Y-%m-01")
+            _p_to = _p_end_month.strftime("%Y-%m-%d")
+        else:
+            _p_to = (_d1 - timedelta(days=1)).strftime("%Y-%m-%d")
+            _p_from = (_d1 - timedelta(days=_ndays)).strftime("%Y-%m-%d")
         from database import get_client_costs as _gcc
         _prev_total = float((_gcc(int(client.get("id")), _p_from, _p_to, client.get("tenant_id") or 1) or {}).get("total") or 0)
         if _prev_total > 0:
