@@ -280,6 +280,15 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .provider-icon-sm { width: 22px; height: 22px; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 600; flex-shrink: 0; }
 .provider-icon-sm--logo { background: var(--bg-subtle) !important; border: 1px solid var(--border-subtle); }
 .provider-icon-sm--logo img { width: 14px; height: 14px; object-fit: contain; }
+
+/* Integrations page cards: uniform layout regardless of content.
+   Body fills the card, the feature-checklist footer pins to the bottom,
+   and buttons wrap as whole units instead of breaking their label text. */
+.intg-card { display: flex; flex-direction: column; }
+.intg-card > div:first-child { flex: 1; }
+.intg-card > div:last-child { margin-top: auto; }
+.intg-card .btn { white-space: nowrap; }
+.intg-card div[style*="display:flex;gap:8px"] { flex-wrap: wrap; }
 .acct-name { color: var(--text-primary); font-weight: 500; font-size: 13px; }
 
 .icon-btn-ghost { background: transparent; border: none; padding: 4px 5px; border-radius: 5px; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
