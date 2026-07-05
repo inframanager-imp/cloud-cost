@@ -6256,7 +6256,8 @@ def api_get_integrations():
         "openai":    {"api_key": mask(s.get("openai_api_key","")), "org_id": s.get("openai_org_id",""), "enabled": s.get("openai_enabled", False),
                       "accounts": [{"name": a.get("name",""), "org_id": a.get("org_id",""), "key_set": bool(a.get("api_key"))} for a in (s.get("openai_accounts") or [])],
                       "chatgpt_monthly": s.get("openai_chatgpt_monthly", 0) or 0, "chatgpt_seats": s.get("openai_chatgpt_seats", 0) or 0,
-                      "chatgpt_members": _parse_json_list(s.get("openai_chatgpt_members"))},
+                      "chatgpt_members": _parse_json_list(s.get("openai_chatgpt_members")),
+                      "chatgpt_teams": s.get("openai_chatgpt_teams") or []},
         "twilio":    {"api_key": mask(s.get("twilio_api_key","")), "enabled": s.get("twilio_enabled", False), "monthly_cost": s.get("twilio_monthly_cost", 0) or 0},
         "sendgrid":  {"api_key": mask(s.get("sendgrid_api_key","")), "enabled": s.get("sendgrid_enabled", False), "monthly_cost": s.get("sendgrid_monthly_cost", 0) or 0},
     })
@@ -6297,37 +6298,28 @@ def _apply_openai_chatgpt_cost(tenant_id):
     Subscription' so the live API-usage sync leaves it intact. ChatGPT seats are
     billed separately from API usage and aren't available via the OpenAI API."""
     s = get_integration_settings(tenant_id or 1)
-    try:
-        monthly = float(s.get("openai_chatgpt_monthly") or 0)
-    except (TypeError, ValueError):
-        monthly = 0.0
-    try:
-        seats = int(s.get("openai_chatgpt_seats") or 0)
-    except (TypeError, ValueError):
-        seats = 0
-    # Parse the ChatGPT member list (JSON of {name,email}).
-    members = []
-    try:
-        _m = s.get("openai_chatgpt_members")
-        if _m:
-            members = [x for x in (json.loads(_m) if isinstance(_m, str) else _m) if (x.get("name") or x.get("email"))]
-    except Exception:
-        members = []
+    # Multi-team: [{name, monthly, seats, members}] — get_integration_settings
+    # back-compats the legacy single monthly/seats/members into one "ChatGPT" team.
+    teams = s.get("openai_chatgpt_teams") or []
     month_start = datetime.utcnow().strftime("%Y-%m-01")
     conn = get_db()
     conn.execute(
         "DELETE FROM cost_data WHERE cloud_provider='openai' AND service_name='ChatGPT Subscription' AND date=? AND tenant_id IS ?",
         (month_start, tenant_id),
     )
-    if monthly > 0:
-        # Group under the same API-Key/Org the usage rows use, so it sits with the account.
-        row = conn.execute(
-            "SELECT subscription_id FROM cost_data WHERE cloud_provider='openai' AND service_name!='ChatGPT Subscription' "
-            "AND subscription_id IS NOT NULL AND tenant_id IS ? ORDER BY date DESC LIMIT 1",
-            (tenant_id,),
-        ).fetchone()
-        sub_id = (row[0] if row else None) or (s.get("openai_org_id") or "ChatGPT")
-        rows = []
+    rows = []
+    for t in teams:
+        try:
+            monthly = float(t.get("monthly") or 0)
+        except (TypeError, ValueError):
+            monthly = 0.0
+        if monthly <= 0:
+            continue
+        seats = int(t.get("seats") or 0)
+        # Rows are tagged with the TEAM name so ChatGPT spend groups per team
+        # in Cost Data (alongside the API teams).
+        sub_id = (t.get("name") or "ChatGPT").strip() or "ChatGPT"
+        members = [m for m in (t.get("members") or []) if (m.get("name") or m.get("email"))]
         if members:
             # Split the monthly cost evenly per member; last member absorbs rounding.
             n = len(members)
@@ -6343,6 +6335,7 @@ def _apply_openai_chatgpt_cost(tenant_id):
             label = f"ChatGPT Subscription ({seats} seats)" if seats else "ChatGPT Subscription"
             rows.append((month_start, "", "ChatGPT Subscription", "Subscription", label,
                          "Subscription", "", round(monthly, 2), "USD", sub_id, "{}", "openai", tenant_id))
+    if rows:
         conn.executemany(
             "INSERT INTO cost_data (date,resource_group,service_name,resource_type,resource_name,"
             "meter_category,meter_subcategory,cost,currency,subscription_id,tags,cloud_provider,tenant_id) "
@@ -6426,6 +6419,7 @@ def api_integration_disconnect(tool):
         "bitbucket": ["bitbucket_workspace", "bitbucket_repo", "bitbucket_token"],
         "cursor":    ["cursor_api_key"],
         "openai":    ["openai_api_key", "openai_org_id"],
+        "chatgpt":   ["openai_chatgpt_teams", "openai_chatgpt_members"],
         "twilio":    ["twilio_api_key"],
         "sendgrid":  ["sendgrid_api_key"],
     }
@@ -6436,11 +6430,18 @@ def api_integration_disconnect(tool):
     flat[f"{tool}_enabled"] = 0
     if tool in ("cursor", "twilio", "sendgrid"):
         flat[f"{tool}_monthly_cost"] = 0
+    if tool == "chatgpt":
+        flat["openai_chatgpt_monthly"] = 0
+        flat["openai_chatgpt_seats"] = 0
     update_integration_settings(flat, tid or 1)
 
     conn = get_db()
     if tool in ("cursor", "twilio", "sendgrid"):
         conn.execute("DELETE FROM cost_data WHERE cloud_provider=? AND tenant_id IS ?", (tool, tid))
+    if tool == "chatgpt":
+        # Remove the mirrored subscription rows for the current month.
+        conn.execute("DELETE FROM cost_data WHERE cloud_provider='openai' AND service_name='ChatGPT Subscription' "
+                     "AND date=? AND tenant_id IS ?", (datetime.utcnow().strftime("%Y-%m-01"), tid))
     if tool == "cursor":
         conn.execute("DELETE FROM cursor_users WHERE tenant_id IS ?", (tid,))
         conn.execute("DELETE FROM cursor_usage WHERE tenant_id IS ?", (tid,))
@@ -6713,21 +6714,24 @@ def api_openai_summary():
     month_start = now.replace(day=1).strftime("%Y-%m-%d")
     today = now.strftime("%Y-%m-%d")
     conn = get_db()
+    # ChatGPT subscription rows are excluded — the seat-based subscription is a
+    # separate integration card; this summary is the API platform only.
+    _no_cgpt = "AND COALESCE(service_name,'') != 'ChatGPT Subscription'"
     row = conn.execute(
         "SELECT COALESCE(SUM(cost),0) as total, MAX(created_at) as last_sync, COUNT(*) as records "
-        "FROM cost_data WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ?",
+        f"FROM cost_data WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ? {_no_cgpt}",
         (tid, month_start, today)
     ).fetchone()
     models = conn.execute(
         "SELECT resource_name, COALESCE(SUM(cost),0) as total FROM cost_data "
-        "WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ? "
+        f"WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ? {_no_cgpt} "
         "GROUP BY resource_name ORDER BY total DESC LIMIT 5",
         (tid, month_start, today)
     ).fetchall()
     # Per-account (team) breakdown — subscription_id holds the account name.
     acct_rows = conn.execute(
         "SELECT subscription_id, COALESCE(SUM(cost),0) t FROM cost_data "
-        "WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ? GROUP BY subscription_id",
+        f"WHERE cloud_provider='openai' AND tenant_id=? AND date BETWEEN ? AND ? {_no_cgpt} GROUP BY subscription_id",
         (tid, month_start, today)
     ).fetchall()
     conn.close()

@@ -2579,7 +2579,8 @@
                             <optgroup label="🔗 SaaS & Dev Tools">
                                 <option value="bitbucket">Bitbucket (Atlassian)</option>
                                 <option value="cursor">Cursor (AI Editor)</option>
-                                <option value="openai">OpenAI / ChatGPT</option>
+                                <option value="openai">OpenAI (API Platform)</option>
+                                <option value="chatgpt">ChatGPT (Subscription)</option>
                             </optgroup>
                         </select>
                     </div>
@@ -3470,7 +3471,7 @@
                         </div>
                     </div>
                     <div style="display:flex;gap:8px">
-                        <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="addIntgAccount('atlassian')">Manage</button>
+                        <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="addIntgAccount('atlassian')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="navigateTo('costs')">View Costs</button>
                         <button class="btn btn-secondary" title="Add another Atlassian account" style="font-size:13px;padding:6px 11px;font-weight:700" onclick="addIntgAccount('atlassian')">+</button>
                     </div>
@@ -3622,8 +3623,8 @@
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M22.28 9.78a5.83 5.83 0 00-.5-4.79 5.9 5.9 0 00-6.35-2.83 5.87 5.87 0 00-4.42-1.97 5.9 5.9 0 00-5.62 4.08 5.87 5.87 0 00-3.93 2.85 5.9 5.9 0 00.73 6.92 5.84 5.84 0 00.5 4.79 5.9 5.9 0 006.35 2.83 5.87 5.87 0 004.42 1.97 5.9 5.9 0 005.63-4.09 5.87 5.87 0 003.92-2.85 5.9 5.9 0 00-.73-6.91zm-8.75 12.26a4.36 4.36 0 01-2.8-1.02l.14-.08 4.65-2.68a.77.77 0 00.38-.66v-6.55l1.97 1.13a.07.07 0 010 .06v5.42a4.37 4.37 0 01-4.34 4.38zm-9.35-4.01a4.34 4.34 0 01-.52-2.93l.14.08 4.65 2.69a.77.77 0 00.76 0l5.67-3.27v2.26a.07.07 0 01-.03.06L10.14 19.4a4.37 4.37 0 01-5.96-1.37zm-1.22-9.57a4.34 4.34 0 012.27-1.91v5.51a.77.77 0 00.38.66l5.67 3.27-1.97 1.13a.07.07 0 01-.07 0L4.8 13.7a4.37 4.37 0 01-.84-5.24zm16.17 3.75l-5.67-3.27 1.97-1.13a.07.07 0 01.07 0l4.64 2.68a4.36 4.36 0 01-.68 7.88v-5.5a.77.77 0 00-.33-.66zm1.96-2.95l-.14-.08-4.64-2.69a.77.77 0 00-.77 0L10.43 9.5V7.23a.07.07 0 01.03-.06l4.65-2.68a4.37 4.37 0 016.18 4.52l-.19-.55zm-12.33 4.05l-1.97-1.13a.07.07 0 010-.06V5.7a4.37 4.37 0 017.17-3.35l-.14.08-4.65 2.69a.77.77 0 00-.38.66v6.55l-.03.18zm1.07-2.3L12 9.6l2.16 1.25v2.5L12 14.6l-2.17-1.25v-2.5z"/></svg>
                         </div>
                         <div>
-                            <div style="font-weight:700;font-size:15px;color:var(--text)">OpenAI / ChatGPT</div>
-                            <div style="font-size:12px;color:var(--text-muted)">AI API & Platform</div>
+                            <div style="font-weight:700;font-size:15px;color:var(--text)">OpenAI</div>
+                            <div style="font-size:12px;color:var(--text-muted)">API Platform · usage-based</div>
                         </div>
                         <div style="margin-left:auto">
                             <span id="intg-status-openai" class="intg-badge intg-badge-off">Not connected</span>
@@ -3632,7 +3633,7 @@
                     <div style="display:flex;gap:8px">
                         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('openai')">Configure</button>
                         <button class="btn btn-secondary" style="font-size:12px;padding:6px 14px" onclick="testIntegration('openai')">Test</button>
-                        <button class="btn btn-secondary" id="openai-sync-btn" style="font-size:12px;padding:6px 14px;display:none" onclick="syncOpenAIUsage()">&#8635; Sync Usage</button>
+                        <button class="btn btn-secondary" id="openai-sync-btn" style="font-size:12px;padding:6px 14px;display:none" onclick="syncOpenAIUsage()" title="Sync API usage">&#8635; Sync</button>
                         <button class="btn btn-secondary" title="Add account" style="font-size:13px;padding:6px 11px;font-weight:700" onclick="addIntgAccount('openai')">+</button>
                     </div>
                     <!-- Usage summary shown after sync -->
@@ -3647,6 +3648,38 @@
                 </div>
                 <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
                     <div style="font-size:11px;color:var(--text-muted)">&#10003; API cost tracking &nbsp;&#10003; Token usage &nbsp;&#10003; Model breakdown</div>
+                </div>
+            </div>
+
+            <!-- ChatGPT (seat-based subscription — separate product from the API platform) -->
+            <div class="card intg-card" id="intg-card-chatgpt" style="padding:0;overflow:hidden;border-top:3px solid #74aa9c">
+                <div style="padding:20px 20px 14px">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                        <div style="width:42px;height:42px;background:linear-gradient(135deg,#74aa9c,#5a8a7d);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M22.28 9.78a5.83 5.83 0 00-.5-4.79 5.9 5.9 0 00-6.35-2.83 5.87 5.87 0 00-4.42-1.97 5.9 5.9 0 00-5.62 4.08 5.87 5.87 0 00-3.93 2.85 5.9 5.9 0 00.73 6.92 5.84 5.84 0 00.5 4.79 5.9 5.9 0 006.35 2.83 5.87 5.87 0 004.42 1.97 5.9 5.9 0 005.63-4.09 5.87 5.87 0 003.92-2.85 5.9 5.9 0 00-.73-6.91zm-8.75 12.26a4.36 4.36 0 01-2.8-1.02l.14-.08 4.65-2.68a.77.77 0 00.38-.66v-6.55l1.97 1.13a.07.07 0 010 .06v5.42a4.37 4.37 0 01-4.34 4.38zm-9.35-4.01a4.34 4.34 0 01-.52-2.93l.14.08 4.65 2.69a.77.77 0 00.76 0l5.67-3.27v2.26a.07.07 0 01-.03.06L10.14 19.4a4.37 4.37 0 01-5.96-1.37zm-1.22-9.57a4.34 4.34 0 012.27-1.91v5.51a.77.77 0 00.38.66l5.67 3.27-1.97 1.13a.07.07 0 01-.07 0L4.8 13.7a4.37 4.37 0 01-.84-5.24zm16.17 3.75l-5.67-3.27 1.97-1.13a.07.07 0 01.07 0l4.64 2.68a4.36 4.36 0 01-.68 7.88v-5.5a.77.77 0 00-.33-.66zm1.96-2.95l-.14-.08-4.64-2.69a.77.77 0 00-.77 0L10.43 9.5V7.23a.07.07 0 01.03-.06l4.65-2.68a4.37 4.37 0 016.18 4.52l-.19-.55zm-12.33 4.05l-1.97-1.13a.07.07 0 010-.06V5.7a4.37 4.37 0 017.17-3.35l-.14.08-4.65 2.69a.77.77 0 00-.38.66v6.55l-.03.18zm1.07-2.3L12 9.6l2.16 1.25v2.5L12 14.6l-2.17-1.25v-2.5z"/></svg>
+                        </div>
+                        <div>
+                            <div style="font-weight:700;font-size:15px;color:var(--text)">ChatGPT</div>
+                            <div style="font-size:12px;color:var(--text-muted)">Business / Team · seat-based</div>
+                        </div>
+                        <div style="margin-left:auto">
+                            <span id="intg-status-chatgpt" class="intg-badge intg-badge-off">Not connected</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="openIntgModal('chatgpt')">Configure</button>
+                        <button class="btn btn-secondary" title="Add another ChatGPT team" style="font-size:13px;padding:6px 11px;font-weight:700" onclick="addIntgAccount('chatgpt')">+</button>
+                    </div>
+                    <div id="chatgpt-cost-summary" style="display:none;margin-top:10px;padding:8px 10px;background:var(--bg-subtle,#f5f5f5);border-radius:8px">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <span style="font-size:12px;font-weight:600;color:var(--text)">Subscription (Monthly)</span>
+                            <span style="font-size:16px;font-weight:700;color:#74aa9c" id="chatgpt-total-cost">$0.00</span>
+                        </div>
+                        <div style="font-size:10px;color:var(--text-muted);margin-top:3px" id="chatgpt-sub-note"></div>
+                    </div>
+                </div>
+                <div style="padding:8px 20px 12px;background:var(--card-bg);border-top:1px solid var(--border)">
+                    <div style="font-size:11px;color:var(--text-muted)">&#10003; Seat cost tracking &nbsp;&#10003; Per-member split &nbsp;&#10003; Shows under OpenAI in Cost Data</div>
                 </div>
             </div>
 
@@ -3826,7 +3859,7 @@
                     </div>
                     <div>
                         <h3 style="margin:0;font-size:16px">Configure OpenAI</h3>
-                        <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">ChatGPT & API Platform</p>
+                        <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">API Platform (usage-based)</p>
                     </div>
                     <button onclick="closeIntgModal('openai')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:20px;line-height:1">&times;</button>
                 </div>
@@ -3835,32 +3868,6 @@
                     <div id="openai-accounts-list" style="display:flex;flex-direction:column;gap:8px"></div>
                     <button type="button" class="btn btn-secondary" style="align-self:flex-start;font-size:12px;padding:6px 12px" onclick="addOpenAIAccountRow('','',false)">+ Add OpenAI account</button>
                     <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Give each team a <strong>name</strong> + its own <strong>API key</strong> (org‑owner/Admin key recommended). Each team's cost is tracked separately.</div>
-                    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:2px">
-                        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">ChatGPT subscription (seats)</div>
-                        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Billed separately from API usage and not available via the API — enter it here to include it in the OpenAI total.</div>
-                        <div style="display:flex;gap:10px">
-                            <div style="flex:1">
-                                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Monthly cost ($)</label>
-                                <input id="openai-chatgpt-monthly" type="number" min="0" step="0.01" placeholder="0.00" class="form-control">
-                            </div>
-                            <div style="flex:1">
-                                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">Seats <span style="color:var(--text-muted)">(optional)</span></label>
-                                <input id="openai-chatgpt-seats" type="number" min="0" step="1" placeholder="0" class="form-control">
-                            </div>
-                        </div>
-                        <div style="margin-top:12px">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                                <label style="font-size:11px;color:var(--text-muted)">Members (monthly cost is split evenly across them)</label>
-                                <button type="button" class="btn btn-secondary" style="font-size:11px;padding:4px 10px" onclick="addOpenAIMemberRow('','')">+ Add member</button>
-                            </div>
-                            <div id="openai-members-list" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto"></div>
-                            <details style="margin-top:8px">
-                                <summary style="font-size:11px;color:var(--accent);cursor:pointer">Bulk paste (one per line: "Name, email" or just email)</summary>
-                                <textarea id="openai-members-bulk" rows="4" class="form-control" style="margin-top:6px;font-size:12px" placeholder="Alice, alice@example.com&#10;bob@example.com"></textarea>
-                                <button type="button" class="btn btn-secondary" style="font-size:11px;padding:4px 10px;margin-top:6px" onclick="importOpenAIMembers()">Import</button>
-                            </details>
-                        </div>
-                    </div>
                     <div style="display:flex;align-items:center;gap:8px;padding:10px 0">
                         <input type="checkbox" id="openai-enabled" style="width:16px;height:16px;cursor:pointer">
                         <label for="openai-enabled" style="font-size:13px;cursor:pointer">Track OpenAI API costs in dashboard</label>
@@ -3871,6 +3878,32 @@
                     <button class="btn btn-secondary" onclick="closeIntgModal('openai')">Cancel</button>
                     <button class="btn btn-secondary" onclick="testIntegration('openai')">Test Key</button>
                     <button class="btn btn-primary" onclick="saveIntegration('openai')">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ChatGPT Modal (seat-based subscription — split out from OpenAI API) -->
+        <div id="intg-modal-chatgpt" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeIntgModal('chatgpt')">
+            <div class="modal-box" style="max-width:520px">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+                    <div style="width:36px;height:36px;background:linear-gradient(135deg,#74aa9c,#5a8a7d);border-radius:8px;display:flex;align-items:center;justify-content:center">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M22.28 9.78a5.83 5.83 0 00-.5-4.79 5.9 5.9 0 00-6.35-2.83 5.87 5.87 0 00-4.42-1.97 5.9 5.9 0 00-5.62 4.08 5.87 5.87 0 00-3.93 2.85 5.9 5.9 0 00.73 6.92 5.84 5.84 0 00.5 4.79 5.9 5.9 0 006.35 2.83 5.87 5.87 0 004.42 1.97 5.9 5.9 0 005.63-4.09 5.87 5.87 0 003.92-2.85 5.9 5.9 0 00-.73-6.91z"/></svg>
+                    </div>
+                    <div>
+                        <h3 style="margin:0;font-size:16px">Configure ChatGPT</h3>
+                        <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">Business / Team subscription (seats)</p>
+                    </div>
+                    <button onclick="closeIntgModal('chatgpt')" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:20px;line-height:1">&times;</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                    <div style="font-size:11px;color:var(--text-muted)">Billed separately from API usage and not available via any API — enter each workspace/team's subscription here. It appears under OpenAI in Cost Data as "ChatGPT Subscription", grouped by team name.</div>
+                    <div id="chatgpt-teams-list" style="display:flex;flex-direction:column;gap:10px;max-height:420px;overflow:auto"></div>
+                    <button type="button" class="btn btn-secondary" style="align-self:flex-start;font-size:12px;padding:6px 12px" onclick="addChatgptTeamRow()">+ Add ChatGPT team</button>
+                </div>
+                <div id="intg-msg-chatgpt" style="display:none;margin-top:12px;padding:10px 12px;border-radius:7px;font-size:13px"></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px">
+                    <button class="btn btn-secondary" onclick="closeIntgModal('chatgpt')">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveIntegration('chatgpt')">Save</button>
                 </div>
             </div>
         </div>
@@ -4107,7 +4140,7 @@ function renderFreshnessCards(providers) {
     const brandColors = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4',
                           openai: '#10a37f', cursor: '#6c47ff', atlassian: '#0052cc' };
     const taglines = { azure: 'Subscriptions & resource groups', aws: 'Accounts via Cost Explorer / CUR',
-                       gcp: 'Projects via BigQuery export', openai: 'API usage & ChatGPT seats',
+                       gcp: 'Projects via BigQuery export', openai: 'API platform & ChatGPT subscription',
                        cursor: 'AI editor usage', atlassian: 'Jira · Confluence · Bitbucket' };
     container.innerHTML = providers.map(p => {
         const cp = (p.cloud_provider || '').toLowerCase();
@@ -4967,11 +5000,12 @@ const _SAAS_META = {
     jira:      { icon: '🔵', title: 'Jira Integration', desc: 'Create Jira tickets automatically when budgets are exceeded or cost anomalies are detected. Configure your Atlassian credentials in the Integrations page.' },
     bitbucket: { icon: '🪣', title: 'Bitbucket Integration', desc: 'Post cost summaries as pull request comments and trigger cost reports via webhooks. Configure your Bitbucket workspace in the Integrations page.' },
     cursor:    { icon: '🖱️', title: 'Cursor Integration', desc: 'Track Cursor AI editor subscription costs alongside your cloud spend in one unified dashboard.' },
-    openai:    { icon: '🤖', title: 'OpenAI / ChatGPT Integration', desc: 'Track OpenAI API token usage and costs. Your API key also powers the AI Cost Assistant built into this platform.' },
+    openai:    { icon: '🤖', title: 'OpenAI Integration', desc: 'Track OpenAI API token usage and costs per team. Your API key also powers the AI Cost Assistant built into this platform.' },
+    chatgpt:   { icon: '💬', title: 'ChatGPT Integration', desc: 'Track your ChatGPT Business/Team subscription — monthly cost, seats, and per-member split — alongside your cloud spend.' },
 };
 function onProviderTypeChange() {
     const t = document.getElementById('providerType').value;
-    const isSaas = ['bitbucket','cursor','openai'].includes(t);
+    const isSaas = ['bitbucket','cursor','openai','chatgpt'].includes(t);
     // Cloud provider fields
     document.getElementById('awsFields').style.display = t === 'aws' ? 'flex' : 'none';
     if (t === 'aws') { stopAwsSetupPolling(); loadAwsSetupToken(); }
@@ -5907,16 +5941,39 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/api/integrations/settings').then(r => r.json()).then(data => {
             _intgSettings = data;
             const _intgConnected = {};
-            ['bitbucket','cursor','openai','twilio','sendgrid'].forEach(tool => {
-                const cfg = data[tool] || {};
+            ['bitbucket','cursor','openai','chatgpt','twilio','sendgrid'].forEach(tool => {
+                const cfg = tool === 'chatgpt' ? (data.openai || {}) : (data[tool] || {});
                 const badge = document.getElementById('intg-status-' + tool);
                 // "Connected" reflects whether credentials are SAVED, not the
                 // enable-automation toggle (which only turns the workflow on/off).
                 const configured = tool === 'bitbucket'  ? !!(cfg.workspace || cfg.token)
                                  : (tool === 'cursor' || tool === 'twilio' || tool === 'sendgrid')
                                                          ? !!(cfg.api_key || (cfg.monthly_cost > 0))
+                                 : tool === 'chatgpt'    ? !!((cfg.chatgpt_teams || []).length)
                                  :                         !!cfg.api_key;  // openai
                 _intgConnected[tool] = configured;
+                // ChatGPT card summary: total monthly across teams + per-team lines.
+                if (tool === 'chatgpt') {
+                    const box = document.getElementById('chatgpt-cost-summary');
+                    const amt = document.getElementById('chatgpt-total-cost');
+                    const note = document.getElementById('chatgpt-sub-note');
+                    if (box && amt) {
+                        const teams = cfg.chatgpt_teams || [];
+                        const total = teams.reduce((s2, t) => s2 + (parseFloat(t.monthly) || 0), 0);
+                        if (teams.length && total > 0) {
+                            box.style.display = 'block';
+                            amt.textContent = '$' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            const mN = teams.reduce((s2, t) => s2 + ((t.members || []).length), 0);
+                            if (note) note.innerHTML =
+                                `${teams.length} team${teams.length !== 1 ? 's' : ''}${mN ? ' · ' + mN + ' members' : ''}` +
+                                (teams.length > 1 ? teams.map(t =>
+                                    `<div style="display:flex;justify-content:space-between;padding:2px 0;border-top:1px solid var(--border,rgba(0,0,0,.06));margin-top:3px">
+                                        <span>${String(t.name || '').replace(/</g, '&lt;')}${(t.members || []).length ? ' · ' + t.members.length : ''}</span>
+                                        <span style="font-weight:600;color:#74aa9c">$${(parseFloat(t.monthly) || 0).toFixed(2)}</span>
+                                    </div>`).join('') : '');
+                        } else box.style.display = 'none';
+                    }
+                }
                 if (badge) {
                     badge.textContent = configured ? 'Connected' : 'Not connected';
                     badge.className = 'intg-badge ' + (configured ? 'intg-badge-on' : 'intg-badge-off');
@@ -5933,7 +5990,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             // Reorder cards: connected integrations first (stable within each group).
-            const _intgOrder = ['bitbucket','cursor','openai','twilio','sendgrid'];
+            const _intgOrder = ['bitbucket','cursor','openai','chatgpt','twilio','sendgrid'];
             const _firstCard = document.getElementById('intg-card-atlassian');
             const _grid = _firstCard ? _firstCard.parentElement : null;
             if (_grid) {
@@ -6444,6 +6501,81 @@ document.addEventListener('DOMContentLoaded', function() {
         return out;
     }
 
+    // ── ChatGPT multi-team (name + monthly + seats + member list per team) ──
+    const _cgptEsc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+    window.addChatgptTeamRow = function(t) {
+        t = t || {};
+        const list = document.getElementById('chatgpt-teams-list');
+        if (!list) return;
+        const el = document.createElement('div');
+        el.className = 'cgpt-team';
+        el.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--bg-subtle,#fafafa)';
+        el.innerHTML = `
+            <div style="display:flex;gap:8px;align-items:center">
+                <input class="cgpt-name form-control" placeholder="Team name (e.g. Engineering)" value="${_cgptEsc(t.name)}" style="flex:1;font-weight:600">
+                <button type="button" class="btn btn-secondary" style="font-size:13px;padding:4px 10px;color:var(--danger,#e74c3c)" title="Remove team" onclick="this.closest('.cgpt-team').remove()">&times;</button>
+            </div>
+            <div style="display:flex;gap:10px">
+                <div style="flex:1">
+                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Monthly cost ($)</label>
+                    <input class="cgpt-monthly form-control" type="number" min="0" step="0.01" placeholder="0.00" value="${t.monthly || ''}">
+                </div>
+                <div style="flex:1">
+                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:3px">Seats (optional)</label>
+                    <input class="cgpt-seats form-control" type="number" min="0" step="1" placeholder="0" value="${t.seats || ''}">
+                </div>
+            </div>
+            <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+                    <label style="font-size:11px;color:var(--text-muted)">Members (cost split evenly)</label>
+                    <button type="button" class="btn btn-secondary" style="font-size:11px;padding:3px 9px" onclick="cgptAddMember(this)">+ Add member</button>
+                </div>
+                <div class="cgpt-members" style="display:flex;flex-direction:column;gap:5px;max-height:170px;overflow:auto"></div>
+                <details style="margin-top:6px">
+                    <summary style="font-size:11px;color:var(--accent);cursor:pointer">Bulk paste ("Name, email" or just email — one per line)</summary>
+                    <textarea class="cgpt-bulk form-control" rows="3" style="margin-top:5px;font-size:12px" placeholder="Alice, alice@example.com&#10;bob@example.com"></textarea>
+                    <button type="button" class="btn btn-secondary" style="font-size:11px;padding:3px 9px;margin-top:5px" onclick="cgptImportMembers(this)">Import</button>
+                </details>
+            </div>`;
+        list.appendChild(el);
+        (t.members || []).forEach(m => cgptAddMember(el.querySelector('.cgpt-members'), m));
+    };
+    window.cgptAddMember = function(target, m) {
+        m = m || {};
+        const box = target.classList && target.classList.contains('cgpt-members')
+            ? target : target.closest('.cgpt-team').querySelector('.cgpt-members');
+        const row = document.createElement('div');
+        row.className = 'cgpt-mrow';
+        row.style.cssText = 'display:flex;gap:6px;align-items:center';
+        row.innerHTML = `
+            <input class="cgpt-mname form-control" placeholder="Name" value="${_cgptEsc(m.name)}" style="flex:1;font-size:12px">
+            <input class="cgpt-memail form-control" placeholder="email@company.com" value="${_cgptEsc(m.email)}" style="flex:1.3;font-size:12px">
+            <button type="button" class="btn btn-secondary" style="font-size:12px;padding:3px 8px;color:var(--danger,#e74c3c)" onclick="this.parentNode.remove()">&times;</button>`;
+        box.appendChild(row);
+    };
+    window.cgptImportMembers = function(btn) {
+        const team = btn.closest('.cgpt-team');
+        const ta = team.querySelector('.cgpt-bulk');
+        (ta.value || '').split('\n').map(l => l.trim()).filter(Boolean).forEach(line => {
+            const parts = line.split(',').map(p => p.trim());
+            const email = parts.find(p => p.includes('@')) || '';
+            const name = parts.find(p => p && !p.includes('@')) || '';
+            if (name || email) cgptAddMember(team.querySelector('.cgpt-members'), { name, email });
+        });
+        ta.value = '';
+    };
+    function _collectChatgptTeams() {
+        return [...document.querySelectorAll('#chatgpt-teams-list .cgpt-team')].map(el => ({
+            name: (el.querySelector('.cgpt-name')?.value || '').trim(),
+            monthly: parseFloat(el.querySelector('.cgpt-monthly')?.value) || 0,
+            seats: parseInt(el.querySelector('.cgpt-seats')?.value) || 0,
+            members: [...el.querySelectorAll('.cgpt-mrow')].map(r => ({
+                name: (r.querySelector('.cgpt-mname')?.value || '').trim(),
+                email: (r.querySelector('.cgpt-memail')?.value || '').trim(),
+            })).filter(m => m.name || m.email),
+        })).filter(t => t.name);
+    }
+
     window.openIntgModal = function(tool) {
         const cfg = (_intgSettings[tool] || {});
         if (tool === 'jira') {
@@ -6490,13 +6622,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 else if (cfg.api_key) addOpenAIAccountRow(cfg.org_id || 'OpenAI', cfg.org_id, true);  // legacy single key
                 else addOpenAIAccountRow('', '', false);
             }
-            _setVal('openai-chatgpt-monthly', cfg.chatgpt_monthly || '');
-            _setVal('openai-chatgpt-seats', cfg.chatgpt_seats || '');
-            const ml = document.getElementById('openai-members-list');
-            if (ml) { ml.innerHTML = ''; (cfg.chatgpt_members || []).forEach(m => addOpenAIMemberRow(m.name, m.email)); }
-            const bulk = document.getElementById('openai-members-bulk');
-            if (bulk) bulk.value = '';
             _setChk('openai-enabled', cfg.enabled);
+        } else if (tool === 'chatgpt') {
+            // ChatGPT settings live under the openai settings blob (same vendor).
+            const ocfg = _intgSettings.openai || {};
+            const tl = document.getElementById('chatgpt-teams-list');
+            if (tl) {
+                tl.innerHTML = '';
+                const teams = ocfg.chatgpt_teams || [];
+                if (teams.length) teams.forEach(t => addChatgptTeamRow(t));
+                else addChatgptTeamRow({});
+            }
         }
         _hideMsg(tool);
         const modal = document.getElementById('intg-modal-' + tool);
@@ -6506,6 +6642,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // "+" on a card → open that integration's add/config flow. Atlassian is a
     // Cloud Provider (real multi-account), so it goes to Cloud Providers → Add.
     window.addIntgAccount = function(tool) {
+        if (tool === 'chatgpt') {
+            // Open the modal (loads existing teams) and append a fresh blank team.
+            openIntgModal('chatgpt');
+            addChatgptTeamRow({});
+            return;
+        }
         if (tool === 'atlassian') {
             if (typeof navigateTo === 'function') navigateTo('cloud-providers');
             setTimeout(() => {
@@ -6586,10 +6728,10 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (tool === 'sendgrid') {
             payload.sendgrid = { api_key: _getVal('sendgrid-api-key'), enabled: _getChk('sendgrid-enabled'), monthly_cost: parseFloat(_getVal('sendgrid-monthly-cost')) || 0 };
         } else if (tool === 'openai') {
-            payload.openai = { accounts: _collectOpenAIAccounts(), enabled: _getChk('openai-enabled'),
-                               chatgpt_monthly: parseFloat(_getVal('openai-chatgpt-monthly')) || 0,
-                               chatgpt_seats: parseInt(_getVal('openai-chatgpt-seats')) || 0,
-                               chatgpt_members: _collectOpenAIMembers() };
+            payload.openai = { accounts: _collectOpenAIAccounts(), enabled: _getChk('openai-enabled') };
+        } else if (tool === 'chatgpt') {
+            // Saved under the openai settings blob; omitting `accounts` leaves API keys untouched.
+            payload.openai = { chatgpt_teams: _collectChatgptTeams() };
         }
         fetch('/api/integrations/settings', {
             method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)

@@ -635,7 +635,8 @@ def init_db():
     # manual monthly amount mirrored into cost_data under cloud_provider='openai'.
     for _col, _decl in (("openai_chatgpt_monthly", "REAL DEFAULT 0"),
                         ("openai_chatgpt_seats", "INTEGER DEFAULT 0"),
-                        ("openai_chatgpt_members", "TEXT DEFAULT ''")):
+                        ("openai_chatgpt_members", "TEXT DEFAULT ''"),
+                        ("openai_chatgpt_teams", "TEXT DEFAULT ''")):
         try:
             cursor.execute(f"SELECT {_col} FROM integration_settings LIMIT 1")
         except Exception:
@@ -2510,6 +2511,32 @@ def get_integration_settings(tenant_id=1):
         _nm = _org if (_org and not _org.lower().startswith(("key_", "sk-", "org-"))) else "OpenAI"
         oai = [{"name": _nm, "api_key": d["openai_api_key"].strip(), "org_id": _org}]
     d["openai_accounts"] = oai
+
+    # Normalize ChatGPT teams into a list [{name, monthly, seats, members}]. Back-compat:
+    # the legacy single monthly/seats/members trio becomes one team named "ChatGPT".
+    teams = []
+    raw_t = (d.get("openai_chatgpt_teams") or "").strip()
+    if raw_t:
+        try:
+            teams = [t for t in (json.loads(raw_t) or []) if (t.get("name") or "").strip()]
+        except Exception:
+            teams = []
+    if not teams:
+        try:
+            _legacy_monthly = float(d.get("openai_chatgpt_monthly") or 0)
+        except (TypeError, ValueError):
+            _legacy_monthly = 0.0
+        if _legacy_monthly > 0:
+            _legacy_members = []
+            try:
+                _lm = d.get("openai_chatgpt_members")
+                if _lm:
+                    _legacy_members = json.loads(_lm) if isinstance(_lm, str) else _lm
+            except Exception:
+                _legacy_members = []
+            teams = [{"name": "ChatGPT", "monthly": _legacy_monthly,
+                      "seats": int(d.get("openai_chatgpt_seats") or 0), "members": _legacy_members}]
+    d["openai_chatgpt_teams"] = teams
     return d
 
 
@@ -2523,7 +2550,7 @@ def update_integration_settings(settings, tenant_id=1):
         "bitbucket_workspace", "bitbucket_repo", "bitbucket_token", "bitbucket_enabled",
         "cursor_api_key", "cursor_enabled", "cursor_monthly_cost", "cursor_accounts",
         "openai_api_key", "openai_org_id", "openai_enabled", "openai_accounts",
-        "openai_chatgpt_monthly", "openai_chatgpt_seats", "openai_chatgpt_members",
+        "openai_chatgpt_monthly", "openai_chatgpt_seats", "openai_chatgpt_members", "openai_chatgpt_teams",
         "twilio_api_key", "twilio_enabled", "twilio_monthly_cost",
         "sendgrid_api_key", "sendgrid_enabled", "sendgrid_monthly_cost",
     ]
@@ -2543,6 +2570,15 @@ def update_integration_settings(settings, tenant_id=1):
                 val = json.dumps([{"name": (m.get("name") or "").strip(),
                                    "email": (m.get("email") or "").strip()}
                                   for m in (val or []) if ((m.get("name") or "").strip() or (m.get("email") or "").strip())])
+            elif key == "openai_chatgpt_teams" and not isinstance(val, str):
+                # Multiple ChatGPT workspaces/teams: name + monthly + seats + members.
+                val = json.dumps([{
+                    "name": (t.get("name") or "").strip(),
+                    "monthly": float(t.get("monthly") or 0),
+                    "seats": int(t.get("seats") or 0),
+                    "members": [{"name": (m.get("name") or "").strip(), "email": (m.get("email") or "").strip()}
+                                for m in (t.get("members") or []) if ((m.get("name") or "").strip() or (m.get("email") or "").strip())],
+                } for t in (val or []) if (t.get("name") or "").strip()])
             elif key == "openai_accounts" and not isinstance(val, str):
                 # Multiple OpenAI accounts/teams (name + api_key + org_id) as JSON.
                 val = json.dumps([{"name": (a.get("name") or "").strip(),
