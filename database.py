@@ -1266,7 +1266,7 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
     # other modes collapse rows into Resource Group / Service / Account totals.
     group_mode = (filters or {}).get("group_by", "resource")
     dim_map = {
-        "resource":       ["cloud_provider", "resource_group", "service_name", "resource_type", "resource_name", "subscription_id"],
+        "resource":       ["cloud_provider", "resource_group", "service_name", "resource_type", "resource_name", "subscription_id", "meter_category"],
         "resource_group": ["cloud_provider", "resource_group", "subscription_id"],
         "service":        ["cloud_provider", "service_name", "subscription_id"],
         "account":        ["cloud_provider", "subscription_id"],
@@ -1279,7 +1279,7 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
             return _rg_commitment_label_sql()
         return d
     # Always emit the same output columns; non-grouped ones come back NULL.
-    out_cols = ["resource_group", "service_name", "resource_type", "resource_name", "subscription_id"]
+    out_cols = ["resource_group", "service_name", "resource_type", "resource_name", "subscription_id", "meter_category"]
     select_cols = ",\n            ".join(
         (f"{_dim_expr(c)} AS {c}" if c in group_dims else f"NULL AS {c}") for c in out_cols
     )
