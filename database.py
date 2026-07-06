@@ -1240,6 +1240,16 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
         if filters.get("resource_type"):
             where += " AND resource_type LIKE ?"
             params.append(f"%{filters['resource_type']}%")
+        if filters.get("meter_categories"):
+            vals = filters["meter_categories"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"meter_category IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_meter_category"):
+                cond = f"({cond} OR meter_category IS NULL OR meter_category='')"
+            where += f" AND {cond}"
+        elif filters.get("include_blank_meter_category"):
+            where += " AND (meter_category IS NULL OR meter_category='')"
         if filters.get("meter_category"):
             where += " AND meter_category LIKE ?"
             params.append(f"%{filters['meter_category']}%")
@@ -1380,6 +1390,16 @@ def get_cost_total(filters=None, tenant_id=None, cloud_provider=None, reporting_
         if filters.get("resource_type"):
             query += " AND resource_type LIKE ?"
             params.append(f"%{filters['resource_type']}%")
+        if filters.get("meter_categories"):
+            vals = filters["meter_categories"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"meter_category IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_meter_category"):
+                cond = f"({cond} OR meter_category IS NULL OR meter_category='')"
+            query += f" AND {cond}"
+        elif filters.get("include_blank_meter_category"):
+            query += " AND (meter_category IS NULL OR meter_category='')"
         if filters.get("meter_category"):
             query += " AND meter_category LIKE ?"
             params.append(f"%{filters['meter_category']}%")
@@ -1478,6 +1498,16 @@ def get_cost_totals_by_subscription(filters=None, tenant_id=None, cloud_provider
         if filters.get("resource_type"):
             query += " AND cd.resource_type LIKE ?"
             params.append(f"%{filters['resource_type']}%")
+        if filters.get("meter_categories"):
+            vals = filters["meter_categories"]
+            placeholders = ",".join(["?"] * len(vals))
+            cond = f"cd.meter_category IN ({placeholders})"
+            params.extend(vals)
+            if filters.get("include_blank_meter_category"):
+                cond = f"({cond} OR cd.meter_category IS NULL OR cd.meter_category='')"
+            query += f" AND {cond}"
+        elif filters.get("include_blank_meter_category"):
+            query += " AND (cd.meter_category IS NULL OR cd.meter_category='')"
         if filters.get("meter_category"):
             query += " AND cd.meter_category LIKE ?"
             params.append(f"%{filters['meter_category']}%")

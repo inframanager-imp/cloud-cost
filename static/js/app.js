@@ -2004,10 +2004,22 @@ async function loadCostsTable() {
     params.set('granularity', granularity);
     if (costGroupBy && costGroupBy !== 'resource') params.set('group_by', costGroupBy);
     if (rg.length) params.set('resource_groups', rg.join(','));
-    if (services.length) params.set('service_names', services.join(','));
+    // OpenAI: the "Service" column shows the API key name (stored in meter_category),
+    // so its funnel filters on meter_category instead of the constant service_name.
+    const isOpenAI = activeCloud === 'openai';
+    if (isOpenAI) {
+        // Legacy OpenAI rows store the 'Token Usage' placeholder (rendered as '-'),
+        // so "(Blank)" should match those too.
+        const cats = (includeBlankService && !services.includes('Token Usage'))
+            ? [...services, 'Token Usage'] : services;
+        if (cats.length) params.set('meter_categories', cats.join(','));
+        if (includeBlankService) params.set('include_blank_meter_category', '1');
+    } else {
+        if (services.length) params.set('service_names', services.join(','));
+        if (includeBlankService) params.set('include_blank_service', '1');
+    }
     if (resources.length) params.set('resource_names', resources.join(','));
     if (includeBlankRG) params.set('include_blank_resource_group', '1');
-    if (includeBlankService) params.set('include_blank_service', '1');
     if (resType) params.set('resource_type', resType);
     if (subs.length) params.set('subscription_ids', subs.join(','));
     if (includeBlankSub) params.set('include_blank_subscription', '1');
@@ -2211,7 +2223,11 @@ async function loadCostsTable() {
         const filterQs = filterParams.toString() ? '?' + filterParams.toString() : '';
         const filters = await fetch('/api/filters' + filterQs).then(r => r.json());
         populateCdMultiselect('rg', filters.resource_groups || []);
-        populateCdMultiselect('svc', filters.services || []);
+        // OpenAI: the Service funnel lists API key names (meter_category); the
+        // 'Token Usage' placeholder is hidden — "(Blank)" covers those rows.
+        populateCdMultiselect('svc', isOpenAI
+            ? (filters.meter_categories || []).filter(v => v !== 'Token Usage')
+            : (filters.services || []));
         populateCdMultiselect('res', filters.resources || []);
         _populateResourceTypeOptions(filters.resource_types || []);
     } catch (err) {
@@ -2272,8 +2288,12 @@ function sortCostsBy(field) {
 function sortCostRows(rows) {
     const out = [...rows];
     out.sort((a, b) => {
-        let av = a[costSortBy];
-        let bv = b[costSortBy];
+        // OpenAI shows the API key (meter_category) in the Service column, so
+        // sorting that column sorts by the key name, not the constant "OpenAI".
+        const field = (costsSelectedCloud === 'openai' && costSortBy === 'service_name')
+            ? 'meter_category' : costSortBy;
+        let av = a[field];
+        let bv = b[field];
         if (costSortBy === 'cost') {
             av = Number(av || 0);
             bv = Number(bv || 0);
@@ -3462,9 +3482,17 @@ function exportCSV() {
     if (dateTo) params.set('date_to', dateTo);
     params.set('granularity', granularity);
     if (rg.length) params.set('resource_groups', rg.join(','));
-    if (services.length) params.set('service_names', services.join(','));
+    // OpenAI: the Service funnel holds API key names → filter on meter_category
+    if (activeCloud === 'openai') {
+        const cats = (includeBlankService && !services.includes('Token Usage'))
+            ? [...services, 'Token Usage'] : services;
+        if (cats.length) params.set('meter_categories', cats.join(','));
+        if (includeBlankService) params.set('include_blank_meter_category', '1');
+    } else {
+        if (services.length) params.set('service_names', services.join(','));
+        if (includeBlankService) params.set('include_blank_service', '1');
+    }
     if (includeBlankRG) params.set('include_blank_resource_group', '1');
-    if (includeBlankService) params.set('include_blank_service', '1');
     if (resType) params.set('resource_type', resType);
     if (subs.length) params.set('subscription_ids', subs.join(','));
     if (includeBlankSub) params.set('include_blank_subscription', '1');

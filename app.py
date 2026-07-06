@@ -1439,6 +1439,8 @@ def api_costs():
         "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
         "resource_type": request.args.get("resource_type"),
         "meter_category": request.args.get("meter_category"),
+        "meter_categories": _csv_list("meter_categories"),
+        "include_blank_meter_category": (request.args.get("include_blank_meter_category") or "").lower() in ("1", "true", "yes"),
         "search": request.args.get("search"),
         "cloud_provider": request.args.get("cloud_provider") or None,
         "limit": request.args.get("limit", 100, type=int),
@@ -1508,6 +1510,8 @@ def api_costs_total():
         "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
         "resource_type": request.args.get("resource_type"),
         "meter_category": request.args.get("meter_category"),
+        "meter_categories": _csv_list("meter_categories"),
+        "include_blank_meter_category": (request.args.get("include_blank_meter_category") or "").lower() in ("1", "true", "yes"),
         "search": request.args.get("search"),
     }
     filters = {k: v for k, v in filters.items() if v is not None and v != ""}
@@ -1536,6 +1540,8 @@ def api_costs_total_by_subscription():
         "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
         "resource_type": request.args.get("resource_type"),
         "meter_category": request.args.get("meter_category"),
+        "meter_categories": _csv_list("meter_categories"),
+        "include_blank_meter_category": (request.args.get("include_blank_meter_category") or "").lower() in ("1", "true", "yes"),
         "search": request.args.get("search"),
         # subscription_id intentionally ignored; this endpoint returns totals for all subs
     }
@@ -2126,6 +2132,8 @@ def api_export():
         "include_blank_resource_group": (request.args.get("include_blank_resource_group") or "").lower() in ("1", "true", "yes"),
         "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
         "resource_type": request.args.get("resource_type"),
+        "meter_categories": _csv_list("meter_categories"),
+        "include_blank_meter_category": (request.args.get("include_blank_meter_category") or "").lower() in ("1", "true", "yes"),
         "cloud_provider": request.args.get("cloud_provider"),
         "search": request.args.get("search"),
     }
@@ -6608,11 +6616,30 @@ def _openai_account_records(headers, sub_id, date_from, date_to, tenant_id):
         # the actual key (e.g. Platform-API vs Prism-API) like OpenAI's Usage page.
         for _pid in proj_names:
             try:
+                # Keys owned by a service account (e.g. Prism-API) often have a null
+                # name in the api_keys list — the display name lives on the service
+                # account itself, so fetch those first and fall back to them.
+                sa_names = {}
+                try:
+                    sr = _req.get(f"https://api.openai.com/v1/organization/projects/{_pid}/service_accounts?limit=100", headers=headers, timeout=15)
+                    if sr.status_code == 200:
+                        for sa in sr.json().get("data", []):
+                            if sa.get("id"):
+                                sa_names[sa["id"]] = sa.get("name") or sa["id"]
+                except Exception:
+                    pass
                 kr = _req.get(f"https://api.openai.com/v1/organization/projects/{_pid}/api_keys?limit=100", headers=headers, timeout=15)
                 if kr.status_code == 200:
                     for k in kr.json().get("data", []):
-                        if k.get("id"):
-                            key_names[k["id"]] = k.get("name") or k["id"]
+                        if not k.get("id"):
+                            continue
+                        _owner = k.get("owner") or {}
+                        _sa = _owner.get("service_account") or {}
+                        key_names[k["id"]] = (k.get("name")
+                                              or _sa.get("name")
+                                              or sa_names.get(_sa.get("id") or "")
+                                              or (_owner.get("user") or {}).get("name")
+                                              or k["id"])
             except Exception:
                 pass
     except Exception:
