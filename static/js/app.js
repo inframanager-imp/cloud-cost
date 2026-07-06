@@ -1624,7 +1624,7 @@ function _cuSortBy(col) {
 
 // OpenAI Group By → Model / API Capability / Spend Category.
 async function renderOpenAIGrouped(by) {
-    const labels = { model: 'Model', capability: 'API Capability', category: 'Spend Category' };
+    const labels = { model: 'Model', apikey: 'API Key', capability: 'API Capability', category: 'Spend Category' };
     const hdr  = document.getElementById('openaiGroupLabelHeader');
     const body = document.getElementById('openaiGroupBody');
     const subtitleBar = document.getElementById('costsSubtitleBar');

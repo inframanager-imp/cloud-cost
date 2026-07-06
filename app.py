@@ -5315,18 +5315,25 @@ def api_openai_grouped():
     date_to   = request.args.get("date_to")   or now.strftime("%Y-%m-%d")
 
     conn = get_db()
-    q = ("SELECT resource_name, COALESCE(SUM(cost),0) total FROM cost_data "
+    # 'apikey' groups directly on meter_category (the API key's display name,
+    # stored by the sync); the rest derive from the resource_name line item.
+    _sel = "meter_category" if by == "apikey" else "resource_name"
+    q = (f"SELECT {_sel} AS name, COALESCE(SUM(cost),0) total FROM cost_data "
          "WHERE cloud_provider='openai' AND date BETWEEN ? AND ? ")
     params = [date_from, date_to]
     if tid is not None:
         q += "AND tenant_id IS ? "; params.append(tid)
-    q += "GROUP BY resource_name"
+    q += f"GROUP BY {_sel}"
     raw = conn.execute(q, params).fetchall()
     conn.close()
 
     agg = {}
     for r in raw:
-        name = r["resource_name"] or "API Usage"
+        name = r["name"] or "API Usage"
+        if by == "apikey":
+            key = name if name not in ("Token Usage", "") else "(unattributed)"
+            agg[key] = agg.get(key, 0) + r["total"]
+            continue
         model = name.split(", ")[0]                      # "gpt-5.4-..." (strip token type)
         if by == "capability":
             key = _openai_capability(model)
@@ -6592,10 +6599,22 @@ def _openai_account_records(headers, sub_id, date_from, date_to, tenant_id):
     # Project id → name map so costs can be grouped per OpenAI project
     # (platform.openai.com → Projects). Best-effort: needs an admin/org key.
     proj_names = {}
+    key_names = {}
     try:
         pr = _req.get("https://api.openai.com/v1/organization/projects?limit=100", headers=headers, timeout=15)
         if pr.status_code == 200:
             proj_names = {p["id"]: (p.get("name") or p["id"]) for p in pr.json().get("data", []) if p.get("id")}
+        # API key id → display name (per project), so costs can be attributed to
+        # the actual key (e.g. Platform-API vs Prism-API) like OpenAI's Usage page.
+        for _pid in proj_names:
+            try:
+                kr = _req.get(f"https://api.openai.com/v1/organization/projects/{_pid}/api_keys?limit=100", headers=headers, timeout=15)
+                if kr.status_code == 200:
+                    for k in kr.json().get("data", []):
+                        if k.get("id"):
+                            key_names[k["id"]] = k.get("name") or k["id"]
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -6614,7 +6633,7 @@ def _openai_account_records(headers, sub_id, date_from, date_to, tenant_id):
             costs_url = (
                 f"https://api.openai.com/v1/organization/costs"
                 f"?start_time={chunk_start_ts}&end_time={chunk_end_ts}"
-                f"&bucket_width=1d&limit=31&group_by[]=line_item&group_by[]=project_id"
+                f"&bucket_width=1d&limit=31&group_by[]=line_item&group_by[]=project_id&group_by[]=api_key_id"
             )
             r = _req.get(costs_url, headers=headers, timeout=20)
             if r.status_code == 200:
@@ -6630,8 +6649,10 @@ def _openai_account_records(headers, sub_id, date_from, date_to, tenant_id):
                         line_item = result.get("line_item") or "API Usage"
                         _pid = result.get("project_id") or ""
                         proj = proj_names.get(_pid, _pid)  # name if known, else raw id
+                        _kid = result.get("api_key_id") or ""
+                        api_key_label = key_names.get(_kid, _kid) or "Token Usage"
                         records.append((bucket_date, proj or None, "OpenAI", "AI API", line_item,
-                                        "Token Usage", line_item, cost_val, "USD",
+                                        api_key_label, line_item, cost_val, "USD",
                                         sub_id, None, "openai", tenant_id))
             else:
                 chunk_errors += 1
