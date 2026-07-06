@@ -1965,7 +1965,11 @@ async function loadCostsTable() {
     //   service        → Cloud, Date, Subscription, Service, Cost
     //   resource       → Cloud, Date, Subscription, Resource Group, Service, Resource, Cost
     if (rgHeader) rgHeader.style.display = isSvcGroup ? 'none' : '';
-    if (serviceHeader) serviceHeader.style.display = isRgGroup ? 'none' : '';
+    if (serviceHeader) {
+        serviceHeader.style.display = isRgGroup ? 'none' : '';
+        // OpenAI shows the API key in this column instead of the constant "OpenAI".
+        serviceHeader.childNodes[0].textContent = (costsSelectedCloud === 'openai') ? 'API Key ' : 'Service ';
+    }
     if (resourceHeader) resourceHeader.style.display = (isRgGroup || isSvcGroup) ? 'none' : '';
     if (subscriptionHeader) {
         subscriptionHeader.style.display = '';
@@ -2103,7 +2107,12 @@ async function loadCostsTable() {
                 const dateOnly = granularity === 'monthly' ? rawDate.slice(0, 7) : rawDate.split('T')[0];
                 const rgCell = `<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.resource_group||''}">${r.resource_group || '-'}</td>`;
                 const subCell = `<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${subNameMap[r.subscription_id]||''}">${subNameMap[r.subscription_id] || '-'}</td>`;
-                const serviceCell = `<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.service_name||''}">${r.service_name || '-'}</td>`;
+                // OpenAI: the Service column is always "OpenAI" (useless) — show the
+                // API key name (stored in meter_category by the sync) instead.
+                const _svcVal = (costsSelectedCloud === 'openai')
+                    ? ((r.meter_category && r.meter_category !== 'Token Usage') ? r.meter_category : '-')
+                    : r.service_name;
+                const serviceCell = `<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${_svcVal||''}">${_svcVal || '-'}</td>`;
                 const resourceCell = `<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))"><span class="res-link">${resourceDisplay}</span></td>`;
                 const middleCells = isRgGroup
                     ? `${subCell}${rgCell}`
