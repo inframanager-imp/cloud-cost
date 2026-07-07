@@ -2056,7 +2056,11 @@ select.filter-input option {
 }
 .email-field-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
+}
+.email-field-row .email-field {
+    min-width: 110px;
 }
 .report-sections-grid {
     display: grid;
