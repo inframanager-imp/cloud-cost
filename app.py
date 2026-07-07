@@ -433,19 +433,19 @@ def api_subscriptions():
     azure_subs = get_subscriptions(tenant_id=tid)
     result = [{"subscription_id": s["subscription_id"], "name": s["name"], "enabled": s["enabled"], "cloud": "azure"} for s in azure_subs]
 
-    # AWS/GCP accounts from cloud_providers table
+    # AWS/GCP/Atlassian accounts from cloud_providers table (these are true
+    # multi-account "cloud provider" rows that already have friendly names).
     conn = get_db()
-    cloud_icons = {"aws": "⚙", "gcp": "◉"}
+    cloud_icons = {"aws": "⚙", "gcp": "◉", "atlassian": "◧"}
     if tid is not None:
         cp_rows = conn.execute(
-            "SELECT provider_id, name, provider_type FROM cloud_providers WHERE tenant_id=? AND provider_type IN ('aws','gcp') AND enabled=1",
+            "SELECT provider_id, name, provider_type FROM cloud_providers WHERE tenant_id=? AND provider_type IN ('aws','gcp','atlassian') AND enabled=1",
             (tid,)
         ).fetchall()
     else:
         cp_rows = conn.execute(
-            "SELECT provider_id, name, provider_type FROM cloud_providers WHERE provider_type IN ('aws','gcp') AND enabled=1"
+            "SELECT provider_id, name, provider_type FROM cloud_providers WHERE provider_type IN ('aws','gcp','atlassian') AND enabled=1"
         ).fetchall()
-    conn.close()
 
     for cp in cp_rows:
         if not cp["provider_id"]:
@@ -456,6 +456,35 @@ def api_subscriptions():
             "name": f"{icon} {cp['name'] or cp['provider_id']}",
             "enabled": True,
             "cloud": cp["provider_type"],
+        })
+
+    # Integration providers whose "accounts" are teams/orgs that live only in
+    # cost_data (OpenAI, ChatGPT, Cursor, ...) — never in cloud_providers or
+    # subscriptions. Their subscription_id already IS the friendly team name
+    # (e.g. PRISM-TEAM), set at sync time, so no name lookup is needed. Pulling
+    # this generically (any cloud_provider not already covered above) means the
+    # "API Key / Org" / "Team" column filter on Cost Data works for every
+    # integration, including future ones, without hardcoding a list here.
+    if tid is not None:
+        intg_rows = conn.execute(
+            "SELECT DISTINCT cloud_provider, subscription_id FROM cost_data "
+            "WHERE tenant_id IS ? AND subscription_id IS NOT NULL AND subscription_id != '' "
+            "AND cloud_provider NOT IN ('azure','aws','gcp','atlassian')",
+            (tid,)
+        ).fetchall()
+    else:
+        intg_rows = conn.execute(
+            "SELECT DISTINCT cloud_provider, subscription_id FROM cost_data "
+            "WHERE subscription_id IS NOT NULL AND subscription_id != '' "
+            "AND cloud_provider NOT IN ('azure','aws','gcp','atlassian')"
+        ).fetchall()
+    conn.close()
+    for r in intg_rows:
+        result.append({
+            "subscription_id": r["subscription_id"],
+            "name": r["subscription_id"],
+            "enabled": True,
+            "cloud": r["cloud_provider"],
         })
 
     return jsonify(result)
