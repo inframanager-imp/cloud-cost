@@ -1160,6 +1160,11 @@ def _build_custom_report_html(report):
                           f'{_arr} {abs(_pct):.1f}% vs {_prev_label}</div>'
                           f'<div style="font-size:11px;color:{MUT};margin-top:2px">'
                           f'Previous: <span style="font-weight:700;color:{INK}">${_prev_total:,.2f}</span></div>')
+        elif total_cost > 0 and _prev_label:
+            # No prior-period cost at all (e.g. a resource group created mid-period) —
+            # say so explicitly instead of silently omitting the comparison.
+            _prev_line = (f'<div style="font-size:12px;font-weight:700;color:{BLUE};margin-top:6px">New spend this period</div>'
+                          f'<div style="font-size:11px;color:{MUT};margin-top:2px">No cost recorded {_prev_label} (previous: $0.00)</div>')
         html += f"""
 <tr><td style="padding-bottom:14px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EFF4FE;border:1px solid #D6E4FB;border-radius:14px"><tr>
@@ -1798,6 +1803,13 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
                           f'<div style="font-size:10px;color:#6B7785;margin-top:2px">'
                           f'Previous: <span style="font-weight:700;color:#0E4C8A">${_prev_total:,.2f}</span>'
                           f' ({_fmt_d(_p_from)} to {_fmt_d(_p_to)})</div>')
+        elif total > 0:
+            # No prior-period cost at all (e.g. client's resources created mid-period) —
+            # say so explicitly instead of silently omitting the comparison.
+            _lbl = "previous month" if (_d1.day == 1 and _d2.day == _month_end and _d1.month == _d2.month) else "same period last month"
+            _prev_line = (f'<div style="font-size:11px;font-weight:700;color:#2563EB;margin-top:5px">New spend this period</div>'
+                          f'<div style="font-size:10px;color:#6B7785;margin-top:2px">'
+                          f'No cost recorded {_lbl} ({_fmt_d(_p_from)} to {_fmt_d(_p_to)}) &mdash; previous: $0.00</div>')
     except Exception as _pe:
         print(f"[client-report] prev-period compare failed: {_pe}")
 
