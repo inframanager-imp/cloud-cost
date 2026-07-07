@@ -1128,18 +1128,26 @@ def _build_custom_report_html(report):
 <tr><td align="center" style="padding:28px 14px">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="884" style="max-width:884px;width:100%">
 
-<!-- Header -->
+<!-- Header banner: gradient hero, matching the client report's design -->
 <tr><td style="padding-bottom:14px">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid {CARD_BD};border-radius:14px"><tr>
-    <td style="padding:22px 24px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td valign="middle">{_tileHTML('📊', 46)}</td>
-      <td valign="middle" style="padding-left:14px">
-        <div style="font-size:11px;color:{BLUE};letter-spacing:.08em;text-transform:uppercase;font-weight:700">Custom report</div>
-        <div style="font-size:22px;color:{INK};font-weight:800;margin-top:2px">{report_name}</div>
-        <div style="font-size:12px;color:{MUT};margin-top:4px">📅 Generated {now.strftime('%-d %B %Y at %H:%M UTC')}</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+         style="background-color:#2E3ED8;background-image:linear-gradient(115deg,#1E40D8 0%,#4F2EDC 55%,#8A2BE2 100%);border-radius:16px">
+    <tr>
+      <td width="70" style="padding:20px 0 0 22px;font-size:34px;color:rgba(255,255,255,.14);vertical-align:top">&#9729;</td>
+      <td style="padding:26px 10px;text-align:center">
+        <div style="font-size:12px;color:#C9D6FF;letter-spacing:0.14em;text-transform:uppercase;font-weight:700">&#9729; Cloud Cost Analyzer</div>
+        <div style="font-size:28px;color:#FFFFFF;font-weight:800;letter-spacing:-0.01em;margin-top:6px">Custom Cost Report</div>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top:12px"><tr>
+          <td style="background:rgba(255,255,255,.13);border:2px solid rgba(255,255,255,.55);border-radius:12px;padding:8px 22px">
+            <span style="font-size:17px;vertical-align:middle">&#128202;</span>
+            <span style="font-size:20px;color:#FFFFFF;font-weight:800;letter-spacing:.02em;vertical-align:middle">&nbsp;{report_name}</span>
+          </td>
+        </tr></table>
+        <div style="font-size:12px;color:#DCE4FF;margin-top:10px">&#128197; Generated {now.strftime('%-d %B %Y at %H:%M UTC')}</div>
       </td>
-    </tr></table></td>
-  </tr></table>
+      <td width="70" style="padding:0 22px 20px 0;font-size:34px;color:rgba(255,255,255,.14);vertical-align:bottom;text-align:right">&#9729;</td>
+    </tr>
+  </table>
 </td></tr>
 
 <!-- Meta cards -->
