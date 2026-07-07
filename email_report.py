@@ -1584,46 +1584,61 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         chart_pts.append((r["date"], r["cost"], is_spike))
 
     # Horizontal bar chart of the daily trend (spikes in red) — replaces the tall
-    # day-by-day table so the report stays compact.
+    # day-by-day table so the report stays compact. Built from nested HTML
+    # tables (bgcolor cells), NOT SVG: Outlook desktop (the Word rendering
+    # engine) doesn't support inline SVG at all — it either strips it or dumps
+    # the <text> labels as raw run-together text. Tables render correctly
+    # everywhere, matching the pattern already used by the custom report.
     def _svg_daily(pts):
         if not pts:
             return ""
-        W, H = 900, 200
-        pl, pr, ptp, pb = 48, 14, 20, 30
-        pw, ph = W - pl - pr, H - ptp - pb
+        INK, MUT = "#1A1A1A", "#8A95A1"
         mx = max((c for _, c, _ in pts), default=1) or 1
         n = len(pts)
-        slot = pw / n
-        bw = max(3.0, slot * 0.62)
-        show_all = n <= 16
         step = max(1, round(n / 14))
-        grid = ""
-        for g in (0.0, 0.5, 1.0):
-            yy = ptp + ph - ph * g
-            grid += f'<line x1="{pl}" y1="{yy:.1f}" x2="{W - pr}" y2="{yy:.1f}" stroke="#EEF1F5"/>'
-            grid += f'<text x="{pl - 6}" y="{yy + 3:.1f}" font-size="8" fill="#8A95A1" text-anchor="end">${mx * g:,.0f}</text>'
-        bars = ""
+        show_all = n <= 16
+        CHART_H = 132
+        _short = lambda v: (f"${v/1000:.1f}k" if v >= 1000 else f"${v:.0f}")
+        bars = labels = ""
+        any_spike = False
         for i, (d, c, sp) in enumerate(pts):
-            bh = (c / mx) * ph
-            x = pl + slot * i + (slot - bw) / 2
-            y = ptp + ph - bh
+            h = max(2, round(c / mx * (CHART_H - 14)))
+            any_spike = any_spike or sp
             col = "#D64545" if sp else ACCENT
-            bars += f'<rect x="{x:.1f}" y="{y:.1f}" width="{bw:.1f}" height="{max(0.0, bh):.1f}" rx="2" fill="{col}"/>'
-            if sp or show_all:
-                bars += (f'<text x="{x + bw / 2:.1f}" y="{y - 3:.1f}" font-size="8" '
-                         f'font-weight="{700 if sp else 400}" fill="{"#D64545" if sp else "#5A6B7B"}" text-anchor="middle">${c:,.0f}</text>')
+            show_val = sp or show_all
+            vlabel = (f'<div style="font-size:8px;font-weight:{700 if sp else 400};color:{col};'
+                      f'text-align:center;line-height:1;padding-bottom:2px;white-space:nowrap">{_short(c)}</div>' if show_val else '')
+            bars += (f'<td valign="bottom" style="padding:0 1px">{vlabel}'
+                     f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>'
+                     f'<td height="{h}" bgcolor="{col}" style="height:{h}px;background:{col};border-radius:3px 3px 0 0;line-height:1px;font-size:1px">&nbsp;</td>'
+                     f'</tr></table></td>')
             if i % step == 0 or i == n - 1:
                 try:
                     _dl = datetime.strptime(d, "%Y-%m-%d").strftime("%d %b")
                 except Exception:
                     _dl = d[5:]
-                bars += f'<text x="{x + bw / 2:.1f}" y="{H - 13}" font-size="8" fill="#8A95A1" text-anchor="middle">{_dl}</text>'
-        legend = (f'<rect x="{W - 170}" y="2" width="9" height="9" rx="2" fill="{ACCENT}"/>'
-                  f'<text x="{W - 157}" y="10" font-size="9" fill="#525252">Total Cost</text>'
-                  f'<rect x="{W - 92}" y="2" width="9" height="9" rx="2" fill="#D64545"/>'
-                  f'<text x="{W - 79}" y="10" font-size="9" fill="#525252">Spike</text>')
-        return (f'<svg viewBox="0 0 {W} {H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">'
-                f'{grid}{bars}{legend}</svg>')
+                labels += f'<td align="center" style="padding:5px 0 0;font-size:9px;color:{MUT};white-space:nowrap">{_dl}</td>'
+            else:
+                labels += '<td></td>'
+        legend = ' &bull; <span style="color:#D64545">■</span> spike day' if any_spike else ""
+        yax = (f'<td width="44" valign="top" style="width:44px">'
+               f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:{CHART_H}px">'
+               f'<tr><td height="{CHART_H//2}" valign="top" style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;line-height:1">{_short(mx)}</td></tr>'
+               f'<tr><td height="{CHART_H//2}" valign="middle" style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;line-height:1">{_short(mx/2)}</td></tr>'
+               f'</table>'
+               f'<div style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;margin-top:-8px">$0</div></td>')
+        avg_c = sum(c for _, c, _ in pts) / n if n else 0
+        pk_d, pk_c, _ = max(pts, key=lambda p: p[1]) if pts else ("", 0, False)
+        return (
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
+            f'<tr valign="bottom">{yax}<td>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:{CHART_H}px;border-bottom:2px solid #E7ECF3">'
+            f'<tr valign="bottom">{bars}</tr></table></td></tr>'
+            f'<tr><td></td><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>{labels}</tr></table></td></tr>'
+            f'</table>'
+            f'<div style="margin-top:12px;font-size:11px;color:{MUT};border-top:1px solid #EDF1F7;padding-top:10px">'
+            f'Peak <b style="color:{INK}">${pk_c:,.2f}</b> on {pk_d} &bull; '
+            f'Avg <b style="color:{INK}">${avg_c:,.2f}</b>/day{legend}</div>')
     trend_chart = _svg_daily(chart_pts)
 
     # Manually-tracked costs — present when called from send-report (cost_data
