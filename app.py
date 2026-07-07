@@ -57,6 +57,9 @@ from database import (
     create_client, get_clients, get_client, update_client, delete_client,
     get_client_mappings, upsert_client_mappings, get_client_costs,
     update_client_schedule, mark_client_report_sent, get_scheduled_clients,
+    get_client_report_schedules, create_client_report_schedule,
+    update_client_report_schedule, delete_client_report_schedule,
+    mark_client_schedule_sent, get_all_active_client_schedules,
     build_client_sql_filter, get_client_filter_values,
     # Manually-added costs
     MANUAL_COST_CATEGORIES, create_manual_cost, update_manual_cost, delete_manual_cost,
@@ -3998,6 +4001,87 @@ def api_client_update_schedule(client_id):
     return jsonify({"message": "Schedule saved"})
 
 
+def _parse_schedule_body(body):
+    """Shared validation for creating/updating a client report schedule."""
+    name = (body.get("name") or "").strip() or "Schedule"
+    recipients = (body.get("recipients") or "").strip()
+    schedule = (body.get("schedule") or "none").strip().lower()
+    if schedule not in ("none", "daily", "weekly", "monthly"):
+        schedule = "none"
+    try:
+        schedule_day = int(body.get("schedule_day") or 1)
+    except (TypeError, ValueError):
+        schedule_day = 1
+    try:
+        schedule_hour = int(body.get("schedule_hour") or 8)
+    except (TypeError, ValueError):
+        schedule_hour = 8
+    schedule_hour = max(0, min(23, schedule_hour))
+    try:
+        schedule_minute = int(body.get("schedule_minute") or 0)
+    except (TypeError, ValueError):
+        schedule_minute = 0
+    schedule_minute = max(0, min(59, schedule_minute))
+    schedule_tz = "IST" if (body.get("schedule_tz") or "UTC").upper() == "IST" else "UTC"
+    enabled = bool(body.get("enabled", True))
+    return name, recipients, schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled
+
+
+@app.route("/api/clients/<int:client_id>/schedules", methods=["GET"])
+@login_required
+def api_client_list_schedules(client_id):
+    tid = current_tenant_id()
+    if not get_client(client_id, tid):
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(get_client_report_schedules(client_id, tid))
+
+
+@app.route("/api/clients/<int:client_id>/schedules", methods=["POST"])
+@login_required
+def api_client_create_schedule(client_id):
+    tid = current_tenant_id()
+    if not get_client(client_id, tid):
+        return jsonify({"error": "Not found"}), 404
+    body = request.get_json(silent=True) or {}
+    name, recipients, schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled = _parse_schedule_body(body)
+    if schedule != "none" and not recipients:
+        return jsonify({"error": "Recipients are required to enable a schedule"}), 400
+    new_id = create_client_report_schedule(
+        client_id, tid, name, recipients, schedule, schedule_day, schedule_hour,
+        schedule_tz=schedule_tz, schedule_minute=schedule_minute, enabled=enabled)
+    return jsonify({"message": "Schedule created", "id": new_id})
+
+
+@app.route("/api/clients/<int:client_id>/schedules/<int:schedule_id>", methods=["PUT"])
+@login_required
+def api_client_update_schedule_item(client_id, schedule_id):
+    tid = current_tenant_id()
+    if not get_client(client_id, tid):
+        return jsonify({"error": "Not found"}), 404
+    body = request.get_json(silent=True) or {}
+    name, recipients, schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled = _parse_schedule_body(body)
+    if schedule != "none" and not recipients:
+        return jsonify({"error": "Recipients are required to enable a schedule"}), 400
+    ok = update_client_report_schedule(
+        schedule_id, client_id, tid, name, recipients, schedule, schedule_day, schedule_hour,
+        schedule_tz=schedule_tz, schedule_minute=schedule_minute, enabled=enabled)
+    if not ok:
+        return jsonify({"error": "Schedule not found"}), 404
+    return jsonify({"message": "Schedule updated"})
+
+
+@app.route("/api/clients/<int:client_id>/schedules/<int:schedule_id>", methods=["DELETE"])
+@login_required
+def api_client_delete_schedule_item(client_id, schedule_id):
+    tid = current_tenant_id()
+    if not get_client(client_id, tid):
+        return jsonify({"error": "Not found"}), 404
+    ok = delete_client_report_schedule(schedule_id, client_id, tid)
+    if not ok:
+        return jsonify({"error": "Schedule not found"}), 404
+    return jsonify({"message": "Schedule deleted"})
+
+
 @app.route("/api/clients/<int:client_id>/report-preview", methods=["GET"])
 @login_required
 def api_client_report_preview(client_id):
@@ -4652,16 +4736,18 @@ def _check_email_schedule():
                     except Exception as e:
                         print(f"[Email Report] Custom report '{cr['name']}' failed: {e}")
 
-        # Check client report schedules
-        for client in get_scheduled_clients():
-            cl_schedule = client.get("schedule", "none")
-            cl_recipients = [r.strip() for r in (client.get("recipients") or "").split(",") if r.strip()]
-            if cl_schedule == "none" or not cl_recipients:
+        # Check client report schedules — a client can have several (e.g. a
+        # weekly internal digest + a monthly one for the client themselves),
+        # each with its own recipients/frequency and its own last_sent.
+        for sched in get_all_active_client_schedules():
+            cl_recipients = [r.strip() for r in (sched.get("recipients") or "").split(",") if r.strip()]
+            if not cl_recipients:
                 continue
-            cl_hour = client.get("schedule_hour", 8)
-            cl_minute = client.get("schedule_minute", 0)
-            cl_day = client.get("schedule_day", 1)
-            cl_lnow = _report_local_now(now, client.get("schedule_tz", "UTC"))
+            cl_schedule = sched.get("schedule", "none")
+            cl_hour = sched.get("schedule_hour", 8)
+            cl_minute = sched.get("schedule_minute", 0)
+            cl_day = sched.get("schedule_day", 1)
+            cl_lnow = _report_local_now(now, sched.get("schedule_tz", "UTC"))
             cl_should_send = False
             if _in_hour_slot(cl_lnow, cl_hour, cl_minute):
                 if cl_schedule == "daily":
@@ -4671,13 +4757,17 @@ def _check_email_schedule():
                 elif cl_schedule == "monthly" and cl_lnow.day == 1:
                     cl_should_send = True
             if cl_should_send:
+                label = f"{sched['client_name']} / {sched.get('name') or 'Schedule'}"
                 try:
-                    print(f"[Email Report] Sending client report '{client['name']}'...")
-                    _send_client_cost_report(client, client["tenant_id"], cl_recipients, report_type="scheduled")
-                    mark_client_report_sent(client["id"])
-                    print(f"[Email Report] Client report '{client['name']}' sent.")
+                    client = get_client(sched["client_id"], sched["tenant_id"])
+                    if not client:
+                        continue
+                    print(f"[Email Report] Sending client report '{label}'...")
+                    _send_client_cost_report(client, sched["tenant_id"], cl_recipients, report_type="scheduled")
+                    mark_client_schedule_sent(sched["id"])
+                    print(f"[Email Report] Client report '{label}' sent.")
                 except Exception as e:
-                    print(f"[Email Report] Client report '{client['name']}' failed: {e}")
+                    print(f"[Email Report] Client report '{label}' failed: {e}")
 
     except Exception as e:
         print(f"[Email Report] Scheduler error: {e}")

@@ -950,6 +950,50 @@ def init_db():
             print(f"[DB] Migrated clients: added {col} column")
 
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS client_report_schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            tenant_id INTEGER NOT NULL DEFAULT 1,
+            name TEXT NOT NULL DEFAULT '',
+            recipients TEXT NOT NULL DEFAULT '',
+            schedule TEXT NOT NULL DEFAULT 'none',
+            schedule_day INTEGER DEFAULT 1,
+            schedule_hour INTEGER DEFAULT 8,
+            schedule_minute INTEGER DEFAULT 0,
+            schedule_tz TEXT DEFAULT 'UTC',
+            enabled INTEGER DEFAULT 1,
+            last_sent TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_client_report_schedules_client ON client_report_schedules(client_id)")
+
+    # One-time migration: carry each client's single legacy schedule (columns on
+    # clients: recipients/schedule/schedule_day/hour/minute/tz/last_sent) into its
+    # own row here, so existing schedules keep firing under the new multi-schedule
+    # model instead of silently vanishing. Only runs if the new table is empty.
+    try:
+        _existing = cursor.execute("SELECT COUNT(*) FROM client_report_schedules").fetchone()[0]
+        if _existing == 0:
+            _legacy = cursor.execute(
+                "SELECT id, tenant_id, recipients, schedule, schedule_day, schedule_hour, "
+                "schedule_minute, schedule_tz, last_sent FROM clients "
+                "WHERE schedule IS NOT NULL AND schedule != 'none' AND COALESCE(recipients,'') != ''"
+            ).fetchall()
+            for r in _legacy:
+                cursor.execute(
+                    "INSERT INTO client_report_schedules (client_id, tenant_id, name, recipients, schedule, "
+                    "schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled, last_sent) "
+                    "VALUES (?, ?, 'Default', ?, ?, ?, ?, ?, ?, 1, ?)",
+                    (r["id"], r["tenant_id"], r["recipients"], r["schedule"], r["schedule_day"],
+                     r["schedule_hour"], r["schedule_minute"], r["schedule_tz"], r["last_sent"])
+                )
+            if _legacy:
+                print(f"[DB] Migrated {len(_legacy)} legacy client schedule(s) into client_report_schedules")
+    except Exception as _mig_err:
+        print(f"[DB] client_report_schedules migration skipped: {_mig_err}")
+
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS client_mappings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
@@ -4213,6 +4257,89 @@ def mark_client_report_sent(client_id: int):
     )
     conn.commit()
     conn.close()
+
+
+# ─── Client report schedules (multiple per client) ────────────────────────────
+
+def get_client_report_schedules(client_id: int, tenant_id: int) -> list:
+    """All schedules configured for one client (for the Clients-page list view)."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM client_report_schedules WHERE client_id=? AND tenant_id=? ORDER BY id",
+        (client_id, tenant_id)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def create_client_report_schedule(client_id: int, tenant_id: int, name: str, recipients: str,
+                                  schedule: str, schedule_day: int, schedule_hour: int,
+                                  schedule_tz: str = "UTC", schedule_minute: int = 0,
+                                  enabled: bool = True) -> int:
+    conn = get_db()
+    cur = conn.execute(
+        "INSERT INTO client_report_schedules (client_id, tenant_id, name, recipients, schedule, "
+        "schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (client_id, tenant_id, name.strip(), recipients.strip(), schedule, schedule_day,
+         schedule_hour, schedule_minute, schedule_tz, 1 if enabled else 0)
+    )
+    conn.commit()
+    new_id = cur.lastrowid
+    conn.close()
+    return new_id
+
+
+def update_client_report_schedule(schedule_id: int, client_id: int, tenant_id: int, name: str,
+                                  recipients: str, schedule: str, schedule_day: int, schedule_hour: int,
+                                  schedule_tz: str = "UTC", schedule_minute: int = 0, enabled: bool = True) -> bool:
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE client_report_schedules SET name=?, recipients=?, schedule=?, schedule_day=?, "
+        "schedule_hour=?, schedule_minute=?, schedule_tz=?, enabled=? "
+        "WHERE id=? AND client_id=? AND tenant_id=?",
+        (name.strip(), recipients.strip(), schedule, schedule_day, schedule_hour, schedule_minute,
+         schedule_tz, 1 if enabled else 0, schedule_id, client_id, tenant_id)
+    )
+    conn.commit()
+    affected = cur.rowcount > 0
+    conn.close()
+    return affected
+
+
+def delete_client_report_schedule(schedule_id: int, client_id: int, tenant_id: int) -> bool:
+    conn = get_db()
+    cur = conn.execute(
+        "DELETE FROM client_report_schedules WHERE id=? AND client_id=? AND tenant_id=?",
+        (schedule_id, client_id, tenant_id)
+    )
+    conn.commit()
+    affected = cur.rowcount > 0
+    conn.close()
+    return affected
+
+
+def mark_client_schedule_sent(schedule_id: int):
+    conn = get_db()
+    conn.execute(
+        "UPDATE client_report_schedules SET last_sent=? WHERE id=?",
+        (datetime.now().isoformat(), schedule_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_all_active_client_schedules() -> list:
+    """All enabled, non-'none' client schedules (any tenant) with the client's
+    name attached, for the auto-send scheduler loop."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT crs.*, c.name AS client_name FROM client_report_schedules crs "
+        "JOIN clients c ON c.id = crs.client_id "
+        "WHERE crs.enabled=1 AND crs.schedule != 'none' AND TRIM(COALESCE(crs.recipients,'')) != '' "
+        "ORDER BY crs.client_id, crs.id"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def delete_client(client_id: int, tenant_id: int):

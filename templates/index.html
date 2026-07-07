@@ -1542,6 +1542,9 @@
                 <button class="cp-btn-primary" id="clientSendReportBtn" style="height:30px;font-size:12px;display:none" onclick="openClientReportModal()">
                     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>Send Report
                 </button>
+                <button class="cp-btn-secondary" id="clientSchedulesBtn" style="height:30px;font-size:12px;display:none" onclick="openClientSchedulesModal()">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>Schedules <span id="clientSchedulesCount" class="count-chip count-chip--small" style="display:none"></span>
+                </button>
             </div>
         </div>
 
@@ -1555,47 +1558,30 @@
                 <label style="font-size:12px;font-weight:500;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Period</label>
                 <div id="clientReportPeriodLabel" style="font-size:13px;color:var(--text-primary);margin-bottom:20px;padding:6px 10px;background:var(--bg-subtle,#f5f5f5);border-radius:6px"></div>
 
-                <div style="border-top:1px solid var(--border);margin-bottom:16px;padding-top:16px">
-                    <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">Recurring Schedule</div>
-                    <div class="email-field-row">
-                        <div class="email-field" style="flex:1">
-                            <label>Frequency</label>
-                            <select id="clientReportSchedule" class="filter-input" onchange="onClientScheduleChange()">
-                                <option value="none">Manual Only</option>
-                                <option value="daily">Daily</option>
-                                <option value="weekly">Weekly</option>
-                                <option value="monthly">Monthly</option>
-                            </select>
-                        </div>
-                        <div class="email-field" style="flex:1" id="clientScheduleDayGroup">
-                            <label>Day</label>
-                            <select id="clientReportScheduleDay" class="filter-input">
-                                <option value="0">Sunday</option><option value="1" selected>Monday</option>
-                                <option value="2">Tuesday</option><option value="3">Wednesday</option>
-                                <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
-                            </select>
-                        </div>
-                        <div class="email-field" style="flex:1" id="clientScheduleHourGroup">
-                            <label>Time</label>
-                            <input type="time" id="clientReportScheduleTime" class="filter-input" value="08:00">
-                        </div>
-                        <div class="email-field" style="flex:1">
-                            <label>Timezone</label>
-                            <select id="clientReportScheduleTz" class="filter-input">
-                                <option value="UTC" selected>UTC</option>
-                                <option value="IST">IST (UTC+5:30)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div style="font-size:11px;color:var(--text-secondary);margin-top:8px" id="clientScheduleLastSent"></div>
-                </div>
-
                 <div style="display:flex;gap:8px;justify-content:flex-end">
                     <button class="cp-btn-secondary" onclick="closeClientReportModal()">Cancel</button>
-                    <button class="cp-btn-secondary" id="clientReportScheduleSaveBtn" onclick="saveClientReportSchedule()">Save Schedule</button>
                     <button class="cp-btn-primary" id="clientReportSendBtn" onclick="sendClientReport()">
                         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>Send Now
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schedules Modal: list of this client's recurring schedules (multiple allowed) -->
+        <div id="clientSchedulesModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+            <div style="background:var(--bg-card,#fff);border-radius:12px;padding:28px;width:620px;max-width:92vw;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                    <div style="font-size:17px;font-weight:600;color:var(--text-primary)">Report Schedules</div>
+                    <button onclick="closeClientSchedulesModal()" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:20px;line-height:1">&times;</button>
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:18px">Recurring cost reports for <strong id="clientSchedulesModalClientName"></strong> &mdash; add as many as you need (e.g. a weekly internal digest and a monthly client copy).</div>
+
+                <div id="clientSchedulesList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px"></div>
+                <button type="button" class="cp-btn-secondary" style="font-size:12px;padding:6px 12px" onclick="addClientScheduleRow()">+ Add schedule</button>
+
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+                    <button class="cp-btn-secondary" onclick="closeClientSchedulesModal()">Close</button>
+                    <button class="cp-btn-primary" onclick="saveAllClientSchedules()">Save Schedules</button>
                 </div>
             </div>
         </div>
@@ -4086,7 +4072,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260706c"></script>
+<script src="/static/js/app.js?v=20260707a"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

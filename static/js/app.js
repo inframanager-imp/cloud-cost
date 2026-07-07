@@ -7621,14 +7621,6 @@ function openClientReportModal() {
 
     const recipientsEl = document.getElementById('clientReportRecipients');
     if (recipientsEl && !recipientsEl.value) recipientsEl.value = client.recipients || '';
-    document.getElementById('clientReportSchedule').value = client.schedule || 'none';
-    document.getElementById('clientReportScheduleDay').value = client.schedule_day ?? 1;
-    setScheduleTime('clientReportScheduleTime', client.schedule_hour ?? 8, client.schedule_minute ?? 0);
-    document.getElementById('clientReportScheduleTz').value = client.schedule_tz || 'UTC';
-    onClientScheduleChange();
-
-    const lastSentEl = document.getElementById('clientScheduleLastSent');
-    if (lastSentEl) lastSentEl.textContent = client.last_sent ? `Last sent: ${new Date(client.last_sent).toLocaleString()}` : '';
 
     if (modal) modal.style.display = 'flex';
 }
@@ -7638,45 +7630,165 @@ function closeClientReportModal() {
     if (modal) modal.style.display = 'none';
 }
 
-function onClientScheduleChange() {
-    const sched = document.getElementById('clientReportSchedule').value;
-    document.getElementById('clientScheduleDayGroup').style.display = sched === 'weekly' ? '' : 'none';
-    document.getElementById('clientScheduleHourGroup').style.display = sched !== 'none' ? '' : 'none';
+// ── Client report schedules (multiple per client) ──────────────────────────
+let _clientSchedules = [];
+
+async function openClientSchedulesModal() {
+    const client = _clientsData.find(c => c.id === _selectedClientId);
+    if (!client) return;
+    document.getElementById('clientSchedulesModalClientName').textContent = client.name;
+    const modal = document.getElementById('clientSchedulesModal');
+    if (modal) modal.style.display = 'flex';
+    const list = document.getElementById('clientSchedulesList');
+    if (list) list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px">Loading…</div>';
+    try {
+        _clientSchedules = await fetch(`/api/clients/${_selectedClientId}/schedules`).then(r => r.json());
+    } catch (e) {
+        _clientSchedules = [];
+    }
+    if (list) {
+        list.innerHTML = '';
+        if (_clientSchedules.length) {
+            _clientSchedules.forEach(s => addClientScheduleRow(s));
+        } else {
+            list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:13px">No schedules yet — add one below.</div>';
+        }
+    }
+    _updateClientSchedulesBadge();
 }
 
-async function saveClientReportSchedule() {
-    if (!_selectedClientId) return;
-    const recipients = (document.getElementById('clientReportRecipients')?.value || '').trim();
-    const schedule = document.getElementById('clientReportSchedule').value;
-    if (schedule !== 'none' && !recipients) { showToast('Enter at least one recipient to enable a schedule', 'error'); return; }
+function closeClientSchedulesModal() {
+    const modal = document.getElementById('clientSchedulesModal');
+    if (modal) modal.style.display = 'none';
+}
 
-    const btn = document.getElementById('clientReportScheduleSaveBtn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-    try {
-        const resp = await fetch(`/api/clients/${_selectedClientId}/schedule`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                recipients,
-                schedule,
-                schedule_day: parseInt(document.getElementById('clientReportScheduleDay').value),
-                schedule_hour: _timeToHM(document.getElementById('clientReportScheduleTime').value).hour,
-                schedule_minute: _timeToHM(document.getElementById('clientReportScheduleTime').value).minute,
-                schedule_tz: document.getElementById('clientReportScheduleTz').value
-            })
-        });
-        const data = await resp.json();
-        if (resp.ok) {
-            showToast(data.message || 'Schedule saved', 'success');
-            const client = _clientsData.find(c => c.id === _selectedClientId);
-            if (client) { const _t = _timeToHM(document.getElementById('clientReportScheduleTime').value); client.recipients = recipients; client.schedule = schedule; client.schedule_day = parseInt(document.getElementById('clientReportScheduleDay').value); client.schedule_hour = _t.hour; client.schedule_minute = _t.minute; }
-        } else {
-            showToast(data.error || 'Save failed', 'error');
+function _updateClientSchedulesBadge() {
+    const chip = document.getElementById('clientSchedulesCount');
+    if (!chip) return;
+    const n = _clientSchedules.length;
+    if (n > 0) { chip.textContent = n; chip.style.display = ''; } else { chip.style.display = 'none'; }
+}
+
+const _csEsc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+
+function addClientScheduleRow(s) {
+    s = s || {};
+    const list = document.getElementById('clientSchedulesList');
+    if (!list) return;
+    // Remove the "no schedules yet" placeholder if present.
+    if (list.children.length === 1 && list.children[0].tagName === 'DIV' && !list.children[0].classList.contains('cs-row')) {
+        list.innerHTML = '';
+    }
+    const hm = { hour: s.schedule_hour ?? 8, minute: s.schedule_minute ?? 0 };
+    const timeVal = `${String(hm.hour).padStart(2, '0')}:${String(hm.minute).padStart(2, '0')}`;
+    const row = document.createElement('div');
+    row.className = 'cs-row';
+    row.dataset.id = s.id || '';
+    row.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--bg-subtle,#fafafa)';
+    row.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:center">
+            <input class="cs-name form-control" placeholder="Schedule name (e.g. Weekly internal digest)" value="${_csEsc(s.name)}" style="flex:1;font-weight:600">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);white-space:nowrap">
+                <input type="checkbox" class="cs-enabled" ${s.enabled === 0 ? '' : 'checked'} style="width:14px;height:14px"> Enabled
+            </label>
+            <button type="button" class="btn btn-secondary" style="font-size:13px;padding:4px 9px;color:var(--danger,#e74c3c)" title="Remove" onclick="deleteClientScheduleRow(this)">&times;</button>
+        </div>
+        <input class="cs-recipients form-control" placeholder="email1@company.com, email2@company.com" value="${_csEsc(s.recipients)}" style="font-size:13px">
+        <div class="email-field-row">
+            <div class="email-field" style="flex:1">
+                <label style="font-size:11px">Frequency</label>
+                <select class="cs-schedule filter-input" onchange="_onCsFreqChange(this)">
+                    <option value="none" ${(!s.schedule || s.schedule === 'none') ? 'selected' : ''}>Manual Only</option>
+                    <option value="daily" ${s.schedule === 'daily' ? 'selected' : ''}>Daily</option>
+                    <option value="weekly" ${s.schedule === 'weekly' ? 'selected' : ''}>Weekly</option>
+                    <option value="monthly" ${s.schedule === 'monthly' ? 'selected' : ''}>Monthly</option>
+                </select>
+            </div>
+            <div class="email-field cs-day-group" style="flex:1;display:${s.schedule === 'weekly' ? '' : 'none'}">
+                <label style="font-size:11px">Day</label>
+                <select class="cs-day filter-input">
+                    <option value="0" ${s.schedule_day == 0 ? 'selected' : ''}>Sunday</option>
+                    <option value="1" ${(s.schedule_day == null || s.schedule_day == 1) ? 'selected' : ''}>Monday</option>
+                    <option value="2" ${s.schedule_day == 2 ? 'selected' : ''}>Tuesday</option>
+                    <option value="3" ${s.schedule_day == 3 ? 'selected' : ''}>Wednesday</option>
+                    <option value="4" ${s.schedule_day == 4 ? 'selected' : ''}>Thursday</option>
+                    <option value="5" ${s.schedule_day == 5 ? 'selected' : ''}>Friday</option>
+                    <option value="6" ${s.schedule_day == 6 ? 'selected' : ''}>Saturday</option>
+                </select>
+            </div>
+            <div class="email-field cs-time-group" style="flex:1;display:${(s.schedule && s.schedule !== 'none') ? '' : 'none'}">
+                <label style="font-size:11px">Time</label>
+                <input type="time" class="cs-time filter-input" value="${timeVal}">
+            </div>
+            <div class="email-field" style="flex:1">
+                <label style="font-size:11px">Timezone</label>
+                <select class="cs-tz filter-input">
+                    <option value="UTC" ${(s.schedule_tz || 'UTC') === 'UTC' ? 'selected' : ''}>UTC</option>
+                    <option value="IST" ${s.schedule_tz === 'IST' ? 'selected' : ''}>IST (UTC+5:30)</option>
+                </select>
+            </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary)">${s.last_sent ? 'Last sent: ' + new Date(s.last_sent).toLocaleString() : (s.id ? 'Never sent yet' : '')}</div>`;
+    list.appendChild(row);
+}
+
+function _onCsFreqChange(sel) {
+    const row = sel.closest('.cs-row');
+    const sched = sel.value;
+    row.querySelector('.cs-day-group').style.display = sched === 'weekly' ? '' : 'none';
+    row.querySelector('.cs-time-group').style.display = sched !== 'none' ? '' : 'none';
+}
+
+async function deleteClientScheduleRow(btn) {
+    const row = btn.closest('.cs-row');
+    const id = row.dataset.id;
+    if (id) {
+        if (!confirm('Delete this schedule? This cannot be undone.')) return;
+        try {
+            await fetch(`/api/clients/${_selectedClientId}/schedules/${id}`, { method: 'DELETE' });
+        } catch (e) { showToast('Failed to delete: ' + e.message, 'error'); return; }
+    }
+    row.remove();
+    const list = document.getElementById('clientSchedulesList');
+    if (list && !list.children.length) {
+        list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:13px">No schedules yet — add one below.</div>';
+    }
+    _clientSchedules = _clientSchedules.filter(s => String(s.id) !== String(id));
+    _updateClientSchedulesBadge();
+}
+
+async function saveAllClientSchedules() {
+    const rows = [...document.querySelectorAll('#clientSchedulesList .cs-row')];
+    let okCount = 0, errCount = 0;
+    for (const row of rows) {
+        const name = row.querySelector('.cs-name')?.value.trim();
+        const recipients = row.querySelector('.cs-recipients')?.value.trim();
+        const schedule = row.querySelector('.cs-schedule')?.value;
+        const day = parseInt(row.querySelector('.cs-day')?.value ?? 1);
+        const { hour, minute } = _timeToHM(row.querySelector('.cs-time')?.value);
+        const tz = row.querySelector('.cs-tz')?.value;
+        const enabled = row.querySelector('.cs-enabled')?.checked;
+        if (schedule !== 'none' && !recipients) {
+            showToast(`"${name || 'Schedule'}" needs at least one recipient`, 'error');
+            errCount++; continue;
         }
-    } catch(e) {
-        showToast('Save failed: ' + e.message, 'error');
-    } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Save Schedule'; }
+        const body = { name, recipients, schedule, schedule_day: day, schedule_hour: hour, schedule_minute: minute, schedule_tz: tz, enabled };
+        const id = row.dataset.id;
+        try {
+            const resp = await fetch(`/api/clients/${_selectedClientId}/schedules${id ? '/' + id : ''}`, {
+                method: id ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await resp.json();
+            if (resp.ok) { okCount++; if (!id && data.id) row.dataset.id = data.id; }
+            else { errCount++; showToast(data.error || 'Save failed', 'error'); }
+        } catch (e) { errCount++; showToast('Save failed: ' + e.message, 'error'); }
+    }
+    if (okCount) showToast(`Saved ${okCount} schedule${okCount !== 1 ? 's' : ''}`, 'success');
+    if (!errCount) {
+        _clientSchedules = await fetch(`/api/clients/${_selectedClientId}/schedules`).then(r => r.json()).catch(() => _clientSchedules);
+        _updateClientSchedulesBadge();
     }
 }
 
@@ -7720,6 +7832,11 @@ async function selectClient(clientId) {
     // Show action buttons
     document.getElementById('clientSendReportBtn')?.style.setProperty('display', '');
     document.getElementById('clientPreviewBtn')?.style.setProperty('display', '');
+    document.getElementById('clientSchedulesBtn')?.style.setProperty('display', '');
+    fetch(`/api/clients/${clientId}/schedules`).then(r => r.json()).then(s => {
+        _clientSchedules = Array.isArray(s) ? s : [];
+        _updateClientSchedulesBadge();
+    }).catch(() => {});
     // Highlight active item
     document.querySelectorAll('.client-list-item').forEach(el => {
         const isActive = el.getAttribute('onclick') === `selectClient(${clientId})`;
