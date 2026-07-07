@@ -867,6 +867,27 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
     return html
 
 
+def _prev_period_dates(date_from: str, date_to: str):
+    """Return (prev_from, prev_to, label) for comparing a report period against
+    the equivalent period before it. A full calendar month compares to the full
+    previous month; any other range compares to the same date range one month
+    earlier (day clamped to that month's length), matching the client report's
+    month-over-month comparison."""
+    import calendar as _cal
+    d1 = datetime.strptime(date_from, "%Y-%m-%d")
+    d2 = datetime.strptime(date_to, "%Y-%m-%d")
+    month_end = _cal.monthrange(d1.year, d1.month)[1]
+
+    def _month_back(d):
+        y, m = (d.year, d.month - 1) if d.month > 1 else (d.year - 1, 12)
+        return d.replace(year=y, month=m, day=min(d.day, _cal.monthrange(y, m)[1]))
+
+    if d1.day == 1 and d2.day == month_end and d1.month == d2.month:
+        p_end = d1 - timedelta(days=1)
+        return p_end.strftime("%Y-%m-01"), p_end.strftime("%Y-%m-%d"), "previous month"
+    return _month_back(d1).strftime("%Y-%m-%d"), _month_back(d2).strftime("%Y-%m-%d"), "same period last month"
+
+
 def _build_custom_report_html(report):
     """Generate HTML for a custom report based on saved filters and sections."""
     filters = report.get("filters", {})
@@ -922,6 +943,30 @@ def _build_custom_report_html(report):
         cloud_provider=(None if client_id else cloud_providers),
         client_id=client_id,
     )
+
+    # Previous-period comparison for the Total Cost KPI (same logic as the
+    # client report): a full calendar month compares to the full previous
+    # month, any other range compares to the same dates one month earlier.
+    # Best-effort — silently omitted if dates are missing/invalid or there's
+    # no prior data.
+    _prev_total = 0.0
+    _prev_label = ""
+    if date_from and date_to:
+        try:
+            _p_from, _p_to, _prev_label = _prev_period_dates(date_from, date_to)
+            _prev_data = get_custom_cost(
+                subscription_ids=sub_ids if sub_ids else None,
+                resource_groups=rgs if rgs else None,
+                services=services if services else None,
+                date_from=_p_from, date_to=_p_to,
+                tenant_id=tenant_id,
+                cloud_provider=(None if client_id else cloud_providers),
+                client_id=client_id,
+            )
+            _prev_total = float(_prev_data.get("total_cost") or 0)
+        except Exception as _pe:
+            print(f"[custom-report] prev-period compare failed: {_pe}")
+            _prev_total = 0.0
 
     # Client-scoped reports: attach the client's "Other Costs" (manual costs matched
     # by its oc_ mappings). get_custom_cost only covers cloud cost_data, so without
@@ -1105,6 +1150,16 @@ def _build_custom_report_html(report):
         _bars = "".join(
             f'<td width="14" valign="bottom" style="padding:0 2px"><div style="width:11px;height:{h}px;background:{c};border-radius:3px"></div></td>'
             for h, c in [(16, "#BFD4FA"), (30, BLUE), (42, "#93B4F7"), (56, BLUE)])
+        _prev_line = ""
+        if _prev_total > 0:
+            _pct = (total_cost - _prev_total) / _prev_total * 100
+            _up = _pct >= 0
+            _col = "#C0392B" if _up else "#1D9E75"   # cost up = red, down = green
+            _arr = "&#9650;" if _up else "&#9660;"
+            _prev_line = (f'<div style="font-size:12px;font-weight:700;color:{_col};margin-top:6px">'
+                          f'{_arr} {abs(_pct):.1f}% vs {_prev_label}</div>'
+                          f'<div style="font-size:11px;color:{MUT};margin-top:2px">'
+                          f'Previous: <span style="font-weight:700;color:{INK}">${_prev_total:,.2f}</span></div>')
         html += f"""
 <tr><td style="padding-bottom:14px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EFF4FE;border:1px solid #D6E4FB;border-radius:14px"><tr>
@@ -1114,6 +1169,7 @@ def _build_custom_report_html(report):
         <div style="font-size:11px;color:{BLUE};letter-spacing:.08em;text-transform:uppercase;font-weight:700">Total cost</div>
         <div style="font-size:34px;color:{INK};font-weight:800;margin-top:2px">${total_cost:,.2f}</div>
         <div style="font-size:12px;color:{MUT};margin-top:4px">{total_records:,} records &bull; {len(by_rg)} resource group{'s' if len(by_rg) != 1 else ''} &bull; {len(by_service)} services</div>
+        {_prev_line}
       </td>
     </tr></table></td>
     <td align="right" valign="bottom" style="padding:22px 24px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>{_bars}</tr></table></td>
