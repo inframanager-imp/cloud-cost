@@ -7646,19 +7646,73 @@ async function loadClientsPage() {
     }
 }
 
+// Send Report modal's own period selection — independent of the page-level
+// per-client date range, so picking a one-off send period here doesn't change
+// what's shown on the page behind it.
+let _clientReportModalFrom = '';
+let _clientReportModalTo = '';
+
 function openClientReportModal() {
     const client = _clientsData.find(c => c.id === _selectedClientId);
     if (!client) return;
     const modal = document.getElementById('clientReportModal');
     const subtitle = document.getElementById('clientReportModalSubtitle');
-    const periodEl = document.getElementById('clientReportPeriodLabel');
     if (subtitle) subtitle.innerHTML = `Sending cost report for <strong>${_esc(client.name)}</strong>`;
-    if (periodEl) periodEl.textContent = _clientPeriodLabel();
+
+    // Default the modal's period to whatever this client's page-level range
+    // currently is, then let the user change it independently.
+    const presetSel = document.getElementById('clientDatePreset');
+    const sel = document.getElementById('clientReportPeriodSelect');
+    if (sel) sel.value = presetSel?.value || 'this_month';
+    onClientReportPeriodChange();
 
     const recipientsEl = document.getElementById('clientReportRecipients');
     if (recipientsEl && !recipientsEl.value) recipientsEl.value = client.recipients || '';
 
     if (modal) modal.style.display = 'flex';
+}
+
+function onClientReportPeriodChange() {
+    const preset = document.getElementById('clientReportPeriodSelect')?.value || 'this_month';
+    const customWrap = document.getElementById('clientReportCustomWrap');
+    const periodEl = document.getElementById('clientReportPeriodLabel');
+    const today = new Date();
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+    if (preset === 'custom') {
+        if (customWrap) customWrap.style.display = 'block';
+        initRangePicker('clientReportRangePick', 'clientReportDateFrom', 'clientReportDateTo', applyClientReportDateFilter);
+        const f = document.getElementById('clientReportDateFrom')?.value;
+        const t = document.getElementById('clientReportDateTo')?.value;
+        if (f && t) { _clientReportModalFrom = f; _clientReportModalTo = t; }
+        if (periodEl) periodEl.textContent = (_clientReportModalFrom && _clientReportModalTo) ? `${_clientReportModalFrom} to ${_clientReportModalTo}` : 'Pick a custom range above';
+        return;
+    }
+    if (customWrap) customWrap.style.display = 'none';
+
+    if (preset === 'this_month') {
+        _clientReportModalFrom = fmt(new Date(today.getFullYear(), today.getMonth(), 1));
+        _clientReportModalTo = fmt(today);
+    } else if (preset === 'last_month') {
+        const end = new Date(today.getFullYear(), today.getMonth(), 0);
+        _clientReportModalFrom = fmt(new Date(end.getFullYear(), end.getMonth(), 1));
+        _clientReportModalTo = fmt(end);
+    } else if (preset === 'last_30') {
+        _clientReportModalFrom = fmt(new Date(today - 30*864e5));
+        _clientReportModalTo = fmt(today);
+    } else if (preset === 'last_90') {
+        _clientReportModalFrom = fmt(new Date(today - 90*864e5));
+        _clientReportModalTo = fmt(today);
+    }
+    const labels = { this_month: 'This Month', last_month: 'Last Month', last_30: 'Last 30 Days', last_90: 'Last 90 Days' };
+    if (periodEl) periodEl.textContent = `${labels[preset]} · ${_clientReportModalFrom} to ${_clientReportModalTo}`;
+}
+
+function applyClientReportDateFilter() {
+    _clientReportModalFrom = document.getElementById('clientReportDateFrom')?.value || '';
+    _clientReportModalTo = document.getElementById('clientReportDateTo')?.value || '';
+    const periodEl = document.getElementById('clientReportPeriodLabel');
+    if (periodEl && _clientReportModalFrom && _clientReportModalTo) periodEl.textContent = `${_clientReportModalFrom} to ${_clientReportModalTo}`;
 }
 
 function closeClientReportModal() {
@@ -7834,10 +7888,12 @@ async function sendClientReport() {
     const recipients = (document.getElementById('clientReportRecipients')?.value || '').trim();
     if (!recipients) { showToast('Enter at least one recipient', 'error'); return; }
 
+    const firstDay = _clientReportModalFrom;
+    const todayStr = _clientReportModalTo;
+    if (!firstDay || !todayStr) { showToast('Pick a period first', 'error'); return; }
+
     const btn = document.getElementById('clientReportSendBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-
-    const { firstDay, todayStr } = _clientDateRange();
     try {
         const resp = await fetch(`/api/clients/${_selectedClientId}/send-report`, {
             method: 'POST',
