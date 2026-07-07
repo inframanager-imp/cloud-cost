@@ -7493,6 +7493,10 @@ let _clientsData = [];
 let _selectedClientId = null;
 let _clientDateFrom = '';
 let _clientDateTo = '';
+// Per-client date range memory: clientId -> {preset, from, to}, so switching
+// between clients restores each one's own last-picked range instead of
+// sharing a single global range across all of them.
+let _clientDateSettings = {};
 
 function _clientDateRange() {
     if (_clientDateFrom && _clientDateTo) {
@@ -7541,13 +7545,45 @@ function onClientDatePreset() {
         _clientDateFrom = fmt(new Date(today - 90*864e5));
         _clientDateTo   = fmt(today);
     }
-    if (_selectedClientId) selectClient(_selectedClientId);
+    if (_selectedClientId) {
+        _clientDateSettings[_selectedClientId] = { preset, from: _clientDateFrom, to: _clientDateTo };
+        selectClient(_selectedClientId);
+    }
 }
 
 function applyClientDateFilter() {
     _clientDateFrom = document.getElementById('clientDateFrom')?.value || '';
     _clientDateTo   = document.getElementById('clientDateTo')?.value   || '';
-    if (_selectedClientId && _clientDateFrom && _clientDateTo) selectClient(_selectedClientId);
+    if (_selectedClientId && _clientDateFrom && _clientDateTo) {
+        _clientDateSettings[_selectedClientId] = { preset: 'custom', from: _clientDateFrom, to: _clientDateTo };
+        selectClient(_selectedClientId);
+    }
+}
+
+// Restore a client's own saved date range (or default to "This Month" the
+// first time it's viewed) into the shared range vars + the date-range control,
+// WITHOUT calling onClientDatePreset()/selectClient() (both would recurse).
+function _restoreClientDateSettings(clientId) {
+    const presetSel = document.getElementById('clientDatePreset');
+    const customWrap = document.getElementById('clientCustomDateWrap');
+    let saved = _clientDateSettings[clientId];
+    if (!saved) {
+        const today = new Date();
+        const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        saved = { preset: 'this_month', from: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), to: fmt(today) };
+        _clientDateSettings[clientId] = saved;
+    }
+    _clientDateFrom = saved.from;
+    _clientDateTo = saved.to;
+    if (presetSel) presetSel.value = saved.preset;
+    if (customWrap) customWrap.style.display = saved.preset === 'custom' ? 'flex' : 'none';
+    if (saved.preset === 'custom') {
+        const fEl = document.getElementById('clientDateFrom');
+        const tEl = document.getElementById('clientDateTo');
+        if (fEl) fEl.value = saved.from;
+        if (tEl) tEl.value = saved.to;
+        initRangePicker('clientRangePick', 'clientDateFrom', 'clientDateTo');
+    }
 }
 
 function _fmt$(n) {
@@ -7829,6 +7865,9 @@ function previewClientReport() {
 
 async function selectClient(clientId) {
     _selectedClientId = clientId;
+    // Restore this client's own saved date range (each client remembers its
+    // own choice instead of sharing one range across all clients).
+    _restoreClientDateSettings(clientId);
     // Show action buttons
     document.getElementById('clientSendReportBtn')?.style.setProperty('display', '');
     document.getElementById('clientPreviewBtn')?.style.setProperty('display', '');
