@@ -6617,6 +6617,29 @@ async function scSyncProvider(id, name, mode = 'incremental') {
     }
 }
 
+async function scBackfillProvider(id, name) {
+    const btn = document.getElementById(`sc-backfill-btn-${id}`);
+    if (!confirm(`Backfill up to 12 months of history for "${name}" from AWS Cost Explorer?\n\nOnly months with zero existing data are filled — any month already synced (via CUR or a prior sync) is left untouched.`)) return;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="cp-sync-spinner"></span>'; }
+    try {
+        const resp = await fetch(`/api/cloud-providers/${id}/backfill`, { method: 'POST' });
+        const d = await resp.json();
+        if (d.error) {
+            showToast('Backfill failed: ' + d.error, 'error');
+        } else {
+            showToast(d.message || `Backfilling "${name}" in the background — check the Monthly Costs page in a minute.`, 'success');
+        }
+    } catch (e) {
+        showToast('Backfill error: ' + e.message, 'error');
+    } finally {
+        // The fill itself runs in a background thread on the server (no
+        // live-progress endpoint yet), so just restore the button here.
+        setTimeout(() => {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'; }
+        }, 2000);
+    }
+}
+
 // ─── Auto-Sync (legacy — keep for backwards compat) ──────────────────────────
 
 function toggleAutoSyncPanel() {
