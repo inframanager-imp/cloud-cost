@@ -961,12 +961,20 @@ def init_db():
             schedule_hour INTEGER DEFAULT 8,
             schedule_minute INTEGER DEFAULT 0,
             schedule_tz TEXT DEFAULT 'UTC',
+            data_lag_days INTEGER DEFAULT 0,
             enabled INTEGER DEFAULT 1,
             last_sent TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_client_report_schedules_client ON client_report_schedules(client_id)")
+
+    # Migration: add data_lag_days to client_report_schedules if missing (existing DBs)
+    try:
+        cursor.execute("SELECT data_lag_days FROM client_report_schedules LIMIT 1")
+    except Exception:
+        cursor.execute("ALTER TABLE client_report_schedules ADD COLUMN data_lag_days INTEGER DEFAULT 0")
+        print("[DB] Migrated client_report_schedules: added data_lag_days column")
 
     # One-time migration: carry each client's single legacy schedule (columns on
     # clients: recipients/schedule/schedule_day/hour/minute/tz/last_sent) into its
@@ -4275,13 +4283,13 @@ def get_client_report_schedules(client_id: int, tenant_id: int) -> list:
 def create_client_report_schedule(client_id: int, tenant_id: int, name: str, recipients: str,
                                   schedule: str, schedule_day: int, schedule_hour: int,
                                   schedule_tz: str = "UTC", schedule_minute: int = 0,
-                                  enabled: bool = True) -> int:
+                                  enabled: bool = True, data_lag_days: int = 0) -> int:
     conn = get_db()
     cur = conn.execute(
         "INSERT INTO client_report_schedules (client_id, tenant_id, name, recipients, schedule, "
-        "schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled, data_lag_days) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (client_id, tenant_id, name.strip(), recipients.strip(), schedule, schedule_day,
-         schedule_hour, schedule_minute, schedule_tz, 1 if enabled else 0)
+         schedule_hour, schedule_minute, schedule_tz, 1 if enabled else 0, data_lag_days)
     )
     conn.commit()
     new_id = cur.lastrowid
@@ -4291,14 +4299,15 @@ def create_client_report_schedule(client_id: int, tenant_id: int, name: str, rec
 
 def update_client_report_schedule(schedule_id: int, client_id: int, tenant_id: int, name: str,
                                   recipients: str, schedule: str, schedule_day: int, schedule_hour: int,
-                                  schedule_tz: str = "UTC", schedule_minute: int = 0, enabled: bool = True) -> bool:
+                                  schedule_tz: str = "UTC", schedule_minute: int = 0, enabled: bool = True,
+                                  data_lag_days: int = 0) -> bool:
     conn = get_db()
     cur = conn.execute(
         "UPDATE client_report_schedules SET name=?, recipients=?, schedule=?, schedule_day=?, "
-        "schedule_hour=?, schedule_minute=?, schedule_tz=?, enabled=? "
+        "schedule_hour=?, schedule_minute=?, schedule_tz=?, enabled=?, data_lag_days=? "
         "WHERE id=? AND client_id=? AND tenant_id=?",
         (name.strip(), recipients.strip(), schedule, schedule_day, schedule_hour, schedule_minute,
-         schedule_tz, 1 if enabled else 0, schedule_id, client_id, tenant_id)
+         schedule_tz, 1 if enabled else 0, data_lag_days, schedule_id, client_id, tenant_id)
     )
     conn.commit()
     affected = cur.rowcount > 0

@@ -4024,7 +4024,12 @@ def _parse_schedule_body(body):
     schedule_minute = max(0, min(59, schedule_minute))
     schedule_tz = "IST" if (body.get("schedule_tz") or "UTC").upper() == "IST" else "UTC"
     enabled = bool(body.get("enabled", True))
-    return name, recipients, schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled
+    try:
+        data_lag_days = int(body.get("data_lag_days") or 0)
+    except (TypeError, ValueError):
+        data_lag_days = 0
+    data_lag_days = max(0, min(30, data_lag_days))
+    return name, recipients, schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled, data_lag_days
 
 
 @app.route("/api/clients/<int:client_id>/schedules", methods=["GET"])
@@ -4043,12 +4048,12 @@ def api_client_create_schedule(client_id):
     if not get_client(client_id, tid):
         return jsonify({"error": "Not found"}), 404
     body = request.get_json(silent=True) or {}
-    name, recipients, schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled = _parse_schedule_body(body)
+    name, recipients, schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled, data_lag_days = _parse_schedule_body(body)
     if schedule != "none" and not recipients:
         return jsonify({"error": "Recipients are required to enable a schedule"}), 400
     new_id = create_client_report_schedule(
         client_id, tid, name, recipients, schedule, schedule_day, schedule_hour,
-        schedule_tz=schedule_tz, schedule_minute=schedule_minute, enabled=enabled)
+        schedule_tz=schedule_tz, schedule_minute=schedule_minute, enabled=enabled, data_lag_days=data_lag_days)
     return jsonify({"message": "Schedule created", "id": new_id})
 
 
@@ -4059,12 +4064,12 @@ def api_client_update_schedule_item(client_id, schedule_id):
     if not get_client(client_id, tid):
         return jsonify({"error": "Not found"}), 404
     body = request.get_json(silent=True) or {}
-    name, recipients, schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled = _parse_schedule_body(body)
+    name, recipients, schedule, schedule_day, schedule_hour, schedule_minute, schedule_tz, enabled, data_lag_days = _parse_schedule_body(body)
     if schedule != "none" and not recipients:
         return jsonify({"error": "Recipients are required to enable a schedule"}), 400
     ok = update_client_report_schedule(
         schedule_id, client_id, tid, name, recipients, schedule, schedule_day, schedule_hour,
-        schedule_tz=schedule_tz, schedule_minute=schedule_minute, enabled=enabled)
+        schedule_tz=schedule_tz, schedule_minute=schedule_minute, enabled=enabled, data_lag_days=data_lag_days)
     if not ok:
         return jsonify({"error": "Schedule not found"}), 404
     return jsonify({"message": "Schedule updated"})
@@ -4668,6 +4673,22 @@ def _report_local_now(now_utc, tz):
     return now_utc
 
 
+def _period_for_schedule(schedule_type, local_now, lag_days=0):
+    """Report window for a client schedule, shifted back by `lag_days` so the
+    period doesn't end on days whose cost data may not be fully synced yet
+    (billing data typically lags 1-2 days behind real time)."""
+    effective = local_now - timedelta(days=lag_days)
+    if schedule_type == "daily":
+        d = effective.strftime("%Y-%m-%d")
+        return d, d
+    if schedule_type == "weekly":
+        date_from = (effective - timedelta(days=6)).strftime("%Y-%m-%d")
+        return date_from, effective.strftime("%Y-%m-%d")
+    if schedule_type == "monthly":
+        return effective.replace(day=1).strftime("%Y-%m-%d"), effective.strftime("%Y-%m-%d")
+    return effective.strftime("%Y-%m-%d"), effective.strftime("%Y-%m-%d")
+
+
 def _in_hour_slot(local_now, target_hour, target_minute=0):
     """True when the local clock is in the same 5-minute slot as the scheduled
     HH:MM — paired with the 5-min scheduler tick so each scheduled time fires once.
@@ -4762,8 +4783,11 @@ def _check_email_schedule():
                     client = get_client(sched["client_id"], sched["tenant_id"])
                     if not client:
                         continue
-                    print(f"[Email Report] Sending client report '{label}'...")
-                    _send_client_cost_report(client, sched["tenant_id"], cl_recipients, report_type="scheduled")
+                    lag_days = int(sched.get("data_lag_days") or 0)
+                    cl_date_from, cl_date_to = _period_for_schedule(cl_schedule, cl_lnow, lag_days)
+                    print(f"[Email Report] Sending client report '{label}' for {cl_date_from} to {cl_date_to}...")
+                    _send_client_cost_report(client, sched["tenant_id"], cl_recipients,
+                                              date_from=cl_date_from, date_to=cl_date_to, report_type="scheduled")
                     mark_client_schedule_sent(sched["id"])
                     print(f"[Email Report] Client report '{label}' sent.")
                 except Exception as e:

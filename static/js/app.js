@@ -7817,6 +7817,10 @@ function addClientScheduleRow(s) {
                     <option value="IST" ${s.schedule_tz === 'IST' ? 'selected' : ''}>IST (UTC+5:30)</option>
                 </select>
             </div>
+            <div class="email-field cs-lag-group" style="flex:1;display:${(s.schedule && s.schedule !== 'none') ? '' : 'none'}" title="Cost data isn't always real-time — this many days are skipped off the end of the report period so it doesn't cut off on still-syncing days">
+                <label style="font-size:11px">Data Lag (days)</label>
+                <input type="number" class="cs-lag filter-input" min="0" max="30" step="1" value="${s.data_lag_days ?? 0}">
+            </div>
         </div>
         <div style="font-size:11px;color:var(--text-secondary)">${s.last_sent ? 'Last sent: ' + new Date(s.last_sent).toLocaleString() : (s.id ? 'Never sent yet' : '')}</div>`;
     list.appendChild(row);
@@ -7827,6 +7831,7 @@ function _onCsFreqChange(sel) {
     const sched = sel.value;
     row.querySelector('.cs-day-group').style.display = sched === 'weekly' ? '' : 'none';
     row.querySelector('.cs-time-group').style.display = sched !== 'none' ? '' : 'none';
+    row.querySelector('.cs-lag-group').style.display = sched !== 'none' ? '' : 'none';
 }
 
 async function deleteClientScheduleRow(btn) {
@@ -7858,11 +7863,12 @@ async function saveAllClientSchedules() {
         const { hour, minute } = _timeToHM(row.querySelector('.cs-time')?.value);
         const tz = row.querySelector('.cs-tz')?.value;
         const enabled = row.querySelector('.cs-enabled')?.checked;
+        const dataLagDays = parseInt(row.querySelector('.cs-lag')?.value ?? 0) || 0;
         if (schedule !== 'none' && !recipients) {
             showToast(`"${name || 'Schedule'}" needs at least one recipient`, 'error');
             errCount++; continue;
         }
-        const body = { name, recipients, schedule, schedule_day: day, schedule_hour: hour, schedule_minute: minute, schedule_tz: tz, enabled };
+        const body = { name, recipients, schedule, schedule_day: day, schedule_hour: hour, schedule_minute: minute, schedule_tz: tz, enabled, data_lag_days: dataLagDays };
         const id = row.dataset.id;
         try {
             const resp = await fetch(`/api/clients/${_selectedClientId}/schedules${id ? '/' + id : ''}`, {
