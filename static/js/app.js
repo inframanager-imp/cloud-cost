@@ -7781,6 +7781,7 @@ function addClientScheduleRow(s) {
             <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);white-space:nowrap">
                 <input type="checkbox" class="cs-enabled" ${s.enabled === 0 ? '' : 'checked'} style="width:14px;height:14px"> Enabled
             </label>
+            <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 9px;white-space:nowrap" title="Preview exactly what this schedule would send next, using its frequency and data lag" onclick="previewClientScheduleRow(this)">Preview</button>
             <button type="button" class="btn btn-secondary" style="font-size:13px;padding:4px 9px;color:var(--danger,#e74c3c)" title="Remove" onclick="deleteClientScheduleRow(this)">&times;</button>
         </div>
         <input class="cs-recipients form-control" placeholder="email1@company.com, email2@company.com" value="${_csEsc(s.recipients)}" style="font-size:13px">
@@ -7824,6 +7825,44 @@ function addClientScheduleRow(s) {
         </div>
         <div style="font-size:11px;color:var(--text-secondary)">${s.last_sent ? 'Last sent: ' + new Date(s.last_sent).toLocaleString() : (s.id ? 'Never sent yet' : '')}</div>`;
     list.appendChild(row);
+}
+
+function _fmtYMD(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function _periodForSchedule(schedule, lagDays) {
+    // Mirrors _period_for_schedule() in app.py so Preview shows exactly what
+    // the next automated send would compute for this schedule.
+    const effective = new Date();
+    effective.setDate(effective.getDate() - (lagDays || 0));
+    if (schedule === 'daily') {
+        const d = _fmtYMD(effective);
+        return { from: d, to: d };
+    }
+    if (schedule === 'weekly') {
+        const from = new Date(effective);
+        from.setDate(from.getDate() - 6);
+        return { from: _fmtYMD(from), to: _fmtYMD(effective) };
+    }
+    if (schedule === 'monthly') {
+        const from = new Date(effective.getFullYear(), effective.getMonth(), 1);
+        return { from: _fmtYMD(from), to: _fmtYMD(effective) };
+    }
+    const d = _fmtYMD(effective);
+    return { from: d, to: d };
+}
+
+function previewClientScheduleRow(btn) {
+    const row = btn.closest('.cs-row');
+    const schedule = row.querySelector('.cs-schedule')?.value || 'none';
+    if (schedule === 'none') {
+        showToast('Set a frequency first to preview this schedule', 'error');
+        return;
+    }
+    const lagDays = parseInt(row.querySelector('.cs-lag')?.value ?? 0) || 0;
+    const { from, to } = _periodForSchedule(schedule, lagDays);
+    window.open(`/api/clients/${_selectedClientId}/report-preview?date_from=${from}&date_to=${to}`, '_blank');
 }
 
 function _onCsFreqChange(sel) {
