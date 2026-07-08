@@ -1239,9 +1239,9 @@ def _build_custom_report_html(report):
         _daily = (
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
             f'<tr valign="bottom">{yax}<td>'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:{CHART_H}px;border-bottom:2px solid #E7ECF3">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:{CHART_H}px;border-bottom:2px solid #E7ECF3;table-layout:fixed">'
             f'<tr valign="bottom">{bars}</tr></table></td></tr>'
-            f'<tr><td></td><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>{labels}</tr></table></td></tr>'
+            f'<tr><td></td><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed"><tr>{labels}</tr></table></td></tr>'
             f'</table>'
             f'<div style="margin-top:12px;font-size:11px;color:{MUT};border-top:1px solid #EDF1F7;padding-top:10px">'
             f'Peak <b style="color:{INK}">${pk["cost"]:,.2f}</b> on {pk["date"]} &bull; '
@@ -1632,9 +1632,9 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         return (
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
             f'<tr valign="bottom">{yax}<td>'
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:{CHART_H}px;border-bottom:2px solid #E7ECF3">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="height:{CHART_H}px;border-bottom:2px solid #E7ECF3;table-layout:fixed">'
             f'<tr valign="bottom">{bars}</tr></table></td></tr>'
-            f'<tr><td></td><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>{labels}</tr></table></td></tr>'
+            f'<tr><td></td><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed"><tr>{labels}</tr></table></td></tr>'
             f'</table>'
             f'<div style="margin-top:12px;font-size:11px;color:{MUT};border-top:1px solid #EDF1F7;padding-top:10px">'
             f'Peak <b style="color:{INK}">${pk_c:,.2f}</b> on {pk_d} &bull; '
@@ -1666,6 +1666,15 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             '<th style="padding:9px 14px;font-size:11px;font-weight:500;color:#525252;text-align:right">Cost</th></tr>'
             + manual_rows + '</table>'
             f'<div style="font-size:12px;color:#525252;margin-bottom:28px">Other tools/subscriptions total: <strong>{manual_sym}{manual_total:,.2f}</strong></div>')
+    else:
+        # This is always a client-linked report, so an empty result is always
+        # resolvable — say so explicitly instead of silently dropping the whole
+        # section (which looked identical to a broken mapping). One-off entries
+        # only count in their own month; recurring ones count forward from theirs.
+        manual_section = (
+            '<div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Other Tools & Subscriptions (Manually Tracked)</div>'
+            '<div style="font-size:12px;color:#525252;padding:2px 0 28px">No other costs recorded for this period. '
+            'One-off entries appear only in their own month; mark an entry as recurring to carry it forward from its start month.</div>')
 
     # ── Top Services + Top RG shown side-by-side (mockup format) ────────────
     _rank_head = ('<tr style="border-bottom:1px solid #E8ECF1">'
