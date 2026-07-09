@@ -446,6 +446,19 @@ function exNavMonth(delta) {
     loadExecutiveSummary();
 }
 
+function exportExecutiveDashboard() {
+    // Browser print-to-PDF: @media print in style.css hides chrome (sidebar,
+    // controls) and forces light colors, leaving just the dashboard content.
+    // Simpler and dependency-free vs. server-side rendering; revisit with a
+    // headless-render pipeline only if pagination/fidelity becomes an issue.
+    const periodLabel = document.getElementById('exPeriodLabel')?.textContent?.trim() || '';
+    const prevTitle = document.title;
+    document.title = `FinOps Command Center${periodLabel ? ' - ' + periodLabel : ''}`;
+    const restore = () => { document.title = prevTitle; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    window.print();
+}
+
 async function loadExecutiveSummary() {
     if (_exYear === null) {
         const now = new Date();

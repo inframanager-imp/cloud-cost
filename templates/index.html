@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v=20260705f">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260707a">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260709a">
     <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507n">
     <link rel="stylesheet" href="/static/css/appearance.css?v=20260507n">
     <script>
@@ -362,7 +362,7 @@
                 </div>
             </div>
             <!-- Date nav + controls -->
-            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <div class="no-print" style="display:flex;align-items:center;gap:8px;flex-shrink:0">
                 <!-- Month navigator -->
                 <div style="display:flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:var(--card-bg)">
                     <button onclick="exNavMonth(-1)" style="padding:5px 10px;border:none;background:transparent;cursor:pointer;color:var(--text-secondary);font-size:14px;line-height:1;display:flex;align-items:center" title="Previous month">&#8249;</button>
@@ -376,6 +376,10 @@
                 <button onclick="loadExecutiveSummary()" style="display:flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border);border-radius:7px;background:var(--card-bg);font-size:12px;color:var(--text-secondary);cursor:pointer">
                     <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                     Refresh
+                </button>
+                <button onclick="exportExecutiveDashboard()" class="cp-btn-primary" style="display:flex;align-items:center;gap:5px;padding:5px 12px;font-size:12px">
+                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Download PDF
                 </button>
             </div>
         </div>
@@ -4084,7 +4088,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260709a"></script>
+<script src="/static/js/app.js?v=20260709b"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
