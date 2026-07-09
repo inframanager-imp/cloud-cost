@@ -2538,10 +2538,9 @@ async function loadMonthly() {
                     const all = grouped[c];
                     const items = all.slice(0, ACCT_SHOWN).map(sub => {
                         const raw = (sub.name || sub.subscription_id || '').trim() || '-';
-                        const short = raw.length > 20 ? raw.slice(0, 18) + '…' : raw;
                         const esc = raw.replace(/"/g, '&quot;');
                         return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:11px;margin-top:2px;line-height:1.3;padding-left:8px">
-                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;color:var(--text-secondary)" title="${esc}">${short}</span>
+                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;color:var(--text-secondary)" title="${esc}">${raw}</span>
                             <span style="color:var(--text-primary);flex-shrink:0;font-weight:500;font-variant-numeric:tabular-nums">${curSym()}${Number(sub.cost).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
                         </div>`;
                     }).join('') + (all.length > ACCT_SHOWN
