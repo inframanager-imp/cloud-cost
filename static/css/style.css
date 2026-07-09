@@ -969,7 +969,13 @@ select.filter-input option {
     }
     body { background: #fff !important; }
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    .exec-kpi-row, #exKpiRow { grid-template-columns: repeat(4, 1fr) !important; }
+    /* These dashboard rows use fixed-px grid columns (e.g. 230px 1fr 270px)
+       sized for a wide screen — on a printed page they overflow and silently
+       clip the rightmost card, so stack them full-width instead. */
+    #exKpiRow, .exec-row-charts, .exec-row-accounts { grid-template-columns: 1fr !important; }
+    #exKpiRow > div { margin-bottom: 8px; }
+    .exec-row-charts > div, .exec-row-accounts > div { page-break-inside: avoid; margin-bottom: 12px; }
+    .exec-row-charts canvas, .exec-row-accounts canvas { max-height: 260px !important; }
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────── */

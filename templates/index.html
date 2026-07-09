@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v=20260705f">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260709a">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260709b">
     <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507n">
     <link rel="stylesheet" href="/static/css/appearance.css?v=20260507n">
     <script>
@@ -460,7 +460,7 @@
         </div>
 
         <!-- Row 2: Donut | Trend (wide) | Top Drivers -->
-        <div style="display:grid;grid-template-columns:230px 1fr 270px;gap:12px;margin-bottom:12px;align-items:stretch">
+        <div class="exec-row-charts" style="display:grid;grid-template-columns:230px 1fr 270px;gap:12px;margin-bottom:12px;align-items:stretch">
 
             <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -498,7 +498,7 @@
         </div>
 
         <!-- Row 3: Accounts | Savings | Governance -->
-        <div style="display:grid;grid-template-columns:1fr 260px 280px;gap:12px;margin-bottom:16px;align-items:stretch">
+        <div class="exec-row-accounts" style="display:grid;grid-template-columns:1fr 260px 280px;gap:12px;margin-bottom:16px;align-items:stretch">
 
             <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -4088,7 +4088,7 @@
 
 </div>
 
-<script src="/static/js/app.js?v=20260709b"></script>
+<script src="/static/js/app.js?v=20260709c"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

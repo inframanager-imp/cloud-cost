@@ -459,6 +459,20 @@ function exportExecutiveDashboard() {
     window.print();
 }
 
+// The print stylesheet stacks the KPI/chart rows to full-width (their normal
+// layout uses fixed-px multi-column grids sized for a wide screen, which
+// overflow and clip on a printed page). Chart.js canvases were rendered at
+// their old, narrower on-screen size, so force a resize once the print
+// layout is actually in effect, then resize back for screen afterward.
+window.addEventListener('beforeprint', () => {
+    if (_exTrendChart) _exTrendChart.resize();
+    if (_exDonutChart) _exDonutChart.resize();
+});
+window.addEventListener('afterprint', () => {
+    if (_exTrendChart) _exTrendChart.resize();
+    if (_exDonutChart) _exDonutChart.resize();
+});
+
 async function loadExecutiveSummary() {
     if (_exYear === null) {
         const now = new Date();
