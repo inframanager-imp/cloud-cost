@@ -1,5 +1,7 @@
 flask==3.1.0
 gunicorn==22.0.0
+# PostgreSQL driver (replacing the stdlib sqlite3 data layer)
+psycopg2-binary==2.9.10
 azure-identity==1.19.0
 azure-mgmt-costmanagement==4.0.1
 azure-mgmt-resource==23.2.0

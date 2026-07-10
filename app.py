@@ -75,6 +75,9 @@ from database import (
     # GCP one-click setup tokens
     create_gcp_setup_token, validate_gcp_setup_token,
     consume_gcp_setup_token, get_gcp_setup_token_status,
+    # Dialect-aware SQL fragments (SQLite/Postgres) — see database.py header
+    _month_group_expr, _week_group_expr, _dow_expr, _hour_expr,
+    _now_minus_days_expr, _month_start_expr, _date_cast_expr,
 )
 from azure_fetcher import (fetch_cost_data, fetch_activity_logs, resolve_caller_names, fetch_subscriptions,
                            fetch_billing_account_costs, filter_billing_only_charges)
@@ -867,9 +870,9 @@ def api_executive_summary():
     # Budget utilization
     try:
         budgets = conn.execute(
-            "SELECT name, amount FROM budgets WHERE (tenant_id = ? OR tenant_id IS NULL) AND is_active = 1", (tid,)
+            "SELECT name, amount FROM budgets WHERE (tenant_id = ? OR tenant_id IS NULL) AND enabled = 1", (tid,)
         ).fetchall() if tid else conn.execute(
-            "SELECT name, amount FROM budgets WHERE is_active = 1"
+            "SELECT name, amount FROM budgets WHERE enabled = 1"
         ).fetchall()
         total_budget = sum(b["amount"] for b in budgets) if budgets else 0
     except Exception:
@@ -1140,9 +1143,7 @@ def api_sync():
                 ba_rows, ba_ids = fetch_billing_account_costs(date_from_ba, date_to)
                 if ba_rows:
                     # Build subscription-level service totals from DB to find billing-only charges
-                    import sqlite3
-                    db_path = os.getenv("DB_PATH", "/app/data/azure_costs.db")
-                    conn = sqlite3.connect(db_path)
+                    conn = get_db()
                     sub_svc_totals = {}
                     rows = conn.execute(
                         "SELECT LOWER(service_name), SUM(cost) FROM cost_data "
@@ -1796,7 +1797,7 @@ def api_monthly():
     _cost = _converted_cost_sql(rep)
     conn = get_db()
     cloud_rows = conn.execute(f"""
-        SELECT strftime('%Y-%m', date) as month, cloud_provider, SUM({_cost}) as total
+        SELECT {_month_group_expr()} as month, cloud_provider, SUM({_cost}) as total
         FROM cost_data
         WHERE tenant_id = ?
         GROUP BY month, cloud_provider
@@ -2672,14 +2673,14 @@ def api_activity_overview():
         GROUP BY op_type ORDER BY cnt DESC
     """, params).fetchall()
     daily = conn.execute(f"""
-        SELECT DATE(timestamp) as day, COUNT(*) as cnt,
+        SELECT {_date_cast_expr('timestamp')} as day, COUNT(*) as cnt,
                SUM(CASE WHEN status='Failed' THEN 1 ELSE 0 END) as failed_cnt
         FROM activity_logs{where}
         GROUP BY day ORDER BY day DESC LIMIT 30
     """, params).fetchall()
     heatmap = conn.execute(f"""
-        SELECT CAST(strftime('%w', timestamp) AS INTEGER) as dow,
-               CAST(strftime('%H', timestamp) AS INTEGER) as hour,
+        SELECT {_dow_expr('timestamp')} as dow,
+               {_hour_expr('timestamp')} as hour,
                COUNT(*) as cnt
         FROM activity_logs{where}
         GROUP BY dow, hour
@@ -2852,7 +2853,7 @@ def api_activity_failed():
         LIMIT 100
     """, params).fetchall()
     daily = conn.execute(f"""
-        SELECT DATE(timestamp) as day, COUNT(*) as cnt
+        SELECT {_date_cast_expr('timestamp')} as day, COUNT(*) as cnt
         FROM activity_logs {where}
         GROUP BY day
         ORDER BY day DESC
@@ -7328,7 +7329,7 @@ def api_sa_stats():
     stats["records"]    = conn.execute("SELECT COUNT(*) FROM cost_data").fetchone()[0]
     stats["budgets"]    = conn.execute("SELECT COUNT(*) FROM budgets WHERE enabled=1").fetchone()[0]
     stats["alerts_30d"] = conn.execute(
-        "SELECT COUNT(*) FROM budget_alerts WHERE triggered_at >= datetime('now','-30 days')"
+        f"SELECT COUNT(*) FROM budget_alerts WHERE triggered_at >= {_now_minus_days_expr(30)}"
     ).fetchone()[0]
     conn.close()
     return jsonify(stats)
@@ -7367,14 +7368,14 @@ def api_sa_tenants_list():
     """Returns tenant list with user_count and cloud spend for superadmin portal."""
     from database import get_db
     conn = get_db()
-    rows = conn.execute("""
+    rows = conn.execute(f"""
         SELECT t.*,
                (SELECT COUNT(*) FROM users u WHERE u.tenant_id = t.id) AS user_count,
                (SELECT COALESCE(SUM(cd.cost), 0) FROM cost_data cd
-                  WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month')) AS cloud_spend_30d,
+                  WHERE cd.tenant_id = t.id AND cd.date >= {_month_start_expr()}) AS cloud_spend_30d,
                (SELECT COALESCE(SUM(cd.cost), 0) FROM cost_data cd
-                  WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month', '-1 month')
-                        AND cd.date < date('now', 'start of month')) AS cloud_spend_prev_30d
+                  WHERE cd.tenant_id = t.id AND cd.date >= {_month_start_expr(1)}
+                        AND cd.date < {_month_start_expr()}) AS cloud_spend_prev_30d
         FROM tenants t ORDER BY t.created_at DESC
     """).fetchall()
     conn.close()

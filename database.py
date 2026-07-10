@@ -1,14 +1,162 @@
 import sqlite3
 import os
 import json
+import re
 import hashlib
 import secrets
 from datetime import datetime
 
 DB_PATH = os.environ.get("DB_PATH", os.path.join(os.path.dirname(__file__), "azure_costs.db"))
 
+# DB_ENGINE selects the data layer: "sqlite" (default, unchanged legacy path)
+# or "postgres" (in-progress migration — see feature/postgres-migration branch).
+# Defaulting to sqlite means nothing about prod's behavior changes until this
+# is explicitly flipped in that environment's .env.
+DB_ENGINE  = os.environ.get("DB_ENGINE", "sqlite").strip().lower()
+DB_HOST    = os.environ.get("DB_HOST", "")
+DB_PORT    = os.environ.get("DB_PORT", "5432")
+DB_NAME    = os.environ.get("DB_NAME", "finops_cost")
+DB_USER    = os.environ.get("DB_USER", "")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
+
+_QMARK_RE = re.compile(r"\?")
+
+
+class _PGCursorCompat:
+    """Wraps a psycopg2 cursor so it accepts SQLite's `?` placeholders (used
+    ~1,300 times across the codebase) instead of requiring every call site to
+    be rewritten to `%s` up front. Also emulates sqlite3's `.lastrowid`
+    (psycopg2 has no equivalent after a plain INSERT) via `SELECT lastval()`,
+    which returns the most recent value obtained from any sequence in this
+    session — correct as long as `.lastrowid` is read immediately after the
+    INSERT that generated it, which is the pattern used everywhere here.
+
+    Also auto-rolls-back the parent connection when a statement fails. In
+    SQLite each statement is independent, so this codebase has many
+    `try: conn.execute(...) except Exception: <fallback>` sites that swallow
+    a bad query and move on — harmless there, but in Postgres one failed
+    statement poisons the *whole transaction* until ROLLBACK, silently
+    breaking every subsequent query on that connection for the rest of the
+    request. Rolling back here on failure keeps the connection usable after
+    a caught exception, matching SQLite's forgiving per-statement behavior
+    instead of requiring every one of those sites to be found and fixed."""
+
+    def __init__(self, cursor, conn=None):
+        self._cur = cursor
+        self._conn = conn
+
+    def execute(self, sql, params=()):
+        try:
+            self._cur.execute(_QMARK_RE.sub("%s", sql), params)
+        except Exception:
+            if self._conn is not None:
+                self._conn.rollback()
+            raise
+        return self
+
+    def executemany(self, sql, seq_of_params):
+        try:
+            self._cur.executemany(_QMARK_RE.sub("%s", sql), seq_of_params)
+        except Exception:
+            if self._conn is not None:
+                self._conn.rollback()
+            raise
+        return self
+
+    @property
+    def lastrowid(self):
+        self._cur.execute("SELECT lastval()")
+        return self._cur.fetchone()[0]
+
+    @property
+    def rowcount(self):
+        return self._cur.rowcount
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+    def fetchmany(self, size=None):
+        return self._cur.fetchmany(size) if size is not None else self._cur.fetchmany()
+
+    def __iter__(self):
+        return iter(self._cur)
+
+    def close(self):
+        self._cur.close()
+
+
+class _PGConnCompat:
+    """Wraps a psycopg2 connection so `conn.execute(sql, params)` works like
+    sqlite3.Connection's shorthand (used ~490 times across the codebase,
+    which plain psycopg2 connections don't support — only cursors do)."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql, params=()):
+        cur = _PGCursorCompat(self._conn.cursor(), self._conn)
+        cur.execute(sql, params)
+        return cur
+
+    def executemany(self, sql, seq_of_params):
+        cur = _PGCursorCompat(self._conn.cursor(), self._conn)
+        cur.executemany(sql, seq_of_params)
+        return cur
+
+    def cursor(self):
+        return _PGCursorCompat(self._conn.cursor(), self._conn)
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+
+_PG_NUMERIC_OID = 1700  # psycopg2 decodes `numeric` columns to Decimal by default
+_pg_numeric_registered = False
+
+
+def _register_pg_numeric_as_float():
+    """Make `numeric` columns decode to Python float instead of Decimal.
+    SQLite's REAL (used for the same cost/amount columns) already returns
+    plain floats, and this codebase does float arithmetic on those values
+    throughout — Decimal doesn't mix with float in Python (`Decimal * 0.15`
+    raises TypeError), so without this every one of those call sites would
+    need converting individually. float64 has ~15-17 significant digits,
+    same precision Python already uses for these values everywhere else."""
+    global _pg_numeric_registered
+    if _pg_numeric_registered:
+        return
+    import psycopg2
+    float_type = psycopg2.extensions.new_type(
+        (_PG_NUMERIC_OID,), "NUMERIC_AS_FLOAT",
+        lambda value, curs: float(value) if value is not None else None,
+    )
+    psycopg2.extensions.register_type(float_type)
+    _pg_numeric_registered = True
+
+
+def _get_pg_db():
+    import psycopg2
+    import psycopg2.extras
+    _register_pg_numeric_as_float()
+    conn = psycopg2.connect(
+        host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD,
+        cursor_factory=psycopg2.extras.DictCursor,  # supports both row["col"] and row[0], matching sqlite3.Row
+    )
+    return _PGConnCompat(conn)
+
 
 def get_db():
+    if DB_ENGINE == "postgres":
+        return _get_pg_db()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -18,7 +166,83 @@ def get_db():
     return conn
 
 
+# ─── Dialect-aware SQL fragments ───────────────────────────────────────────
+# SQLite-only date functions (strftime/date('now',...)) used throughout the
+# raw-SQL layer. Each returns the exact original SQLite expression when
+# DB_ENGINE=sqlite (zero behavior change there) and a Postgres equivalent
+# when DB_ENGINE=postgres, so call sites don't need per-engine branching.
+
+def _month_group_expr(col="date"):
+    """'YYYY-MM' string for a date column, for GROUP BY / SELECT."""
+    if DB_ENGINE == "postgres":
+        return f"to_char({col}::date, 'YYYY-MM')"
+    return f"strftime('%Y-%m', {col})"
+
+
+def _week_group_expr(col="date"):
+    """'YYYY-Www' string for a date column. Note: uses ISO week numbering on
+    Postgres vs SQLite's %W (Monday-first, non-ISO) — labels can differ by
+    one at year boundaries; acceptable for a display grouping key."""
+    if DB_ENGINE == "postgres":
+        return f"to_char({col}::date, 'IYYY-\"W\"IW')"
+    return f"strftime('%Y-W%W', {col})"
+
+
+def _dow_expr(col):
+    """Day of week as an int, 0=Sunday..6=Saturday on both engines."""
+    if DB_ENGINE == "postgres":
+        return f"EXTRACT(DOW FROM {col}::timestamp)::int"
+    return f"CAST(strftime('%w', {col}) AS INTEGER)"
+
+
+def _hour_expr(col):
+    """Hour of day as an int, 0-23."""
+    if DB_ENGINE == "postgres":
+        return f"EXTRACT(HOUR FROM {col}::timestamp)::int"
+    return f"CAST(strftime('%H', {col}) AS INTEGER)"
+
+
+def _now_minus_days_expr(days):
+    """Timestamp `days` days before now, as text formatted the same way as
+    SQLite's `datetime()` ('YYYY-MM-DD HH:MM:SS') — timestamp columns like
+    budget_alerts.triggered_at are stored as TEXT on both engines."""
+    if DB_ENGINE == "postgres":
+        return f"to_char(CURRENT_TIMESTAMP - INTERVAL '{days} days', 'YYYY-MM-DD HH24:MI:SS')"
+    return f"datetime('now','-{days} days')"
+
+
+def _date_cast_expr(col):
+    """Cast a timestamp column down to a plain date. SQLite's DATE() has no
+    direct Postgres equivalent — Postgres uses a `::date` cast instead."""
+    if DB_ENGINE == "postgres":
+        return f"{col}::date"
+    return f"DATE({col})"
+
+
+def _month_start_expr(months_back=0):
+    """Date of the 1st of the current month, or `months_back` months earlier,
+    as text — `date`/`cost_data.date` etc. are stored as ISO 'YYYY-MM-DD'
+    TEXT columns throughout this schema (on both engines), and ISO date
+    strings sort identically as text or as a real date, so comparisons
+    against them need a text value, not Postgres's native `date` type."""
+    if DB_ENGINE == "postgres":
+        if months_back == 0:
+            return "date_trunc('month', CURRENT_DATE)::text"
+        return f"(date_trunc('month', CURRENT_DATE) - INTERVAL '{months_back} months')::text"
+    if months_back == 0:
+        return "date('now', 'start of month')"
+    return f"date('now', 'start of month', '-{months_back} month')"
+
+
 def init_db():
+    if DB_ENGINE == "postgres":
+        # Schema was already provisioned by the one-time pgloader migration
+        # (see feature/postgres-migration). Everything below this point is
+        # SQLite-dialect DDL (AUTOINCREMENT, the ALTER-TABLE-ADD-COLUMN
+        # migration idiom, the table-rebuild-for-CHECK-constraint-change
+        # workarounds) that hasn't been ported yet — TODO for the next pass
+        # of this migration, tracked separately from today's get_db() work.
+        return
     conn = get_db()
     cursor = conn.cursor()
 
@@ -1777,7 +2001,7 @@ def get_summary(group_by="service_name", date_from=None, date_to=None, subscript
     _cost = _converted_cost_sql(reporting_currency)
     query = f"""
         SELECT {group_by}, SUM({_cost}) as total_cost, COUNT(*) as record_count,
-               currency
+               MAX(currency) as currency
         FROM cost_data WHERE 1=1
     """
     params = []
@@ -1808,7 +2032,7 @@ def get_daily_trend(date_from=None, date_to=None, resource_group=None, service_n
     conn = get_db()
     _cost = _converted_cost_sql(reporting_currency)
     query = f"""
-        SELECT SUBSTR(date, 1, 10) AS date, SUM({_cost}) as total_cost, currency
+        SELECT SUBSTR(date, 1, 10) AS date, SUM({_cost}) as total_cost, MAX(currency) as currency
         FROM cost_data WHERE 1=1
     """
     params = []
@@ -2168,7 +2392,7 @@ def get_weekly_breakdown(group_by, date_from=None, date_to=None, subscription_id
 
     query = f"""
         SELECT
-            strftime('%Y-W%W', date) as week,
+            {_week_group_expr()} as week,
             MIN(date) as week_start,
             MAX(date) as week_end,
             {group_by} as name,
@@ -2200,13 +2424,13 @@ def get_weekly_breakdown(group_by, date_from=None, date_to=None, subscription_id
 def get_available_periods(subscription_id=None):
     """Get list of available months and weeks for comparison dropdowns."""
     conn = get_db()
-    month_query = """
-        SELECT strftime('%Y-%m', date) as month, MIN(date) as start_date, MAX(date) as end_date,
+    month_query = f"""
+        SELECT {_month_group_expr()} as month, MIN(date) as start_date, MAX(date) as end_date,
                SUM(cost) as total_cost
         FROM cost_data
     """
-    week_query = """
-        SELECT strftime('%Y-W%W', date) as week, MIN(date) as start_date, MAX(date) as end_date,
+    week_query = f"""
+        SELECT {_week_group_expr()} as week, MIN(date) as start_date, MAX(date) as end_date,
                SUM(cost) as total_cost
         FROM cost_data
     """
@@ -2783,12 +3007,12 @@ def get_monthly_summary(subscription_id=None, tenant_id=None, cloud_provider=Non
     _cost = _converted_cost_sql(reporting_currency)
     query = f"""
         SELECT
-            strftime('%Y-%m', date) as month,
+            {_month_group_expr()} as month,
             SUM({_cost}) as total_cost,
             COUNT(*) as record_count,
             COUNT(DISTINCT resource_group) as rg_count,
             COUNT(DISTINCT service_name) as service_count,
-            currency
+            MAX(currency) as currency
         FROM cost_data
     """
     params = []
@@ -2804,7 +3028,7 @@ def get_monthly_summary(subscription_id=None, tenant_id=None, cloud_provider=Non
         params.append(cloud_provider)
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
-    query += " GROUP BY strftime('%Y-%m', date) ORDER BY month ASC"
+    query += f" GROUP BY {_month_group_expr()} ORDER BY month ASC"
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -2815,10 +3039,10 @@ def get_monthly_service_breakdown(subscription_id=None, tenant_id=None, cloud_pr
     _cost = _converted_cost_sql(reporting_currency)
     query = f"""
         SELECT
-            strftime('%Y-%m', date) as month,
+            {_month_group_expr()} as month,
             service_name,
             SUM({_cost}) as total_cost,
-            currency
+            MAX(currency) as currency
         FROM cost_data
     """
     params = []
@@ -2834,7 +3058,7 @@ def get_monthly_service_breakdown(subscription_id=None, tenant_id=None, cloud_pr
         params.append(cloud_provider)
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
-    query += " GROUP BY strftime('%Y-%m', date), service_name ORDER BY month ASC, total_cost DESC"
+    query += f" GROUP BY {_month_group_expr()}, service_name ORDER BY month ASC, total_cost DESC"
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -2845,10 +3069,10 @@ def get_monthly_rg_breakdown(subscription_id=None, tenant_id=None, cloud_provide
     _cost = _converted_cost_sql(reporting_currency)
     query = f"""
         SELECT
-            strftime('%Y-%m', date) as month,
+            {_month_group_expr()} as month,
             resource_group,
             SUM({_cost}) as total_cost,
-            currency
+            MAX(currency) as currency
         FROM cost_data
     """
     params = []
@@ -2864,7 +3088,7 @@ def get_monthly_rg_breakdown(subscription_id=None, tenant_id=None, cloud_provide
         params.append(cloud_provider)
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
-    query += " GROUP BY strftime('%Y-%m', date), resource_group ORDER BY month ASC, total_cost DESC"
+    query += f" GROUP BY {_month_group_expr()}, resource_group ORDER BY month ASC, total_cost DESC"
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -2876,7 +3100,7 @@ def get_monthly_subscription_breakdown(subscription_id=None, tenant_id=None, clo
     _cost = _converted_cost_sql(reporting_currency, col="cd.cost", cur_col="cd.currency")
     query = f"""
         SELECT
-            strftime('%Y-%m', cd.date) as month,
+            {_month_group_expr('cd.date')} as month,
             cd.subscription_id,
             cd.cloud_provider,
             s.name as subscription_name,
@@ -2899,8 +3123,8 @@ def get_monthly_subscription_breakdown(subscription_id=None, tenant_id=None, clo
         params.append(cloud_provider)
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
-    query += """
-        GROUP BY strftime('%Y-%m', cd.date), cd.subscription_id, s.name, cp.name, cd.cloud_provider
+    query += f"""
+        GROUP BY {_month_group_expr('cd.date')}, cd.subscription_id, s.name, cp.name, cd.cloud_provider
         ORDER BY month ASC, total_cost DESC
     """
     rows = conn.execute(query, params).fetchall()
@@ -3697,16 +3921,16 @@ def get_tenant(tenant_id: int = None, slug: str = None) -> dict:
 def get_all_tenants() -> list:
     from currency import tenant_reporting_currency, symbol as _cur_symbol
     conn = get_db()
-    rows = conn.execute("""
+    rows = conn.execute(f"""
         SELECT t.*,
                (SELECT COUNT(*) FROM users u WHERE u.tenant_id=t.id) AS user_count,
                (SELECT COUNT(*) FROM cloud_providers cp WHERE cp.tenant_id=t.id) AS provider_count,
                (SELECT COUNT(*) FROM cost_data cd WHERE cd.tenant_id=t.id) AS cost_rows,
                (SELECT COALESCE(SUM(cd.cost), 0) FROM cost_data cd
-                  WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month')) AS cloud_spend_30d_raw,
+                  WHERE cd.tenant_id = t.id AND cd.date >= {_month_start_expr()}) AS cloud_spend_30d_raw,
                (SELECT COALESCE(SUM(cd.cost), 0) FROM cost_data cd
-                  WHERE cd.tenant_id = t.id AND cd.date >= date('now', 'start of month', '-1 month')
-                        AND cd.date < date('now', 'start of month')) AS cloud_spend_prev_30d_raw
+                  WHERE cd.tenant_id = t.id AND cd.date >= {_month_start_expr(1)}
+                        AND cd.date < {_month_start_expr()}) AS cloud_spend_prev_30d_raw
         FROM tenants t ORDER BY t.created_at DESC
     """).fetchall()
     conn.close()
