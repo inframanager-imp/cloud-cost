@@ -77,7 +77,8 @@ from database import (
     consume_gcp_setup_token, get_gcp_setup_token_status,
     # Dialect-aware SQL fragments (SQLite/Postgres) — see database.py header
     _month_group_expr, _week_group_expr, _dow_expr, _hour_expr,
-    _now_minus_days_expr, _month_start_expr, _date_cast_expr,
+    _now_minus_days_expr, _month_start_expr, _date_cast_expr, _group_concat_expr,
+    _nocase_order_expr,
 )
 from azure_fetcher import (fetch_cost_data, fetch_activity_logs, resolve_caller_names, fetch_subscriptions,
                            fetch_billing_account_costs, filter_billing_only_charges)
@@ -2686,7 +2687,7 @@ def api_activity_overview():
         GROUP BY dow, hour
     """, params).fetchall()
     top_resources = conn.execute(f"""
-        SELECT resource_name, resource_type, resource_group, COUNT(*) as cnt
+        SELECT resource_name, MAX(resource_type) as resource_type, MAX(resource_group) as resource_group, COUNT(*) as cnt
         FROM activity_logs{where} AND resource_name IS NOT NULL AND resource_name != ''
         GROUP BY resource_name ORDER BY cnt DESC LIMIT 10
     """, params).fetchall()
@@ -2785,20 +2786,21 @@ def api_activity_resource_timeline():
             events.append(d)
         return jsonify({"events": events})
 
-    rows = conn.execute(f"""
-        SELECT resource_name, resource_type, resource_group,
-               COUNT(*) as event_count,
-               MIN(timestamp) as first_event,
-               MAX(timestamp) as last_event,
-               SUM(CASE WHEN status='Failed' THEN 1 ELSE 0 END) as failures,
-               GROUP_CONCAT(DISTINCT
+    _op_type_case = """
                    CASE
                        WHEN operation_name LIKE 'Create%' OR operation_name LIKE 'Update%' THEN 'Create'
                        WHEN operation_name LIKE 'Delete%' THEN 'Delete'
                        WHEN operation_name LIKE 'Start%' OR operation_name LIKE 'Stop%' OR operation_name LIKE 'Deallocate%' THEN 'Action'
                        ELSE 'Other'
                    END
-               ) as op_types
+    """
+    rows = conn.execute(f"""
+        SELECT resource_name, MAX(resource_type) as resource_type, MAX(resource_group) as resource_group,
+               COUNT(*) as event_count,
+               MIN(timestamp) as first_event,
+               MAX(timestamp) as last_event,
+               SUM(CASE WHEN status='Failed' THEN 1 ELSE 0 END) as failures,
+               {_group_concat_expr(_op_type_case)} as op_types
         FROM activity_logs
         {where} AND resource_name IS NOT NULL AND resource_name != ''
         GROUP BY resource_name
@@ -2832,8 +2834,8 @@ def api_activity_failed():
         LIMIT 20
     """, params).fetchall()
     by_res = conn.execute(f"""
-        SELECT resource_name, resource_group, COUNT(*) as cnt, MAX(timestamp) as last_occurred,
-               GROUP_CONCAT(DISTINCT operation_name) as operations
+        SELECT resource_name, MAX(resource_group) as resource_group, COUNT(*) as cnt, MAX(timestamp) as last_occurred,
+               {_group_concat_expr('operation_name')} as operations
         FROM activity_logs {where} AND resource_name IS NOT NULL AND resource_name != ''
         GROUP BY resource_name
         ORDER BY cnt DESC
@@ -5273,7 +5275,7 @@ def api_atlassian_users():
     if org_id:
         q += "AND org_id=? "
         params.append(org_id)
-    q += "ORDER BY (status='active') DESC, name COLLATE NOCASE"
+    q += f"ORDER BY (status='active') DESC, {_nocase_order_expr('name')}"
     rows = [dict(r) for r in conn.execute(q, params).fetchall()]
     conn.close()
 

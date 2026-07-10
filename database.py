@@ -22,6 +22,16 @@ DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
 _QMARK_RE = re.compile(r"\?")
 
 
+def _translate_sql(sql):
+    """Escape literal `%` (e.g. LIKE 'Create%' wildcards — 27+ sites across
+    the codebase) before substituting `?` placeholders with `%s`. psycopg2
+    uses Python's %-style string formatting for parameter substitution, so
+    any other literal `%` in the query text is otherwise misread as its own
+    format specifier, raising `IndexError: list index out of range` from
+    deep inside psycopg2 the moment the substitution count doesn't match."""
+    return _QMARK_RE.sub("%s", sql.replace("%", "%%"))
+
+
 class _PGCursorCompat:
     """Wraps a psycopg2 cursor so it accepts SQLite's `?` placeholders (used
     ~1,300 times across the codebase) instead of requiring every call site to
@@ -47,7 +57,7 @@ class _PGCursorCompat:
 
     def execute(self, sql, params=()):
         try:
-            self._cur.execute(_QMARK_RE.sub("%s", sql), params)
+            self._cur.execute(_translate_sql(sql), params)
         except Exception:
             if self._conn is not None:
                 self._conn.rollback()
@@ -56,7 +66,7 @@ class _PGCursorCompat:
 
     def executemany(self, sql, seq_of_params):
         try:
-            self._cur.executemany(_QMARK_RE.sub("%s", sql), seq_of_params)
+            self._cur.executemany(_translate_sql(sql), seq_of_params)
         except Exception:
             if self._conn is not None:
                 self._conn.rollback()
@@ -171,6 +181,25 @@ def get_db():
 # raw-SQL layer. Each returns the exact original SQLite expression when
 # DB_ENGINE=sqlite (zero behavior change there) and a Postgres equivalent
 # when DB_ENGINE=postgres, so call sites don't need per-engine branching.
+
+def _nocase_order_expr(col):
+    """Case-insensitive ORDER BY term. SQLite's COLLATE NOCASE has no
+    built-in Postgres equivalent (Postgres collations are locale/ICU-based,
+    not simple ASCII case-folding) — LOWER() sorts the same way here."""
+    if DB_ENGINE == "postgres":
+        return f"LOWER({col})"
+    return f"{col} COLLATE NOCASE"
+
+
+def _group_concat_expr(expr, distinct=True):
+    """Comma-join an aggregate expression's values. SQLite's GROUP_CONCAT
+    has no Postgres equivalent — Postgres uses STRING_AGG(expr, sep), which
+    (unlike GROUP_CONCAT) requires the separator argument explicitly."""
+    d = "DISTINCT " if distinct else ""
+    if DB_ENGINE == "postgres":
+        return f"STRING_AGG({d}{expr}, ',')"
+    return f"GROUP_CONCAT({d}{expr})"
+
 
 def _month_group_expr(col="date"):
     """'YYYY-MM' string for a date column, for GROUP BY / SELECT."""
@@ -1897,7 +1926,7 @@ def get_resource_detail(subscription_ids=None, service_name=None, date_from=None
         SELECT
             cd.resource_name,
             cd.resource_group,
-            arn.display_name,
+            MAX(arn.display_name) as display_name,
             SUM({_cost}) as total_cost,
             COUNT(*) as total_records
         FROM cost_data cd
