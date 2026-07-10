@@ -191,6 +191,44 @@ def _nocase_order_expr(col):
     return f"{col} COLLATE NOCASE"
 
 
+def _last_insert_id_sql():
+    """Raw-SQL form of 'get the last auto-increment id' — used at a couple of
+    call sites that query it directly instead of reading cursor.lastrowid.
+    Postgres has no last_insert_rowid(); lastval() is the equivalent (same
+    function _PGCursorCompat.lastrowid already uses internally)."""
+    if DB_ENGINE == "postgres":
+        return "SELECT lastval()"
+    return "SELECT last_insert_rowid()"
+
+
+def _insert_ignore_single_col_sql(table, col):
+    """'INSERT this row if it doesn't already exist' for a single-column
+    insert keyed on a unique column — the seed-a-default-row-per-tenant
+    pattern used by email_settings/integration_settings. Postgres has no
+    INSERT OR IGNORE; ON CONFLICT DO NOTHING is the equivalent."""
+    if DB_ENGINE == "postgres":
+        return f"INSERT INTO {table} ({col}) VALUES (?) ON CONFLICT ({col}) DO NOTHING"
+    return f"INSERT OR IGNORE INTO {table} ({col}) VALUES (?)"
+
+
+def _insert_replace_sql(table, cols, conflict_cols):
+    """'INSERT this row, replacing any existing row with the same key' — the
+    upsert pattern used by cache/dedup tables (caller_names, cursor_users,
+    etc). Postgres has no INSERT OR REPLACE; ON CONFLICT (...) DO UPDATE is
+    the equivalent. conflict_cols may be a single column name or a tuple for
+    a composite unique constraint (e.g. cursor_users' (tenant_id, user_id))."""
+    col_list = ", ".join(cols)
+    placeholders = ", ".join(["?"] * len(cols))
+    if DB_ENGINE == "postgres":
+        if isinstance(conflict_cols, str):
+            conflict_cols = (conflict_cols,)
+        conflict_sql = ", ".join(conflict_cols)
+        update_cols = [c for c in cols if c not in conflict_cols]
+        set_sql = ", ".join(f"{c}=EXCLUDED.{c}" for c in update_cols)
+        return f"INSERT INTO {table} ({col_list}) VALUES ({placeholders}) ON CONFLICT ({conflict_sql}) DO UPDATE SET {set_sql}"
+    return f"INSERT OR REPLACE INTO {table} ({col_list}) VALUES ({placeholders})"
+
+
 def _group_concat_expr(expr, distinct=True):
     """Comma-join an aggregate expression's values. SQLite's GROUP_CONCAT
     has no Postgres equivalent — Postgres uses STRING_AGG(expr, sep), which
@@ -2656,7 +2694,7 @@ def save_custom_report(data, tenant_id=1):
          tenant_id)
     )
     conn.commit()
-    rid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    rid = conn.execute(_last_insert_id_sql()).fetchone()[0]
     conn.close()
     return rid
 
@@ -2746,7 +2784,7 @@ def get_email_settings(tenant_id=1):
     conn = get_db()
     row = conn.execute("SELECT * FROM email_settings WHERE tenant_id=?", (tenant_id,)).fetchone()
     if not row:
-        conn.execute("INSERT OR IGNORE INTO email_settings (tenant_id) VALUES (?)", (tenant_id,))
+        conn.execute(_insert_ignore_single_col_sql("email_settings", "tenant_id"), (tenant_id,))
         conn.commit()
         row = conn.execute("SELECT * FROM email_settings WHERE tenant_id=?", (tenant_id,)).fetchone()
     conn.close()
@@ -2769,7 +2807,7 @@ def get_email_settings(tenant_id=1):
 
 def update_email_settings(settings, tenant_id=1):
     conn = get_db()
-    conn.execute("INSERT OR IGNORE INTO email_settings (tenant_id) VALUES (?)", (tenant_id,))
+    conn.execute(_insert_ignore_single_col_sql("email_settings", "tenant_id"), (tenant_id,))
     fields = []
     params = []
     allowed = ["smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from",
@@ -2801,7 +2839,7 @@ def get_integration_settings(tenant_id=1):
     conn = get_db()
     row = conn.execute("SELECT * FROM integration_settings WHERE tenant_id=?", (tenant_id,)).fetchone()
     if not row:
-        conn.execute("INSERT OR IGNORE INTO integration_settings (tenant_id) VALUES (?)", (tenant_id,))
+        conn.execute(_insert_ignore_single_col_sql("integration_settings", "tenant_id"), (tenant_id,))
         conn.commit()
         row = conn.execute("SELECT * FROM integration_settings WHERE tenant_id=?", (tenant_id,)).fetchone()
     conn.close()
@@ -2877,7 +2915,7 @@ def get_integration_settings(tenant_id=1):
 
 def update_integration_settings(settings, tenant_id=1):
     conn = get_db()
-    conn.execute("INSERT OR IGNORE INTO integration_settings (tenant_id) VALUES (?)", (tenant_id,))
+    conn.execute(_insert_ignore_single_col_sql("integration_settings", "tenant_id"), (tenant_id,))
     allowed = [
         "jira_url", "jira_email", "jira_token", "jira_project", "jira_issue_type", "jira_enabled",
         "jira_admin_token", "jira_admin_org_id",
@@ -2957,7 +2995,7 @@ def save_filter(name, filters, tenant_id=1):
         (name, json.dumps(filters), tenant_id)
     )
     conn.commit()
-    fid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    fid = conn.execute(_last_insert_id_sql()).fetchone()[0]
     conn.close()
     return fid
 
@@ -3227,12 +3265,15 @@ def insert_activity_logs(logs, subscription_id=None, cloud_provider="azure", ten
                     ).encode("utf-8", errors="replace")
                 ).hexdigest()[:48]
                 eid = f"synth:{h}"
-            cursor.execute("""
-                INSERT OR IGNORE INTO activity_logs
+            _insert_kw = "INSERT" if DB_ENGINE == "postgres" else "INSERT OR IGNORE"
+            _conflict_sql = "ON CONFLICT (event_id) DO NOTHING" if DB_ENGINE == "postgres" else ""
+            cursor.execute(f"""
+                {_insert_kw} INTO activity_logs
                 (event_id, subscription_id, cloud_provider, timestamp, caller, operation, operation_name,
                  resource_group, resource_type, resource_name, resource_id,
                  status, level, category, description, tenant_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                {_conflict_sql}
             """, (eid, sub, cp, *t[1:], tid))
             inserted += cursor.rowcount
         except Exception:
@@ -3345,7 +3386,7 @@ def save_caller_names(name_map):
     conn = get_db()
     for cid, name in name_map.items():
         conn.execute(
-            "INSERT OR REPLACE INTO caller_names (caller_id, display_name, updated_at) VALUES (?, ?, ?)",
+            _insert_replace_sql("caller_names", ["caller_id", "display_name", "updated_at"], "caller_id"),
             (cid, name, datetime.utcnow().isoformat())
         )
     conn.commit()
@@ -3367,7 +3408,7 @@ def save_aws_resource_names(name_map: dict, provider_id: str = None):
     now = datetime.utcnow().isoformat()
     for resource_id, display_name in name_map.items():
         conn.execute(
-            "INSERT OR REPLACE INTO aws_resource_names (resource_id, display_name, provider_id, updated_at) VALUES (?, ?, ?, ?)",
+            _insert_replace_sql("aws_resource_names", ["resource_id", "display_name", "provider_id", "updated_at"], "resource_id"),
             (resource_id, display_name, provider_id, now)
         )
     conn.commit()

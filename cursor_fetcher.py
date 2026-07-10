@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 
 import requests
 
-from database import get_db, get_integration_settings
+from database import get_db, get_integration_settings, _insert_replace_sql
 
 CURSOR_BASE = "https://api.cursor.com"
 
@@ -152,8 +152,12 @@ def _sync_one_account(conn, tenant_id, acct_name, key, now):
         int(m.get("fastPremiumRequests") or 0), now.isoformat(),
     ) for m in members]
     conn.executemany(
-        "INSERT OR REPLACE INTO cursor_users(tenant_id,account,user_id,name,email,role,spend_cents,"
-        "included_cents,fast_premium_requests,synced_at) VALUES(?,?,?,?,?,?,?,?,?,?)", rows,
+        _insert_replace_sql(
+            "cursor_users",
+            ["tenant_id", "account", "user_id", "name", "email", "role", "spend_cents",
+             "included_cents", "fast_premium_requests", "synced_at"],
+            ("tenant_id", "user_id"),
+        ), rows,
     )
 
     # Usage events (once) → daily on-demand split + per-(user,model) aggregation.
@@ -234,8 +238,11 @@ def _sync_one_account(conn, tenant_id, acct_name, key, now):
             a["tokens"] += toks
             a["events"] += 1
         conn.executemany(
-            "INSERT OR REPLACE INTO cursor_usage(tenant_id,account,email,model,included_cents,on_demand_cents,tokens,events,synced_at) "
-            "VALUES(?,?,?,?,?,?,?,?,?)",
+            _insert_replace_sql(
+                "cursor_usage",
+                ["tenant_id", "account", "email", "model", "included_cents", "on_demand_cents", "tokens", "events", "synced_at"],
+                ("tenant_id", "email", "model"),
+            ),
             [(tenant_id, acct_name, em, mo, v["included"], v["on_demand"], v["tokens"], v["events"], now.isoformat())
              for (em, mo), v in agg.items()],
         )
