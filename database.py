@@ -217,6 +217,19 @@ def get_db():
 # DB_ENGINE=sqlite (zero behavior change there) and a Postgres equivalent
 # when DB_ENGINE=postgres, so call sites don't need per-engine branching.
 
+def _not_guid_prefix_expr(col):
+    """True when `col` does NOT start with an 8-hex-char GUID segment
+    followed by a dash. SQLite's GLOB (Unix shell-style patterns) has no
+    Postgres equivalent by that name — Postgres's POSIX regex `!~` operator
+    covers the same case cleanly."""
+    if DB_ENGINE == "postgres":
+        return f"{col} !~ '^[0-9a-fA-F]{{8}}-'"
+    return (
+        f"{col} NOT GLOB "
+        "'[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]-*'"
+    )
+
+
 def _nocase_order_expr(col):
     """Case-insensitive ORDER BY term. SQLite's COLLATE NOCASE has no
     built-in Postgres equivalent (Postgres collations are locale/ICU-based,
@@ -2563,10 +2576,7 @@ def get_distinct_values(column, subscription_id=None, subscription_ids=None, clo
         # Bare-GUID resource names (reservation orders, ephemeral container
         # groups, etc.) flood the list and aren't useful filter targets — exclude
         # anything starting with a GUID. The free-text Search box still finds them.
-        conditions.append(
-            "resource_name NOT GLOB "
-            "'[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]-*'"
-        )
+        conditions.append(_not_guid_prefix_expr("resource_name"))
     if subscription_ids:
         placeholders = ",".join(["?"] * len(subscription_ids))
         conditions.append(f"subscription_id IN ({placeholders})")
