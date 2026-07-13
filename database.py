@@ -54,8 +54,10 @@ class _PGCursorCompat:
     def __init__(self, cursor, conn=None):
         self._cur = cursor
         self._conn = conn
+        self._executemany_count = None
 
     def execute(self, sql, params=()):
+        self._executemany_count = None
         try:
             self._cur.execute(_translate_sql(sql), params)
         except Exception:
@@ -65,8 +67,27 @@ class _PGCursorCompat:
         return self
 
     def executemany(self, sql, seq_of_params):
+        # Plain psycopg2 executemany() sends one statement per network round
+        # trip — fine for SQLite (a local file, no round trip at all) but
+        # brutally slow for Postgres over the network: a multi-thousand-row
+        # cost_data sync took minutes instead of seconds against the real
+        # remote database in testing. execute_batch() pipelines many rows
+        # per round trip with the exact same sql/params shape, no call sites
+        # need to change.
+        seq_of_params = list(seq_of_params)
         try:
-            self._cur.executemany(_translate_sql(sql), seq_of_params)
+            if DB_ENGINE == "postgres":
+                import psycopg2.extras
+                psycopg2.extras.execute_batch(self._cur, _translate_sql(sql), seq_of_params, page_size=500)
+                # execute_batch() doesn't keep an accurate cursor.rowcount
+                # across pages (only the last page) — for a plain INSERT
+                # (the dominant case here) every param row becomes one row,
+                # so len() is the correct count; ON CONFLICT DO NOTHING sites
+                # may overcount by however many rows were skipped as
+                # duplicates, an acceptable trade for status/progress numbers.
+                self._executemany_count = len(seq_of_params)
+            else:
+                self._cur.executemany(_translate_sql(sql), seq_of_params)
         except Exception:
             if self._conn is not None:
                 self._conn.rollback()
@@ -80,6 +101,8 @@ class _PGCursorCompat:
 
     @property
     def rowcount(self):
+        if self._executemany_count is not None:
+            return self._executemany_count
         return self._cur.rowcount
 
     def fetchone(self):
