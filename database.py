@@ -20,6 +20,7 @@ DB_USER    = os.environ.get("DB_USER", "")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
 
 _QMARK_RE = re.compile(r"\?")
+_IS_QMARK_RE = re.compile(r"\bIS\s+\?")
 
 
 def _translate_sql(sql):
@@ -28,7 +29,18 @@ def _translate_sql(sql):
     uses Python's %-style string formatting for parameter substitution, so
     any other literal `%` in the query text is otherwise misread as its own
     format specifier, raising `IndexError: list index out of range` from
-    deep inside psycopg2 the moment the substitution count doesn't match."""
+    deep inside psycopg2 the moment the substitution count doesn't match.
+
+    Also rewrites `col IS ?` (23+ sites, mostly `tenant_id IS ?`) to
+    `col IS NOT DISTINCT FROM ?`. SQLite's IS is a NULL-safe equality
+    operator that works against any value, not just NULL/TRUE/FALSE — this
+    codebase relies on that to match both a real tenant_id and legacy NULL
+    rows with one placeholder. Standard SQL (and Postgres) only allows IS
+    against NULL/TRUE/FALSE, so `tenant_id IS ?` with a non-null param is a
+    syntax error there; IS NOT DISTINCT FROM is Postgres's exact equivalent
+    of SQLite's IS semantics for arbitrary values."""
+    if DB_ENGINE == "postgres":
+        sql = _IS_QMARK_RE.sub("IS NOT DISTINCT FROM ?", sql)
     return _QMARK_RE.sub("%s", sql.replace("%", "%%"))
 
 
