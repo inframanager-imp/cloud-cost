@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 from database import (
     get_email_settings, get_subscriptions, get_summary,
     get_daily_trend, get_monthly_summary, log_email,
-    get_custom_cost, get_custom_report, update_custom_report
+    get_custom_cost, get_custom_report, update_custom_report,
+    get_db
 )
 import os
-import sqlite3
 
 
 def _resolve_report_period(settings):
@@ -417,9 +417,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
         # Resource changes for selected period (best-effort). Keep robust if tables are missing.
         resource_changes_available = True
         try:
-            db_path = os.getenv("DB_PATH") or os.path.join(os.path.dirname(__file__), "azure_costs.db")
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row
+            conn = get_db()
 
             # Build cost map for the period
             cost_rows = conn.execute("""

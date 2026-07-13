@@ -20,7 +20,7 @@ import sys
 from dotenv import load_dotenv
 load_dotenv()
 
-from database import get_db
+from database import get_db, DB_ENGINE
 
 OWNER_TENANT_ID = int(os.getenv("OWNER_TENANT_ID", "1"))
 
@@ -44,12 +44,20 @@ TENANT_SCOPED_TABLES = [
 
 
 def _has_table(conn, name: str) -> bool:
+    if DB_ENGINE == "postgres":
+        return conn.execute(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=?", (name,)
+        ).fetchone() is not None
     return conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
     ).fetchone() is not None
 
 
 def _has_column(conn, table: str, col: str) -> bool:
+    if DB_ENGINE == "postgres":
+        return conn.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_name=? AND column_name=?", (table, col)
+        ).fetchone() is not None
     return any(c[1] == col for c in conn.execute(f"PRAGMA table_info({table})").fetchall())
 
 
@@ -109,11 +117,15 @@ def audit() -> dict:
 
     # ── Invariant 3: same account's cost_data under multiple tenants ──────────
     if _has_table(conn, "cost_data"):
+        if DB_ENGINE == "postgres":
+            tids_expr = "STRING_AGG(DISTINCT tenant_id::text, ',')"
+        else:
+            tids_expr = "GROUP_CONCAT(DISTINCT tenant_id)"
         dupes = conn.execute(
             "SELECT subscription_id, cloud_provider, COUNT(DISTINCT tenant_id) AS n, "
-            "       GROUP_CONCAT(DISTINCT tenant_id) AS tids "
+            f"       {tids_expr} AS tids "
             "FROM cost_data WHERE subscription_id IS NOT NULL AND subscription_id != '' "
-            "GROUP BY subscription_id, cloud_provider HAVING n > 1"
+            "GROUP BY subscription_id, cloud_provider HAVING COUNT(DISTINCT tenant_id) > 1"
         ).fetchall()
         for r in dupes:
             findings.append({
