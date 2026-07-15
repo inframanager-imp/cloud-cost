@@ -4726,13 +4726,20 @@ def upsert_client_mappings(client_id: int, mappings: list):
     conn.close()
 
 
-def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: int) -> dict:
-    """Return cost summary for a client based on its mappings."""
+def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: int, reporting_currency: str = None) -> dict:
+    """Return cost summary for a client based on its mappings.
+
+    reporting_currency: when set, every cost_data row is converted from its
+    own native currency into this one before summing (same mechanism the
+    dashboard uses — see _converted_cost_sql). Left as None by default so
+    existing callers (e.g. the raw Client Cost Allocation UI API) are
+    completely unaffected; only pass it where converted totals are wanted."""
     mappings = get_client_mappings(client_id)
     if not mappings:
         return {"total": 0, "by_service": [], "by_subscription": [], "trend": []}
 
     conn = get_db()
+    _cost = _converted_cost_sql(reporting_currency)
 
     # Build OR conditions from mappings
     conditions = []
@@ -4746,13 +4753,13 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
     base_params = [date_from, date_to, tenant_id] + params
 
     total_row = conn.execute(
-        f"SELECT COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"SELECT COALESCE(SUM({_cost}),0) as total FROM cost_data "
         f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause}",
         base_params
     ).fetchone()
 
     by_service = conn.execute(
-        f"SELECT service_name, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"SELECT service_name, COALESCE(SUM({_cost}),0) as total FROM cost_data "
         f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
         f"GROUP BY service_name ORDER BY total DESC LIMIT 10",
         base_params
@@ -4760,7 +4767,7 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
 
     # Top resource groups (RG / project / region — whatever cost_data.resource_group holds)
     by_rg = conn.execute(
-        f"SELECT resource_group, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"SELECT resource_group, COALESCE(SUM({_cost}),0) as total FROM cost_data "
         f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
         f"AND resource_group IS NOT NULL AND resource_group!='' "
         f"GROUP BY resource_group ORDER BY total DESC LIMIT 10",
@@ -4768,14 +4775,14 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
     ).fetchall()
 
     by_subscription = conn.execute(
-        f"SELECT subscription_id, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"SELECT subscription_id, COALESCE(SUM({_cost}),0) as total FROM cost_data "
         f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
         f"GROUP BY subscription_id ORDER BY total DESC",
         base_params
     ).fetchall()
 
     trend = conn.execute(
-        f"SELECT substr(date,1,10) as date, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"SELECT substr(date,1,10) as date, COALESCE(SUM({_cost}),0) as total FROM cost_data "
         f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
         f"GROUP BY substr(date,1,10) ORDER BY substr(date,1,10)",
         base_params
@@ -4784,7 +4791,7 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
     # Per-cloud breakdown — straight from cost_data's cloud_provider (don't infer
     # the cloud from mappings, which defaults to azure for non-subscription maps).
     by_cloud = conn.execute(
-        f"SELECT cloud_provider, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"SELECT cloud_provider, COALESCE(SUM({_cost}),0) as total FROM cost_data "
         f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
         f"GROUP BY cloud_provider ORDER BY total DESC",
         base_params
@@ -4794,12 +4801,22 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
     # HAVING total>0 filter — Cursor users with $0 on-demand still carry included
     # (plan) cost, so every mapped user should appear.
     by_resource = conn.execute(
-        f"SELECT resource_name, COALESCE(SUM(cost),0) as total FROM cost_data "
+        f"SELECT resource_name, COALESCE(SUM({_cost}),0) as total FROM cost_data "
         f"WHERE substr(date,1,10)>=? AND substr(date,1,10)<=? AND tenant_id=? AND {mapping_clause} "
         f"AND resource_name IS NOT NULL AND resource_name!='' "
         f"GROUP BY resource_name ORDER BY total DESC LIMIT 100",
         base_params
     ).fetchall()
+
+    # Cursor's own tables (cursor_users.spend_cents/included_cents) are always
+    # USD-denominated, unlike cost_data which carries its own per-row currency
+    # — convert these explicitly rather than via _converted_cost_sql, which
+    # only applies to cost_data columns.
+    def _conv_usd(v):
+        if not reporting_currency:
+            return v
+        from currency import convert as _fx_convert
+        return _fx_convert(v, "USD", reporting_currency)
 
     # Included (plan-covered) cost per Cursor user — cost_data holds on-demand only;
     # included lives in cursor_users (keyed by name and/or email).
@@ -4809,13 +4826,13 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
             "SELECT name, email, COALESCE(included_cents,0) ic FROM cursor_users WHERE tenant_id IS ?",
             (tenant_id,)
         ).fetchall():
-            ic = round((u["ic"] or 0) / 100.0, 2)
+            ic = round(_conv_usd((u["ic"] or 0) / 100.0), 2)
             if u["name"]:  incl_map[u["name"]] = ic
             if u["email"]: incl_map[u["email"]] = ic
     except Exception:
         pass
 
-    CURSOR_SEAT_INCLUDED = 20.0  # Cursor Business plan includes $20 of usage per seat
+    CURSOR_SEAT_INCLUDED = _conv_usd(20.0)  # Cursor Business plan includes $20 of usage per seat
     def _res_item(r):
         od    = round(r["total"], 2)
         incl  = incl_map.get(r["resource_name"], 0)            # combined included+free
@@ -4850,8 +4867,8 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
             have.add(nm.lower())
             # Member absent from the period's cost_data — use the cursor_users snapshot
             # (its on-demand isn't in cost_data, so no double-count) so they still appear.
-            od   = round((u["sc"] or 0) / 100.0, 2)
-            incl = round((u["ic"] or 0) / 100.0, 2)
+            od   = round(_conv_usd((u["sc"] or 0) / 100.0), 2)
+            incl = round(_conv_usd((u["ic"] or 0) / 100.0), 2)
             inc_u = round(min(CURSOR_SEAT_INCLUDED, incl), 2) if incl else 0
             free  = round(max(0.0, incl - inc_u), 2)
             by_resource_items.append({"name": nm, "cost": od, "ondemand": od, "included": incl,
@@ -4867,6 +4884,7 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
         "by_cloud": [{"cloud": r["cloud_provider"] or "unknown", "cost": round(r["total"], 2)} for r in by_cloud],
         "by_resource": by_resource_items,
         "trend": [{"date": r["date"], "cost": round(r["total"], 2)} for r in trend],
+        "cursor_seat_included": CURSOR_SEAT_INCLUDED,
     }
 
 

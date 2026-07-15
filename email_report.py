@@ -1484,8 +1484,15 @@ def send_test_email(recipient, tenant_id=1):
     )
 
 
-def build_client_report_html(client: dict, cost_data: dict, date_from: str, date_to: str) -> str:
-    """Generate an HTML cost report for a single client."""
+def build_client_report_html(client: dict, cost_data: dict, date_from: str, date_to: str, reporting_currency: str = None) -> str:
+    """Generate an HTML cost report for a single client. cost_data's values are
+    expected to already be converted into reporting_currency (see
+    get_client_costs(reporting_currency=...)) — this function uses the same
+    code both to pick the displayed symbol and to re-fetch the previous
+    period's total (for the vs-last-period comparison) in the same currency,
+    so the two numbers stay comparable."""
+    from currency import symbol as _cur_symbol_fn
+    currency_symbol = _cur_symbol_fn(reporting_currency)
     font_stack = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
     ACCENT = "#185FA5"
     RANK_COLS = ["#185FA5","#3A77B2","#5E8FC0","#80A7CE","#A3BFDB","#BACFE5"]
@@ -1536,7 +1543,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         bg = "#F7F9FC" if i % 2 == 0 else "#FFFFFF"
         svc_rows += f"""<tr style="background:{bg}">
             <td style="padding:8px 14px;font-size:13px;color:#1A1A1A"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:{col};margin-right:8px"></span>{s['name']}</td>
-            <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">${s['cost']:,.2f}</td>
+            <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">{currency_symbol}{s['cost']:,.2f}</td>
             <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">{pct:.0f}%</td>
         </tr>"""
 
@@ -1565,7 +1572,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         cloud_rows += f"""<tr>
             <td style="padding:8px 14px;white-space:nowrap"><span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px;background:{bg_b};color:{fg_b};margin-right:6px">{cloud.upper()[:3]}</span><span style="font-size:13px;color:#1A1A1A">{label}</span></td>
             <td style="padding:8px 8px;width:38%"><div style="background:#EBEBEB;border-radius:4px;height:8px"><div style="background:{col};height:8px;border-radius:4px;width:{bar}%"></div></div></td>
-            <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">${cost:,.2f}</td>
+            <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">{currency_symbol}{cost:,.2f}</td>
             <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">{pct:.0f}%</td>
         </tr>"""
 
@@ -1596,7 +1603,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         step = max(1, round(n / 14))
         show_all = n <= 16
         CHART_H = 132
-        _short = lambda v: (f"${v/1000:.1f}k" if v >= 1000 else f"${v:.0f}")
+        _short = lambda v: (f"{currency_symbol}{v/1000:.1f}k" if v >= 1000 else f"{currency_symbol}{v:.0f}")
         bars = labels = ""
         any_spike = False
         for i, (d, c, sp) in enumerate(pts):
@@ -1624,7 +1631,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
                f'<tr><td height="{CHART_H//2}" valign="top" style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;line-height:1">{_short(mx)}</td></tr>'
                f'<tr><td height="{CHART_H//2}" valign="middle" style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;line-height:1">{_short(mx/2)}</td></tr>'
                f'</table>'
-               f'<div style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;margin-top:-8px">$0</div></td>')
+               f'<div style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;margin-top:-8px">{currency_symbol}0</div></td>')
         avg_c = sum(c for _, c, _ in pts) / n if n else 0
         pk_d, pk_c, _ = max(pts, key=lambda p: p[1]) if pts else ("", 0, False)
         return (
@@ -1635,8 +1642,8 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             f'<tr><td></td><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed"><tr>{labels}</tr></table></td></tr>'
             f'</table>'
             f'<div style="margin-top:12px;font-size:11px;color:{MUT};border-top:1px solid #EDF1F7;padding-top:10px">'
-            f'Peak <b style="color:{INK}">${pk_c:,.2f}</b> on {pk_d} &bull; '
-            f'Avg <b style="color:{INK}">${avg_c:,.2f}</b>/day{legend}</div>')
+            f'Peak <b style="color:{INK}">{currency_symbol}{pk_c:,.2f}</b> on {pk_d} &bull; '
+            f'Avg <b style="color:{INK}">{currency_symbol}{avg_c:,.2f}</b>/day{legend}</div>')
     trend_chart = _svg_daily(chart_pts)
 
     # Manually-tracked costs — present when called from send-report (cost_data
@@ -1644,7 +1651,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     # section renders empty.
     manual_data  = cost_data.get("manual_costs") or {}
     manual_items = manual_data.get("items", [])
-    manual_sym   = manual_data.get("symbol", "$")
+    manual_sym   = manual_data.get("symbol", currency_symbol)
     manual_total = manual_data.get("total", 0)
     manual_rows = ""
     for i, m in enumerate(manual_items):
@@ -1687,7 +1694,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             bg = "#F7F9FC" if i % 2 == 0 else "#FFFFFF"
             out += (f'<tr style="background:{bg}">'
                     f'<td style="padding:7px 12px;font-size:12px;color:#1A1A1A"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:{col};margin-right:7px"></span>{s["name"]}</td>'
-                    f'<td style="padding:7px 12px;font-size:12px;font-weight:600;text-align:right;white-space:nowrap">${s["cost"]:,.2f}</td>'
+                    f'<td style="padding:7px 12px;font-size:12px;font-weight:600;text-align:right;white-space:nowrap">{currency_symbol}{s["cost"]:,.2f}</td>'
                     f'<td style="padding:7px 12px;font-size:11px;color:#525252;text-align:right;white-space:nowrap">{pct:.0f}%</td></tr>')
         return out
     def _rank_card(title, rows):
@@ -1710,7 +1717,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         _cloud_cells += ('<td style="padding:0 4px 14px;vertical-align:top">'
                          '<table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td height="118" style="height:118px;padding:8px 12px;text-align:center;vertical-align:middle">'
                          f'<div style="font-size:10px;color:#6B7785;letter-spacing:.05em;text-transform:uppercase;font-weight:600">{CLOUD_KPI_LABELS.get(cloud, cloud.upper() + " Cost")}</div>'
-                         f'<div style="font-size:21px;color:#1A1A1A;font-weight:700;margin-top:6px">${ccost:,.2f}</div>'
+                         f'<div style="font-size:21px;color:#1A1A1A;font-weight:700;margin-top:6px">{currency_symbol}{ccost:,.2f}</div>'
                          '<div style="font-size:10px;color:#8A95A1;margin-top:4px">based on applicable</div>'
                          '</td></tr></table></td>')
 
@@ -1718,13 +1725,13 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     spike_days  = sum(1 for _, _, sp in chart_pts if sp)
     highest_day = max(recent, key=lambda r: r["cost"], default=None)
     _tsvc = by_service[0] if by_service else None
-    _ins = [("Overall Spend", f"Total spend for {_df} to {_dt} is ${total:,.2f}, averaging ${avg_day:,.2f}/day across {n_days} days with data.")]
+    _ins = [("Overall Spend", f"Total spend for {_df} to {_dt} is {currency_symbol}{total:,.2f}, averaging {currency_symbol}{avg_day:,.2f}/day across {n_days} days with data.")]
     if _tsvc:
-        _ins.append(("Top Service", (f"{_tsvc['name']} is the largest service at ${_tsvc['cost']:,.2f} ({_tsvc['cost'] / total * 100:.0f}% of total)." if total else f"{_tsvc['name']} is the largest service.")))
+        _ins.append(("Top Service", (f"{_tsvc['name']} is the largest service at {currency_symbol}{_tsvc['cost']:,.2f} ({_tsvc['cost'] / total * 100:.0f}% of total)." if total else f"{_tsvc['name']} is the largest service.")))
     if len(cloud_totals) > 1:
-        _ins.append(("Cloud Mix", ", ".join(f"{CLOUD_KPI_LABELS.get(cl, cl.title() + ' Cost').replace(' Cost', '')} ${co:,.0f}" for cl, co in cloud_totals[:4]) + "."))
+        _ins.append(("Cloud Mix", ", ".join(f"{CLOUD_KPI_LABELS.get(cl, cl.title() + ' Cost').replace(' Cost', '')} {currency_symbol}{co:,.0f}" for cl, co in cloud_totals[:4]) + "."))
     if spike_days:
-        _hd = f"{highest_day['date']} (${highest_day['cost']:,.2f})" if highest_day else ""
+        _hd = f"{highest_day['date']} ({currency_symbol}{highest_day['cost']:,.2f})" if highest_day else ""
         _ins.append(("Cost Spikes", f"{spike_days} day(s) had unusually high spend. Highest: {_hd}."))
     _ins_rows = "".join(
         '<tr><td style="padding:7px 0;vertical-align:top;width:18px"><div style="width:7px;height:7px;border-radius:50%;background:#185FA5;margin-top:5px"></div></td>'
@@ -1740,23 +1747,24 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     # By user / resource (e.g. Cursor per-user). When included (plan-covered) cost
     # is available, show Included + On-Demand + Total; otherwise just the cost.
     has_incl = any(r.get("included", 0) for r in by_resource)
+    _seat_included = cost_data.get("cursor_seat_included", 20.0)
     res_rows = ""
     for i, r in enumerate(by_resource):
         bg = "#F7F9FC" if i % 2 == 0 else "#FFFFFF"
         if has_incl:
             _free = r.get('free_usage', 0)
-            free_disp = "$20+" if _free > 20 else (f"${_free:,.2f}" if _free > 0 else "—")
+            free_disp = f"{currency_symbol}{_seat_included:,.0f}+" if _free > _seat_included else (f"{currency_symbol}{_free:,.2f}" if _free > 0 else "—")
             res_rows += f"""<tr style="background:{bg}">
                 <td style="padding:8px 14px;font-size:13px;color:#1A1A1A">{r['name']}</td>
-                <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">${r.get('included_usage',0):,.2f}</td>
+                <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">{currency_symbol}{r.get('included_usage',0):,.2f}</td>
                 <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">{free_disp}</td>
-                <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">${r.get('ondemand',r['cost']):,.2f}</td>
+                <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">{currency_symbol}{r.get('ondemand',r['cost']):,.2f}</td>
             </tr>"""
         else:
             pct = r["cost"] / total * 100 if total else 0
             res_rows += f"""<tr style="background:{bg}">
                 <td style="padding:8px 14px;font-size:13px;color:#1A1A1A">{r['name']}</td>
-                <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">${r['cost']:,.2f}</td>
+                <td style="padding:8px 14px;font-size:13px;font-weight:600;text-align:right;white-space:nowrap">{currency_symbol}{r['cost']:,.2f}</td>
                 <td style="padding:8px 14px;font-size:12px;color:#525252;text-align:right;white-space:nowrap">{pct:.0f}%</td>
             </tr>"""
     res_header = (
@@ -1821,7 +1829,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             _p_from = _month_back(_d1).strftime("%Y-%m-%d")
             _p_to = _month_back(_d2).strftime("%Y-%m-%d")
         from database import get_client_costs as _gcc
-        _prev_total = float((_gcc(int(client.get("id")), _p_from, _p_to, client.get("tenant_id") or 1) or {}).get("total") or 0)
+        _prev_total = float((_gcc(int(client.get("id")), _p_from, _p_to, client.get("tenant_id") or 1, reporting_currency) or {}).get("total") or 0)
         if _prev_total > 0:
             _pct = (total - _prev_total) / _prev_total * 100
             _up = _pct >= 0
@@ -1831,7 +1839,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             _prev_line = (f'<div style="font-size:11px;font-weight:700;color:{_col};margin-top:5px">'
                           f'{_arr} {abs(_pct):.1f}% vs {_lbl}</div>'
                           f'<div style="font-size:10px;color:#6B7785;margin-top:2px">'
-                          f'Previous: <span style="font-weight:700;color:#0E4C8A">${_prev_total:,.2f}</span>'
+                          f'Previous: <span style="font-weight:700;color:#0E4C8A">{currency_symbol}{_prev_total:,.2f}</span>'
                           f' ({_fmt_d(_p_from)} to {_fmt_d(_p_to)})</div>')
         elif total > 0:
             # No prior-period cost at all (e.g. client's resources created mid-period) —
@@ -1839,7 +1847,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             _lbl = "previous month" if (_d1.day == 1 and _d2.day == _month_end and _d1.month == _d2.month) else "same period last month"
             _prev_line = (f'<div style="font-size:11px;font-weight:700;color:#2563EB;margin-top:5px">New spend this period</div>'
                           f'<div style="font-size:10px;color:#6B7785;margin-top:2px">'
-                          f'No cost recorded {_lbl} ({_fmt_d(_p_from)} to {_fmt_d(_p_to)}) &mdash; previous: $0.00</div>')
+                          f'No cost recorded {_lbl} ({_fmt_d(_p_from)} to {_fmt_d(_p_to)}) &mdash; previous: {currency_symbol}0.00</div>')
     except Exception as _pe:
         print(f"[client-report] prev-period compare failed: {_pe}")
 
@@ -1880,7 +1888,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
     <td style="padding:0 4px 14px;vertical-align:top">
       <table role="presentation" width="100%" style="background:#FFFFFF;border:1px solid #DCE3EC;border-radius:12px"><tr><td height="118" style="height:118px;padding:8px 12px;text-align:center;vertical-align:middle">
         <div style="font-size:10px;color:#6B7785;letter-spacing:0.05em;text-transform:uppercase;font-weight:600">Total Cost</div>
-        <div style="font-size:22px;color:#0E4C8A;font-weight:700;margin-top:6px">${total:,.2f}</div>
+        <div style="font-size:22px;color:#0E4C8A;font-weight:700;margin-top:6px">{currency_symbol}{total:,.2f}</div>
         {_prev_line}
         <div style="font-size:10px;color:#8A95A1;margin-top:4px">&#128197; {_df} to {_dt}</div>
       </td></tr></table>

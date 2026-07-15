@@ -3941,12 +3941,14 @@ def _send_client_cost_report(client, tenant_id, recipients, date_from=None, date
     today = datetime.utcnow()
     date_from = date_from or today.replace(day=1).strftime("%Y-%m-%d")
     date_to   = date_to   or today.strftime("%Y-%m-%d")
+    from currency import tenant_reporting_currency
+    rep_cur = tenant_reporting_currency(tenant_id, get_db)
     client = dict(client)
     client["mappings"] = get_client_mappings(client["id"])
-    cost_data = get_client_costs(client["id"], date_from, date_to, tenant_id)
+    cost_data = get_client_costs(client["id"], date_from, date_to, tenant_id, rep_cur)
     _mc_items = get_client_manual_costs(client["id"], tenant_id, month=f"{date_to[:7]}-01")
     cost_data["manual_costs"] = _manual_costs_with_summary(tenant_id, items=_mc_items)
-    html = build_client_report_html(client, cost_data, date_from, date_to)
+    html = build_client_report_html(client, cost_data, date_from, date_to, rep_cur)
     subject = f"Client Cost Report — {client['name']} ({date_from} to {date_to})"
     send_report_email(recipients=recipients, subject=subject, html_body=html, report_type=report_type, tenant_id=tenant_id or 1)
     return subject
@@ -4100,11 +4102,13 @@ def api_client_report_preview(client_id):
     today = datetime.utcnow()
     date_from = request.args.get("date_from") or today.replace(day=1).strftime("%Y-%m-%d")
     date_to   = request.args.get("date_to")   or today.strftime("%Y-%m-%d")
+    from currency import tenant_reporting_currency
+    rep_cur = tenant_reporting_currency(tid, get_db)
     client["mappings"] = get_client_mappings(client_id)
-    cost_data = get_client_costs(client_id, date_from, date_to, tid)
+    cost_data = get_client_costs(client_id, date_from, date_to, tid, rep_cur)
     _mc_items = get_client_manual_costs(client_id, tid, month=f"{date_to[:7]}-01")
     cost_data["manual_costs"] = _manual_costs_with_summary(tid, items=_mc_items)
-    html = build_client_report_html(client, cost_data, date_from, date_to)
+    html = build_client_report_html(client, cost_data, date_from, date_to, rep_cur)
     return Response(html, mimetype="text/html")
 
 
