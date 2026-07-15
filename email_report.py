@@ -893,6 +893,10 @@ def _build_custom_report_html(report):
     report_name = report.get("name", "Custom Report")
     tenant_id = report.get("tenant_id") or 1
 
+    from currency import tenant_reporting_currency, symbol as _cur_symbol_fn
+    rep_cur = tenant_reporting_currency(tenant_id, get_db)
+    currency_symbol = _cur_symbol_fn(rep_cur)
+
     sub_ids = filters.get("subscription_ids", [])
     rgs = filters.get("resource_groups", [])
     services = filters.get("services", [])
@@ -939,6 +943,7 @@ def _build_custom_report_html(report):
         date_to=date_to or None,
         tenant_id=tenant_id,
         cloud_provider=(None if client_id else cloud_providers),
+        reporting_currency=rep_cur,
         client_id=client_id,
     )
 
@@ -959,6 +964,7 @@ def _build_custom_report_html(report):
                 date_from=_p_from, date_to=_p_to,
                 tenant_id=tenant_id,
                 cloud_provider=(None if client_id else cloud_providers),
+                reporting_currency=rep_cur,
                 client_id=client_id,
             )
             _prev_total = float(_prev_data.get("total_cost") or 0)
@@ -1017,7 +1023,7 @@ def _build_custom_report_html(report):
     manual = data.get("manual_costs") or {}
     manual_items = manual.get("items", [])
     manual_total = manual.get("total", 0)
-    manual_sym = manual.get("symbol", "$")
+    manual_sym = manual.get("symbol", currency_symbol)
     manual_rows = ""
     for i, m in enumerate(manual_items):
         bg = "#F7F7F5" if i % 2 == 0 else "#FFFFFF"
@@ -1084,7 +1090,7 @@ def _build_custom_report_html(report):
             body += (f'<tr style="background:{bg}">'
                      f'<td style="padding:9px 14px;font-size:13px;color:{INK}">{ic}{it["name"]}</td>'
                      f'<td style="padding:9px 8px;width:36%">{_barHTML(it["cost"] / mx * 100)}</td>'
-                     f'<td style="padding:9px 14px;font-size:13px;font-weight:700;color:{INK};text-align:right;white-space:nowrap">${it["cost"]:,.2f}</td>'
+                     f'<td style="padding:9px 14px;font-size:13px;font-weight:700;color:{INK};text-align:right;white-space:nowrap">{currency_symbol}{it["cost"]:,.2f}</td>'
                      f'<td style="padding:9px 14px;font-size:12px;color:{MUT};text-align:right;white-space:nowrap">{pct:.1f}%</td></tr>')
         head = (f'<tr style="border-bottom:1px solid #EDF1F7">'
                 f'<th style="padding:8px 14px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:{MUT};text-align:left">{head_label}</th>'
@@ -1121,7 +1127,7 @@ def _build_custom_report_html(report):
     html = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:{PAGE_BG};font-family:{font_stack}">
-<div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:{PAGE_BG}">{report_name} — ${total_cost:,.0f} total</div>
+<div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:{PAGE_BG}">{report_name} — {currency_symbol}{total_cost:,.0f} total</div>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:{PAGE_BG}">
 <tr><td align="center" style="padding:28px 14px">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="884" style="max-width:884px;width:100%">
@@ -1165,20 +1171,20 @@ def _build_custom_report_html(report):
             _prev_line = (f'<div style="font-size:12px;font-weight:700;color:{_col};margin-top:6px">'
                           f'{_arr} {abs(_pct):.1f}% vs {_prev_label}</div>'
                           f'<div style="font-size:11px;color:{MUT};margin-top:2px">'
-                          f'Previous: <span style="font-weight:700;color:{INK}">${_prev_total:,.2f}</span></div>')
+                          f'Previous: <span style="font-weight:700;color:{INK}">{currency_symbol}{_prev_total:,.2f}</span></div>')
         elif total_cost > 0 and _prev_label:
             # No prior-period cost at all (e.g. a resource group created mid-period) —
             # say so explicitly instead of silently omitting the comparison.
             _prev_line = (f'<div style="font-size:12px;font-weight:700;color:{BLUE};margin-top:6px">New spend this period</div>'
-                          f'<div style="font-size:11px;color:{MUT};margin-top:2px">No cost recorded {_prev_label} (previous: $0.00)</div>')
+                          f'<div style="font-size:11px;color:{MUT};margin-top:2px">No cost recorded {_prev_label} (previous: {currency_symbol}0.00)</div>')
         html += f"""
 <tr><td style="padding-bottom:14px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EFF4FE;border:1px solid #D6E4FB;border-radius:14px"><tr>
     <td style="padding:22px 24px" valign="middle"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td valign="middle"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="54" height="54" align="center" valign="middle" style="width:54px;height:54px;background:{BLUE};border-radius:27px;color:#FFFFFF;font-size:24px;font-weight:700">$</td></tr></table></td>
+      <td valign="middle"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="54" height="54" align="center" valign="middle" style="width:54px;height:54px;background:{BLUE};border-radius:27px;color:#FFFFFF;font-size:24px;font-weight:700">{currency_symbol}</td></tr></table></td>
       <td valign="middle" style="padding-left:16px">
         <div style="font-size:11px;color:{BLUE};letter-spacing:.08em;text-transform:uppercase;font-weight:700">Total cost</div>
-        <div style="font-size:34px;color:{INK};font-weight:800;margin-top:2px">${total_cost:,.2f}</div>
+        <div style="font-size:34px;color:{INK};font-weight:800;margin-top:2px">{currency_symbol}{total_cost:,.2f}</div>
         <div style="font-size:12px;color:{MUT};margin-top:4px">{total_records:,} records &bull; {len(by_rg)} resource group{'s' if len(by_rg) != 1 else ''} &bull; {len(by_service)} services</div>
         {_prev_line}
       </td>
@@ -1206,7 +1212,7 @@ def _build_custom_report_html(report):
         pk = max(recent, key=lambda d: d["cost"]) if recent else {"cost": 0, "date": ""}
         step = max(1, round(n / 8))
         CHART_H = 132
-        _short = lambda v: (f"${v/1000:.1f}k" if v >= 1000 else f"${v:.0f}")
+        _short = lambda v: (f"{currency_symbol}{v/1000:.1f}k" if v >= 1000 else f"{currency_symbol}{v:.0f}")
         bars = labels = ""
         any_spike = False
         for i, d in enumerate(recent):
@@ -1233,7 +1239,7 @@ def _build_custom_report_html(report):
                f'<tr><td height="{CHART_H//2}" valign="top" style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;line-height:1">{_short(mxt)}</td></tr>'
                f'<tr><td height="{CHART_H//2}" valign="middle" style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;line-height:1">{_short(mxt/2)}</td></tr>'
                f'</table>'
-               f'<div style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;margin-top:-8px">$0</div></td>')
+               f'<div style="font-size:8px;color:{MUT};text-align:right;padding-right:7px;margin-top:-8px">{currency_symbol}0</div></td>')
         _daily = (
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
             f'<tr valign="bottom">{yax}<td>'
@@ -1242,8 +1248,8 @@ def _build_custom_report_html(report):
             f'<tr><td></td><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed"><tr>{labels}</tr></table></td></tr>'
             f'</table>'
             f'<div style="margin-top:12px;font-size:11px;color:{MUT};border-top:1px solid #EDF1F7;padding-top:10px">'
-            f'Peak <b style="color:{INK}">${pk["cost"]:,.2f}</b> on {pk["date"]} &bull; '
-            f'Avg <b style="color:{INK}">${avg:,.2f}</b>/day{legend}</div>')
+            f'Peak <b style="color:{INK}">{currency_symbol}{pk["cost"]:,.2f}</b> on {pk["date"]} &bull; '
+            f'Avg <b style="color:{INK}">{currency_symbol}{avg:,.2f}</b>/day{legend}</div>')
         html += _cardHTML("📅", "Daily spend", _daily)
 
     # Other Tools & Subscriptions (manually-tracked / Other Costs), if any.
