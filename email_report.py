@@ -1624,7 +1624,6 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
         mx = max((c for _, c, _ in pts), default=1) or 1
         n = len(pts)
         step = max(1, round(n / 14))
-        show_all = n <= 16
         CHART_H = 132
         _short = lambda v: (f"{currency_symbol}{v/1000:.1f}k" if v >= 1000 else f"{currency_symbol}{v:.0f}")
         bars = labels = ""
@@ -1633,7 +1632,7 @@ def build_client_report_html(client: dict, cost_data: dict, date_from: str, date
             h = max(2, round(c / mx * (CHART_H - 14)))
             any_spike = any_spike or sp
             col = "#D64545" if sp else ACCENT
-            show_val = sp or show_all
+            show_val = True
             vlabel = (f'<div style="font-size:8px;font-weight:{700 if sp else 400};color:{col};'
                       f'text-align:center;line-height:1;padding-bottom:2px;white-space:nowrap">{_short(c)}</div>' if show_val else '')
             bars += (f'<td valign="bottom" style="padding:0 1px">{vlabel}'
