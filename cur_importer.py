@@ -370,6 +370,31 @@ def parse_local_cur_files(
     return records, skipped
 
 
+def _manifests_overlapping_range(manifests: list, date_from: str, date_to: str) -> list:
+    """Filter manifests (each period like '20260601-20260701') to those whose
+    billing-period window overlaps [date_from, date_to]. AWS delivers one CUR
+    manifest per billing month, so a range spanning (or entirely within) a past
+    month needs that month's manifest, not just the newest one."""
+    if not date_from and not date_to:
+        return manifests[:1]  # no range given — same "just the newest" behavior as before
+    out = []
+    for m in manifests:
+        period = m.get("period", "")
+        parts = period.split("-")
+        if len(parts) != 2 or len(parts[0]) != 8 or len(parts[1]) != 8:
+            continue
+        try:
+            p_start = f"{parts[0][:4]}-{parts[0][4:6]}-{parts[0][6:8]}"
+            p_end = f"{parts[1][:4]}-{parts[1][4:6]}-{parts[1][6:8]}"
+        except Exception:
+            continue
+        lo = max(p_start, date_from) if date_from else p_start
+        hi = min(p_end, date_to) if date_to else p_end
+        if lo <= hi:
+            out.append(m)
+    return out
+
+
 def fetch_cur_records(
     credentials: dict,
     bucket: str,
@@ -386,34 +411,42 @@ def fetch_cur_records(
     s3 = _s3_client(credentials)
     prefix = prefix.rstrip("/") + "/"
 
-    if not manifest_key:
+    if manifest_key:
+        manifest_keys = [manifest_key]
+    else:
         manifests = list_cur_manifests(s3, bucket, prefix)
         if not manifests:
             raise ValueError(f"No CUR manifests found in s3://{bucket}/{prefix}")
-        manifest_key = manifests[0]["key"]
-        print(f"[CUR] Using manifest: {manifest_key}")
-
-    csv_keys = _parse_manifest(s3, bucket, manifest_key)
-    if not csv_keys:
-        raise ValueError(f"Manifest {manifest_key} contains no CSV file references")
-
-    print(f"[CUR] Manifest lists {len(csv_keys)} CSV file(s)")
+        selected = _manifests_overlapping_range(manifests, date_from, date_to)
+        if not selected:
+            # Requested range doesn't overlap any known billing period — fall back
+            # to the newest manifest (previous behavior) rather than erroring out.
+            selected = manifests[:1]
+        manifest_keys = [m["key"] for m in selected]
+        print(f"[CUR] Using manifest(s): {manifest_keys}")
 
     records = []
     skipped = 0
     seen = set()
 
-    for csv_key in csv_keys:
-        print(f"[CUR] Parsing s3://{bucket}/{csv_key} ...")
-        row_count = 0
-        for row in _stream_csv_gz(s3, bucket, csv_key):
-            row_count += 1
-            result = _process_row(row, account_id, date_from, date_to, seen)
-            if result is None:
-                skipped += 1
-            else:
-                records.append(result)
-        print(f"[CUR] {csv_key}: {row_count} rows → {len(records)} kept so far")
+    for mkey in manifest_keys:
+        csv_keys = _parse_manifest(s3, bucket, mkey)
+        if not csv_keys:
+            print(f"[CUR] Manifest {mkey} contains no CSV file references — skipping")
+            continue
+        print(f"[CUR] Manifest {mkey} lists {len(csv_keys)} CSV file(s)")
+
+        for csv_key in csv_keys:
+            print(f"[CUR] Parsing s3://{bucket}/{csv_key} ...")
+            row_count = 0
+            for row in _stream_csv_gz(s3, bucket, csv_key):
+                row_count += 1
+                result = _process_row(row, account_id, date_from, date_to, seen)
+                if result is None:
+                    skipped += 1
+                else:
+                    records.append(result)
+            print(f"[CUR] {csv_key}: {row_count} rows → {len(records)} kept so far")
 
     print(f"[CUR] Total: {len(records)} records, {skipped} skipped")
     return records, skipped
