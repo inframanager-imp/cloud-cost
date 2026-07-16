@@ -966,6 +966,7 @@ def _build_custom_report_html(report):
     # no prior data.
     _prev_total = 0.0
     _prev_label = ""
+    _prev_by_cloud = {}
     if date_from and date_to:
         try:
             _p_from, _p_to, _prev_label = _prev_period_dates(date_from, date_to)
@@ -980,6 +981,7 @@ def _build_custom_report_html(report):
                 client_id=client_id,
             )
             _prev_total = float(_prev_data.get("total_cost") or 0)
+            _prev_by_cloud = {c["cloud"]: c["cost"] for c in (_prev_data.get("by_cloud") or [])}
         except Exception as _pe:
             print(f"[custom-report] prev-period compare failed: {_pe}")
             _prev_total = 0.0
@@ -1001,7 +1003,9 @@ def _build_custom_report_html(report):
     total_records = data.get("total_records", 0)
     by_rg = data.get("by_rg", [])
     by_service = data.get("by_service", [])
+    by_cloud = data.get("by_cloud", [])
     daily_trend = data.get("daily_trend", [])
+    _multi_cloud = len({c["cloud"] for c in by_cloud}) > 1
 
     # Resolve subscription names
     subs = get_subscriptions(tenant_id=tenant_id)
@@ -1030,6 +1034,22 @@ def _build_custom_report_html(report):
     font_stack = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
     ACCENT = "#185FA5"
     RANK_COLS = ["#185FA5", "#3A77B2", "#5E8FC0", "#80A7CE", "#A3BFDB", "#BACFE5"]
+
+    # Per-cloud badge styling (same palette as the scheduled tenant-wide report)
+    CLOUD_LABEL    = {"azure": "Azure",   "aws": "AWS",     "gcp": "GCP"}
+    CLOUD_BG       = {"azure": "#0078D4", "aws": "#FF9900", "gcp": "#4285F4"}
+    CLOUD_ABBR     = {"azure": "Az",      "aws": "AW",      "gcp": "GC"}
+    CLOUD_BADGE_BG = {"azure": "#E6F1FB", "aws": "#FFF3E0", "gcp": "#E8F0FE"}
+    CLOUD_BADGE_FG = {"azure": "#0C447C", "aws": "#7D4600", "gcp": "#1A56A3"}
+
+    def _cloudBadge(cloud):
+        if not cloud or cloud == "unknown":
+            return ""
+        abbr = CLOUD_ABBR.get(cloud, cloud[:2].upper())
+        bg = CLOUD_BADGE_BG.get(cloud, "#F0F0F0")
+        fg = CLOUD_BADGE_FG.get(cloud, "#333333")
+        return (f'<span style="display:inline-block;font-size:8px;font-weight:700;color:{fg};'
+                f'background:{bg};border-radius:3px;padding:1px 4px;margin-right:6px;vertical-align:middle">{abbr}</span>')
 
     # Manually-added costs (tools/subscriptions not visible to cloud APIs)
     manual = data.get("manual_costs") or {}
@@ -1099,8 +1119,9 @@ def _build_custom_report_html(report):
             bg = "#FFFFFF" if i % 2 == 0 else STRIPE
             pct = (it["cost"] / total_cost * 100) if total_cost > 0 else 0
             ic = (f'<span style="font-size:15px">{emoji_fn(it["name"])}</span>&nbsp;&nbsp;' if emoji_fn else '')
+            cb = _cloudBadge(it.get("cloud")) if _multi_cloud else ""
             body += (f'<tr style="background:{bg}">'
-                     f'<td style="padding:9px 14px;font-size:13px;color:{INK}">{ic}{it["name"]}</td>'
+                     f'<td style="padding:9px 14px;font-size:13px;color:{INK}">{cb}{ic}{it["name"]}</td>'
                      f'<td style="padding:9px 8px;width:36%">{_barHTML(it["cost"] / mx * 100)}</td>'
                      f'<td style="padding:9px 14px;font-size:13px;font-weight:700;color:{INK};text-align:right;white-space:nowrap">{currency_symbol}{it["cost"]:,.2f}</td>'
                      f'<td style="padding:9px 14px;font-size:12px;color:{MUT};text-align:right;white-space:nowrap">{pct:.1f}%</td></tr>')
@@ -1203,6 +1224,47 @@ def _build_custom_report_html(report):
     </tr></table></td>
     <td align="right" valign="bottom" style="padding:22px 24px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>{_bars}</tr></table></td>
   </tr></table>
+</td></tr>
+"""
+
+    if "summary" in sections and _multi_cloud:
+        _cloud_cards = ""
+        for c in by_cloud:
+            cloud = c["cloud"]
+            lbl = CLOUD_LABEL.get(cloud, cloud.upper())
+            bg = CLOUD_BG.get(cloud, "#555555")
+            abbr = CLOUD_ABBR.get(cloud, cloud[:2].upper())
+            pct = (c["cost"] / total_cost * 100) if total_cost > 0 else 0
+            prev_c = _prev_by_cloud.get(cloud, 0)
+            if prev_c > 0:
+                c_pct = (c["cost"] - prev_c) / prev_c * 100
+                c_up = c_pct >= 0
+                c_col = "#C0392B" if c_up else "#1D9E75"
+                c_arr = "&#9650;" if c_up else "&#9660;"
+                c_prev_line = (f'<div style="font-size:11px;font-weight:700;color:{c_col};margin-top:6px">{c_arr} {abs(c_pct):.1f}% vs prev</div>'
+                               f'<div style="font-size:10px;color:{MUT};margin-top:1px">Previous: {currency_symbol}{prev_c:,.2f}</div>')
+            elif c["cost"] > 0 and _prev_label:
+                c_prev_line = f'<div style="font-size:11px;font-weight:700;color:{BLUE};margin-top:6px">New spend this period</div>'
+            else:
+                c_prev_line = ""
+            _cloud_cards += f"""
+            <td valign="top" style="padding:0 5px;width:33%">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                     style="background:#FFFFFF;border:1px solid {CARD_BD};border-radius:10px">
+                <tr><td style="padding:14px 16px">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+                    <td style="width:26px;height:26px;background:{bg};border-radius:6px;text-align:center;vertical-align:middle;font-size:10px;font-weight:600;color:#FFFFFF;line-height:26px">{abbr}</td>
+                    <td style="padding-left:8px;font-size:13px;color:{INK};font-weight:500">{lbl}</td>
+                    <td align="right"><span style="font-size:10px;color:{MUT};font-weight:500">{pct:.1f}%</span></td>
+                  </tr></table>
+                  <div style="font-size:20px;color:{INK};font-weight:700;letter-spacing:-0.02em;margin-top:10px">{currency_symbol}{c['cost']:,.2f}</div>
+                  {c_prev_line}
+                </td></tr>
+              </table>
+            </td>"""
+        html += f"""
+<tr><td style="padding-bottom:14px">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 -5px"><tr>{_cloud_cards}</tr></table>
 </td></tr>
 """
 

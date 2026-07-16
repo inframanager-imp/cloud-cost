@@ -2676,11 +2676,18 @@ def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups
     rg_query += " GROUP BY resource_group ORDER BY total_cost DESC"
     rg_rows = conn.execute(rg_query, params).fetchall()
 
-    # Breakdown by service
+    # Breakdown by service (tagged with cloud_provider so a multi-cloud report
+    # doesn't merge same-named services across clouds, and so callers can show
+    # a per-row cloud icon)
     svc_query = query.replace(_base_cost,
-                               f"service_name, {_base_cost}")
-    svc_query += " GROUP BY service_name ORDER BY total_cost DESC"
+                               f"service_name, cloud_provider, {_base_cost}")
+    svc_query += " GROUP BY service_name, cloud_provider ORDER BY total_cost DESC"
     svc_rows = conn.execute(svc_query, params).fetchall()
+
+    # Breakdown by cloud provider (current period totals for a multi-cloud summary)
+    cloud_query = query.replace(_base_cost, f"cloud_provider, {_base_cost}")
+    cloud_query += " GROUP BY cloud_provider ORDER BY total_cost DESC"
+    cloud_rows = conn.execute(cloud_query, params).fetchall()
 
     # Daily trend
     trend_query = query.replace(_base_cost,
@@ -2706,7 +2713,8 @@ def get_custom_cost(subscription_id=None, subscription_ids=None, resource_groups
         "total_cost": total,
         "total_records": records,
         "by_rg": [{"name": r["resource_group"] or "Unknown", "cost": round(r["total_cost"], 2), "records": r["records"]} for r in rg_rows],
-        "by_service": [{"name": r["service_name"] or "Unknown", "cost": round(r["total_cost"], 2), "records": r["records"]} for r in svc_rows],
+        "by_service": [{"name": r["service_name"] or "Unknown", "cloud": r["cloud_provider"] or "unknown", "cost": round(r["total_cost"], 2), "records": r["records"]} for r in svc_rows],
+        "by_cloud": [{"cloud": r["cloud_provider"] or "unknown", "cost": round(r["total_cost"], 2), "records": r["records"]} for r in cloud_rows],
         "by_resource": [
             {
                 "resource_group": r["resource_group"] or "Unknown",
