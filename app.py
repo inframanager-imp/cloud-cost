@@ -1203,13 +1203,9 @@ def api_sync():
                                 cur_bucket = (provider.get("cur_bucket") or "").strip()
                                 if cur_bucket:
                                     from cur_importer import import_from_s3_bucket
-                                    conn = get_db()
-                                    conn.execute(
-                                        "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
-                                        (p_from, date_to, pid, tid),
-                                    )
-                                    conn.commit()
-                                    conn.close()
+                                    # Delete-then-reinsert now happens inside import_from_s3_bucket,
+                                    # scoped to only the dates it actually fetched — a failed/empty
+                                    # S3 fetch can never wipe existing history.
                                     result = import_from_s3_bucket(
                                         provider=provider, date_from=p_from, date_to=date_to, tenant_id=tid,
                                     )
@@ -4209,6 +4205,7 @@ def _run_auto_sync():
             tname          = tenant.get("name", str(tid))
             interval_hours = int(tenant.get("auto_sync_interval_hours") or 6)
             tenant_records = 0
+            provider_errors = []
 
             # Skip if not yet due based on this tenant's own interval
             _lc = get_db()
@@ -4264,6 +4261,7 @@ def _run_auto_sync():
                         update_subscription_sync_time(sub_id, "cost")
                     except Exception as sub_err:
                         print(f"[Auto-Sync] Azure sub {sub.get('subscription_id','?')} (tenant {tname}) failed: {sub_err}")
+                        provider_errors.append(f"azure sub {sub.get('subscription_id','?')}: {sub_err}")
 
                 # AWS / GCP cloud providers
                 from aws_fetcher import fetch_aws_costs
@@ -4296,12 +4294,10 @@ def _run_auto_sync():
                             cur_bucket = (p.get("cur_bucket") or "").strip()
                             if cur_bucket:
                                 from cur_importer import import_from_s3_bucket
-                                _c = get_db()
-                                _c.execute(
-                                    "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
-                                    (p_from, date_to, pid, p_tid),
-                                )
-                                _c.commit(); _c.close()
+                                # Delete-then-reinsert now happens inside import_from_s3_bucket,
+                                # scoped to only the dates it actually fetched — so a failed/empty
+                                # S3 fetch can never wipe existing history (same guarantee
+                                # _sync_delete_window gives every other provider below).
                                 result = import_from_s3_bucket(provider=p, date_from=p_from, date_to=date_to, tenant_id=p_tid)
                                 tenant_records += result.get("records", 0)
                                 print(f"[Auto-Sync] CUR import {pid} (tenant {tname}): {result}")
@@ -4374,6 +4370,7 @@ def _run_auto_sync():
                     except Exception as cp_err:
                         update_cloud_provider_sync_time(p["id"], error=str(cp_err))
                         print(f"[Auto-Sync] {ptype.upper()} '{pname}' failed: {cp_err}")
+                        provider_errors.append(f"{ptype} '{pname}': {cp_err}")
 
                 # ── Azure providers added via Cloud Providers (own credentials) ──
                 # Multi-tenant Azure accounts live in cloud_providers (not the
@@ -4423,6 +4420,7 @@ def _run_auto_sync():
                     except Exception as z_err:
                         update_cloud_provider_sync_time(zp.get("id"), error=str(z_err))
                         print(f"[Auto-Sync] AZURE '{z_name}' (tenant {tname}) failed: {z_err}")
+                        provider_errors.append(f"azure '{z_name}': {z_err}")
 
                 # ── Atlassian (User Costs): monthly per-user snapshot ──────────
                 for ap in get_cloud_providers(enabled_only=True, tenant_id=tid):
@@ -4455,6 +4453,7 @@ def _run_auto_sync():
                     except Exception as a_err:
                         update_cloud_provider_sync_time(ap.get("id"), error=str(a_err))
                         print(f"[Auto-Sync] ATLASSIAN '{ap.get('name')}' failed: {a_err}")
+                        provider_errors.append(f"atlassian '{ap.get('name')}': {a_err}")
 
                 # ── Cursor: live team spend (per-user on-demand) ───────────────
                 # On-demand usage accrues continuously through the cycle, so refresh
@@ -4468,6 +4467,7 @@ def _run_auto_sync():
                         print(f"[Auto-Sync] CURSOR (tenant {tname}): {cur_res}")
                 except Exception as cur_err:
                     print(f"[Auto-Sync] CURSOR (tenant {tname}) failed: {cur_err}")
+                    provider_errors.append(f"cursor: {cur_err}")
 
                 # ── OpenAI: per-team API usage (also re-mirrors the ChatGPT
                 # subscription, which keeps seat rows present after month rollover).
@@ -4484,9 +4484,14 @@ def _run_auto_sync():
                         print(f"[Auto-Sync] CHATGPT (tenant {tname}): subscription re-mirrored")
                 except Exception as oa_err:
                     print(f"[Auto-Sync] OPENAI (tenant {tname}) failed: {oa_err}")
+                    provider_errors.append(f"openai: {oa_err}")
 
-                update_sync_log(sync_id, "success", tenant_records)
-                print(f"[Auto-Sync] Tenant '{tname}': {tenant_records} records")
+                if provider_errors:
+                    update_sync_log(sync_id, "partial", tenant_records, "; ".join(provider_errors)[:2000])
+                    print(f"[Auto-Sync] Tenant '{tname}': {tenant_records} records, {len(provider_errors)} provider(s) failed")
+                else:
+                    update_sync_log(sync_id, "success", tenant_records)
+                    print(f"[Auto-Sync] Tenant '{tname}': {tenant_records} records")
                 return tenant_records
 
             except Exception as t_err:

@@ -517,8 +517,16 @@ def import_from_s3_bucket(provider: dict, credentials: dict = None,
 
     period = f"{date_from} to {date_to}"
     if not records:
-        print(f"[CUR] No records found for {period}")
+        print(f"[CUR] No records found for {period} — leaving existing cost_data untouched")
         return {"records": 0, "skipped": skipped, "period": period}
+
+    # Only delete the date range the fetch actually covered (clamped to the
+    # requested window), AFTER a successful fetch — never wipe existing history
+    # ahead of an S3/parse failure. Mirrors _sync_delete_window()'s guard used by
+    # every other provider's sync path.
+    fetched_dates = sorted({str(r[0])[:10] for r in records if r and r[0]})
+    del_from = max(fetched_dates[0], str(date_from)[:10]) if fetched_dates else None
+    del_to = min(fetched_dates[-1], str(date_to)[:10]) if fetched_dates else None
 
     # Stamp tenant_id on each record before inserting
     stamped = []
@@ -528,8 +536,13 @@ def import_from_s3_bucket(provider: dict, credentials: dict = None,
         # insert_cost_records_with_tenant expects tenant_id as 13th element
         stamped.append(tuple(row_list))
 
-    from database import insert_cost_records, get_db
+    from database import get_db
     conn = get_db()
+    if del_from and del_to and del_from <= del_to:
+        conn.execute(
+            "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
+            (del_from, del_to, account_id, tid),
+        )
     # Use executemany directly so we can inject tenant_id
     conn.executemany("""
         INSERT INTO cost_data

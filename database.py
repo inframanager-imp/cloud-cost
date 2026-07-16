@@ -5039,6 +5039,19 @@ def get_client_filter_values(cloud: str, filter_type: str, tenant_id: int) -> li
                 (tenant_id,)
             ).fetchall()
             result = [{"value": r["value"], "label": r["label"] or r["value"]} for r in rows if r["value"]]
+            # Azure accounts added via Cloud Providers (own SP credentials) live in
+            # cloud_providers, not the legacy subscriptions table — union them in too.
+            seen_ids = {r["value"] for r in result}
+            azp_rows = conn.execute(
+                "SELECT provider_id as value, name as label FROM cloud_providers "
+                "WHERE provider_type='azure' AND (tenant_id=? OR tenant_id IS NULL)",
+                (tenant_id,)
+            ).fetchall()
+            for r in azp_rows:
+                if r["value"] and r["value"] not in seen_ids:
+                    seen_ids.add(r["value"])
+                    result.append({"value": r["value"], "label": r["label"] or r["value"]})
+            result.sort(key=lambda x: x["label"].lower())
         else:
             # Non-Azure billing units. A cloud_provider is one entry, but a single
             # GCP billing account can span many projects (each its own

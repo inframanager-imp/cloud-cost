@@ -51,15 +51,21 @@ def _get_all_cloud_accounts(tenant_id=1):
     accounts = []
 
     # Azure subscriptions
+    seen_ids = set()
     rows = conn.execute("SELECT subscription_id, name, 'azure' as cloud FROM subscriptions WHERE enabled=1 AND tenant_id=?", (tenant_id,)).fetchall()
     for r in rows:
         accounts.append({"id": r["subscription_id"], "name": r["name"], "cloud": "azure"})
+        seen_ids.add(r["subscription_id"])
 
-    # AWS + GCP from cloud_providers table (use subscription_id = provider_id for cost_data lookup)
+    # AWS + GCP + Azure (own-credentials flow) from cloud_providers table (use
+    # subscription_id = provider_id for cost_data lookup). Azure accounts added via
+    # Cloud Providers live here, not in the legacy subscriptions table above.
     rows2 = conn.execute(
-        "SELECT provider_id, name, provider_type FROM cloud_providers WHERE enabled=1 AND provider_type IN ('aws','gcp') AND tenant_id=?", (tenant_id,)
+        "SELECT provider_id, name, provider_type FROM cloud_providers WHERE enabled=1 AND provider_type IN ('aws','gcp','azure') AND tenant_id=?", (tenant_id,)
     ).fetchall()
     for r in rows2:
+        if r["provider_id"] in seen_ids:
+            continue
         accounts.append({"id": r["provider_id"], "name": r["name"], "cloud": r["provider_type"]})
 
     conn.close()
@@ -78,6 +84,10 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
         cloud_provider = settings.get("report_cloud_provider") or ""
     cloud_provider = (cloud_provider or "").strip().lower()
 
+    from currency import tenant_reporting_currency, symbol as _cur_symbol_fn
+    rep_cur = tenant_reporting_currency(tenant_id, get_db)
+    currency_symbol = _cur_symbol_fn(rep_cur)
+
     now        = datetime.utcnow()
     period     = _resolve_report_period(settings)
     month_start = period["date_from"]
@@ -85,10 +95,10 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
 
     # ── Data gathering (filtered by cloud_provider if set) ────────────────
     cp_filter = cloud_provider if cloud_provider else None
-    top_services = get_summary("service_name",  date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)[:10]
-    top_rgs      = get_summary("resource_group", date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)[:10]
-    trend        = get_daily_trend(date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)
-    monthly      = get_monthly_summary(tenant_id=tenant_id, cloud_provider=cp_filter)
+    top_services = get_summary("service_name",  date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter, reporting_currency=rep_cur)[:10]
+    top_rgs      = get_summary("resource_group", date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter, reporting_currency=rep_cur)[:10]
+    trend        = get_daily_trend(date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter, reporting_currency=rep_cur)
+    monthly      = get_monthly_summary(tenant_id=tenant_id, cloud_provider=cp_filter, reporting_currency=rep_cur)
 
     total_this_month = sum(r["total_cost"] for r in top_services) if top_services else 0
     last_month_data  = [m for m in monthly if m["month"] != now.strftime("%Y-%m")]
@@ -96,16 +106,17 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
     mom_change = ((total_this_month - last_month_total) / last_month_total * 100) if last_month_total > 0 else 0
     avg_daily  = total_this_month / max(1, len(set(r["date"] for r in trend))) if trend else 0
 
-    from database import get_db
+    from database import _converted_cost_sql
     conn = get_db()
+    _cloud_cost = _converted_cost_sql(rep_cur)
     if cp_filter:
         cloud_rows = conn.execute(
-            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? AND cloud_provider=? GROUP BY cloud_provider ORDER BY total DESC",
+            f"SELECT cloud_provider, SUM({_cloud_cost}) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? AND cloud_provider=? GROUP BY cloud_provider ORDER BY total DESC",
             (month_start, today, tenant_id, cp_filter)
         ).fetchall()
     else:
         cloud_rows = conn.execute(
-            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? GROUP BY cloud_provider ORDER BY total DESC",
+            f"SELECT cloud_provider, SUM({_cloud_cost}) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? GROUP BY cloud_provider ORDER BY total DESC",
             (month_start, today, tenant_id)
         ).fetchall()
     conn.close()
@@ -129,7 +140,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
         all_accounts = [a for a in all_accounts if a["cloud"] == cp_filter]
     sub_costs = []
     for acct in all_accounts:
-        svcs = get_summary("service_name", date_from=month_start, date_to=today, subscription_id=acct["id"], tenant_id=tenant_id)
+        svcs = get_summary("service_name", date_from=month_start, date_to=today, subscription_id=acct["id"], tenant_id=tenant_id, reporting_currency=rep_cur)
         cost = sum(r["total_cost"] for r in svcs)
         if cost > 0:
             sub_costs.append({"name": acct["name"], "cost": cost, "cloud": acct["cloud"]})
@@ -142,12 +153,12 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
     delta_sign   = "+" if up else ""
 
     # Preheader text
-    preheader_top = f"Total ${total_this_month:,.0f} this period"
+    preheader_top = f"Total {currency_symbol}{total_this_month:,.0f} this period"
     if cloud_totals:
         top_cloud = cloud_totals[0]
         top_lbl   = CLOUD_LABEL.get(top_cloud["cloud"], top_cloud["cloud"])
         top_pct   = top_cloud["total"] / grand_total * 100
-        preheader_top += f". {top_lbl} leads at ${top_cloud['total']:,.0f} ({top_pct:.1f}%)."
+        preheader_top += f". {top_lbl} leads at {currency_symbol}{top_cloud['total']:,.0f} ({top_pct:.1f}%)."
 
     # ── Email wrapper ─────────────────────────────────────────────────────
     font_stack = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
@@ -188,16 +199,16 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
     <tr>
       <td width="25%" style="padding:18px 16px;border-right:1px solid #F0F0EE;text-align:center;vertical-align:top">
         <div style="font-size:10px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">This period</div>
-        <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:5px">${total_this_month:,.0f}</div>
+        <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:5px">{currency_symbol}{total_this_month:,.0f}</div>
         <div style="font-size:11px;color:{delta_color};margin-top:3px">{delta_arrow} {abs(mom_change):.1f}% vs last</div>
       </td>
       <td width="25%" style="padding:18px 16px;border-right:1px solid #F0F0EE;text-align:center;vertical-align:top">
         <div style="font-size:10px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">Last period</div>
-        <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:5px">${last_month_total:,.0f}</div>
+        <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:5px">{currency_symbol}{last_month_total:,.0f}</div>
       </td>
       <td width="25%" style="padding:18px 16px;border-right:1px solid #F0F0EE;text-align:center;vertical-align:top">
         <div style="font-size:10px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">Avg / day</div>
-        <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:5px">${avg_daily:,.0f}</div>
+        <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:5px">{currency_symbol}{avg_daily:,.0f}</div>
       </td>
       <td width="25%" style="padding:18px 16px;text-align:center;vertical-align:top">
         <div style="font-size:10px;color:#8A8A8A;letter-spacing:0.06em;text-transform:uppercase;font-weight:500">MoM change</div>
@@ -237,7 +248,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                       <td align="right"><span style="font-size:10px;color:{badge_fg};background:{badge_bg};border-radius:4px;padding:2px 7px;font-weight:500">{pct:.1f}%</span></td>
                     </tr>
                   </table>
-                  <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:10px">${c['total']:,.0f}</div>
+                  <div style="font-size:22px;color:#1A1A1A;font-weight:500;letter-spacing:-0.02em;margin-top:10px">{currency_symbol}{c['total']:,.0f}</div>
                   <!-- bar -->
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:10px">
                     <tr>
@@ -270,7 +281,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
             rows += f"""
 <tr style="background:{bg}">
   <td style="padding:6px 12px;font-size:12px;color:#525252;white-space:nowrap;{bold}">{r["date"][:10]}</td>
-  <td style="padding:6px 8px;font-size:12px;color:#1A1A1A;font-weight:500;text-align:right;white-space:nowrap">${r["total_cost"]:,.2f}</td>
+  <td style="padding:6px 8px;font-size:12px;color:#1A1A1A;font-weight:500;text-align:right;white-space:nowrap">{currency_symbol}{r["total_cost"]:,.2f}</td>
   <td style="padding:6px 12px;width:40%">
     <div style="background:{bar_col};height:8px;border-radius:4px;width:{bar_w}%"></div>
   </td>
@@ -310,7 +321,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                   <td bgcolor="#EBEBEB" height="7" style="background:#EBEBEB;border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
                 </tr></table>
               </td>
-              <td style="padding:10px 14px;font-size:13px;font-weight:500;color:#1A1A1A;text-align:right;width:20%">${s['total_cost']:,.2f}</td>
+              <td style="padding:10px 14px;font-size:13px;font-weight:500;color:#1A1A1A;text-align:right;width:20%">{currency_symbol}{s['total_cost']:,.2f}</td>
             </tr>"""
         if other_svs:
             other_total = sum(x["total_cost"] for x in other_svs)
@@ -326,7 +337,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                   <td bgcolor="#EBEBEB" height="7" style="background:#EBEBEB;border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
                 </tr></table>
               </td>
-              <td style="padding:10px 14px;font-size:13px;font-weight:500;color:#525252;text-align:right;width:20%">${other_total:,.2f}</td>
+              <td style="padding:10px 14px;font-size:13px;font-weight:500;color:#525252;text-align:right;width:20%">{currency_symbol}{other_total:,.2f}</td>
             </tr>"""
 
         cloud_sub = CLOUD_LABEL.get(cloud_provider, "All clouds") if cloud_provider else "All clouds"
@@ -366,7 +377,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                   <td bgcolor="#EBEBEB" height="7" style="background:#EBEBEB;border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
                 </tr></table>
               </td>
-              <td style="padding:10px 14px;font-size:13px;font-weight:500;color:#1A1A1A;text-align:right;width:22%">${sc['cost']:,.2f}</td>
+              <td style="padding:10px 14px;font-size:13px;font-weight:500;color:#1A1A1A;text-align:right;width:22%">{currency_symbol}{sc['cost']:,.2f}</td>
             </tr>"""
 
         html += f"""
@@ -398,7 +409,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                   <td bgcolor="#EBEBEB" height="7" style="background:#EBEBEB;border-radius:3px;line-height:7px;font-size:1px">&nbsp;</td>
                 </tr></table>
               </td>
-              <td style="padding:10px 14px;font-size:13px;font-weight:500;color:#1A1A1A;text-align:right;width:20%">${r['total_cost']:,.2f}</td>
+              <td style="padding:10px 14px;font-size:13px;font-weight:500;color:#1A1A1A;text-align:right;width:20%">{currency_symbol}{r['total_cost']:,.2f}</td>
             </tr>"""
 
         html += f"""
@@ -420,8 +431,9 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
             conn = get_db()
 
             # Build cost map for the period
-            cost_rows = conn.execute("""
-                SELECT subscription_id, resource_group, resource_name, SUM(cost) as total_cost
+            _rc_cost = _converted_cost_sql(rep_cur)
+            cost_rows = conn.execute(f"""
+                SELECT subscription_id, resource_group, resource_name, SUM({_rc_cost}) as total_cost
                 FROM cost_data
                 WHERE date >= ? AND date <= ? AND tenant_id = ?
                   AND resource_name IS NOT NULL AND resource_name != ''
@@ -438,8 +450,8 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                 lb_start = (datetime.strptime(month_start, "%Y-%m-%d") - timedelta(days=lookback_days_default)).strftime("%Y-%m-%d")
             except Exception:
                 lb_start = month_start
-            daily_rows = conn.execute("""
-                SELECT subscription_id, lower(resource_group) as rg, resource_name, date, SUM(cost) as day_cost
+            daily_rows = conn.execute(f"""
+                SELECT subscription_id, lower(resource_group) as rg, resource_name, date, SUM({_rc_cost}) as day_cost
                 FROM cost_data
                 WHERE date >= ? AND date <= ? AND tenant_id = ?
                   AND resource_name IS NOT NULL AND resource_name != ''
@@ -591,7 +603,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                     <td style="padding:8px 10px;font-size:12px;color:#8A8A8A">containerGroups</td>
                     <td style="padding:8px 10px;font-size:12px;color:#8A8A8A">—</td>
                     <td style="padding:8px 10px;font-size:12px;color:#8A8A8A">—</td>
-                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#1A1A1A;text-align:right">${total_cost:,.2f}</td>
+                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#1A1A1A;text-align:right">{currency_symbol}{total_cost:,.2f}</td>
                 </tr>"""
 
             for i, r in enumerate(other_rows):
@@ -607,7 +619,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                     <td style="padding:8px 10px;font-size:12px;color:#525252">{(r["resource_type"] or "").split("/")[-1]}</td>
                     <td style="padding:8px 10px;font-size:12px;color:#525252;white-space:nowrap">{created_date or "-"}</td>
                     <td style="padding:8px 10px;font-size:12px;color:#525252">{actor}</td>
-                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#1A1A1A;text-align:right">${est_cost:,.2f}</td>
+                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#1A1A1A;text-align:right">{currency_symbol}{est_cost:,.2f}</td>
                 </tr>"""
             return out or '<tr><td colspan="6" style="padding:10px 12px;color:#8A8A8A">No data</td></tr>'
 
@@ -635,8 +647,8 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                     <td style="padding:8px 10px;font-size:12px;color:#8A8A8A">containerGroups</td>
                     <td style="padding:8px 10px;font-size:12px;color:#8A8A8A">—</td>
                     <td style="padding:8px 10px;font-size:12px;color:#8A8A8A">—</td>
-                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#1A1A1A;text-align:right">${total_incurred:,.2f}</td>
-                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#3B6D11;text-align:right">${total_savings:,.2f}</td>
+                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#1A1A1A;text-align:right">{currency_symbol}{total_incurred:,.2f}</td>
+                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#3B6D11;text-align:right">{currency_symbol}{total_savings:,.2f}</td>
                 </tr>"""
 
             for i, r in enumerate(other_rows):
@@ -654,8 +666,8 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                     <td style="padding:8px 10px;font-size:12px;color:#525252">{(r["resource_type"] or "").split("/")[-1]}</td>
                     <td style="padding:8px 10px;font-size:12px;color:#525252;white-space:nowrap">{del_date or "-"}</td>
                     <td style="padding:8px 10px;font-size:12px;color:#525252">{actor}</td>
-                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#1A1A1A;text-align:right">${incurred:,.2f}</td>
-                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#3B6D11;text-align:right">${savings:,.2f}</td>
+                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#1A1A1A;text-align:right">{currency_symbol}{incurred:,.2f}</td>
+                    <td style="padding:8px 10px;font-size:12px;font-weight:500;color:#3B6D11;text-align:right">{currency_symbol}{savings:,.2f}</td>
                 </tr>"""
             return out or '<tr><td colspan="7" style="padding:10px 12px;color:#8A8A8A">No data</td></tr>'
 
@@ -763,7 +775,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#F7F7F5;border:1px solid #E8E8E4;border-radius:8px">
                     <tr><td style="padding:12px 14px">
                       <div style="font-size:11px;color:#8A8A8A">Created cost (est.)</div>
-                      <div style="font-size:22px;font-weight:500;color:#1A1A1A;margin-top:4px">${created_cost_est:,.0f}</div>
+                      <div style="font-size:22px;font-weight:500;color:#1A1A1A;margin-top:4px">{currency_symbol}{created_cost_est:,.0f}</div>
                     </td></tr>
                   </table>
                 </td>
@@ -771,7 +783,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#F7F7F5;border:1px solid #E8E8E4;border-radius:8px">
                     <tr><td style="padding:12px 14px">
                       <div style="font-size:11px;color:#8A8A8A">Deleted cost (incurred)</div>
-                      <div style="font-size:22px;font-weight:500;color:#1A1A1A;margin-top:4px">${deleted_cost_est:,.0f}</div>
+                      <div style="font-size:22px;font-weight:500;color:#1A1A1A;margin-top:4px">{currency_symbol}{deleted_cost_est:,.0f}</div>
                     </td></tr>
                   </table>
                 </td>
@@ -779,7 +791,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#F7F7F5;border:1px solid #E8E8E4;border-radius:8px">
                     <tr><td style="padding:12px 14px">
                       <div style="font-size:11px;color:#8A8A8A">Est. savings after delete</div>
-                      <div style="font-size:22px;font-weight:500;color:#3B6D11;margin-top:4px">${deleted_savings_est:,.0f}</div>
+                      <div style="font-size:22px;font-weight:500;color:#3B6D11;margin-top:4px">{currency_symbol}{deleted_savings_est:,.0f}</div>
                     </td></tr>
                   </table>
                 </td>
@@ -829,7 +841,7 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
         rows = ""
         for i, m in enumerate(monthly[-6:]):
             bg = "#FFFFFF" if i % 2 == 0 else "#F7F7F5"
-            rows += f'<tr style="background:{bg}"><td style="padding:9px 14px;font-size:13px;color:#1A1A1A">{m["month"]}</td><td style="padding:9px 14px;font-size:13px;font-weight:500;color:#1A1A1A;text-align:right">${m["total_cost"]:,.2f}</td><td style="padding:9px 14px;font-size:13px;color:#525252;text-align:right">{m["record_count"]:,}</td></tr>'
+            rows += f'<tr style="background:{bg}"><td style="padding:9px 14px;font-size:13px;color:#1A1A1A">{m["month"]}</td><td style="padding:9px 14px;font-size:13px;font-weight:500;color:#1A1A1A;text-align:right">{currency_symbol}{m["total_cost"]:,.2f}</td><td style="padding:9px 14px;font-size:13px;color:#525252;text-align:right">{m["record_count"]:,}</td></tr>'
         html += f"""
         <div style="font-size:14px;font-weight:500;color:#1A1A1A;margin-bottom:14px">Monthly history</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #E8E8E4;border-radius:8px;overflow:hidden;margin-bottom:24px">
@@ -1329,16 +1341,20 @@ def _build_report_text(sections=None, settings=None, cloud_provider=None, tenant
         cloud_provider = settings.get("report_cloud_provider") or ""
     cloud_provider = (cloud_provider or "").strip().lower()
 
+    from currency import tenant_reporting_currency, symbol as _cur_symbol_fn
+    rep_cur = tenant_reporting_currency(tenant_id, get_db)
+    currency_symbol = _cur_symbol_fn(rep_cur)
+
     now    = datetime.utcnow()
     period = _resolve_report_period(settings)
     month_start = period["date_from"]
     today  = period["date_to"]
     cp_filter = cloud_provider if cloud_provider else None
 
-    top_services = get_summary("service_name",  date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)[:5]
-    top_rgs      = get_summary("resource_group", date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)[:5]
-    trend        = get_daily_trend(date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter)
-    monthly      = get_monthly_summary(tenant_id=tenant_id, cloud_provider=cp_filter)
+    top_services = get_summary("service_name",  date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter, reporting_currency=rep_cur)[:5]
+    top_rgs      = get_summary("resource_group", date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter, reporting_currency=rep_cur)[:5]
+    trend        = get_daily_trend(date_from=month_start, date_to=today, tenant_id=tenant_id, cloud_provider=cp_filter, reporting_currency=rep_cur)
+    monthly      = get_monthly_summary(tenant_id=tenant_id, cloud_provider=cp_filter, reporting_currency=rep_cur)
 
     total_this_month = sum(r["total_cost"] for r in top_services) if top_services else 0
     last_month_data  = [m for m in monthly if m["month"] != now.strftime("%Y-%m")]
@@ -1346,16 +1362,17 @@ def _build_report_text(sections=None, settings=None, cloud_provider=None, tenant
     mom_change = ((total_this_month - last_month_total) / last_month_total * 100) if last_month_total > 0 else 0
     avg_daily  = total_this_month / max(1, len(set(r["date"] for r in trend))) if trend else 0
 
-    from database import get_db
+    from database import _converted_cost_sql
     conn = get_db()
+    _cloud_cost = _converted_cost_sql(rep_cur)
     if cp_filter:
         cloud_rows = conn.execute(
-            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? AND cloud_provider=? GROUP BY cloud_provider ORDER BY total DESC",
+            f"SELECT cloud_provider, SUM({_cloud_cost}) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? AND cloud_provider=? GROUP BY cloud_provider ORDER BY total DESC",
             (month_start, today, tenant_id, cp_filter)
         ).fetchall()
     else:
         cloud_rows = conn.execute(
-            "SELECT cloud_provider, SUM(cost) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? GROUP BY cloud_provider ORDER BY total DESC",
+            f"SELECT cloud_provider, SUM({_cloud_cost}) as total FROM cost_data WHERE date>=? AND date<=? AND tenant_id=? GROUP BY cloud_provider ORDER BY total DESC",
             (month_start, today, tenant_id)
         ).fetchall()
     conn.close()
@@ -1368,9 +1385,9 @@ def _build_report_text(sections=None, settings=None, cloud_provider=None, tenant
         f"Cloud Cost Report — {period['label']}",
         f"Generated {now.strftime('%-d %B %Y at %H:%M UTC')}",
         sep,
-        f"Total:      ${total_this_month:>10,.2f}  ({arrow} {abs(mom_change):.1f}% vs last period)",
-        f"Last period:${last_month_total:>10,.2f}",
-        f"Avg / day:  ${avg_daily:>10,.2f}",
+        f"Total:      {currency_symbol}{total_this_month:>10,.2f}  ({arrow} {abs(mom_change):.1f}% vs last period)",
+        f"Last period:{currency_symbol}{last_month_total:>10,.2f}",
+        f"Avg / day:  {currency_symbol}{avg_daily:>10,.2f}",
         sep,
     ]
     if cloud_totals:
@@ -1378,17 +1395,17 @@ def _build_report_text(sections=None, settings=None, cloud_provider=None, tenant
         for c in cloud_totals:
             lbl = {"azure":"Azure","aws":"AWS","gcp":"GCP"}.get(c["cloud"], c["cloud"].upper())
             pct = c["total"] / grand_total * 100
-            lines.append(f"  {lbl:<8} ${c['total']:>10,.2f}  ({pct:.1f}%)")
+            lines.append(f"  {lbl:<8} {currency_symbol}{c['total']:>10,.2f}  ({pct:.1f}%)")
         lines.append(sep)
     if top_services:
         lines.append("Top services:")
         for s in top_services:
-            lines.append(f"  {(s['service_name'] or 'Unknown'):<30} ${s['total_cost']:>10,.2f}")
+            lines.append(f"  {(s['service_name'] or 'Unknown'):<30} {currency_symbol}{s['total_cost']:>10,.2f}")
         lines.append(sep)
     if top_rgs:
         lines.append("Top resource groups / regions:")
         for r in top_rgs:
-            lines.append(f"  {(r['resource_group'] or 'Unknown'):<30} ${r['total_cost']:>10,.2f}")
+            lines.append(f"  {(r['resource_group'] or 'Unknown'):<30} {currency_symbol}{r['total_cost']:>10,.2f}")
         lines.append(sep)
     lines.append("This report was generated automatically by Cloud Cost Analyzer.")
     return "\n".join(lines)

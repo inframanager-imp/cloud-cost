@@ -62,6 +62,7 @@ def send_budget_alert(
     period: str = "monthly",
     provider: str = "all",
     webhook_url: str = "",
+    currency_symbol: str = "$",
 ) -> bool:
     """
     Send a formatted budget alert to Slack.
@@ -95,9 +96,9 @@ def send_budget_alert(
             "fields": [
                 {"type": "mrkdwn", "text": f"*Provider*\n{provider_label}"},
                 {"type": "mrkdwn", "text": f"*Period*\n{period_label}"},
-                {"type": "mrkdwn", "text": f"*Current Spend*\n${current_spend:,.2f}"},
-                {"type": "mrkdwn", "text": f"*Budget*\n${budget_amount:,.2f}"},
-                {"type": "mrkdwn", "text": f"*Remaining*\n${remaining:,.2f}"},
+                {"type": "mrkdwn", "text": f"*Current Spend*\n{currency_symbol}{current_spend:,.2f}"},
+                {"type": "mrkdwn", "text": f"*Budget*\n{currency_symbol}{budget_amount:,.2f}"},
+                {"type": "mrkdwn", "text": f"*Remaining*\n{currency_symbol}{remaining:,.2f}"},
                 {"type": "mrkdwn", "text": f"*Triggered*\n{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"},
             ],
         },
@@ -116,7 +117,7 @@ def send_budget_alert(
     ]
 
     fallback_text = (
-        f"[Budget Alert] {budget_name}: ${current_spend:,.2f} / ${budget_amount:,.2f} "
+        f"[Budget Alert] {budget_name}: {currency_symbol}{current_spend:,.2f} / {currency_symbol}{budget_amount:,.2f} "
         f"({pct_used}% used, threshold {threshold_pct}%)"
     )
 

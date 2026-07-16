@@ -62,17 +62,23 @@ def _period_dates(period: str, budget: dict = None):
 
 
 def get_current_spend(budget: dict) -> float:
-    """Query cost_data for the budget's scope and period."""
+    """Query cost_data for the budget's scope and period (scoped to the budget's own tenant)."""
+    from database import _converted_cost_sql
+    from currency import tenant_reporting_currency
+
     date_from, date_to = _period_dates(budget["period"], budget)
-    provider_type = budget.get("provider_type", "all")
-    provider_id   = budget.get("provider_id", "")
+    tenant_id      = budget.get("tenant_id") or 1
+    provider_type  = budget.get("provider_type", "all")
+    provider_id    = budget.get("provider_id", "")
     resource_group = budget.get("resource_group", "")
     service_name   = budget.get("service_name", "")
 
     conn = get_db()
-    params = [date_from, date_to]
+    rep_cur = tenant_reporting_currency(tenant_id, get_db)
+    _cost = _converted_cost_sql(rep_cur)
+    params = [date_from, date_to, tenant_id]
     # Use substr(date,1,10) so timestamps like '2026-06-16T00:00:00Z' match plain date strings
-    where = "WHERE substr(date,1,10) >= ? AND substr(date,1,10) <= ?"
+    where = "WHERE substr(date,1,10) >= ? AND substr(date,1,10) <= ? AND tenant_id = ?"
 
     if provider_type and provider_type != "all":
         where += " AND cloud_provider = ?"
@@ -91,7 +97,7 @@ def get_current_spend(budget: dict) -> float:
         params.append(service_name)
 
     row = conn.execute(
-        f"SELECT COALESCE(SUM(cost), 0) AS total FROM cost_data {where}",
+        f"SELECT COALESCE(SUM({_cost}), 0) AS total FROM cost_data {where}",
         params,
     ).fetchone()
     conn.close()
@@ -108,8 +114,11 @@ def _send_email_alert(budget: dict, threshold_pct: int, current_spend: float):
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
         from database import get_email_settings
+        from currency import tenant_reporting_currency, symbol as _cur_symbol_fn
 
-        settings = get_email_settings(budget.get("tenant_id") or 1)
+        b_tenant_id = budget.get("tenant_id") or 1
+        settings = get_email_settings(b_tenant_id)
+        currency_symbol = _cur_symbol_fn(tenant_reporting_currency(b_tenant_id, get_db))
         smtp_host = settings.get("smtp_host", "")
         smtp_port = settings.get("smtp_port", 587)
         smtp_user = settings.get("smtp_user", "")
@@ -152,9 +161,9 @@ def _send_email_alert(budget: dict, threshold_pct: int, current_spend: float):
             <table style="width:100%;border-collapse:collapse">
               <tr><td style="padding:8px 0;color:#666">Provider</td><td style="padding:8px 0;font-weight:600">{provider if provider!='ALL' else 'All Clouds'}</td></tr>
               <tr><td style="padding:8px 0;color:#666">Period</td><td style="padding:8px 0;font-weight:600">{period}</td></tr>
-              <tr><td style="padding:8px 0;color:#666">Current Spend</td><td style="padding:8px 0;font-weight:600">${current_spend:,.2f}</td></tr>
-              <tr><td style="padding:8px 0;color:#666">Budget</td><td style="padding:8px 0;font-weight:600">${budget_amount:,.2f}</td></tr>
-              <tr><td style="padding:8px 0;color:#666">Remaining</td><td style="padding:8px 0;font-weight:600;color:{'#E53E3E' if remaining==0 else '#38A169'}">${remaining:,.2f}</td></tr>
+              <tr><td style="padding:8px 0;color:#666">Current Spend</td><td style="padding:8px 0;font-weight:600">{currency_symbol}{current_spend:,.2f}</td></tr>
+              <tr><td style="padding:8px 0;color:#666">Budget</td><td style="padding:8px 0;font-weight:600">{currency_symbol}{budget_amount:,.2f}</td></tr>
+              <tr><td style="padding:8px 0;color:#666">Remaining</td><td style="padding:8px 0;font-weight:600;color:{'#E53E3E' if remaining==0 else '#38A169'}">{currency_symbol}{remaining:,.2f}</td></tr>
             </table>
           </div>
           <div style="padding:16px;background:#f9f9f9;font-size:12px;color:#888">
@@ -204,6 +213,8 @@ def check_budgets(provider_filter: str = None) -> list:
     Returns:
         List of dicts describing each alert fired.
     """
+    from currency import tenant_reporting_currency, symbol as _cur_symbol_fn
+
     budgets = get_budgets(enabled_only=True)
     fired = []
 
@@ -221,6 +232,7 @@ def check_budgets(provider_filter: str = None) -> list:
             continue
 
         pct_used = (current_spend / budget_amount) * 100
+        b_currency_symbol = _cur_symbol_fn(tenant_reporting_currency(budget.get("tenant_id") or 1, get_db))
 
         for threshold in sorted(budget["alert_thresholds"]):
             if pct_used < threshold:
@@ -241,6 +253,7 @@ def check_budgets(provider_filter: str = None) -> list:
                     budget_amount=budget_amount,
                     period=budget["period"],
                     provider=b_provider,
+                    currency_symbol=b_currency_symbol,
                     webhook_url=SLACK_WEBHOOK_URL,
                 )
                 if ok:
