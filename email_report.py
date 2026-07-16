@@ -1233,8 +1233,8 @@ def _build_custom_report_html(report):
             is_spike = n >= 5 and d["cost"] >= spike_thr and d["cost"] > avg
             any_spike = any_spike or is_spike
             col = "#DC2626" if is_spike else BLUE
-            # Cost label above spikes (and the single peak day) so the $ is readable.
-            show_val = is_spike or d["date"] == pk["date"]
+            # Cost label above every bar.
+            show_val = True
             vlabel = (f'<div style="font-size:8px;font-weight:700;color:{col};text-align:center;'
                       f'line-height:1;padding-bottom:2px;white-space:nowrap">{_short(d["cost"])}</div>' if show_val else '')
             # Each bar = a bottom-aligned nested-table cell with a bgcolor block (email-safe).
