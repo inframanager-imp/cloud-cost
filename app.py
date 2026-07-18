@@ -4719,6 +4719,17 @@ def _in_hour_slot(local_now, target_hour, target_minute=0):
             and (local_now.minute // 5) == (int(target_minute) // 5))
 
 
+def _is_scheduled_weekday(local_now, stored_day):
+    """True when local_now falls on the day-of-week the user picked.
+    The <select> in every schedule UI (email settings, custom reports, client
+    schedules) uses JS Date.getDay() convention: Sunday=0 ... Saturday=6.
+    Python's datetime.weekday() uses Monday=0 ... Sunday=6 -- comparing the
+    stored value straight against .weekday() (as this code used to) is off by
+    one day for every day of the week, so a "Saturday" schedule actually fired
+    on Sunday. Convert before comparing."""
+    return local_now.weekday() == (int(stored_day) - 1) % 7
+
+
 def _check_email_schedule():
     """Check if it's time to send a scheduled report, then reschedule."""
     global _email_timer
@@ -4740,7 +4751,7 @@ def _check_email_schedule():
                 if _in_hour_slot(lnow, target_hour, target_minute):
                     if schedule == "daily":
                         should_send = True
-                    elif schedule == "weekly" and lnow.weekday() == target_day:
+                    elif schedule == "weekly" and _is_scheduled_weekday(lnow, target_day):
                         should_send = True
                     elif schedule == "monthly" and lnow.day == 1:
                         should_send = True
@@ -4767,7 +4778,7 @@ def _check_email_schedule():
                 if _in_hour_slot(cr_lnow, cr_hour, cr_minute):
                     if cr_schedule == "daily":
                         cr_should_send = True
-                    elif cr_schedule == "weekly" and cr_lnow.weekday() == cr_day:
+                    elif cr_schedule == "weekly" and _is_scheduled_weekday(cr_lnow, cr_day):
                         cr_should_send = True
                     elif cr_schedule == "monthly" and cr_lnow.day == 1:
                         cr_should_send = True
@@ -4795,7 +4806,7 @@ def _check_email_schedule():
             if _in_hour_slot(cl_lnow, cl_hour, cl_minute):
                 if cl_schedule == "daily":
                     cl_should_send = True
-                elif cl_schedule == "weekly" and cl_lnow.weekday() == cl_day:
+                elif cl_schedule == "weekly" and _is_scheduled_weekday(cl_lnow, cl_day):
                     cl_should_send = True
                 elif cl_schedule == "monthly" and cl_lnow.day == 1:
                     cl_should_send = True
