@@ -3986,12 +3986,17 @@ def api_client_update_schedule(client_id):
     except (TypeError, ValueError):
         schedule_day = 1
     try:
-        schedule_hour = int(body.get("schedule_hour") or 8)
+        # NOT `body.get(...) or 8` -- hour=0 (12 AM) is falsy in Python and
+        # would silently fall back to the 8 default, shifting a midnight
+        # schedule to 8 AM.
+        _raw_hour = body.get("schedule_hour")
+        schedule_hour = int(_raw_hour) if _raw_hour is not None else 8
     except (TypeError, ValueError):
         schedule_hour = 8
     schedule_hour = max(0, min(23, schedule_hour))
     try:
-        schedule_minute = int(body.get("schedule_minute") or 0)
+        _raw_minute = body.get("schedule_minute")
+        schedule_minute = int(_raw_minute) if _raw_minute is not None else 0
     except (TypeError, ValueError):
         schedule_minute = 0
     schedule_minute = max(0, min(59, schedule_minute))
@@ -4014,12 +4019,17 @@ def _parse_schedule_body(body):
     except (TypeError, ValueError):
         schedule_day = 1
     try:
-        schedule_hour = int(body.get("schedule_hour") or 8)
+        # NOT `body.get(...) or 8` -- hour=0 (12 AM) is falsy in Python and
+        # would silently fall back to the 8 default, shifting a midnight
+        # schedule to 8 AM.
+        _raw_hour = body.get("schedule_hour")
+        schedule_hour = int(_raw_hour) if _raw_hour is not None else 8
     except (TypeError, ValueError):
         schedule_hour = 8
     schedule_hour = max(0, min(23, schedule_hour))
     try:
-        schedule_minute = int(body.get("schedule_minute") or 0)
+        _raw_minute = body.get("schedule_minute")
+        schedule_minute = int(_raw_minute) if _raw_minute is not None else 0
     except (TypeError, ValueError):
         schedule_minute = 0
     schedule_minute = max(0, min(59, schedule_minute))
