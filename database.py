@@ -2536,26 +2536,38 @@ def get_weekly_breakdown(group_by, date_from=None, date_to=None, subscription_id
     return [dict(r) for r in rows]
 
 
-def get_available_periods(subscription_id=None):
+def get_available_periods(subscription_id=None, subscription_ids=None, cloud_provider=None, tenant_id=None, reporting_currency=None):
     """Get list of available months and weeks for comparison dropdowns."""
     conn = get_db()
+    _cost = _converted_cost_sql(reporting_currency)
     month_query = f"""
         SELECT {_month_group_expr()} as month, MIN(date) as start_date, MAX(date) as end_date,
-               SUM(cost) as total_cost
+               SUM({_cost}) as total_cost
         FROM cost_data
     """
     week_query = f"""
         SELECT {_week_group_expr()} as week, MIN(date) as start_date, MAX(date) as end_date,
-               SUM(cost) as total_cost
+               SUM({_cost}) as total_cost
         FROM cost_data
     """
+    conditions = []
     params = []
-    if subscription_id:
-        month_query += " WHERE subscription_id = ?"
-        week_query += " WHERE subscription_id = ?"
-        params = [subscription_id]
-    month_query += " GROUP BY month ORDER BY month ASC"
-    week_query += " GROUP BY week ORDER BY week ASC"
+    if subscription_ids:
+        placeholders = ",".join(["?"] * len(subscription_ids))
+        conditions.append(f"subscription_id IN ({placeholders})")
+        params.extend(subscription_ids)
+    elif subscription_id:
+        conditions.append("subscription_id = ?")
+        params.append(subscription_id)
+    if cloud_provider:
+        conditions.append("cloud_provider = ?")
+        params.append(cloud_provider)
+    if tenant_id is not None:
+        conditions.append("tenant_id = ?")
+        params.append(tenant_id)
+    where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    month_query += where + " GROUP BY month ORDER BY month ASC"
+    week_query += where + " GROUP BY week ORDER BY week ASC"
     months = conn.execute(month_query, params).fetchall()
     weeks = conn.execute(week_query, params).fetchall()
     conn.close()

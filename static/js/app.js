@@ -2773,6 +2773,32 @@ function cmpRemovePeriod(n) {
     if (btn) btn.style.display = '';
 }
 
+// Re-fetch the period dropdown list ($ totals shown next to each month/week)
+// scoped to whatever cloud + account filter is currently selected on the
+// Compare page, so those totals always match what the comparison table below
+// will actually show. Preserves the current period selections by value where
+// the same month/week still exists after refreshing.
+async function _refreshComparePeriods() {
+    const params = new URLSearchParams();
+    if (cmpSelectedCloud) params.set('cloud_provider', cmpSelectedCloud);
+    const accountFilterId = document.getElementById('cmpAccountFilterSelect')?.value || '';
+    if (accountFilterId) {
+        params.set('subscription_ids', accountFilterId);
+    } else if ((cmpSelectedCloud === 'aws' || cmpSelectedCloud === 'gcp') && cmpSelectedRGs.size > 0) {
+        const ids = [...cmpSelectedRGs].map(name => cmpAccountIdMap[name] || name);
+        params.set('subscription_ids', ids.join(','));
+    }
+    const prevValues = [1, 2, 3, 4, 5, 6].map(i => document.getElementById('cmpMonth' + i)?.value);
+    comparePeriods = await fetch('/api/compare/periods?' + params.toString()).then(r => r.json());
+    populateCompareDropdowns();
+    // Restore prior selections (by value) where the period still exists.
+    [1, 2, 3, 4, 5, 6].forEach((i, idx) => {
+        const sel = document.getElementById('cmpMonth' + i);
+        const prev = prevValues[idx];
+        if (sel && prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+    });
+}
+
 async function loadCompare() {
     try {
         // Default to the biggest-spend cloud (no "All") if not already chosen.
@@ -2788,12 +2814,10 @@ async function loadCompare() {
         if (selectedSubscription) filterParams.set('subscription_id', selectedSubscription);
         const filterQs = filterParams.toString() ? '?' + filterParams.toString() : '';
 
-        const [periods, filters] = await Promise.all([
-            fetch('/api/compare/periods' + subParam()).then(r => r.json()),
+        const [filters] = await Promise.all([
             fetch('/api/filters' + filterQs).then(r => r.json()),
+            _refreshComparePeriods(),
         ]);
-        comparePeriods = periods;
-        populateCompareDropdowns();
         populateCmpRG(filters.resource_groups || []);
         onCompareModeChange();
         // Auto-run the period dropdowns so changing a period re-runs without the button.
@@ -2894,6 +2918,7 @@ function setCmpCloud(btn, cloud) {
             populateCmpRG(f.resource_groups || []);
         }).catch(() => populateCmpRG([]));
     }
+    _refreshComparePeriods();  // keep period $ totals in sync with the new cloud
     cmpAutoRun();   // auto-apply on cloud change
 }
 
@@ -2924,7 +2949,9 @@ function _hideCmpAccountFilter() {
 }
 
 function onCmpAccountFilterChange() {
-    // Nothing needed — value is read at compare time
+    // Keep the period-dropdown $ totals in sync with the selected account,
+    // then re-run the comparison itself.
+    _refreshComparePeriods().then(cmpAutoRun);
 }
 
 function populateCmpRG(rgs, idMap) {
@@ -3003,7 +3030,7 @@ function populateCompareDropdowns() {
         if (!sel) continue;
         sel.innerHTML = '';
         comparePeriods.months.forEach((m) => {
-            const label = `${formatMonth(m.month)} ($${Number(m.total_cost).toLocaleString(undefined, {maximumFractionDigits:0})})`;
+            const label = `${formatMonth(m.month)} (${curSym()}${Number(m.total_cost).toLocaleString(undefined, {maximumFractionDigits:0})})`;
             sel.add(new Option(label, `${m.start_date}|${m.end_date}`));
         });
     }
@@ -3022,7 +3049,7 @@ function populateCompareDropdowns() {
 
     // Populate weeks
     comparePeriods.weeks.forEach((w, i) => {
-        const label = `${w.week} (${w.start_date} to ${w.end_date}) - $${Number(w.total_cost).toLocaleString(undefined, {maximumFractionDigits:0})}`;
+        const label = `${w.week} (${w.start_date} to ${w.end_date}) - ${curSym()}${Number(w.total_cost).toLocaleString(undefined, {maximumFractionDigits:0})}`;
         w1.add(new Option(label, `${w.start_date}|${w.end_date}`));
         w2.add(new Option(label, `${w.start_date}|${w.end_date}`));
     });

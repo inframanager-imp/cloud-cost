@@ -1059,7 +1059,7 @@
                 <!-- 4. Filter by Account (shown when AWS/GCP selected) -->
                 <div class="filter-bar__field" id="cmpAccountFilterField" style="display:none">
                     <span class="micro-label" id="cmpAccountFilterLabel">Filter by Account</span>
-                    <select class="filter-bar__select filter-bar__select--wide" id="cmpAccountFilterSelect">
+                    <select class="filter-bar__select filter-bar__select--wide" id="cmpAccountFilterSelect" onchange="onCmpAccountFilterChange()">
                         <option value="">All accounts</option>
                     </select>
                 </div>

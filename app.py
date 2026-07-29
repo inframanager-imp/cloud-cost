@@ -2008,7 +2008,16 @@ def api_compare():
 @login_required
 def api_compare_periods():
     sub_id = request.args.get("subscription_id")
-    return jsonify(get_available_periods(subscription_id=sub_id))
+    subs_raw = request.args.get("subscription_ids")
+    sub_ids = [s.strip() for s in subs_raw.split(",") if s.strip()] if subs_raw else None
+    cloud_provider = request.args.get("cloud_provider") or None
+    tid = current_tenant_id()
+    from currency import tenant_reporting_currency
+    rep_cur = tenant_reporting_currency(tid, get_db)
+    return jsonify(get_available_periods(
+        subscription_id=sub_id, subscription_ids=sub_ids, cloud_provider=cloud_provider,
+        tenant_id=tid, reporting_currency=rep_cur,
+    ))
 
 
 @app.route("/api/compare/drilldown")
