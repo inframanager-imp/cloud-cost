@@ -2498,9 +2498,10 @@ def get_comparison_drilldown_multi(group_by, group_value, periods, subscription_
     return result
 
 
-def get_weekly_breakdown(group_by, date_from=None, date_to=None, subscription_id=None, resource_groups=None):
+def get_weekly_breakdown(group_by, date_from=None, date_to=None, subscription_id=None, resource_groups=None, tenant_id=None, reporting_currency=None):
     """Get cost grouped by week and a dimension."""
     conn = get_db()
+    _cost = _converted_cost_sql(reporting_currency)
     valid_groups = ["service_name", "resource_group", "meter_category"]
     if group_by not in valid_groups:
         group_by = "service_name"
@@ -2511,7 +2512,7 @@ def get_weekly_breakdown(group_by, date_from=None, date_to=None, subscription_id
             MIN(date) as week_start,
             MAX(date) as week_end,
             {group_by} as name,
-            SUM(cost) as total_cost
+            SUM({_cost}) as total_cost
         FROM cost_data
         WHERE 1=1
     """
@@ -2529,6 +2530,9 @@ def get_weekly_breakdown(group_by, date_from=None, date_to=None, subscription_id
         placeholders = ','.join('?' for _ in resource_groups)
         query += f" AND resource_group IN ({placeholders})"
         params.extend(resource_groups)
+    if tenant_id is not None:
+        query += " AND tenant_id = ?"
+        params.append(tenant_id)
 
     query += f" GROUP BY week, {group_by} ORDER BY week ASC, total_cost DESC"
     rows = conn.execute(query, params).fetchall()

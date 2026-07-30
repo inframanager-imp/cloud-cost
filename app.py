@@ -823,14 +823,21 @@ def api_executive_summary():
     def mom_pct(cur, prev):
         return round((cur - prev) / prev * 100, 1) if prev > 0 else 0
 
-    # 6-month trend by cloud
+    # 6-month trend by cloud. Compute each month's start/end via direct
+    # year/month arithmetic (not repeated "step back a month" loops) -- that
+    # approach previously double-counted the step for i>0 and produced offsets
+    # [6,5,4,3,2,0] instead of [5,4,3,2,1,0], silently skipping last month.
     months_trend = []
     for i in range(5, -1, -1):
-        ref = (today.replace(day=1) - timedelta(days=1)) if i > 0 else today
-        for _ in range(i):
-            ref = ref.replace(day=1) - timedelta(days=1)
-        m_start = ref.replace(day=1)
-        m_end = ref if i == 0 else ref
+        total_month_index = (today.year * 12 + (today.month - 1)) - i
+        y, m = divmod(total_month_index, 12)
+        m += 1
+        m_start = today.replace(year=y, month=m, day=1)
+        if i == 0:
+            m_end = today
+        else:
+            next_month_start = m_start.replace(year=y + 1, month=1, day=1) if m == 12 else m_start.replace(month=m + 1, day=1)
+            m_end = next_month_start - timedelta(days=1)
         rows = conn.execute(f"""
             SELECT cloud_provider, SUM({_cost}) as total
             FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
@@ -2108,7 +2115,10 @@ def api_compare_weekly():
     sub_id = request.args.get("subscription_id")
     resource_groups_str = request.args.get("resource_groups")
     resource_groups = resource_groups_str.split(',') if resource_groups_str else None
-    data = get_weekly_breakdown(group_by, date_from, date_to, subscription_id=sub_id, resource_groups=resource_groups)
+    tid = current_tenant_id()
+    from currency import tenant_reporting_currency
+    rep_cur = tenant_reporting_currency(tid, get_db)
+    data = get_weekly_breakdown(group_by, date_from, date_to, subscription_id=sub_id, resource_groups=resource_groups, tenant_id=tid, reporting_currency=rep_cur)
 
     # Restructure: {week -> {name: cost}}
     weeks = {}
@@ -6941,7 +6951,7 @@ def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
     now = datetime.utcnow()
     date_to = now.date()
     date_from = date_to - timedelta(days=days)
-    records, errors = [], []
+    records, errors, succeeded_sub_ids = [], [], []
     for acct in accounts:
         api_key = (acct.get("api_key") or "").strip()
         if not api_key:
@@ -6950,22 +6960,27 @@ def _fetch_openai_costs(tenant_id: int, days: int = 30) -> dict:
         headers = {"Authorization": f"Bearer {api_key}"}
         try:
             records.extend(_openai_account_records(headers, sub_id, date_from, date_to, tenant_id))
+            succeeded_sub_ids.append(sub_id)
         except Exception as e:
             errors.append(f"{sub_id}: {e}")
             print(f"[OpenAI sync] account '{sub_id}' failed: {e}")
 
     # Don't wipe existing data if every account errored (transient failure).
-    if not records and errors:
+    if not succeeded_sub_ids:
         _apply_openai_chatgpt_cost(tenant_id)
         return {"inserted": 0, "accounts": len(accounts), "errors": errors,
                 "date_from": str(date_from), "date_to": str(date_to)}
 
     conn = get_db()
-    # Replace all API-usage rows in the range once (exclude the manual ChatGPT line).
+    # Only replace rows for accounts that actually succeeded this run -- a failed
+    # account's existing historical data must survive untouched, not get wiped
+    # just because a sibling account's fetch worked (same guard shape as the
+    # CUR importer's delete-after-fetch fix).
+    placeholders = ",".join(["?"] * len(succeeded_sub_ids))
     conn.execute(
-        "DELETE FROM cost_data WHERE cloud_provider='openai' AND service_name!='ChatGPT Subscription' "
-        "AND tenant_id=? AND date BETWEEN ? AND ?",
-        (tenant_id, str(date_from), str(date_to))
+        f"DELETE FROM cost_data WHERE cloud_provider='openai' AND service_name!='ChatGPT Subscription' "
+        f"AND tenant_id=? AND date BETWEEN ? AND ? AND subscription_id IN ({placeholders})",
+        [tenant_id, str(date_from), str(date_to)] + succeeded_sub_ids
     )
     if records:
         conn.executemany("""
