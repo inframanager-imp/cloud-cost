@@ -1800,6 +1800,9 @@ def get_cost_total(filters=None, tenant_id=None, cloud_provider=None, reporting_
                          OR meter_category LIKE ?)"""
             s = f"%{filters['search']}%"
             params.extend([s, s, s, s, s])
+        if filters.get("_extra_where"):
+            query += " " + filters["_extra_where"]
+            params.extend(filters.get("_extra_params") or [])
 
     if tenant_id is not None:
         query += " AND tenant_id = ?"
@@ -1908,6 +1911,12 @@ def get_cost_totals_by_subscription(filters=None, tenant_id=None, cloud_provider
                               OR cd.meter_category LIKE ?)"""
             s = f"%{filters['search']}%"
             params.extend([s, s, s, s, s])
+        if filters.get("_extra_where"):
+            # Must be built with prefix="cd." (build_client_sql_filter) — this
+            # query joins subscriptions/cloud_providers, which also have a
+            # subscription_id column, so an unqualified reference is ambiguous.
+            query += " " + filters["_extra_where"]
+            params.extend(filters.get("_extra_params") or [])
 
     if tenant_id is not None:
         query += " AND cd.tenant_id = ?"
@@ -4918,28 +4927,33 @@ def get_client_costs(client_id: int, date_from: str, date_to: str, tenant_id: in
 _MAP_SUBSEP = ""
 
 
-def _mapping_condition(filter_type: str, value: str) -> tuple:
-    """Return (sql_condition, [params]) for a single mapping row."""
+def _mapping_condition(filter_type: str, value: str, prefix: str = "") -> tuple:
+    """Return (sql_condition, [params]) for a single mapping row.
+    `prefix` (e.g. "cd.") qualifies the cost_data column names for callers that
+    JOIN cost_data against another table sharing a column name (e.g.
+    subscriptions.subscription_id), to avoid an ambiguous-column SQL error."""
     if (filter_type or "").startswith("oc_"):
         # "Other Costs" mappings (oc_item / oc_category / oc_team) match manual_costs,
         # NOT cloud cost_data — so they never contribute to the cloud SQL filter.
         return ("1=0", [])
     if filter_type == "subscription_id":
-        return ("subscription_id = ?", [value])
+        return (f"{prefix}subscription_id = ?", [value])
     elif filter_type == "service_name":
-        return ("LOWER(service_name) = LOWER(?)", [value])
+        return (f"LOWER({prefix}service_name) = LOWER(?)", [value])
     elif filter_type == "resource_name":  # e.g. Cursor per-user, Azure/AWS per-resource
-        return ("LOWER(resource_name) = LOWER(?)", [value])
+        return (f"LOWER({prefix}resource_name) = LOWER(?)", [value])
     else:  # resource_group — may be scoped to a specific subscription (compound value)
         if value and _MAP_SUBSEP in value:
             sub_id, rg = value.split(_MAP_SUBSEP, 1)
-            return ("(subscription_id = ? AND LOWER(resource_group) = LOWER(?))", [sub_id, rg])
-        return ("LOWER(resource_group) = LOWER(?)", [value])
+            return (f"({prefix}subscription_id = ? AND LOWER({prefix}resource_group) = LOWER(?))", [sub_id, rg])
+        return (f"LOWER({prefix}resource_group) = LOWER(?)", [value])
 
 
-def build_client_sql_filter(client_id: int) -> tuple:
+def build_client_sql_filter(client_id: int, prefix: str = "") -> tuple:
     """Return (sql_fragment, params) for injecting into cost_data queries.
-    Returns ('', []) if client has no mappings.
+    Returns ('', []) if client has no mappings. Pass `prefix` (e.g. "cd.") when
+    the target query joins cost_data against another table that shares a
+    column name (e.g. subscriptions.subscription_id) — see _mapping_condition.
     """
     mappings = get_client_mappings(client_id)
     if not mappings:
@@ -4947,7 +4961,7 @@ def build_client_sql_filter(client_id: int) -> tuple:
     conditions = []
     params = []
     for m in mappings:
-        cond, plist = _mapping_condition(m["filter_type"], m["value"])
+        cond, plist = _mapping_condition(m["filter_type"], m["value"], prefix=prefix)
         conditions.append(cond)
         params.extend(plist)
     return ("AND (" + " OR ".join(conditions) + ")", params)

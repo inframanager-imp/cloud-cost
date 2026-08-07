@@ -1552,6 +1552,17 @@ def api_costs_total():
         "search": request.args.get("search"),
     }
     filters = {k: v for k, v in filters.items() if v is not None and v != ""}
+
+    client_id_param = request.args.get("client_id")
+    if client_id_param:
+        try:
+            frag, cparams = build_client_sql_filter(int(client_id_param))
+            if frag:
+                filters["_extra_where"] = frag
+                filters["_extra_params"] = cparams
+        except (ValueError, TypeError):
+            pass
+
     cloud_provider = request.args.get("cloud_provider") or None
     from currency import tenant_reporting_currency
     _rep = tenant_reporting_currency(current_tenant_id(), get_db)
@@ -1583,6 +1594,19 @@ def api_costs_total_by_subscription():
         # subscription_id intentionally ignored; this endpoint returns totals for all subs
     }
     filters = {k: v for k, v in filters.items() if v is not None and v != ""}
+
+    client_id_param = request.args.get("client_id")
+    if client_id_param:
+        try:
+            # prefix="cd." -- this query joins subscriptions/cloud_providers,
+            # which also carry a subscription_id column (see get_cost_totals_by_subscription).
+            frag, cparams = build_client_sql_filter(int(client_id_param), prefix="cd.")
+            if frag:
+                filters["_extra_where"] = frag
+                filters["_extra_params"] = cparams
+        except (ValueError, TypeError):
+            pass
+
     cloud_provider = request.args.get("cloud_provider") or None
     from currency import tenant_reporting_currency
     _rep = tenant_reporting_currency(current_tenant_id(), get_db)
