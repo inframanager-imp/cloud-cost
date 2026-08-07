@@ -2851,6 +2851,13 @@ function setCmpCloud(btn, cloud) {
     const groupBySel = document.getElementById('cmpGroupBy');
     if (groupBySel) {
         const current = groupBySel.value;
+        // Azure and GCP get an explicit cloud-appropriate default (Resource
+        // Group / Project) instead of carrying over whatever was selected on
+        // the previous cloud tab — "Resource Name" surviving a switch to
+        // Azure was the reported bug, since resource_name stays "valid" in
+        // every cloud's option list so the old restore-previous logic never
+        // corrected it.
+        let defaultVal = null;
         if (cloud === 'aws') {
             groupBySel.innerHTML = `
                 <option value="service_name">Service</option>
@@ -2861,6 +2868,7 @@ function setCmpCloud(btn, cloud) {
                 <option value="service_name">Service</option>
                 <option value="subscription_id">Project</option>
                 <option value="resource_name">Resource Name</option>`;
+            defaultVal = 'subscription_id';
         } else if (cloud && cloud !== 'azure' && CLOUD_META[cloud]) {
             // Integration providers (OpenAI/ChatGPT/Atlassian/Cursor): use their
             // own dimension names (e.g. OpenAI → API Key/Org · Project · Model).
@@ -2877,9 +2885,14 @@ function setCmpCloud(btn, cloud) {
                 <option value="service_name">Service</option>
                 <option value="resource_group">Resource Group</option>
                 <option value="resource_name">Resource Name</option>`;
+            if (cloud === 'azure') defaultVal = 'resource_group';
         }
-        // Restore previous selection if still valid
-        if ([...groupBySel.options].some(o => o.value === current)) groupBySel.value = current;
+        if (defaultVal) {
+            groupBySel.value = defaultVal;
+        } else if ([...groupBySel.options].some(o => o.value === current)) {
+            // Restore previous selection if still valid (AWS / integrations)
+            groupBySel.value = current;
+        }
     }
 
     // Update filter section label and search placeholder
