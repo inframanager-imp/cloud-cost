@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cost Group</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --canvas:#E7EAE6; --card:#FFFFFF; --ink:#14211B; --ink-soft:#5A675F;
+    --ink-faint:#8B968E; --line:#D5DBD3; --line-soft:#E5E9E4;
+    --money:#1B7F5A; --money-deep:#0F5C41; --money-wash:#E8F2EC;
+    --heat-lo:#E9B24C; --heat-mid:#D77A2B; --heat-hi:#B23A2A;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+    --body:'Inter',system-ui,-apple-system,sans-serif;
+    --radius:10px; --shadow:0 1px 2px rgba(20,33,27,.06),0 6px 22px rgba(20,33,27,.05);
+  }
+  :root[data-theme="dark"]{
+    --canvas:#151A17; --card:#1D2521; --ink:#EAEFEB; --ink-soft:#9DAA9F;
+    --ink-faint:#6F7C72; --line:#2E3934; --line-soft:#263029;
+    --money:#3FBE8C; --money-deep:#2E8F68; --money-wash:#193227;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 22px rgba(0,0,0,.35);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --canvas:#151A17; --card:#1D2521; --ink:#EAEFEB; --ink-soft:#9DAA9F;
+      --ink-faint:#6F7C72; --line:#2E3934; --line-soft:#263029;
+      --money:#3FBE8C; --money-deep:#2E8F68; --money-wash:#193227;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 22px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--body);background:var(--canvas);color:var(--ink);
+    line-height:1.45;font-size:14px;padding:22px;min-height:100vh;transition:background .15s,color .15s}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .wrap{max-width:1320px;margin:0 auto}
+
+  header{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:flex-end;
+    justify-content:space-between;padding-bottom:18px;margin-bottom:18px;border-bottom:2px solid var(--ink)}
+  .brand{display:flex;flex-direction:column;gap:4px}
+  .back{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);text-decoration:none;display:inline-block;margin-bottom:6px}
+  .back:hover{color:var(--money-deep)}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--money-deep);font-weight:600}
+  h1{font-family:var(--disp);font-size:27px;font-weight:700;letter-spacing:-.01em}
+  .tag-temp{font-family:var(--mono);font-size:10px;letter-spacing:.06em;background:var(--money-wash);color:var(--money-deep);
+    padding:2px 8px;border-radius:5px;vertical-align:middle;margin-left:8px}
+  .header-actions{display:flex;gap:8px;align-items:center}
+  .cloud-toggle{display:flex;gap:2px;background:var(--line-soft);border-radius:7px;padding:2px;height:34px;box-sizing:border-box}
+  .cloud-toggle button{border:none;background:none;font-size:12px;font-weight:600;padding:0 12px;border-radius:5px;cursor:pointer;
+    color:var(--ink-soft);font-family:var(--body)}
+  .cloud-toggle button.on{background:var(--card);color:var(--money-deep)}
+  .theme-btn{height:34px;padding:0 12px;border-radius:7px;border:1px solid var(--line);background:var(--card);
+    color:var(--ink-soft);cursor:pointer;font-size:12.5px;font-family:var(--body)}
+  .theme-btn:hover{border-color:var(--money);color:var(--money-deep)}
+
+  .filters{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:13px 15px;margin-bottom:16px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
+  .fgroup{display:flex;flex-direction:column;gap:5px;min-width:170px}
+  .fgroup>label{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);font-weight:600}
+  select,input[type=date],input[type=search]{font-family:var(--body);font-size:13px;padding:8px 10px;
+    border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink);width:100%;height:36px}
+  .btn{height:36px;padding:0 15px;border-radius:7px;font-family:var(--body);font-size:13px;font-weight:600;cursor:pointer;
+    border:1px solid var(--line);background:var(--card);color:var(--ink);display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{border-color:var(--money);color:var(--money-deep)}
+  .btn.primary{background:var(--money-deep);border-color:var(--money-deep);color:#fff}
+  .btn.primary:hover{background:var(--money);color:#fff}
+  .fbtns{display:flex;gap:8px;margin-left:auto;align-self:flex-end}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:13px 15px;
+    box-shadow:var(--shadow);display:flex;flex-direction:column;gap:5px;min-width:0}
+  .kpi .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-weight:600}
+  .kpi .val{font-family:var(--mono);font-size:22px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi .sub{font-size:11.5px;color:var(--ink-soft)}
+  .kpi.accent{background:var(--money-deep);border-color:var(--money-deep)}
+  .kpi.accent .lbl{color:#A9D9C3}.kpi.accent .val{color:#fff}.kpi.accent .sub{color:#BFE3D2}
+
+  .domains{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .dchip{text-align:left;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--dc);
+    border-radius:var(--radius);box-shadow:var(--shadow);padding:11px 13px 12px;cursor:pointer;font-family:var(--body);
+    display:grid;grid-template-columns:1fr auto;grid-template-areas:"name pct" "cost pct" "track track";gap:1px 10px}
+  .dchip:hover{border-color:var(--dc)}
+  .dchip.off{opacity:.38}
+  .dchip .dname{grid-area:name;font-size:11.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dchip .dcost{grid-area:cost;font-size:17px;font-weight:600;color:var(--ink)}
+  .dchip .dpct{grid-area:pct;align-self:center;font-size:12.5px;color:var(--ink-soft)}
+  .dchip .dtrack{grid-area:track;height:5px;background:var(--line-soft);border-radius:3px;overflow:hidden;margin-top:8px}
+  .dchip .dfill{display:block;height:100%;border-radius:3px}
+
+  .grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;margin-bottom:16px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:15px 16px}
+  .panel-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .panel-h h2{font-family:var(--disp);font-size:15px;font-weight:600}
+  .panel-h .hint{font-size:11px;color:var(--ink-faint)}
+  .strip svg{width:100%;height:150px;display:block}
+  .strip .bar{cursor:pointer}
+  .strip .axis{font-family:var(--mono);font-size:9px;fill:var(--ink-faint)}
+  .strip-note{margin-top:9px;font-size:11.5px;color:var(--ink-soft);display:flex;gap:14px;flex-wrap:wrap}
+  .hbars{display:flex;flex-direction:column;gap:7px}
+  .hbar{display:grid;grid-template-columns:150px 1fr auto;align-items:center;gap:10px;font-size:12px}
+  .hbar .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hbar .track{height:16px;background:var(--line-soft);border-radius:4px;overflow:hidden}
+  .hbar .fill{height:100%;border-radius:4px}
+  .hbar .v{font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);white-space:nowrap}
+  .chart-toggle{display:flex;gap:2px;background:var(--line-soft);border-radius:7px;padding:2px}
+  .chart-toggle button{border:none;background:none;font-size:11.5px;padding:4px 10px;border-radius:5px;cursor:pointer;
+    color:var(--ink-soft);font-weight:600;font-family:var(--body)}
+  .chart-toggle button.on{background:var(--card);color:var(--money-deep)}
+
+  .tablecard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+    overflow:hidden;margin-bottom:16px}
+  .tbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line-soft)}
+  .tbar h2{font-family:var(--disp);font-size:15px;font-weight:600}
+  .tbar .grpby{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-soft)}
+  .tbar .grpby select{width:auto;height:32px;padding:4px 26px 4px 9px}
+  .tbar .tsearch{flex:1 1 200px;max-width:280px;margin-left:auto}
+  .tbar .tsearch input{height:32px}
+  .tscroll{overflow:auto;max-height:520px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  thead th{position:sticky;top:0;background:var(--line-soft);text-align:left;padding:9px 14px;font-size:10.5px;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);font-weight:600;cursor:pointer;
+    white-space:nowrap;border-bottom:1px solid var(--line)}
+  thead th.r{text-align:right}
+  thead th:hover{color:var(--money-deep)}
+  thead th .ar{opacity:.4;font-size:9px}
+  thead th.sorted .ar{opacity:1;color:var(--money-deep)}
+  tbody td{padding:8px 14px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+  tbody tr:hover{background:var(--money-wash)}
+  td.dim{color:var(--ink-soft)}
+  td.mono{font-family:var(--mono);text-align:right;white-space:nowrap}
+  .costcell{display:flex;align-items:center;justify-content:flex-end;gap:9px}
+  .costcell .cbar{height:8px;border-radius:3px;flex:none}
+  .tag{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:5px;
+    background:var(--line-soft);color:var(--ink-soft)}
+  .tfoot{padding:10px 16px;font-size:11.5px;color:var(--ink-faint);border-top:1px solid var(--line-soft);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  .empty{padding:44px;text-align:center;color:var(--ink-faint);font-size:13px}
+  .state{padding:60px;text-align:center;color:var(--ink-soft)}
+
+  @media(max-width:1020px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.hbar{grid-template-columns:120px 1fr auto}}
+  @media(max-width:640px){body{padding:13px}h1{font-size:21px}.kpis{grid-template-columns:1fr 1fr}.fbtns{margin-left:0;width:100%}.fbtns .btn{flex:1;justify-content:center}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <a href="/" class="back">&larr; Back to Dashboard</a>
+      <span class="eyebrow" id="eyebrow">AWS Cost Explorer</span>
+      <h1>Cost Group</h1>
+    </div>
+    <div class="header-actions">
+      <div class="cloud-toggle" id="cloudToggle">
+        <button data-cloud="aws" class="on" type="button">AWS</button>
+        <button data-cloud="azure" type="button">Azure</button>
+        <button data-cloud="gcp" type="button">GCP</button>
+      </div>
+      <button class="theme-btn" id="themeBtn" type="button">🌙 Dark mode</button>
+    </div>
+  </header>
+
+  <section class="filters">
+    <div class="fgroup"><label id="acctLbl">AWS account</label><select id="acctSel"><option value="">All AWS accounts</option></select></div>
+    <div class="fgroup"><label>From</label><input type="date" id="dateFrom"></div>
+    <div class="fgroup"><label>To</label><input type="date" id="dateTo"></div>
+    <div class="fbtns">
+      <button class="btn" id="resetBtn" type="button">Reset</button>
+      <button class="btn primary" id="loadBtn" type="button">Load</button>
+      <button class="btn" id="exportBtn" type="button">Export CSV</button>
+    </div>
+  </section>
+
+  <div id="stateMsg" class="state">Pick an account/date range and click Load.</div>
+
+  <div id="report" style="display:none">
+    <section class="kpis" id="kpis"></section>
+    <section class="domains" id="domainBar"></section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="panel-h"><h2>Daily spend</h2><span class="hint">Click a day to filter · click again to clear</span></div>
+        <div class="strip" id="strip"></div>
+        <div class="strip-note" id="stripNote"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h">
+          <h2 id="chartTitle">Top services</h2>
+          <div class="chart-toggle">
+            <button data-dim="cat" class="on" type="button">Cost group</button>
+            <button data-dim="s" type="button">Service</button>
+            <button data-dim="ut" type="button" id="usageTypeDimBtn" style="display:none">Usage Type</button>
+            <button data-dim="r" type="button" id="regionDimBtn">Region</button>
+            <button data-dim="rn" type="button">Resource</button>
+          </div>
+        </div>
+        <div class="hbars" id="hbars"></div>
+      </div>
+    </section>
+
+    <section class="tablecard">
+      <div class="tbar">
+        <h2>Line items</h2>
+        <div class="grpby">
+          <label for="groupBy">Group by</label>
+          <select id="groupBy">
+            <option value="cat" selected>Cost group</option>
+            <option value="cat|s">Cost group &raquo; Service</option>
+            <option value="s">Service</option>
+            <option value="ut" id="usageTypeColOpt" style="display:none">Usage Type</option>
+            <option value="r" id="regionColOpt">Region</option>
+            <option value="rn">Resource</option>
+            <option value="d">Day</option>
+            <option value="none">No grouping</option>
+          </select>
+        </div>
+        <div class="tsearch"><input type="search" id="tSearch" placeholder="Search rows&hellip;"></div>
+      </div>
+      <div class="tscroll"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+      <div class="tfoot" id="tfoot"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ---- theme ----
+const THEME_KEY = "advcost_theme";
+function applyTheme(t){ document.documentElement.setAttribute("data-theme", t);
+  document.getElementById("themeBtn").textContent = t==="dark" ? "☀ Light mode" : "🌙 Dark mode"; }
+(function initTheme(){
+  const saved = localStorage.getItem(THEME_KEY);
+  if(saved){ applyTheme(saved); }
+  else { applyTheme(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); }
+})();
+document.getElementById("themeBtn").addEventListener("click", ()=>{
+  const cur = document.documentElement.getAttribute("data-theme")==="dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, cur); applyTheme(cur);
+});
+
+const fmtMoney = (v,cur)=> (v<0?"-":"")+(cur==="USD"||!cur?"$":cur+" ")+Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const CAT_COLOR={"Bandwidth":"#B23A2A","Compute":"#1B7F5A","Database":"#3A6EA5","Storage":"#D77A2B",
+  "Monitoring & Mgmt":"#7A5AA6","Network":"#0E8C86","Other":"#AEB6AC"};
+function heat(t){t=Math.max(0,Math.min(1,t));const s=[[233,178,76],[215,122,43],[178,58,42]];
+  const seg=t<0.5?[s[0],s[1],t/0.5]:[s[1],s[2],(t-0.5)/0.5];const[a,b,f]=seg;
+  const c=a.map((av,i)=>Math.round(av+(b[i]-av)*f));return `rgb(${c[0]},${c[1]},${c[2]})`;}
+
+let RAW = []; let CUR = "USD"; let ACCOUNTS = [];
+const state = { sel:{cat:new Set(), s:new Set(), r:new Set(), rn:new Set()}, dayFrom:null, dayTo:null,
+  chartDim:"cat", groupBy:"cat", tSearch:"", sortKey:"c", sortDir:-1, days:[], cloud:"aws" };
+
+const dateFrom=document.getElementById("dateFrom"), dateTo=document.getElementById("dateTo");
+(function defaultRange(){
+  const to = new Date(); const from = new Date(); from.setDate(from.getDate()-29);
+  dateTo.value = to.toISOString().slice(0,10); dateFrom.value = from.toISOString().slice(0,10);
+})();
+
+function cloudLabel(){ return {aws:"AWS",azure:"Azure",gcp:"GCP"}[state.cloud] || "AWS"; }
+
+function populateAccounts(){
+  const sel = document.getElementById("acctSel");
+  sel.innerHTML = `<option value="">All ${cloudLabel()} accounts</option>`;
+  ACCOUNTS.filter(a=>a.cloud===state.cloud).forEach(a=>{
+    const o=document.createElement("option"); o.value=a.subscription_id; o.textContent=a.name; sel.appendChild(o);
+  });
+}
+fetch("/api/subscriptions").then(r=>r.json()).then(list=>{
+  ACCOUNTS = list||[];
+  populateAccounts();
+}).catch(()=>{});
+
+document.getElementById("cloudToggle").addEventListener("click", (e)=>{
+  const btn = e.target.closest("button[data-cloud]");
+  if(!btn || btn.classList.contains("on")) return;
+  document.querySelectorAll("#cloudToggle button").forEach(b=>b.classList.remove("on"));
+  btn.classList.add("on");
+  state.cloud = btn.dataset.cloud;
+  document.getElementById("eyebrow").textContent = cloudLabel() + " Cost Explorer";
+  document.getElementById("acctLbl").textContent = cloudLabel() + " account";
+  updateRegionLabels();
+  updateUsageTypeVisibility();
+  populateAccounts();
+  RAW = []; state.days = [];
+  document.getElementById("report").style.display="none";
+  const stateMsg=document.getElementById("stateMsg");
+  stateMsg.style.display="block"; stateMsg.textContent="Pick an account/date range and click Load.";
+});
+
+document.getElementById("loadBtn").addEventListener("click", loadData);
+document.getElementById("resetBtn").addEventListener("click", ()=>{
+  ["cat","s","r","rn"].forEach(k=>state.sel[k]=new Set());
+  state.dayFrom=null; state.dayTo=null; state.tSearch=""; document.getElementById("tSearch").value="";
+  renderAll();
+});
+
+function loadData(){
+  const stateMsg=document.getElementById("stateMsg"), report=document.getElementById("report");
+  stateMsg.style.display="block"; stateMsg.textContent="Loading…"; report.style.display="none";
+  const params=new URLSearchParams();
+  params.set("cloud", state.cloud);
+  const acct=document.getElementById("acctSel").value;
+  if(acct) params.set("subscription_id", acct);
+  if(dateFrom.value) params.set("date_from", dateFrom.value);
+  if(dateTo.value) params.set("date_to", dateTo.value);
+  fetch("/api/advance-cost/data?"+params.toString()).then(r=>r.json()).then(json=>{
+    RAW = json.rows||[]; CUR = json.currency||"USD";
+    if(!RAW.length){ stateMsg.textContent=`No ${cloudLabel()} cost data found for this account/date range.`; return; }
+    state.days = [...new Set(RAW.map(x=>x.d))].sort();
+    state.dayFrom = state.days[0]; state.dayTo = state.days[state.days.length-1];
+    ["cat","s","r","rn"].forEach(k=>state.sel[k]=new Set());
+    stateMsg.style.display="none"; report.style.display="block";
+    updateUsageTypeVisibility();
+    renderAll();
+    if(json.truncated){
+      stateMsg.style.display="block";
+      stateMsg.textContent="⚠ This result set hit the row cap — totals below are incomplete. Narrow the account or date range.";
+      stateMsg.style.color="#B23A2A";
+    }
+  }).catch(err=>{ stateMsg.textContent="Failed to load data: "+err; });
+}
+
+function passes(x){
+  for(const k of ["cat","s","r","rn"]){ if(state.sel[k].size && !state.sel[k].has(x[k])) return false; }
+  if(x.d < state.dayFrom || x.d > state.dayTo) return false;
+  return true;
+}
+function filtered(){ return RAW.filter(passes); }
+
+function renderKPIs(f){
+  const total=f.reduce((s,x)=>s+x.c,0);
+  const grand=RAW.reduce((s,x)=>s+x.c,0)||1;
+  const dayset=new Set(f.map(x=>x.d)); const nDays=dayset.size||1;
+  const svcMap=new Map(); f.forEach(x=>svcMap.set(x.s,(svcMap.get(x.s)||0)+x.c));
+  let topSvc=["—",0]; svcMap.forEach((v,k)=>{if(v>topSvc[1])topSvc=[k,v];});
+  const cards=[
+    {lbl:"Filtered cost", val:fmtMoney(total,CUR), sub:`${(total/grand*100).toFixed(1)}% of range total`, accent:true},
+    {lbl:"Avg / day", val:fmtMoney(total/nDays,CUR), sub:`over ${nDays} day${nDays>1?"s":""}`},
+    {lbl:"Top service", val:topSvc[0], sub:fmtMoney(topSvc[1],CUR)},
+    {lbl:"Resources in view", val:String(new Set(f.map(x=>x.rn)).size), sub:`${svcMap.size} services`}
+  ];
+  document.getElementById("kpis").innerHTML = cards.map(c=>
+    `<div class="kpi ${c.accent?"accent":""}"><span class="lbl">${c.lbl}</span>
+     <span class="val" title="${c.val}">${c.val}</span><span class="sub">${c.sub}</span></div>`).join("");
+}
+
+function renderDomains(f){
+  const m=new Map(); f.forEach(x=>m.set(x.cat,(m.get(x.cat)||0)+x.c));
+  const tot=[...m.values()].reduce((a,b)=>a+b,0)||1;
+  const arr=[...m.entries()].sort((a,b)=>b[1]-a[1]);
+  const selSet=state.sel.cat;
+  document.getElementById("domainBar").innerHTML = arr.map(([n,v])=>{
+    const active = selSet.size===0 || selSet.has(n);
+    const col=CAT_COLOR[n]||"#8B968E";
+    return `<button class="dchip ${active?"":"off"}" type="button" data-cat="${encodeURIComponent(n)}" style="--dc:${col}">
+      <span class="dname">${n}</span><span class="dcost num">${fmtMoney(v,CUR)}</span>
+      <span class="dpct num">${(v/tot*100).toFixed(1)}%</span>
+      <span class="dtrack"><span class="dfill" style="width:${Math.abs(v)/tot*100}%;background:${col}"></span></span></button>`;
+  }).join("") || `<div class="empty" style="grid-column:1/-1">No spend in current filter</div>`;
+  document.querySelectorAll("#domainBar .dchip").forEach(ch=>ch.addEventListener("click",()=>{
+    const n=decodeURIComponent(ch.dataset.cat);
+    if(selSet.size===1 && selSet.has(n)) state.sel.cat=new Set(); else state.sel.cat=new Set([n]);
+    renderAll();
+  }));
+}
+
+function renderStrip(f){
+  const m=new Map(state.days.map(d=>[d,0]));
+  f.forEach(x=>m.set(x.d,(m.get(x.d)||0)+x.c));
+  const arr=[...m.entries()];
+  const max=Math.max(1,...arr.map(a=>a[1]));
+  const W=760,H=150,pad={l:6,r:6,t:12,b:20},iw=W-pad.l-pad.r,ih=H-pad.t-pad.b,bw=iw/(arr.length||1);
+  let bars=""; arr.forEach(([d,v],i)=>{
+    const h=Math.max(v>0?1.5:0, v/max*ih); const x=pad.l+i*bw, y=pad.t+ih-h;
+    const sel=(d>=state.dayFrom && d<=state.dayTo);
+    const col = sel? heat(v/max*0.9+0.05) : "#C9D0C8";
+    bars+=`<g class="bar" data-day="${d}"><title>${d} · ${fmtMoney(v,CUR)}</title>
+      <rect x="${x+1}" y="${y}" width="${Math.max(1,bw-2)}" height="${h}" rx="2" fill="${col}"></rect>
+      <rect x="${x}" y="${pad.t}" width="${bw}" height="${ih}" fill="transparent"></rect></g>`;
+  });
+  let labels=""; arr.forEach(([d],i)=>{ if(i%5===0||i===arr.length-1){ const x=pad.l+i*bw+bw/2;
+    labels+=`<text class="axis" x="${x}" y="${H-6}" text-anchor="middle">${d.slice(5)}</text>`; }});
+  document.getElementById("strip").innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${bars}${labels}</svg>`;
+  document.querySelectorAll("#strip .bar").forEach(g=>g.addEventListener("click",()=>{
+    const d=g.dataset.day;
+    if(state.dayFrom===d && state.dayTo===d){ state.dayFrom=state.days[0]; state.dayTo=state.days[state.days.length-1]; }
+    else { state.dayFrom=d; state.dayTo=d; }
+    renderAll();
+  }));
+  const active=arr.filter(a=>a[0]>=state.dayFrom&&a[0]<=state.dayTo);
+  const peak=active.reduce((p,a)=>a[1]>p[1]?a:p,["—",-1]);
+  document.getElementById("stripNote").innerHTML =
+    `<span>Range <b>${state.dayFrom}</b> – <b>${state.dayTo}</b></span>
+     <span>Peak day <b>${peak[0]}</b> at <b class="num">${fmtMoney(peak[1],CUR)}</b></span>`;
+}
+
+function renderBars(f){
+  const dim=state.chartDim;
+  const titles={cat:"Top cost groups",s:"Top services",ut:"Top usage types",r:`Top ${regionLabel().toLowerCase()}s`,rn:"Top resources"};
+  document.getElementById("chartTitle").textContent=titles[dim];
+  const m=new Map(); f.forEach(x=>m.set(x[dim]||"(none)",(m.get(x[dim]||"(none)")||0)+x.c));
+  const arr=[...m.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const max=Math.max(1,...arr.map(a=>Math.abs(a[1])));
+  const tot=f.reduce((s,x)=>s+x.c,0)||1;
+  document.getElementById("hbars").innerHTML = arr.map(([n,v])=>{
+    const w=Math.abs(v)/max*100;
+    const label = dim==="rn" && n.length>28 ? "…"+n.slice(-26) : n;
+    return `<div class="hbar"><span class="nm" title="${n}">${label}</span>
+      <div class="track"><div class="fill" style="width:${w}%;background:${heat(Math.abs(v)/max)}"></div></div>
+      <span class="v">${fmtMoney(v,CUR)} · ${(v/tot*100).toFixed(0)}%</span></div>`;
+  }).join("") || `<div class="empty">No data</div>`;
+}
+document.querySelectorAll(".chart-toggle button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".chart-toggle button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); state.chartDim=b.dataset.dim; renderBars(filtered());
+}));
+
+function regionLabel(){ return {aws:"Region",azure:"Resource Group",gcp:"Project"}[state.cloud] || "Region"; }
+function fieldLabel(k){ return k==="r" ? regionLabel() : {cat:"Cost group",s:"Service",ut:"Usage Type",rn:"Resource",d:"Day"}[k]; }
+function updateRegionLabels(){
+  const lbl = regionLabel();
+  document.getElementById("regionDimBtn").textContent = lbl;
+  document.getElementById("regionColOpt").textContent = lbl;
+}
+function updateUsageTypeVisibility(){
+  // Usage Type (meter_subcategory) is only populated for Azure, and only once
+  // resource-level sync data actually carries it -- hide the dimension rather
+  // than showing a chart/column that's always empty.
+  const show = state.cloud === "azure" && RAW.some(x=>x.ut);
+  const dimBtn = document.getElementById("usageTypeDimBtn");
+  const colOpt = document.getElementById("usageTypeColOpt");
+  dimBtn.style.display = show ? "" : "none";
+  colOpt.style.display = show ? "" : "none";
+  if(!show){
+    if(state.chartDim === "ut"){
+      state.chartDim = "cat";
+      document.querySelectorAll(".chart-toggle button").forEach(b=>b.classList.toggle("on", b.dataset.dim==="cat"));
+    }
+    if(state.groupBy.split("|").includes("ut")){
+      state.groupBy = "cat";
+      document.getElementById("groupBy").value = "cat";
+    }
+  }
+}
+function groupRows(f){
+  const gb=state.groupBy;
+  if(gb==="none") return f.map(x=>({keys:[x.s,x.ut,x.r,x.rn,x.d], c:x.c, n:x.n}));
+  const parts=gb.split("|"); const m=new Map();
+  for(const x of f){
+    const kk=parts.map(p=>x[p]).join(" » ");
+    let o=m.get(kk); if(!o){o={key:kk, parts:parts.map(p=>x[p]), c:0, n:0}; m.set(kk,o);}
+    o.c+=x.c; o.n+=x.n;
+  }
+  return [...m.values()];
+}
+const groupCols = ()=>{ const gb=state.groupBy;
+  if(gb==="none") return [{k:"s",t:"Service"},{k:"ut",t:"Usage Type"},{k:"r",t:regionLabel()},{k:"rn",t:"Resource"},{k:"d",t:"Day"}];
+  return gb.split("|").map(p=>({k:p,t:fieldLabel(p)})); };
+
+function renderTable(f){
+  let rows=groupRows(f);
+  if(state.tSearch){ const q=state.tSearch.toLowerCase();
+    rows=rows.filter(r=>(r.key||r.keys.join(" ")).toLowerCase().includes(q)); }
+  const sk=state.sortKey, dir=state.sortDir;
+  rows.sort((a,b)=>{
+    let av,bv;
+    if(sk==="c"){av=a.c;bv=b.c;} else if(sk==="n"){av=a.n;bv=b.n;}
+    else { const idx=+sk.slice(1); av=(a.parts?a.parts[idx]:a.keys[idx])||""; bv=(b.parts?b.parts[idx]:b.keys[idx])||""; return String(av).localeCompare(String(bv))*dir; }
+    return (av-bv)*dir;
+  });
+  const cols=groupCols();
+  const maxAbs=Math.max(1,...rows.map(r=>Math.abs(r.c)));
+  const thead=document.querySelector("#tbl thead");
+  thead.innerHTML="<tr>"+cols.map((c,i)=>{
+    const key="g"+i; const on=state.sortKey===key;
+    return `<th data-sort="${key}" class="${on?"sorted":""}">${c.t} <span class="ar">${on?(dir<0?"▼":"▲"):"↕"}</span></th>`;
+  }).join("")+
+    `<th data-sort="n" class="r ${sk==="n"?"sorted":""}">Items <span class="ar">${sk==="n"?(dir<0?"▼":"▲"):"↕"}</span></th>`+
+    `<th data-sort="c" class="r ${sk==="c"?"sorted":""}">Cost <span class="ar">${sk==="c"?(dir<0?"▼":"▲"):"↕"}</span></th></tr>`;
+  const tbody=document.querySelector("#tbl tbody");
+  if(!rows.length){ tbody.innerHTML=`<tr><td colspan="${cols.length+2}"><div class="empty">No line items match these filters.</div></td></tr>`; }
+  else{
+    tbody.innerHTML = rows.slice(0,600).map(r=>{
+      const vals=r.parts||r.keys;
+      const tds=cols.map((c,i)=>`<td class="${i>0?"dim":""}" title="${String(vals[i]??"")}">${String(vals[i]??"")}</td>`).join("");
+      const w=Math.abs(r.c)/maxAbs*100;
+      return `<tr>${tds}<td class="mono dim">${r.n.toLocaleString("en-US")}</td>
+        <td class="mono"><div class="costcell"><span class="cbar" style="width:${Math.max(3,w*0.5)}px;background:${heat(Math.abs(r.c)/maxAbs)}"></span>${fmtMoney(r.c,CUR)}</div></td></tr>`;
+    }).join("");
+  }
+  thead.querySelectorAll("th").forEach(th=>th.addEventListener("click",()=>{
+    const k=th.dataset.sort;
+    if(state.sortKey===k) state.sortDir*=-1; else { state.sortKey=k; state.sortDir=(k==="c"||k==="n")?-1:1; }
+    renderTable(filtered());
+  }));
+  document.getElementById("tfoot").innerHTML =
+    `<span>${rows.length.toLocaleString("en-US")} group${rows.length!==1?"s":""}${rows.length>600?" · showing first 600":""}</span>
+     <span>Sum of shown: <b class="num">${fmtMoney(rows.reduce((s,r)=>s+r.c,0),CUR)}</b></span>`;
+}
+document.getElementById("groupBy").addEventListener("change",e=>{ state.groupBy=e.target.value; state.sortKey="c"; state.sortDir=-1; renderTable(filtered()); });
+document.getElementById("tSearch").addEventListener("input",e=>{ state.tSearch=e.target.value; renderTable(filtered()); });
+
+document.getElementById("exportBtn").addEventListener("click",()=>{
+  const f=filtered(); const rows=groupRows(f); const cols=groupCols();
+  const head=[...cols.map(c=>c.t),"Items","Cost"];
+  const lines=[head.join(",")];
+  rows.sort((a,b)=>b.c-a.c).forEach(r=>{
+    const vals=r.parts||r.keys;
+    const cells=cols.map((c,i)=>`"${String(vals[i]??"").replace(/"/g,'""')}"`);
+    cells.push(r.n, r.c.toFixed(4)); lines.push(cells.join(","));
+  });
+  const blob=new Blob([lines.join("\n")],{type:"text/csv"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=`advance-cost-${state.dayFrom}_to_${state.dayTo}.csv`; a.click();
+});
+
+function renderAll(){
+  const f=filtered();
+  renderKPIs(f); renderDomains(f); renderStrip(f); renderBars(f); renderTable(f);
+}
+})();
+</script>
+</body>
+</html>
