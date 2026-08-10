@@ -1668,6 +1668,11 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
     group_mode = (filters or {}).get("group_by", "resource")
     dim_map = {
         "resource":       ["cloud_provider", "resource_group", "service_name", "resource_type", "resource_name", "subscription_id", "meter_category"],
+        # Same as "resource" plus meter_subcategory (Usage Type) -- kept as its own
+        # mode rather than added to "resource" so the main Cost Data table (and
+        # other query_costs("resource") callers) don't silently get split into
+        # more rows by a dimension they never asked for.
+        "resource_detail": ["cloud_provider", "resource_group", "service_name", "resource_type", "resource_name", "subscription_id", "meter_category", "meter_subcategory"],
         "resource_group": ["cloud_provider", "resource_group", "subscription_id"],
         "service":        ["cloud_provider", "service_name", "subscription_id"],
         "account":        ["cloud_provider", "subscription_id"],
@@ -1680,7 +1685,7 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
             return _rg_commitment_label_sql()
         return d
     # Always emit the same output columns; non-grouped ones come back NULL.
-    out_cols = ["resource_group", "service_name", "resource_type", "resource_name", "subscription_id", "meter_category"]
+    out_cols = ["resource_group", "service_name", "resource_type", "resource_name", "subscription_id", "meter_category", "meter_subcategory"]
     select_cols = ",\n            ".join(
         (f"{_dim_expr(c)} AS {c}" if c in group_dims else f"NULL AS {c}") for c in out_cols
     )
@@ -1711,6 +1716,149 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
     rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# Keyword buckets for the Advance Cost report's cost-group chips, one ruleset
+# per cloud since AWS/Azure/GCP use completely different service-name
+# vocabularies. AWS side is matched against cur_importer.py's service_name
+# remapping (Amazon EC2, EBS Storage, NAT Gateway, RDS Instances, etc.);
+# Azure/GCP sides against the raw service names in cost_data. Best-effort
+# classification, not stored data — none of the sources carry a cost-group
+# field. GCP's real-world mix skews heavily toward AI/ML API line items
+# (Gemini, Translate, Vertex AI, etc.), not classic infra — verified against
+# live tenant data before writing these rules, not guessed.
+_ADV_COST_GROUP_RULES = {
+    "aws": [
+        ("Storage", ("s3", "simple storage service", "ebs storage", "ebs snapshot", "glacier",
+                     "backup", "elastic file system", "efs")),
+        ("Database", ("rds", "relational database", "dynamodb", "aurora", "redshift",
+                       "elasticache", "documentdb")),
+        ("Bandwidth", ("data transfer", "cloudfront", "nat gateway")),
+        ("Network", ("elastic load balancing", "load balancer", "virtual private cloud", "vpc",
+                     "route 53", "direct connect", "network interface", "elastic ip", "waf",
+                     "api gateway")),
+        ("Monitoring & Mgmt", ("cloudwatch", "cloudtrail", "config", "systems manager", "x-ray",
+                                "cost explorer", "secrets manager", "key management")),
+        ("Compute", ("ec2", "elastic compute cloud", "fargate", "lambda", "elastic container service",
+                     "ecs", "elastic kubernetes", "eks", "batch", "lightsail", "sagemaker", "glue",
+                     "elastic mapreduce", "opensearch", "elasticsearch", "athena")),
+    ],
+    "azure": [
+        ("Storage", ("storage", "backup", "netapp files")),
+        ("Database", ("database for mysql", "database for postgresql", "cosmos db", "sql database")),
+        ("Bandwidth", ("bandwidth", "content delivery network")),
+        ("Network", ("application gateway", "virtual network", "load balancer", "vpn gateway",
+                     "nat gateway", "traffic manager", "azure dns", "azure bastion",
+                     "network watcher", "api management", "service bus", "event hubs",
+                     "microsoft entra", "active directory", "key vault")),
+        ("Monitoring & Mgmt", ("ddos protection", "defender for cloud", "log analytics",
+                                "azure monitor", "grafana")),
+        # Verified against the real ServiceFamily dimension (not guessed): Foundry
+        # Tools/Models -> "AI + Machine Learning", Cognitive Search -> "Web" --
+        # both would have landed in "Compute" under the old keyword-only guess.
+        ("AI + Machine Learning", ("foundry",)),
+        ("Web", ("cognitive search",)),
+        ("Compute", ("virtual machines", "virtual machine licenses", "container instances",
+                     "container registry", "app service", "functions", "logic apps",
+                     "bing services")),
+    ],
+    "gcp": [
+        ("Storage", ("cloud storage", "storage transfer", "filestore", "persistent disk")),
+        ("Database", ("cloud sql", "bigquery", "firestore", "bigtable", "spanner", "memorystore")),
+        ("Bandwidth", ("network egress", "cloud cdn", "networking")),
+        ("Network", ("cloud load balancing", "cloud vpn", "cloud interconnect", "cloud dns",
+                     "cloud nat", "virtual private cloud", "cloud armor")),
+        ("Monitoring & Mgmt", ("cloud logging", "cloud monitoring", "cloud trace", "secret manager",
+                                "identity and access management", "vm manager")),
+        ("AI / ML APIs", ("vertex ai", "gemini", "translate", "text-to-speech", "speech-to-text",
+                          "vision api", "natural language", "custom search", "document ai",
+                          "video intelligence", "dialogflow")),
+        ("Compute", ("compute engine", "kubernetes engine", "cloud run", "app engine",
+                     "cloud functions", "batch")),
+    ],
+}
+
+
+def _adv_cost_group(service_name: str, cloud_provider: str = "aws") -> str:
+    s = (service_name or "").lower()
+    rules = _ADV_COST_GROUP_RULES.get((cloud_provider or "aws").lower(), _ADV_COST_GROUP_RULES["aws"])
+    for group, keywords in rules:
+        if any(k in s for k in keywords):
+            return group
+    return "Other"
+
+
+# Microsoft's own ServiceFamily taxonomy (azure_fetcher.py now pulls this live
+# per service via the Cost Management API into cost_data.meter_category for
+# Azure rows going forward). Rows synced before that change still carry the
+# old placeholder (meter_category == service_name), which won't match this
+# set, so those rows correctly fall back to the keyword-based _adv_cost_group
+# guess below rather than being mis-labeled with their own service name.
+_AZURE_KNOWN_SERVICE_FAMILIES = {
+    "Compute", "Storage", "Databases", "Networking", "Web", "Containers",
+    "Analytics", "AI + Machine Learning", "Internet of Things", "Integration",
+    "Identity", "Security", "Management and Governance", "Migration", "Mobile",
+    "Media", "Developer Tools", "Hybrid", "SaaS", "Azure Marketplace Services",
+    "Other",
+}
+
+
+def _adv_cost_group_azure(service_name: str, meter_category: str) -> str:
+    if meter_category in _AZURE_KNOWN_SERVICE_FAMILIES:
+        return meter_category
+    return _adv_cost_group(service_name, "azure")
+
+
+def get_advance_cost_report_data(tenant_id, subscription_id=None, date_from=None, date_to=None,
+                                  reporting_currency=None, cloud_provider="aws"):
+    """
+    Line-item-ish feed for the Advance Cost report page: one row per
+    day x service x region x resource, scoped to a single tenant/cloud.
+    Built on top of query_costs()'s existing resource-level grouping rather
+    than a new query, so it stays consistent with the Cost Data table.
+    """
+    # query_costs orders by date DESC, so a cap here silently drops the
+    # *oldest* dates in the range once exceeded (see incident: Azure's high
+    # resource cardinality blew past the old 20k cap and dropped the first
+    # half of a 31-day month, under-reporting total cost by ~43%). Capped
+    # high enough that realistic single-tenant/date-range queries never hit
+    # it; `truncated` tells the caller when they did anyway.
+    row_cap = 250000
+    is_azure = (cloud_provider or "").lower() == "azure"
+    filters = {
+        "cloud_provider": cloud_provider,
+        # Azure gets the finer "resource_detail" mode (adds meter_subcategory /
+        # Usage Type to the grouping); AWS/GCP stay on "resource" unchanged.
+        "group_by": "resource_detail" if is_azure else "resource",
+        "limit": row_cap,
+    }
+    if subscription_id:
+        filters["subscription_id"] = subscription_id
+    if date_from:
+        filters["date_from"] = date_from
+    if date_to:
+        filters["date_to"] = date_to
+
+    rows = query_costs(filters, tenant_id=tenant_id, reporting_currency=reporting_currency)
+    out = []
+    for r in rows:
+        cost = float(r.get("cost") or 0)
+        svc = r.get("service_name") or "Unknown"
+        cat = (_adv_cost_group_azure(svc, r.get("meter_category") or "") if is_azure
+               else _adv_cost_group(svc, cloud_provider))
+        out.append({
+            "d": r.get("date"),
+            "s": svc,
+            "cat": cat,
+            "ut": r.get("meter_subcategory") or "" if is_azure else "",
+            "r": r.get("resource_group") or "unknown",
+            "rt": r.get("resource_type") or "",
+            "rn": r.get("resource_name") or "",
+            "acct": r.get("subscription_id") or "",
+            "c": round(cost, 6),
+            "n": int(r.get("line_count") or 1),
+        })
+    return out, len(out) >= row_cap
 
 
 def get_cost_total(filters=None, tenant_id=None, cloud_provider=None, reporting_currency=None):
