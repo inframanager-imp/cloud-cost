@@ -69,225 +69,296 @@
 
 <!-- ─── Sidebar ──────────────────────────────────────────────────────── -->
 <nav class="sidebar" id="main-sidebar">
-    <div class="sidebar-logo" style="position:relative">
-        <h1>
-            <svg class="logo-mark" width="30" height="30" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="ccaLogoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-                        <stop stop-color="#6366f1"/>
-                        <stop offset="1" stop-color="#8b5cf6"/>
-                    </linearGradient>
-                </defs>
-                <rect width="32" height="32" rx="8.5" fill="url(#ccaLogoGrad)"/>
-                <path d="M10.2 21.2h9.4a3.45 3.45 0 0 0 .15-6.9 3.95 3.95 0 0 0-7.55-1.25 3.15 3.15 0 0 0-3.45 2.95 3.1 3.1 0 0 0 1.45 5.2Z" fill="#ffffff"/>
-                <text x="16" y="18.9" text-anchor="middle" font-family="'Segoe UI',Arial,sans-serif" font-size="9" font-weight="800" fill="#6366f1">$</text>
+    <!-- Header -->
+    <div class="sidebar-header">
+        <a href="#" class="sidebar-brand" onclick="navigateTo('executive'); return false;">
+            <div class="sidebar-logo-box">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6.5 19H17A4.5 4.5 0 0 0 17 10A5.5 5.5 0 0 0 6.6 8.5A4.5 4.5 0 0 0 6.5 19Z" fill="white"/>
+                    <text x="11.8" y="15.2" text-anchor="middle" font-family="'Inter', sans-serif" font-size="8.5" font-weight="900" fill="#4F46E5">$</text>
+                </svg>
+            </div>
+            <div class="sidebar-brand-text">
+                <span class="title-line">Cloud Cost</span>
+                <span class="title-line">Analyzer</span>
+            </div>
+        </a>
+        <button class="sidebar-theme-toggle theme-toggle" id="themeToggle" title="Toggle dark / light mode" aria-label="Toggle theme">
+            <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
             </svg>
-            <span>Cloud&nbsp;Cost<br>Analyzer</span>
-        </h1>
-        <button id="sidebar-collapse-btn" onclick="toggleSidebar()" title="Toggle sidebar"
-            style="position:absolute;top:2px;right:0;width:26px;height:26px;border-radius:6px;border:none;background:#4f6ef7;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">
-            <svg id="sidebar-toggle-icon" width="13" height="13" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="10,2 4,6.5 10,11"/></svg>
+            <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
         </button>
     </div>
 
-    <div class="sidebar-nav">
+    <!-- Nav Body -->
+    <div class="sidebar-nav-body">
 
-        <!-- ── AI Assistant ────────────────────────── -->
-        <div class="nav-item" data-page="chat" onclick="navigateTo('chat')" style="border-bottom:1px solid var(--border);margin-bottom:4px">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-            </svg>
-            <span class="nav-text">AI Assistant</span>
+        <!-- ANALYTICS GROUP -->
+        <div class="nav-card-group expanded" id="group-analytics">
+            <div class="nav-card-header" onclick="toggleNavGroup(this)">
+                <div class="nav-card-header-left">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"/>
+                        <line x1="12" y1="20" x2="12" y2="4"/>
+                        <line x1="6" y1="20" x2="6" y2="14"/>
+                    </svg>
+                    <span class="nav-card-title">ANALYTICS</span>
+                </div>
+                <div class="nav-card-chevron">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="nav-card-body">
+                <div class="nav-item active" data-page="executive" onclick="navigateTo('executive')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                    </svg>
+                    <span class="nav-text">Dashboard</span>
+                </div>
+                <div class="nav-item" data-page="cloud-overview" onclick="navigateTo('cloud-overview')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/>
+                    </svg>
+                    <span class="nav-text">Cloud Overview</span>
+                </div>
+                <div class="nav-item" data-page="costs" onclick="navigateTo('costs')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    <span class="nav-text">Cost Data</span>
+                </div>
+                <div class="nav-item" data-page="monthly" onclick="navigateTo('monthly')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="16" y1="2" x2="16" y2="6"/>
+                        <line x1="8" y1="2" x2="8" y2="6"/>
+                        <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    <span class="nav-text">Monthly Costs</span>
+                </div>
+                <div class="nav-item" data-page="compare" onclick="navigateTo('compare')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                    <span class="nav-text">Compare</span>
+                </div>
+                <div class="nav-item" data-page="custom-cost" onclick="navigateTo('custom-cost')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <circle cx="12" cy="12" r="6"/>
+                        <circle cx="12" cy="12" r="2"/>
+                    </svg>
+                    <span class="nav-text">Custom Cost</span>
+                </div>
+                <div class="nav-item" data-page="clients" onclick="navigateTo('clients')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="7" width="20" height="14" rx="2"/>
+                        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+                    </svg>
+                    <span class="nav-text">Clients</span>
+                </div>
+                <div class="nav-item" data-page="othercosts" onclick="navigateTo('othercosts')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="8" y1="13" x2="16" y2="13"/>
+                        <line x1="8" y1="17" x2="13" y2="17"/>
+                    </svg>
+                    <span class="nav-text">Other Costs</span>
+                </div>
+            </div>
         </div>
 
-        <!-- ── Setup ───────────────────────────────── -->
-        <div class="nav-section-label">Setup</div>
-
-        <div class="nav-item" data-page="cloud-providers" onclick="navigateTo('cloud-providers')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
-            </svg>
-            <span class="nav-text">Cloud Providers</span>
+        <!-- SETUP GROUP -->
+        <div class="nav-card-group" id="group-setup">
+            <div class="nav-card-header" onclick="toggleNavGroup(this)">
+                <div class="nav-card-header-left">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                    <span class="nav-card-title">SETUP</span>
+                </div>
+                <div class="nav-card-chevron">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="nav-card-body">
+                <div class="nav-item" data-page="cloud-providers" onclick="navigateTo('cloud-providers')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 15a4 4 0 0 0 4 4h9a5 5 0 1 0-.1-9.999 5.002 5.002 0 1 0-9.78 2.096A4.001 4.001 0 0 0 3 15z"/>
+                    </svg>
+                    <span class="nav-text">Cloud Providers</span>
+                </div>
+                <div class="nav-item" data-page="budgets" onclick="navigateTo('budgets')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="1" x2="12" y2="23"/>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    <span class="nav-text">Budgets &amp; Alerts</span>
+                </div>
+                <div class="nav-item" data-page="integrations" onclick="navigateTo('integrations')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                    <span class="nav-text">Other Services</span>
+                </div>
+            </div>
         </div>
 
-        <div class="nav-item" data-page="budgets" onclick="navigateTo('budgets')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
-            </svg>
-            <span class="nav-text">Budgets &amp; Alerts</span>
-        </div>
-
-        <div class="nav-item" data-page="integrations" onclick="navigateTo('integrations')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-            </svg>
-            <span class="nav-text">Other Services</span>
-        </div>
-
-
-        <!-- ── Analytics ───────────────────────────── -->
-        <div class="nav-section-label" style="border-top:1px solid var(--border)">Analytics</div>
-
-        <div class="nav-item active" data-page="executive" onclick="navigateTo('executive')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M3 3h18v18H3zM3 9h18M9 21V9"/>
-            </svg>
-            <span class="nav-text">Dashboard</span>
-        </div>
-
-        <div class="nav-item" data-page="cloud-overview" onclick="navigateTo('cloud-overview')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-                <path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/>
-            </svg>
-            <span class="nav-text">Cloud Overview</span>
-        </div>
-
-        <div class="nav-item" data-page="costs" onclick="navigateTo('costs')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                <polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/>
-                <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10,9 9,9 8,9"/>
-            </svg>
-            <span class="nav-text">Cost Data</span>
-        </div>
-
-        <div class="nav-item" data-page="monthly" onclick="navigateTo('monthly')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-            <span class="nav-text">Monthly Costs</span>
-        </div>
-
-        <div class="nav-item" data-page="compare" onclick="navigateTo('compare')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
-            </svg>
-            <span class="nav-text">Compare</span>
-        </div>
-
-        <div class="nav-item" data-page="custom-cost" onclick="navigateTo('custom-cost')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-            </svg>
-            <span class="nav-text">Custom Cost</span>
-        </div>
-
-        <div class="nav-item" data-page="clients" onclick="navigateTo('clients')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
-                <line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>
-            </svg>
-            <span class="nav-text">Clients</span>
-        </div>
-
-        <div class="nav-item" data-page="othercosts" onclick="navigateTo('othercosts')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M9 2h6l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z"/>
-                <path d="M14 2v5h5"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>
-            </svg>
-            <span class="nav-text">Other Costs</span>
-        </div>
-
-        <!-- ── Operations ──────────────────────────── -->
-        <div class="nav-section-label" style="border-top:1px solid var(--border)">Operations</div>
-
-        <div class="nav-item" data-page="activity" onclick="navigateTo('activity')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
-            </svg>
-            <span class="nav-text">Activity Log</span>
-        </div>
-
-
-        <div class="nav-item" data-page="reports" onclick="navigateTo('reports')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                <polyline points="22,6 12,13 2,6"/>
-            </svg>
-            <span class="nav-text">Email Reports</span>
-        </div>
-
-        <div class="nav-item" data-page="team" onclick="navigateTo('team')">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
-            </svg>
-            <span class="nav-text">Team</span>
+        <!-- OPERATIONS GROUP -->
+        <div class="nav-card-group" id="group-operations">
+            <div class="nav-card-header" onclick="toggleNavGroup(this)">
+                <div class="nav-card-header-left">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                    <span class="nav-card-title">OPERATIONS</span>
+                </div>
+                <div class="nav-card-chevron">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="nav-card-body">
+                <div class="nav-item" data-page="activity" onclick="navigateTo('activity')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span class="nav-text">Activity Log</span>
+                </div>
+                <div class="nav-item" data-page="reports" onclick="navigateTo('reports')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <path d="M22 6l-10 7L2 6"/>
+                    </svg>
+                    <span class="nav-text">Email Reports</span>
+                </div>
+                <div class="nav-item" data-page="team" onclick="navigateTo('team')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    <span class="nav-text">Team</span>
+                </div>
+            </div>
         </div>
 
     </div>
-    <!-- Sync Center trigger -->
-    <button class="sidebar-sync" onclick="openSyncCenter()">
-        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <polyline points="23,4 23,10 17,10"/><polyline points="1,20 1,14 7,14"/>
-            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-        </svg>
-        <span>Sync Center</span>
-        <span class="sidebar-sync__status" id="scGlobalStatus"></span>
-    </button>
 
-    <div class="sidebar-theme-trial" style="display:none">
-        <select id="themeTrialSelect" title="Color theme">
-            <option value="">Original</option>
-            <option value="forest">Forest</option>
-            <option value="ocean">Ocean</option>
-            <option value="ember">Ember</option>
-            <option value="violet">Violet</option>
-            <option value="rose">Rose</option>
-            <option value="slate">Slate</option>
-            <option value="aurora">Aurora</option>
-        </select>
+    <!-- AI Assistant Row (Above Footer) -->
+    <div class="nav-item sidebar-ai-item" data-page="chat" onclick="navigateTo('chat')">
+        <div class="ai-icon-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/>
+                <path d="M19 2L20.2 5.8L24 7L20.2 8.2L19 12L17.8 8.2L14 7L17.8 5.8L19 2Z" opacity="0.7"/>
+            </svg>
+        </div>
+        <span class="ai-text">AI Assistant</span>
     </div>
 
-    <div class="sidebar-user" style="padding:0 0 4px">
-        {% if is_impersonating %}
-        <div class="impersonation-banner">
-            <div class="impersonation-banner__text">
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
-                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-                    <circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
-                </svg>
-                <span>Viewing as <strong>{{ impersonated_tenant }}</strong></span>
+    <!-- Hidden sync status span for app.js sync status compatibility -->
+    <span class="sidebar-sync__status" id="scGlobalStatus" style="display:none"></span>
+
+    <!-- Footer Container -->
+    <div class="sidebar-footer-container">
+        <!-- Divider -->
+        <div class="sidebar-divider"></div>
+
+        <!-- Workspace / Tenant Row -->
+        <div class="sidebar-tenant-row">
+            <div class="tenant-left">
+                <span class="tenant-dot"></span>
+                <span class="tenant-name">{{ active_tenant if active_tenant else (impersonated_tenant if is_impersonating else 'blucognition') }}</span>
             </div>
-            <button class="impersonation-banner__exit" onclick="exitImpersonation()" title="Return to Super Admin">
-                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
-                    <path d="M10 17l5-5-5-5"/>
-                    <path d="M15 12H3"/>
-                    <path d="M21 19V5"/>
+            <button class="tenant-close-btn" onclick="if(typeof exitImpersonation==='function') exitImpersonation();" title="Exit / Close tenant" aria-label="Exit / Close tenant">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
-                Exit
             </button>
         </div>
-        {% endif %}
-        <div class="user-tile">
-            <div class="user-tile__avatar">{{ username[:2]|upper }}</div>
-            <div class="user-tile__meta">
-                <div class="user-tile__name" title="{{ username }}">{{ username.split('@')[0] }}</div>
-                <div class="user-tile__role">Cloud Admin</div>
+
+        <!-- Divider -->
+        <div class="sidebar-divider"></div>
+
+        <!-- User Profile Row -->
+        <div class="sidebar-user-row">
+            <div class="user-avatar-wrap">
+                <div class="user-avatar-circle">{{ username[:2]|upper if username else 'SU' }}</div>
+                <span class="user-online-dot"></span>
             </div>
-            <button class="user-tile__action theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle dark / light">
-                <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
-                <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-14.07 1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2m-15.07 5.07 1.41-1.41M17.66 6.34l1.41-1.41"/>
-                </svg>
-            </button>
-            <a href="/logout" class="user-tile__action" title="Sign out" aria-label="Sign out">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
-                    <polyline points="16,17 21,12 16,7"/>
-                    <line x1="21" y1="12" x2="9" y2="12"/>
-                </svg>
-            </a>
+            <div class="user-details">
+                <div class="user-name" title="{{ username }}">{{ username.split('@')[0]|capitalize if username else 'Super Admin' }}</div>
+                <div class="user-role">Cloud Administrator</div>
+            </div>
+            <div class="user-actions">
+                <button class="user-action-btn" onclick="openSyncCenter()" title="Sync Center / Refresh">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <polyline points="1 20 1 14 7 14"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                </button>
+                <a href="/logout" class="user-action-btn" title="Sign out" aria-label="Sign out">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                </a>
+            </div>
         </div>
     </div>
 </nav>
+
+<script>
+function toggleNavGroup(headerEl) {
+    const cardGroup = headerEl.closest('.nav-card-group');
+    if (cardGroup) {
+        cardGroup.classList.toggle('expanded');
+    }
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.getElementById('main-sidebar');
+    if (sidebar) {
+        sidebar.addEventListener('transitionend', (e) => {
+            if (e.propertyName === 'width') {
+                window.dispatchEvent(new Event('resize'));
+            }
+        });
+    }
+});
+</script>
 
 <!-- Theme toggle lives in the sidebar user tile — visible on all pages -->
 
@@ -341,120 +412,128 @@
     <section id="page-executive" class="page-section active">
 
         <!-- Header -->
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
             <div>
-                <div class="db-breadcrumb">ANALYTICS / DASHBOARD</div>
-                <h1 style="font-size:22px;font-weight:700;color:var(--text-primary);margin:3px 0 6px">FinOps Command Center</h1>
-                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                    <div data-cloud-vis="azure" style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:rgba(0,120,212,0.1);border:1px solid rgba(0,120,212,0.25)">
-                        <img src="/static/azure-logo.svg" width="13" height="13" alt="Azure" style="object-fit:contain;display:block">
-                        <span style="font-size:11px;font-weight:600;color:#0078d4">Azure</span>
-                    </div>
-                    <div data-cloud-vis="aws" style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:rgba(255,153,0,0.1);border:1px solid rgba(255,153,0,0.25)">
-                        <img src="/static/aws-logo.svg" width="18" height="10" alt="AWS" style="object-fit:contain;display:block">
-                        <span style="font-size:11px;font-weight:600;color:#FF9900">AWS</span>
-                    </div>
-                    <div data-cloud-vis="gcp" style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:rgba(66,133,244,0.1);border:1px solid rgba(66,133,244,0.25)">
-                        <img src="/static/gcp-logo.svg" width="13" height="13" alt="GCP" style="object-fit:contain;display:block">
-                        <span style="font-size:11px;font-weight:600;color:#4285F4">GCP</span>
-                    </div>
-                    <span style="font-size:11px;color:var(--text-secondary)">· Optimize Today. Save Tomorrow. Scale Intelligently.</span>
-                </div>
+                <div style="font-size:11px;font-weight:500;color:#6B7280;margin-bottom:3px">Analytics / Dashboard</div>
+                <h1 style="font-size:22px;font-weight:600;color:#111827;margin:0;line-height:1.2;letter-spacing:-0.01em">FinOps Command Center</h1>
             </div>
-            <!-- Date nav + controls -->
-            <div class="no-print" style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <!-- Toolbar Controls -->
+            <div class="no-print" style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+                <!-- Custom Cloud Provider Dropdown (LEFT of Date Selector) -->
+                <div class="custom-cloud-dropdown" id="customCloudDropdown">
+                    <button type="button" class="custom-cloud-trigger" id="cloudDropdownTrigger" onclick="toggleCloudDropdown(event)">
+                        <span id="selectedCloudLabel">☁️ All Clouds</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="dropdown-chevron"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="custom-cloud-menu" id="cloudDropdownMenu">
+                        <div class="custom-cloud-option active" onclick="selectCloudOption('all', '☁️ All Clouds', event)">
+                            <span>☁️ All Clouds</span>
+                        </div>
+                        <div class="custom-cloud-option" onclick="selectCloudOption('azure', '⚡ Azure', event)">
+                            <span>⚡ Azure</span>
+                        </div>
+                        <div class="custom-cloud-option" onclick="selectCloudOption('aws', '📦 AWS', event)">
+                            <span>📦 AWS</span>
+                        </div>
+                        <div class="custom-cloud-option" onclick="selectCloudOption('gcp', '🌐 GCP', event)">
+                            <span>🌐 GCP</span>
+                        </div>
+                    </div>
+                </div>
                 <!-- Month navigator -->
-                <div style="display:flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:var(--card-bg)">
-                    <button onclick="exNavMonth(-1)" style="padding:5px 10px;border:none;background:transparent;cursor:pointer;color:var(--text-secondary);font-size:14px;line-height:1;display:flex;align-items:center" title="Previous month">&#8249;</button>
-                    <div style="padding:5px 12px;border-left:1px solid var(--border);border-right:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text-primary);min-width:110px;text-align:center" id="exPeriodLabel">—</div>
-                    <button onclick="exNavMonth(1)" id="exNextBtn" style="padding:5px 10px;border:none;background:transparent;cursor:pointer;color:var(--text-secondary);font-size:14px;line-height:1;display:flex;align-items:center" title="Next month">&#8250;</button>
+                <div style="display:flex;align-items:center;gap:0;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden;background:#FFFFFF;height:40px;box-sizing:border-box">
+                    <button onclick="exNavMonth(-1)" style="padding:0 12px;height:100%;border:none;background:transparent;cursor:pointer;color:#6B7280;font-size:16px;display:flex;align-items:center;justify-content:center" title="Previous month">&#8249;</button>
+                    <div style="padding:0 14px;height:100%;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;font-size:13px;font-weight:600;color:#111827;min-width:96px;display:flex;align-items:center;justify-content:center" id="exPeriodLabel">—</div>
+                    <button onclick="exNavMonth(1)" id="exNextBtn" style="padding:0 12px;height:100%;border:none;background:transparent;cursor:pointer;color:#6B7280;font-size:16px;display:flex;align-items:center;justify-content:center" title="Next month">&#8250;</button>
                 </div>
                 <!-- Compare label -->
-                <div style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--card-bg);color:var(--text-secondary);white-space:nowrap">
-                    vs <span id="exComparePeriod" style="color:var(--text-primary);font-weight:500">—</span>
+                <div class="header-control-item" style="white-space:nowrap;box-sizing:border-box">
+                    vs <span id="exComparePeriod" style="color:#111827;font-weight:600;margin-left:4px">—</span>
                 </div>
-                <button onclick="loadExecutiveSummary()" style="display:flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border);border-radius:7px;background:var(--card-bg);font-size:12px;color:var(--text-secondary);cursor:pointer">
-                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                    Refresh
+                <!-- Icon-only Refresh button with styling -->
+                <button onclick="loadExecutiveSummary()" class="header-action-icon-btn" title="Refresh Dashboard" aria-label="Refresh Dashboard">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <polyline points="1 20 1 14 7 14"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
                 </button>
-                <button onclick="exportExecutiveDashboard()" class="cp-btn-primary" style="display:flex;align-items:center;gap:5px;padding:5px 12px;font-size:12px">
-                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Download PDF
+                <!-- Icon-only Download PDF button with styling -->
+                <button onclick="exportExecutiveDashboard()" class="header-action-icon-btn header-action-icon-primary" title="Download PDF" aria-label="Download PDF">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
                 </button>
             </div>
         </div>
 
-        <!-- KPI Row: 6 cards -->
-        <div id="exKpiRow" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;margin-bottom:14px;align-items:stretch">
+        <!-- KPI Row: Single Row Guarantee -->
+        <div id="exKpiRow" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;margin-bottom:24px;align-items:stretch;width:100%;box-sizing:border-box">
 
-            <div style="background:var(--card-bg);border:1px solid var(--border);border-top:3px solid #6366f1;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
-                <div style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">Total Spend</div>
-                <div style="font-size:22px;font-weight:700;color:var(--text-primary);line-height:1.1" id="exTotalSpend">$—</div>
+            <div class="exec-kpi-card">
+                <div class="kpi-card-label">Total Spend</div>
+                <div class="kpi-card-value" id="exTotalSpend">$—</div>
                 <div id="exTotalMom"></div>
-                <svg viewBox="0 0 80 20" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><polyline id="exSparkTotal" fill="none" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,16 80,16"/></svg>
-                <div style="font-size:10px;color:var(--text-secondary)" id="exTotalSub"></div>
+                <div class="kpi-card-subtext" id="exTotalSub"></div>
             </div>
 
-            <div data-cloud-vis="azure" style="background:var(--card-bg);border:1px solid rgba(0,120,212,0.3);border-top:3px solid #0078d4;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
-                <div style="display:flex;align-items:center;gap:5px">
-                    <img src="/static/azure-logo.svg" width="14" height="14" alt="Azure" style="object-fit:contain;flex-shrink:0">
-                    <span style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">Azure Spend</span>
+            <div data-cloud-vis="azure" class="exec-kpi-card">
+                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden">
+                    <img src="/static/azure-logo.svg" width="16" height="16" alt="Azure" style="object-fit:contain;flex-shrink:0">
+                    <span class="kpi-card-label">Azure Spend</span>
                 </div>
-                <div style="font-size:22px;font-weight:700;color:#0078d4;line-height:1.1" id="exAzureSpend">$—</div>
+                <div class="kpi-card-value" id="exAzureSpend">$—</div>
                 <div id="exAzureMom"></div>
-                <svg viewBox="0 0 80 20" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><polyline id="exSparkAzure" fill="none" stroke="#0078d4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,16 80,16"/></svg>
-                <div style="font-size:10px;color:var(--text-secondary)" id="exAzureSub"></div>
+                <div class="kpi-card-subtext" id="exAzureSub"></div>
             </div>
 
-            <div data-cloud-vis="aws" style="background:var(--card-bg);border:1px solid rgba(255,153,0,0.3);border-top:3px solid #FF9900;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
-                <div style="display:flex;align-items:center;gap:5px">
-                    <img src="/static/aws-logo.svg" width="18" height="11" alt="AWS" style="object-fit:contain;flex-shrink:0">
-                    <span style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">AWS Spend</span>
+            <div data-cloud-vis="aws" class="exec-kpi-card">
+                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden">
+                    <img src="/static/aws-logo.svg" width="16" height="16" alt="AWS" style="object-fit:contain;flex-shrink:0">
+                    <span class="kpi-card-label">AWS Spend</span>
                 </div>
-                <div style="font-size:22px;font-weight:700;color:#FF9900;line-height:1.1" id="exAwsSpend">$—</div>
+                <div class="kpi-card-value" id="exAwsSpend">$—</div>
                 <div id="exAwsMom"></div>
-                <svg viewBox="0 0 80 20" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><polyline id="exSparkAws" fill="none" stroke="#FF9900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,16 80,16"/></svg>
-                <div style="font-size:10px;color:var(--text-secondary)" id="exAwsSub"></div>
+                <div class="kpi-card-subtext" id="exAwsSub"></div>
             </div>
 
-            <div data-cloud-vis="gcp" style="background:var(--card-bg);border:1px solid rgba(66,133,244,0.3);border-top:3px solid #4285F4;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
-                <div style="display:flex;align-items:center;gap:5px">
-                    <img src="/static/gcp-logo.svg" width="14" height="14" alt="GCP" style="object-fit:contain;flex-shrink:0">
-                    <span style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">GCP Spend</span>
+            <div data-cloud-vis="gcp" class="exec-kpi-card">
+                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden">
+                    <img src="/static/gcp-logo.svg" width="16" height="16" alt="GCP" style="object-fit:contain;flex-shrink:0">
+                    <span class="kpi-card-label">GCP Spend</span>
                 </div>
-                <div style="font-size:22px;font-weight:700;color:#4285F4;line-height:1.1" id="exGcpSpend">$—</div>
+                <div class="kpi-card-value" id="exGcpSpend">$—</div>
                 <div id="exGcpMom"></div>
-                <svg viewBox="0 0 80 20" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><polyline id="exSparkGcp" fill="none" stroke="#4285F4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,16 80,16"/></svg>
-                <div style="font-size:10px;color:var(--text-secondary)" id="exGcpSub"></div>
+                <div class="kpi-card-subtext" id="exGcpSub"></div>
             </div>
 
-            <div style="background:var(--card-bg);border:1px solid rgba(16,185,129,0.3);border-top:3px solid #10b981;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
-                <div style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">Budget vs Actual</div>
-                <div style="font-size:22px;font-weight:700;color:var(--text-primary);line-height:1.1" id="exBudgetActual">$—</div>
-                <div style="font-size:10px;color:var(--text-secondary)" id="exBudgetOf"></div>
-                <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:6px">
-                    <div id="exBudgetBar" style="height:100%;width:0%;background:#10b981;border-radius:3px;transition:width .8s"></div>
+            <div class="exec-kpi-card">
+                <div class="kpi-card-label">Budget vs Actual</div>
+                <div class="kpi-card-value" id="exBudgetActual">$—</div>
+                <div class="kpi-progress-track">
+                    <div id="exBudgetBar" class="kpi-progress-fill" style="width:0%;background:#DC2626"></div>
                 </div>
-                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-secondary);margin-top:2px">
-                    <span id="exBudgetPct">—</span><span id="exBudgetRemain"></span>
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:#6B7280">
+                    <span id="exBudgetOf"></span><span id="exBudgetRemain" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
                 </div>
             </div>
 
-            <div style="background:var(--card-bg);border:1px solid rgba(245,158,11,0.3);border-top:3px solid #f59e0b;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
-                <div style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">Forecasted EOM</div>
-                <div style="font-size:22px;font-weight:700;color:var(--text-primary);line-height:1.1" id="exProjected">$—</div>
-                <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:8px">
-                    <div id="exMonthProgress" style="height:100%;width:0%;background:#f59e0b;border-radius:3px;transition:width .8s"></div>
+            <div class="exec-kpi-card">
+                <div class="kpi-card-label">Forecasted EOM</div>
+                <div class="kpi-card-value" id="exProjected">$—</div>
+                <div class="kpi-progress-track">
+                    <div id="exMonthProgress" class="kpi-progress-fill" style="width:0%;background:#F59E0B"></div>
                 </div>
-                <div style="font-size:10px;color:var(--text-secondary);margin-top:2px" id="exMonthProgressLabel">Day — of —</div>
+                <div class="kpi-card-subtext" id="exMonthProgressLabel">Day — of —</div>
             </div>
 
-            <div style="background:var(--card-bg);border:1px solid rgba(139,92,246,0.3);border-top:3px solid #8b5cf6;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
-                <div style="font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase">Avg / Day</div>
-                <div style="font-size:22px;font-weight:700;color:var(--text-primary);line-height:1.1" id="exAvgDay">$—</div>
+            <div class="exec-kpi-card">
+                <div class="kpi-card-label">Avg / Day</div>
+                <div class="kpi-card-value" id="exAvgDay">$—</div>
                 <div id="exAvgMom"></div>
-                <svg viewBox="0 0 80 20" preserveAspectRatio="none" style="width:100%;height:26px;margin-top:4px"><polyline id="exSparkAvg" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="0,16 80,16"/></svg>
-                <div style="font-size:10px;color:var(--text-secondary)" id="exAvgSub"></div>
+                <div class="kpi-card-subtext" id="exAvgSub"></div>
             </div>
 
         </div>

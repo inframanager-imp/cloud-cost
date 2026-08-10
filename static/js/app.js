@@ -191,12 +191,8 @@ function applyCloudVisibility() {
         });
     });
 
-    // Recompute KPI grid columns so hidden cards don't leave gaps
-    const row = document.getElementById('exKpiRow');
-    if (row) {
-        const visible = Array.from(row.children).filter(c => c.style.display !== 'none').length;
-        row.style.gridTemplateColumns = `repeat(${visible || 1},minmax(0,1fr))`;
-    }
+    // Recompute KPI grid columns so visible cards fill 1 single row evenly
+    updateExKpiRowGrid();
 }
 
 // ─── Navigation ──────────────────────────────────────────────────────────
@@ -206,8 +202,17 @@ function navigateTo(page) {
     history.replaceState(null, '', '#' + page);
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.nav-card-group').forEach(g => g.classList.remove('has-active-page'));
     document.getElementById(`page-${page}`)?.classList.add('active');
-    document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
+    const activeItem = document.querySelector(`.nav-item[data-page="${page}"]`);
+    if (activeItem) {
+        activeItem.classList.add('active');
+        const parentGroup = activeItem.closest('.nav-card-group');
+        if (parentGroup) {
+            parentGroup.classList.add('expanded');
+            parentGroup.classList.add('has-active-page');
+        }
+    }
 
     if (page === 'executive') loadExecutiveSummary();
     if (page === 'cloud-overview') loadCloudOverview();
@@ -473,6 +478,101 @@ window.addEventListener('afterprint', () => {
     if (_exDonutChart) _exDonutChart.resize();
 });
 
+let _exSummaryData = null;
+let _selectedExCloud = 'all';
+
+function toggleCloudDropdown(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById('customCloudDropdown');
+    if (dropdown) dropdown.classList.toggle('open');
+}
+
+function selectCloudOption(val, label, e) {
+    if (e) e.stopPropagation();
+    const lbl = document.getElementById('selectedCloudLabel');
+    if (lbl) lbl.innerHTML = label;
+    document.querySelectorAll('.custom-cloud-option').forEach(el => el.classList.remove('active'));
+    if (e && e.currentTarget) e.currentTarget.classList.add('active');
+    const dropdown = document.getElementById('customCloudDropdown');
+    if (dropdown) dropdown.classList.remove('open');
+    onExCloudFilterChange(val);
+}
+
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('customCloudDropdown');
+    if (dropdown && !dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+    }
+});
+
+function onExCloudFilterChange(cloud) {
+    _selectedExCloud = cloud;
+    if (_exSummaryData) {
+        applyExCloudKpiFilter(_exSummaryData);
+    }
+}
+
+function applyExCloudKpiFilter(d) {
+    const el = id => document.getElementById(id);
+    if (!d || !d.kpis) return;
+    const kpi = d.kpis;
+    const _sym = d.currency_symbol || '$';
+    const $fmt  = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
+    const $fmt2 = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+    const momBadge = pct => {
+        if (pct == null) return '';
+        const up = pct >= 0;
+        const cls = up ? 'trend-up' : 'trend-down';
+        const arrow = up ? '▲' : '▼';
+        return `<span class="kpi-trend-pill ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
+    };
+
+    const cloud = _selectedExCloud || 'all';
+    const azureCard = document.querySelector('#exKpiRow [data-cloud-vis="azure"]');
+    const awsCard   = document.querySelector('#exKpiRow [data-cloud-vis="aws"]');
+    const gcpCard   = document.querySelector('#exKpiRow [data-cloud-vis="gcp"]');
+
+    if (cloud === 'all') {
+        if (azureCard) azureCard.style.display = '';
+        if (awsCard)   awsCard.style.display   = '';
+        if (gcpCard)   gcpCard.style.display   = '';
+        if (el('exTotalSpend')) el('exTotalSpend').textContent = $fmt(kpi.total);
+        if (el('exTotalMom'))   el('exTotalMom').innerHTML = momBadge(kpi.total_mom_pct);
+        if (el('exTotalSub'))   el('exTotalSub').textContent = `vs last month ${$fmt(kpi.total_lm)}`;
+    } else if (cloud === 'azure') {
+        if (azureCard) azureCard.style.display = '';
+        if (awsCard)   awsCard.style.display   = 'none';
+        if (gcpCard)   gcpCard.style.display   = 'none';
+        if (el('exTotalSpend')) el('exTotalSpend').textContent = $fmt(kpi.azure);
+        if (el('exTotalMom'))   el('exTotalMom').innerHTML = momBadge(kpi.azure_mom_pct);
+        if (el('exTotalSub'))   el('exTotalSub').textContent = `Azure Spend (100% of selected)`;
+    } else if (cloud === 'aws') {
+        if (azureCard) azureCard.style.display = 'none';
+        if (awsCard)   awsCard.style.display   = '';
+        if (gcpCard)   gcpCard.style.display   = 'none';
+        if (el('exTotalSpend')) el('exTotalSpend').textContent = $fmt(kpi.aws);
+        if (el('exTotalMom'))   el('exTotalMom').innerHTML = momBadge(kpi.aws_mom_pct);
+        if (el('exTotalSub'))   el('exTotalSub').textContent = `AWS Spend (100% of selected)`;
+    } else if (cloud === 'gcp') {
+        if (azureCard) azureCard.style.display = 'none';
+        if (awsCard)   awsCard.style.display   = 'none';
+        if (gcpCard)   gcpCard.style.display   = '';
+        if (el('exTotalSpend')) el('exTotalSpend').textContent = $fmt(kpi.gcp);
+        if (el('exTotalMom'))   el('exTotalMom').innerHTML = momBadge(kpi.gcp_mom_pct);
+        if (el('exTotalSub'))   el('exTotalSub').textContent = `GCP Spend (100% of selected)`;
+    }
+
+    // Recompute grid columns so all visible cards stretch in 1 single row
+    updateExKpiRowGrid();
+}
+
+function updateExKpiRowGrid() {
+    const row = document.getElementById('exKpiRow');
+    if (!row) return;
+    const visible = Array.from(row.children).filter(c => getComputedStyle(c).display !== 'none');
+    row.style.gridTemplateColumns = `repeat(${visible.length || 1}, minmax(0, 1fr))`;
+}
+
 async function loadExecutiveSummary() {
     if (_exYear === null) {
         const now = new Date();
@@ -490,6 +590,7 @@ async function loadExecutiveSummary() {
         const resp = await fetch(`/api/executive-summary?year=${_exYear}&month=${_exMonth}`);
         if (!resp.ok) { console.error('Executive summary API error:', resp.status, await resp.text()); return; }
         const d = await resp.json();
+        _exSummaryData = d;
         const _sym = d.currency_symbol || '$';
         if (typeof window !== 'undefined') window.TENANT_CUR = { code: d.currency || 'USD', symbol: _sym };
         const $fmt  = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
@@ -510,59 +611,34 @@ async function loadExecutiveSummary() {
         const momBadge = pct => {
             if (pct == null) return '';
             const up = pct >= 0;
-            return `<span style="font-size:10px;font-weight:600;color:${up?'#ef4444':'#10b981'}">${up?'▲':'▼'} ${Math.abs(pct)}% vs last month</span>`;
-        };
-
-        // Sparkline helper: convert array of values to SVG polyline points (80x20 viewBox)
-        const toSparkPoints = vals => {
-            if (!vals || vals.length < 2) return '0,16 80,16';
-            const mn = Math.min(...vals), mx = Math.max(...vals);
-            const range = mx - mn || 1;
-            return vals.map((v, i) => {
-                const x = Math.round(i / (vals.length - 1) * 80);
-                const y = Math.round(16 - ((v - mn) / range) * 12);
-                return `${x},${y}`;
-            }).join(' ');
-        };
-
-        const trend = d.monthly_trend || [];
-        const sparkPoints = {
-            total: toSparkPoints(trend.map(t => t.total)),
-            azure: toSparkPoints(trend.map(t => t.azure)),
-            aws:   toSparkPoints(trend.map(t => t.aws)),
-            gcp:   toSparkPoints(trend.map(t => t.gcp)),
-            avg:   toSparkPoints(trend.map(t => t.total / 30)),
+            const cls = up ? 'trend-up' : 'trend-down';
+            const arrow = up ? '▲' : '▼';
+            return `<span class="kpi-trend-pill ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
         };
 
         // KPI values
-        if (el('exTotalSpend')) el('exTotalSpend').textContent = $fmt(kpi.total);
-        if (el('exTotalMom'))   el('exTotalMom').innerHTML = momBadge(kpi.total_mom_pct);
-        if (el('exTotalSub'))   el('exTotalSub').textContent = `vs last month ${$fmt2(kpi.total_lm)}`;
-        if (el('exSparkTotal')) el('exSparkTotal').setAttribute('points', sparkPoints.total);
-
         if (el('exAzureSpend')) el('exAzureSpend').textContent = $fmt(kpi.azure);
         if (el('exAzureMom'))   el('exAzureMom').innerHTML = momBadge(kpi.azure_mom_pct);
-        if (el('exAzureSub'))   el('exAzureSub').textContent = kpi.azure > 0 ? `${Math.round(kpi.azure/(kpi.total||1)*100)}% of total` : '';
-        if (el('exSparkAzure')) el('exSparkAzure').setAttribute('points', sparkPoints.azure);
+        if (el('exAzureSub'))   el('exAzureSub').textContent = `${Math.round((kpi.azure||0)/(kpi.total||1)*100)}% of total`;
 
         if (el('exAwsSpend'))   el('exAwsSpend').textContent = $fmt(kpi.aws);
         if (el('exAwsMom'))     el('exAwsMom').innerHTML = momBadge(kpi.aws_mom_pct);
-        if (el('exAwsSub'))     el('exAwsSub').textContent = kpi.aws > 0 ? `${Math.round(kpi.aws/(kpi.total||1)*100)}% of total` : '';
-        if (el('exSparkAws'))   el('exSparkAws').setAttribute('points', sparkPoints.aws);
+        if (el('exAwsSub'))     el('exAwsSub').textContent = `${Math.round((kpi.aws||0)/(kpi.total||1)*100)}% of total`;
 
         if (el('exGcpSpend'))   el('exGcpSpend').textContent = $fmt(kpi.gcp);
         if (el('exGcpMom'))     el('exGcpMom').innerHTML = momBadge(kpi.gcp_mom_pct);
-        if (el('exGcpSub'))     el('exGcpSub').textContent = kpi.gcp > 0 ? `${Math.round(kpi.gcp/(kpi.total||1)*100)}% of total` : '';
-        if (el('exSparkGcp'))   el('exSparkGcp').setAttribute('points', sparkPoints.gcp);
+        if (el('exGcpSub'))     el('exGcpSub').textContent = `${Math.round((kpi.gcp||0)/(kpi.total||1)*100)}% of total`;
 
-        if (el('exAvgDay'))  el('exAvgDay').textContent = $fmt2(kpi.avg_daily);
+        if (el('exAvgDay'))  el('exAvgDay').textContent = $fmt(kpi.avg_daily);
         if (el('exAvgMom'))  el('exAvgMom').innerHTML  = momBadge(kpi.total_mom_pct);
-        if (el('exAvgSub'))  el('exAvgSub').textContent = `${kpi.days_elapsed} of ${kpi.days_in_month} days`;
-        if (el('exSparkAvg')) el('exSparkAvg').setAttribute('points', sparkPoints.avg);
+        if (el('exAvgSub'))  el('exAvgSub').textContent = `${kpi.days_elapsed} of ${kpi.days_in_month} Days`;
+
+        // Apply cloud filter to total & visible cards
+        applyExCloudKpiFilter(d);
 
         // Projected EOM + month progress
-        if (el('exProjected'))         el('exProjected').textContent = $fmt2(kpi.projected);
-        if (el('exMonthProgressLabel')) el('exMonthProgressLabel').textContent = `Day ${kpi.days_elapsed} of ${kpi.days_in_month} — ${Math.round(kpi.days_elapsed/kpi.days_in_month*100)}% through month`;
+        if (el('exProjected'))         el('exProjected').textContent = $fmt(kpi.projected);
+        if (el('exMonthProgressLabel')) el('exMonthProgressLabel').textContent = `${Math.round(kpi.days_elapsed/kpi.days_in_month*100)}% Month Complete · Day ${kpi.days_elapsed} of ${kpi.days_in_month}`;
         if (el('exMonthProgress')) {
             const pct = Math.round(kpi.days_elapsed / kpi.days_in_month * 100);
             el('exMonthProgress').style.width = pct + '%';
@@ -570,22 +646,23 @@ async function loadExecutiveSummary() {
 
         // Budget vs Actual
         const budget = d.budget || {};
-        if (el('exBudgetActual')) el('exBudgetActual').textContent = $fmt2(budget.utilized || kpi.total);
+        if (el('exBudgetActual')) el('exBudgetActual').textContent = $fmt(budget.utilized || kpi.total);
         if (budget.pct != null) {
-            if (el('exBudgetOf'))      el('exBudgetOf').textContent = `of ${$fmt2(budget.total)} budget`;
+            if (el('exBudgetOf'))      el('exBudgetOf').textContent = `Budget ${$fmt(budget.total)}`;
             if (el('exBudgetPct'))     el('exBudgetPct').textContent = budget.pct.toFixed(1) + '%';
-            if (el('exBudgetRemain'))  el('exBudgetRemain').textContent = `Remaining ${$fmt2(budget.remaining)}`;
+            if (el('exBudgetRemain'))  el('exBudgetRemain').textContent = budget.remaining >= 0 ? `Remaining ${$fmt(budget.remaining)}` : `Over by ${$fmt(Math.abs(budget.remaining))}`;
             if (el('exBudgetBar')) {
                 const p = Math.min(budget.pct, 100);
                 el('exBudgetBar').style.width = p + '%';
-                el('exBudgetBar').style.background = p > 90 ? '#ef4444' : p > 75 ? '#f59e0b' : '#10b981';
+                el('exBudgetBar').style.background = p > 90 ? '#DC2626' : p > 75 ? '#F59E0B' : '#16A34A';
             }
         } else {
-            if (el('exBudgetOf'))  el('exBudgetOf').textContent = 'No budget configured';
+            if (el('exBudgetOf'))  el('exBudgetOf').textContent = 'No budget set';
             if (el('exBudgetPct')) el('exBudgetPct').textContent = '—';
         }
 
         // Monthly Trend Chart
+        const trend = d.monthly_trend || [];
         const trendLabels = trend.map(t => t.label);
         const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)';
         const txtColor  = isDark ? '#9ca3af' : '#6b7280';
@@ -6746,11 +6823,15 @@ const UI_APPEARANCE_KEY = 'uiAppearance';
 
 function syncAppearanceToggleActive() {
     const isLight = document.documentElement.getAttribute('data-appearance') === 'light';
-    // legacy floating buttons (removed from DOM but guard anyway)
-    const night = document.getElementById('appearanceNightBtn');
-    const sun   = document.getElementById('appearanceSunBtn');
-    if (night) { night.style.opacity = isLight ? '0.45' : '1'; night.style.boxShadow = isLight ? '' : '0 0 0 2px var(--accent)'; }
-    if (sun)   { sun.style.opacity   = isLight ? '1'    : '0.45'; sun.style.boxShadow   = isLight ? '0 0 0 2px var(--accent)' : ''; }
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        const moon = themeToggle.querySelector('.icon-moon');
+        const sun  = themeToggle.querySelector('.icon-sun');
+        if (moon && sun) {
+            moon.style.display = isLight ? 'none' : 'block';
+            sun.style.display  = isLight ? 'block' : 'none';
+        }
+    }
 }
 
 function refreshAllCharts() {
