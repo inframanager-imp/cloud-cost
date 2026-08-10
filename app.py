@@ -23,7 +23,7 @@ from gcp_fetcher import GCPExportPending
 from database import (
     get_db,
     init_db, insert_cost_records, clear_cost_data, delete_cost_data_by_date,
-    get_latest_cost_date, query_costs,
+    get_latest_cost_date, query_costs, get_advance_cost_report_data,
     get_cost_total, get_cost_totals_by_subscription, get_cost_totals_by_service, get_resource_detail, get_custom_cost,
     get_summary, get_daily_trend, get_distinct_values, get_sync_history,
     get_stats, log_sync, update_sync_log,
@@ -556,6 +556,39 @@ def service_detail_page():
     resp = make_response(render_template("service_detail.html"))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return resp
+
+
+@app.route("/advance-cost")
+@login_required
+def advance_cost_page():
+    """Interactive multi-cloud cost-explorer report page (Cost Group)."""
+    resp = make_response(render_template("advance_cost.html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+
+@app.route("/api/advance-cost/data")
+@login_required
+def api_advance_cost_data():
+    from currency import tenant_reporting_currency
+    tid = current_tenant_id()
+    rep_cur = tenant_reporting_currency(tid, get_db)
+    cloud = (request.args.get("cloud") or "aws").lower()
+    if cloud not in ("aws", "azure", "gcp"):
+        cloud = "aws"
+    rows, truncated = get_advance_cost_report_data(
+        tenant_id=tid,
+        subscription_id=request.args.get("subscription_id") or None,
+        date_from=request.args.get("date_from") or None,
+        date_to=request.args.get("date_to") or None,
+        reporting_currency=rep_cur,
+        cloud_provider=cloud,
+    )
+    return jsonify({
+        "currency": rep_cur or "USD",
+        "truncated": truncated,
+        "rows": rows,
+    })
 
 
 # ─── API: Dashboard Stats ────────────────────────────────────────────────────
