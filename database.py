@@ -3611,6 +3611,302 @@ def get_resource_config_filter_options(tenant_id=None):
     }
 
 
+def get_resource_inventory(
+    search=None,
+    provider=None,
+    subscription_id=None,
+    resource_group=None,
+    resource_type=None,
+    power_state=None,
+    date_from=None,
+    date_to=None,
+    page=1,
+    limit=50,
+    sort_by="cost",
+    sort_order="desc",
+    tenant_id=None,
+):
+    """
+    Returns full resource inventory list combining resource_configs with aggregated costs from cost_data.
+    Supports filtering by search text, provider, subscription, resource_group, resource_type, power_state.
+    Includes pagination, totals (count, cost), and filter dynamic stats.
+    """
+    import math
+    from datetime import datetime
+    conn = get_db()
+
+    # Base tenant clause for subscriptions
+    tenant_clause = ""
+    rc_tenant_clause = ""
+    rc_tenant_params = []
+    if tenant_id is not None:
+        rc_tenant_clause = " AND (pc.sub_id IS NOT NULL OR COALESCE(s.tenant_id, 1) = ? OR ? = 1)"
+        rc_tenant_params = [tenant_id, tenant_id]
+
+    # Calculate date range bounds if not supplied
+    if not date_from or not date_to:
+        now = datetime.utcnow()
+        tid_filter = f"AND tenant_id = {tenant_id}" if tenant_id is not None else ""
+        max_row = conn.execute(f"SELECT MAX(date) as md FROM cost_data WHERE 1=1 {tid_filter}").fetchone()
+        max_date_str = max_row["md"] if (max_row and max_row["md"]) else now.strftime("%Y-%m-%d")
+        try:
+            ref_today = datetime.strptime(max_date_str, "%Y-%m-%d")
+        except Exception:
+            ref_today = now
+        date_from = ref_today.strftime("%Y-%m-01")
+        date_to = ref_today.strftime("%Y-%m-%d")
+
+    cost_where = "WHERE date >= ? AND date <= ?"
+    cost_params = [date_from, date_to]
+    if tenant_id is not None:
+        cost_where += " AND tenant_id = ?"
+        cost_params.append(tenant_id)
+
+    sql_base = f"""
+        WITH period_costs AS (
+            SELECT 
+                LOWER(TRIM(subscription_id)) AS sub_id,
+                LOWER(TRIM(resource_group)) AS rg,
+                LOWER(TRIM(resource_name)) AS res_name,
+                SUM(cost) AS period_cost,
+                COUNT(DISTINCT date) AS active_days,
+                MAX(cloud_provider) AS cloud_provider,
+                MAX(tags) AS tags_json,
+                MAX(meter_category) AS meter_cat,
+                MAX(meter_subcategory) AS meter_subcat,
+                MAX(service_name) AS srv_name
+            FROM cost_data
+            {cost_where}
+            GROUP BY LOWER(TRIM(subscription_id)), LOWER(TRIM(resource_group)), LOWER(TRIM(resource_name))
+        ),
+        combined AS (
+            SELECT 
+                rc.id AS config_id,
+                rc.subscription_id,
+                COALESCE(s.name, rc.subscription_id, '—') AS subscription_name,
+                COALESCE(pc.cloud_provider, 'azure') AS cloud_provider,
+                rc.resource_group,
+                rc.resource_type,
+                rc.resource_name,
+                rc.location,
+                rc.sku_name,
+                rc.power_state,
+                rc.config_json,
+                rc.last_synced,
+                pc.tags_json,
+                pc.meter_cat,
+                pc.meter_subcat,
+                pc.srv_name,
+                COALESCE(pc.period_cost, 0.0) AS cost,
+                CASE WHEN COALESCE(pc.active_days, 0) > 0 THEN ROUND(pc.period_cost / pc.active_days, 2) ELSE 0.0 END AS avg_daily_cost
+            FROM resource_configs rc
+            LEFT JOIN subscriptions s ON s.subscription_id = rc.subscription_id
+            LEFT JOIN period_costs pc ON (
+                pc.sub_id = LOWER(TRIM(rc.subscription_id)) AND 
+                pc.rg = LOWER(TRIM(rc.resource_group)) AND 
+                pc.res_name = LOWER(TRIM(rc.resource_name))
+            )
+            WHERE 1=1 {rc_tenant_clause}
+
+            UNION ALL
+
+            SELECT 
+                0 AS config_id,
+                c.sub_id AS subscription_id,
+                COALESCE(s.name, c.sub_id, '—') AS subscription_name,
+                COALESCE(c.cloud_provider, 'azure') AS cloud_provider,
+                c.rg AS resource_group,
+                '—' AS resource_type,
+                c.res_name AS resource_name,
+                '—' AS location,
+                '—' AS sku_name,
+                '' AS power_state,
+                '{{}}' AS config_json,
+                '' AS last_synced,
+                c.tags_json,
+                c.meter_cat,
+                c.meter_subcat,
+                c.srv_name,
+                c.period_cost AS cost,
+                CASE WHEN COALESCE(c.active_days, 0) > 0 THEN ROUND(c.period_cost / c.active_days, 2) ELSE 0.0 END AS avg_daily_cost
+            FROM period_costs c
+            LEFT JOIN subscriptions s ON s.subscription_id = c.sub_id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM resource_configs rc2 
+                WHERE LOWER(TRIM(rc2.subscription_id)) = c.sub_id 
+                AND LOWER(TRIM(rc2.resource_group)) = c.rg 
+                AND LOWER(TRIM(rc2.resource_name)) = c.res_name
+            )
+        )
+        SELECT * FROM combined WHERE 1=1
+    """
+
+    full_params = cost_params + rc_tenant_params
+
+    filters_sql = ""
+    filter_params = []
+
+    if provider and provider != "all":
+        filters_sql += " AND LOWER(cloud_provider) = ?"
+        filter_params.append(provider.lower())
+    if subscription_id and subscription_id != "all":
+        filters_sql += " AND subscription_id = ?"
+        filter_params.append(subscription_id)
+    if resource_group and resource_group != "all":
+        filters_sql += " AND resource_group = ?"
+        filter_params.append(resource_group)
+    if resource_type and resource_type != "all":
+        filters_sql += " AND resource_type = ?"
+        filter_params.append(resource_type)
+    if power_state and power_state != "all":
+        if power_state == "running":
+            filters_sql += " AND (LOWER(power_state) LIKE '%running%' OR LOWER(power_state) LIKE '%started%')"
+        elif power_state == "stopped":
+            filters_sql += " AND (LOWER(power_state) LIKE '%stopped%' OR LOWER(power_state) LIKE '%deallocated%')"
+        elif power_state == "unknown":
+            filters_sql += " AND (power_state IS NULL OR power_state = '')"
+    if search:
+        filters_sql += """ AND (
+            resource_name LIKE ? OR resource_group LIKE ? OR resource_type LIKE ?
+            OR IFNULL(sku_name,'') LIKE ? OR IFNULL(subscription_name,'') LIKE ? OR IFNULL(location,'') LIKE ?
+        )"""
+        s = f"%{search}%"
+        filter_params.extend([s, s, s, s, s, s])
+
+    # Count & total cost query
+    count_sql = f"SELECT COUNT(*) as cnt, COALESCE(SUM(cost), 0.0) as total_spend FROM ({sql_base} {filters_sql})"
+    count_row = conn.execute(count_sql, full_params + filter_params).fetchone()
+    total_count = count_row["cnt"] if count_row else 0
+    total_spend = count_row["total_spend"] if count_row else 0.0
+
+    # Sorting
+    valid_sorts = {
+        "cost": "cost",
+        "resource_name": "resource_name",
+        "service_name": "srv_name",
+        "resource_type": "resource_type",
+        "location": "location",
+        "subscription_name": "subscription_name",
+        "resource_group": "resource_group",
+        "power_state": "power_state",
+    }
+    sort_col = valid_sorts.get(sort_by, "cost")
+    sort_dir = "ASC" if sort_order and sort_order.lower() == "asc" else "DESC"
+
+    # Pagination
+    limit_val = min(max(1, int(limit)), 1000)
+    page_val = max(1, int(page))
+    offset_val = (page_val - 1) * limit_val
+
+    data_sql = f"{sql_base} {filters_sql} ORDER BY {sort_col} {sort_dir} LIMIT ? OFFSET ?"
+    data_params = full_params + filter_params + [limit_val, offset_val]
+
+    rows = conn.execute(data_sql, data_params).fetchall()
+    conn.close()
+
+    def _categorize(name):
+        n = (name or "").lower()
+        if 'tax' in n or 'invoice' in n or 'refund' in n:
+            return 'Tax'
+        if 'bandwidth' in n:
+            return 'Bandwidth'
+        if any(x in n for x in ['analytics', 'athena', 'bigquery', 'kinesis', 'glue', 'opensearch', 'redshift', 'event hubs', 'textract', 'bing', 'custom search']):
+            return 'Analytics & Data'
+        if any(x in n for x in ['sagemaker', 'vertex', 'openai', 'chatgpt', 'gemini', 'foundry', 'cognitive', 'speech', 'translate']):
+            return 'ML'
+        if any(x in n for x in ['sql', 'database', 'cosmos', 'rds', 'dynamo', 'redis', 'postgres', 'mysql', 'mongodb']):
+            return 'Database (RDS)'
+        if any(x in n for x in ['storage', 'blob', 's3', 'disk', 'backup', 'glacier', 'ebs', 'netapp', 'file system']):
+            return 'Storage'
+        if any(x in n for x in ['batch', 'mapreduce', 'emr', 'step functions', 'logic apps', 'devops guru']):
+            return 'Batch'
+        if any(x in n for x in ['network', 'vpn', 'dns', 'load balancer', 'gateway', 'cdn', 'cloudfront', 'bastion', 'traffic manager', 'api management', 'location service', 'transfer family']):
+            return 'Network'
+        if any(x in n for x in ['monitor', 'log', 'insight', 'security', 'defender', 'sentinel', 'config', 'cloudtrail', 'guardduty', 'inspector', 'key vault', 'kms', 'support', 'cost explorer', 'grafana', 'entra', 'active directory', 'cryptography', 'secrets manager', 'ddos', 'network watcher']):
+            return 'Monitoring & Mgmt'
+        return 'Compute'
+
+    results = []
+    for r in rows:
+        d = dict(r)
+        if isinstance(d.get("config_json"), str) and d.get("config_json"):
+            try:
+                d["config_json"] = json.loads(d["config_json"])
+            except Exception:
+                d["config_json"] = {}
+        elif not d.get("config_json"):
+            d["config_json"] = {}
+
+        if isinstance(d.get("tags_json"), str) and d.get("tags_json"):
+            try:
+                d["tags"] = json.loads(d["tags_json"])
+            except Exception:
+                d["tags"] = {}
+        else:
+            d["tags"] = {}
+
+        d["name"] = d.get("resource_name") or "—"
+        d["service_name"] = d.get("srv_name") or d.get("meter_cat") or "—"
+        d["cost_group"] = _categorize(d.get("meter_cat") or d.get("srv_name") or d.get("resource_type"))
+        d["meter_category"] = d.get("meter_cat") or "—"
+        d["meter_subcategory"] = d.get("meter_subcat") or "—"
+        d["pct"] = round((d["cost"] / total_spend * 100), 2) if total_spend > 0 else 0.0
+
+        results.append(d)
+
+    return {
+        "total_count": total_count,
+        "total_spend": total_spend,
+        "page": page_val,
+        "limit": limit_val,
+        "total_pages": math.ceil(total_count / limit_val) if limit_val > 0 else 1,
+        "resources": results,
+    }
+
+
+def get_resource_inventory_filter_options(tenant_id=None):
+    """Provides distinct filter dropdown options for Resource Inventory page."""
+    conn = get_db()
+    tenant_clause = ""
+    tenant_params = []
+    if tenant_id is not None:
+        tenant_clause = " AND COALESCE(s.tenant_id, 1) = ?"
+        tenant_params = [tenant_id]
+
+    subs = conn.execute(f"""
+        SELECT DISTINCT rc.subscription_id AS v, COALESCE(s.name, rc.subscription_id, '') AS label
+        FROM resource_configs rc
+        LEFT JOIN subscriptions s ON s.subscription_id = rc.subscription_id
+        WHERE rc.subscription_id IS NOT NULL AND trim(rc.subscription_id) != ''{tenant_clause}
+        ORDER BY label
+    """, tenant_params).fetchall()
+
+    rgs = conn.execute(f"""
+        SELECT DISTINCT rc.resource_group AS v
+        FROM resource_configs rc
+        LEFT JOIN subscriptions s ON s.subscription_id = rc.subscription_id
+        WHERE rc.resource_group IS NOT NULL AND trim(rc.resource_group) != ''{tenant_clause}
+        ORDER BY rc.resource_group
+    """, tenant_params).fetchall()
+
+    types = conn.execute(f"""
+        SELECT DISTINCT rc.resource_type AS v
+        FROM resource_configs rc
+        LEFT JOIN subscriptions s ON s.subscription_id = rc.subscription_id
+        WHERE rc.resource_type IS NOT NULL AND trim(rc.resource_type) != ''{tenant_clause}
+        ORDER BY rc.resource_type
+    """, tenant_params).fetchall()
+
+    conn.close()
+    return {
+        "subscriptions": [{"id": r["v"], "name": r["label"]} for r in subs if r["v"]],
+        "resource_groups": [r["v"] for r in rgs if r["v"]],
+        "resource_types": [r["v"] for r in types if r["v"]],
+        "providers": ["azure", "aws", "gcp"],
+        "power_states": ["all", "running", "stopped", "unknown"],
+    }
+
+
 def get_activity_distinct(column, tenant_id=None):
     conn = get_db()
     valid = ["caller", "resource_group", "status", "level", "operation_name"]

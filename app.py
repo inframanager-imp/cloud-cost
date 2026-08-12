@@ -1078,6 +1078,364 @@ def api_executive_summary():
     })
 
 
+@app.route("/api/top-resources-by-group")
+@login_required
+def api_top_resources_by_group():
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    from database import get_aws_resource_names, _converted_cost_sql
+
+    cost_group = request.args.get("cost_group", "all").strip()
+    sub_id = request.args.get("subscription_id")
+    cloud_provider = request.args.get("cloud_provider")
+
+    now = datetime.utcnow()
+    tid = current_tenant_id()
+    conn = get_db()
+    tid_filter = f"AND tenant_id = {tid}" if tid is not None else ""
+    c_tid_filter = f"AND c.tenant_id = {tid}" if tid is not None else ""
+
+    max_row = conn.execute(f"SELECT MAX(date) as md FROM cost_data WHERE 1=1 {tid_filter}").fetchone()
+    max_date_str = max_row["md"] if (max_row and max_row["md"]) else now.strftime("%Y-%m-%d")
+    try:
+        ref_today = datetime.strptime(max_date_str, "%Y-%m-%d")
+    except Exception:
+        ref_today = now
+
+    date_from_arg = request.args.get("date_from")
+    date_to_arg = request.args.get("date_to")
+
+    if date_from_arg and date_to_arg:
+        first_of_month = date_from_arg
+        today_str = date_to_arg
+    else:
+        first_of_month = ref_today.strftime("%Y-%m-01")
+        today_str = ref_today.strftime("%Y-%m-%d")
+
+    params = [first_of_month, today_str]
+    where = f"WHERE c.date >= ? AND c.date <= ? AND c.resource_name IS NOT NULL AND c.resource_name != '' {c_tid_filter}"
+    if sub_id:
+        where += " AND c.subscription_id = ?"
+        params.append(sub_id)
+    if cloud_provider:
+        where += " AND c.cloud_provider = ?"
+        params.append(cloud_provider)
+
+    rep_cur = tenant_reporting_currency(tid, get_db)
+    _cost = _converted_cost_sql(rep_cur, col="c.cost", cur_col="c.currency")
+
+    rows = conn.execute(f"""
+        SELECT 
+            c.resource_name,
+            MAX(c.service_name) as service_name,
+            MAX(c.resource_type) as resource_type,
+            MAX(c.resource_group) as resource_group,
+            MAX(c.meter_category) as meter_category,
+            MAX(c.meter_subcategory) as meter_subcategory,
+            MAX(c.subscription_id) as subscription_id,
+            MAX(c.cloud_provider) as cloud_provider,
+            MAX(c.tags) as tags,
+            SUM({_cost}) as total,
+            MAX(rc.location) as location,
+            MAX(rc.sku_name) as sku_name,
+            MAX(rc.power_state) as power_state,
+            MAX(s.name) as subscription_name
+        FROM cost_data c
+        LEFT JOIN resource_configs rc
+               ON c.subscription_id = rc.subscription_id
+              AND c.resource_group = rc.resource_group
+              AND c.resource_name = rc.resource_name
+        LEFT JOIN subscriptions s
+               ON c.subscription_id = s.subscription_id
+        {where}
+        GROUP BY c.resource_name ORDER BY total DESC
+    """, params).fetchall()
+
+    conn.close()
+
+    ec2_names = get_aws_resource_names()
+    try:
+        d_from = datetime.strptime(first_of_month, "%Y-%m-%d")
+        d_to = datetime.strptime(today_str, "%Y-%m-%d")
+        days_in_range = max(1, (d_to - d_from).days + 1)
+    except Exception:
+        days_in_range = 30
+
+    def _categorize(name):
+        n = (name or "").lower()
+        if 'tax' in n or 'invoice' in n or 'refund' in n:
+            return 'Tax'
+        if 'bandwidth' in n:
+            return 'Bandwidth'
+        if any(x in n for x in ['analytics', 'athena', 'bigquery', 'kinesis', 'glue', 'opensearch', 'redshift', 'event hubs', 'textract', 'bing', 'custom search']):
+            return 'Analytics & Data'
+        if any(x in n for x in ['sagemaker', 'vertex', 'openai', 'chatgpt', 'gemini', 'foundry', 'cognitive', 'speech', 'translate']):
+            return 'ML'
+        if any(x in n for x in ['sql', 'database', 'cosmos', 'rds', 'dynamo', 'redis', 'postgres', 'mysql', 'mongodb']):
+            return 'Database (RDS)'
+        if any(x in n for x in ['storage', 'blob', 's3', 'disk', 'backup', 'glacier', 'ebs', 'netapp', 'file system']):
+            return 'Storage'
+        if any(x in n for x in ['batch', 'mapreduce', 'emr', 'step functions', 'logic apps', 'devops guru']):
+            return 'Batch'
+        if any(x in n for x in ['network', 'vpn', 'dns', 'load balancer', 'gateway', 'cdn', 'cloudfront', 'bastion', 'traffic manager', 'api management', 'location service', 'transfer family']):
+            return 'Network'
+        if any(x in n for x in ['monitor', 'log', 'insight', 'security', 'defender', 'sentinel', 'config', 'cloudtrail', 'guardduty', 'inspector', 'key vault', 'kms', 'support', 'cost explorer', 'grafana', 'entra', 'active directory', 'cryptography', 'secrets manager', 'ddos', 'network watcher']):
+            return 'Monitoring & Mgmt'
+        return 'Compute'
+
+    resources_list = []
+    for r in rows:
+        c = round(r["total"] or 0, 2)
+        if c <= 0:
+            continue
+
+        srv = r["service_name"] or ""
+        grp = _categorize(srv)
+
+        if cost_group and cost_group.lower() != "all" and cost_group.lower() != grp.lower():
+            continue
+
+        raw_res = r["resource_name"] or "Unknown Resource"
+        disp_res = ec2_names.get(raw_res, raw_res)
+
+        tags_data = {}
+        if r["tags"]:
+            try:
+                import json
+                tags_data = json.loads(r["tags"]) if isinstance(r["tags"], str) else r["tags"]
+            except Exception:
+                tags_data = {}
+
+        resources_list.append({
+            "name": disp_res,
+            "raw_name": raw_res,
+            "service_name": srv,
+            "cost_group": grp,
+            "resource_type": r["resource_type"] or "",
+            "resource_group": r["resource_group"] or "",
+            "subscription_id": r["subscription_id"] or "",
+            "subscription_name": r["subscription_name"] or r["subscription_id"] or "",
+            "cloud_provider": (r["cloud_provider"] or "azure").lower(),
+            "meter_category": r["meter_category"] or "",
+            "meter_subcategory": r["meter_subcategory"] or "",
+            "sku_name": r["sku_name"] or "",
+            "location": r["location"] or "",
+            "power_state": r["power_state"] or "",
+            "tags": tags_data,
+            "cost": c,
+            "avg_daily_cost": round(c / days_in_range, 2)
+        })
+
+    resources_list.sort(key=lambda x: x["cost"], reverse=True)
+    top_10 = resources_list[:10]
+
+    group_total = sum(x["cost"] for x in resources_list) if resources_list else 1.0
+    for res in top_10:
+        res["pct"] = round((res["cost"] / group_total * 100), 1) if group_total > 0 else 0
+
+    return jsonify({
+        "cost_group": cost_group,
+        "currency": rep_cur,
+        "currency_symbol": _cur_symbol(rep_cur),
+        "total_group_cost": round(group_total, 2),
+        "days_in_range": days_in_range,
+        "top_resources": top_10
+    })
+
+
+@app.route("/api/top-idle-resources")
+@login_required
+def api_top_idle_resources():
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    from database import get_aws_resource_names, _converted_cost_sql
+
+    cost_group = request.args.get("cost_group", "all").strip()
+    resource_group = request.args.get("resource_group", "all").strip()
+    sub_id = request.args.get("subscription_id")
+    cloud_provider = request.args.get("cloud_provider")
+    limit_arg = request.args.get("limit", "10").strip()
+
+    now = datetime.utcnow()
+    tid = current_tenant_id()
+    conn = get_db()
+    tid_filter = f"AND tenant_id = {tid}" if tid is not None else ""
+    c_tid_filter = f"AND c.tenant_id = {tid}" if tid is not None else ""
+
+    max_row = conn.execute(f"SELECT MAX(date) as md FROM cost_data WHERE 1=1 {tid_filter}").fetchone()
+    max_date_str = max_row["md"] if (max_row and max_row["md"]) else now.strftime("%Y-%m-%d")
+    try:
+        ref_today = datetime.strptime(max_date_str, "%Y-%m-%d")
+    except Exception:
+        ref_today = now
+
+    date_from_arg = request.args.get("date_from")
+    date_to_arg = request.args.get("date_to")
+
+    if date_from_arg and date_to_arg:
+        first_of_month = date_from_arg
+        today_str = date_to_arg
+    else:
+        first_of_month = ref_today.strftime("%Y-%m-01")
+        today_str = ref_today.strftime("%Y-%m-%d")
+
+    try:
+        d1 = datetime.strptime(first_of_month, "%Y-%m-%d")
+        d2 = datetime.strptime(today_str, "%Y-%m-%d")
+        days_in_range = max((d2 - d1).days + 1, 1)
+    except Exception:
+        days_in_range = 30
+
+    params = [first_of_month, today_str]
+    where = f"WHERE c.date >= ? AND c.date <= ? AND c.resource_name IS NOT NULL AND c.resource_name != '' {c_tid_filter}"
+    if sub_id:
+        where += " AND c.subscription_id = ?"
+        params.append(sub_id)
+    if cloud_provider:
+        where += " AND c.cloud_provider = ?"
+        params.append(cloud_provider)
+    if resource_group and resource_group.lower() != "all":
+        where += " AND (c.resource_group = ? OR rc.resource_group = ?)"
+        params.extend([resource_group, resource_group])
+
+    rep_cur = tenant_reporting_currency(tid, get_db)
+    _cost = _converted_cost_sql(rep_cur, col="c.cost", cur_col="c.currency")
+
+    rows = conn.execute(f"""
+        SELECT 
+            c.resource_name,
+            MAX(c.service_name) as service_name,
+            MAX(c.resource_type) as resource_type,
+            MAX(COALESCE(rc.resource_group, c.resource_group)) as resource_group,
+            MAX(c.meter_category) as meter_category,
+            MAX(c.meter_subcategory) as meter_subcategory,
+            MAX(c.subscription_id) as subscription_id,
+            MAX(c.cloud_provider) as cloud_provider,
+            MAX(c.tags) as tags,
+            SUM({_cost}) as total,
+            MAX(rc.location) as location,
+            MAX(rc.sku_name) as sku_name,
+            MAX(rc.power_state) as power_state,
+            MAX(s.name) as subscription_name
+        FROM cost_data c
+        LEFT JOIN resource_configs rc 
+            ON c.subscription_id = rc.subscription_id 
+           AND c.resource_name = rc.resource_name
+        LEFT JOIN subscriptions s 
+            ON c.subscription_id = s.subscription_id
+        {where}
+        GROUP BY c.resource_name
+        ORDER BY total DESC
+    """, params).fetchall()
+
+    def _categorize(srv_name):
+        n = (srv_name or '').lower()
+        if any(x in n for x in ['tax', 'gst', 'vat']):
+            return 'Tax'
+        if any(x in n for x in ['bandwidth', 'data transfer', 'egress', 'inter-region']):
+            return 'Bandwidth'
+        if any(x in n for x in ['machine learning', 'sagemaker', 'foundry', 'rekognition', 'comprehend', 'textract', 'ai', 'transcribe', 'cognitive']):
+            return 'ML'
+        if any(x in n for x in ['database', 'rds', 'dynamodb', 'cosmos', 'sql', 'aurora', 'redshift', 'cache', 'redis', 'memcached', 'documentdb', 'neptune']):
+            return 'Database (RDS)'
+        if any(x in n for x in ['analytics', 'synapse', 'kinesis', 'glue', 'quicksight', 'opensearch', 'elasticsearch', 'event hub', 'stream analytics', 'bigquery', 'data factory']):
+            return 'Analytics & Data'
+        if any(x in n for x in ['storage', 'blob', 's3', 'disk', 'backup', 'glacier', 'ebs', 'netapp', 'file system']):
+            return 'Storage'
+        if any(x in n for x in ['batch', 'mapreduce', 'emr', 'step functions', 'logic apps', 'devops guru']):
+            return 'Batch'
+        if any(x in n for x in ['network', 'vpn', 'dns', 'load balancer', 'gateway', 'cdn', 'cloudfront', 'bastion', 'traffic manager', 'api management', 'location service', 'transfer family']):
+            return 'Network'
+        if any(x in n for x in ['monitor', 'log', 'insight', 'security', 'defender', 'sentinel', 'config', 'cloudtrail', 'guardduty', 'inspector', 'key vault', 'kms', 'support', 'cost explorer', 'grafana', 'entra', 'active directory', 'cryptography', 'secrets manager', 'ddos', 'network watcher']):
+            return 'Monitoring & Mgmt'
+        return 'Compute'
+
+    ec2_names = get_aws_resource_names()
+    idle_resources = []
+    all_rgs = set()
+
+    for r in rows:
+        c = round(r["total"] or 0, 2)
+        if c <= 0:
+            continue
+
+        rg = r["resource_group"] or ""
+        if rg:
+            all_rgs.add(rg)
+
+        power_st = (r["power_state"] or "").lower()
+        is_idle = False
+        if any(st in power_st for st in ["stopped", "deallocated", "idle"]):
+            is_idle = True
+        elif not power_st and any(w in (r["service_name"] or "").lower() for w in ["virtual machines", "ec2", "disk", "volume", "storage"]):
+            is_idle = True
+
+        if not is_idle:
+            continue
+
+        srv = r["service_name"] or ""
+        grp = _categorize(srv)
+
+        if cost_group and cost_group.lower() != "all" and cost_group.lower() != grp.lower():
+            continue
+
+        raw_res = r["resource_name"] or "Unknown Resource"
+        disp_res = ec2_names.get(raw_res, raw_res)
+
+        tags_data = {}
+        if r["tags"]:
+            try:
+                import json
+                tags_data = json.loads(r["tags"]) if isinstance(r["tags"], str) else r["tags"]
+            except Exception:
+                tags_data = {}
+
+        idle_resources.append({
+            "name": disp_res,
+            "raw_name": raw_res,
+            "service_name": srv,
+            "cost_group": grp,
+            "resource_type": r["resource_type"] or "",
+            "resource_group": rg or "(none)",
+            "subscription_id": r["subscription_id"] or "",
+            "subscription_name": r["subscription_name"] or r["subscription_id"] or "",
+            "cloud_provider": (r["cloud_provider"] or "azure").lower(),
+            "meter_category": r["meter_category"] or "",
+            "meter_subcategory": r["meter_subcategory"] or "",
+            "sku_name": r["sku_name"] or "",
+            "location": r["location"] or "",
+            "power_state": r["power_state"] or "Stopped",
+            "tags": tags_data,
+            "cost": c,
+            "avg_daily_cost": round(c / days_in_range, 2)
+        })
+
+    idle_resources.sort(key=lambda x: x["cost"], reverse=True)
+
+    if limit_arg.lower() != "all":
+        try:
+            lim = int(limit_arg)
+            result_list = idle_resources[:lim]
+        except Exception:
+            result_list = idle_resources[:10]
+    else:
+        result_list = idle_resources
+
+    total_idle_cost = sum(x["cost"] for x in idle_resources)
+    for res in result_list:
+        res["pct"] = round((res["cost"] / total_idle_cost * 100), 1) if total_idle_cost > 0 else 0
+
+    return jsonify({
+        "cost_group": cost_group,
+        "resource_group": resource_group,
+        "currency": rep_cur,
+        "currency_symbol": _cur_symbol(rep_cur),
+        "total_idle_cost": round(total_idle_cost, 2),
+        "idle_count": len(idle_resources),
+        "days_in_range": days_in_range,
+        "resource_groups": sorted(list(all_rgs)),
+        "idle_resources": result_list
+    })
+
+
 # ─── API: Sync Cost Data ─────────────────────────────────────────────────────
 
 @app.route("/api/sync", methods=["POST"])
@@ -1802,6 +2160,63 @@ def api_resource_configs_list():
 @login_required
 def api_resource_configs_filters():
     return jsonify(get_resource_config_filter_options(tenant_id=current_tenant_id()))
+
+
+@app.route("/api/resource-inventory")
+@login_required
+def api_resource_inventory():
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    from database import get_resource_inventory
+
+    search = request.args.get("search", "").strip()
+    provider = request.args.get("provider", "all").strip()
+    sub_id = request.args.get("subscription_id", "all").strip()
+    resource_group = request.args.get("resource_group", "all").strip()
+    resource_type = request.args.get("resource_type", "all").strip()
+    power_state = request.args.get("power_state", "all").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+
+    try:
+        page = int(request.args.get("page", 1))
+    except ValueError:
+        page = 1
+    try:
+        limit = int(request.args.get("limit", 50))
+    except ValueError:
+        limit = 50
+
+    sort_by = request.args.get("sort_by", "cost").strip()
+    sort_order = request.args.get("sort_order", "desc").strip()
+
+    tid = current_tenant_id()
+    data = get_resource_inventory(
+        search=search if search else None,
+        provider=provider if provider != "all" else None,
+        subscription_id=sub_id if sub_id != "all" else None,
+        resource_group=resource_group if resource_group != "all" else None,
+        resource_type=resource_type if resource_type != "all" else None,
+        power_state=power_state if power_state != "all" else None,
+        date_from=date_from if date_from else None,
+        date_to=date_to if date_to else None,
+        page=page,
+        limit=limit,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        tenant_id=tid,
+    )
+
+    rep_cur = tenant_reporting_currency(tid, get_db)
+    data["currency"] = rep_cur
+    data["currency_symbol"] = _cur_symbol(rep_cur)
+    return jsonify(data)
+
+
+@app.route("/api/resource-inventory/filters")
+@login_required
+def api_resource_inventory_filters():
+    from database import get_resource_inventory_filter_options
+    return jsonify(get_resource_inventory_filter_options(tenant_id=current_tenant_id()))
 
 
 @app.route("/api/resource_configs/sync", methods=["POST"])

@@ -197,6 +197,7 @@ function applyCloudVisibility() {
 
 // ─── Navigation ──────────────────────────────────────────────────────────
 function navigateTo(page) {
+    triggerInstantTabLoader(`Loading ${page ? page.replace('-', ' ') : 'page'}…`, 300);
     currentPage = page;
     // Persist active page in URL hash so browser refresh restores position
     history.replaceState(null, '', '#' + page);
@@ -279,6 +280,7 @@ function navigateTo(page) {
     if (page === 'team') loadTeamPage();
     if (page === 'clients') loadClientsPage();
     if (page === 'othercosts') loadOtherCostsPage();
+    if (page === 'resource-inventory') loadResourceInventoryPage();
 }
 
 function subParam(prefix = '?') {
@@ -618,6 +620,45 @@ document.addEventListener('click', function(e) {
     }
 });
 
+let _globalLogoLoaderTimer = null;
+
+function getLogoLoaderHTML(msg = 'Loading data…') {
+    return `
+        <div class="inline-logo-loader">
+            <div class="logo-loader-box">
+                <img src="/static/img/cloud%20cost%20logo.png" class="logo-loader-img" alt="Loading">
+            </div>
+            <div class="logo-loader-text">${msg}</div>
+        </div>
+    `;
+}
+
+function showGlobalLogoLoader(msg = 'Fetching Cloud Cost Analytics…') {
+    const el = document.getElementById('globalLogoLoader');
+    if (!el) return;
+    const txt = el.querySelector('.logo-loader-text');
+    if (txt) txt.textContent = msg;
+    el.classList.add('active');
+}
+
+function hideGlobalLogoLoader() {
+    const el = document.getElementById('globalLogoLoader');
+    if (!el) return;
+    el.classList.remove('active');
+    if (_globalLogoLoaderTimer) {
+        clearTimeout(_globalLogoLoaderTimer);
+        _globalLogoLoaderTimer = null;
+    }
+}
+
+function triggerInstantTabLoader(msg = 'Loading…', autoHideDelay = 350) {
+    showGlobalLogoLoader(msg);
+    if (_globalLogoLoaderTimer) clearTimeout(_globalLogoLoaderTimer);
+    _globalLogoLoaderTimer = setTimeout(() => {
+        hideGlobalLogoLoader();
+    }, autoHideDelay);
+}
+
 async function loadExecutiveSummary() {
     if (!_exYear || !_exMonth) {
         const now = new Date();
@@ -631,6 +672,7 @@ async function loadExecutiveSummary() {
         nextBtn.style.opacity = atCurrent ? '0.3' : '1';
         nextBtn.style.cursor  = atCurrent ? 'default' : 'pointer';
     }
+    showGlobalLogoLoader('Loading Cloud Cost Analytics…');
     try {
         const resp = await fetch(`/api/executive-summary?preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`);
         if (!resp.ok) { console.error('Executive summary API error:', resp.status, await resp.text()); return; }
@@ -787,26 +829,67 @@ async function loadExecutiveSummary() {
                 </div>`).join('');
         }
 
-        // Top Accounts
+        // Top Accounts Donut/Pie Chart
         const accounts = d.top_accounts || [];
-        const maxAcc = accounts[0]?.cost || 1;
+        const accTotal = accounts.reduce((sum, a) => sum + (a.cost || 0), 0);
         const cloudColMap = { azure: '#0089D6', aws: '#FF9900', gcp: '#34A853' };
-        if (el('exAccountsList')) {
-            el('exAccountsList').innerHTML = accounts.map(a => {
-                const pct = Math.round(a.cost / maxAcc * 100);
-                const badge = `<span style="font-size:9px;font-weight:600;padding:1px 5px;border-radius:8px;background:${cloudColMap[a.cloud]||'#6366f1'}22;color:${cloudColMap[a.cloud]||'#6366f1'};text-transform:uppercase">${a.cloud}</span>`;
-                return `<div style="padding:6px 0;border-bottom:1px solid var(--border)">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-                        <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1">
+        const pieColors = ['#0089D6', '#FF9900', '#34A853', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1'];
+        const accLabels = accounts.map(a => a.name);
+        const accVals = accounts.map(a => a.cost || 0);
+        const accColors = accounts.map((a, i) => cloudColMap[a.cloud] || pieColors[i % pieColors.length]);
+
+        if (window._exAccountsChart) {
+            window._exAccountsChart.destroy();
+            window._exAccountsChart = null;
+        }
+
+        const accPieCtx = el('exAccountsPie');
+        if (accPieCtx && accounts.length) {
+            window._exAccountsChart = new Chart(accPieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: accLabels,
+                    datasets: [{
+                        data: accVals,
+                        backgroundColor: accColors,
+                        borderWidth: 2,
+                        borderColor: isDark ? '#1f2937' : '#fff',
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    cutout: '70%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ` ${ctx.label}: ${$fmt2(ctx.parsed)}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        if (el('exAccountsTotal')) el('exAccountsTotal').textContent = $fmt(accTotal);
+
+        if (el('exAccountsLegend')) {
+            el('exAccountsLegend').innerHTML = accounts.map((a, i) => {
+                const badge = `<span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:4px;background:${cloudColMap[a.cloud]||'#6366f1'}22;color:${cloudColMap[a.cloud]||'#6366f1'};text-transform:uppercase;margin-right:4px">${a.cloud}</span>`;
+                const pct = accTotal > 0 ? Math.round((a.cost / accTotal) * 100) : 0;
+                return `
+                    <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;padding:6px 10px;background:rgba(0,0,0,0.02);border:1px solid var(--border);border-radius:8px">
+                        <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                            <div style="width:8px;height:8px;border-radius:50%;background:${accColors[i]};flex-shrink:0"></div>
                             ${badge}
-                            <span style="font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>
+                            <span style="color:var(--text-primary);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.name}">${a.name}</span>
+                            <span style="color:var(--text-secondary);font-size:10.5px;flex-shrink:0">${pct}%</span>
                         </div>
-                        <span style="font-size:12px;font-weight:700;color:var(--text-primary);flex-shrink:0;margin-left:10px">${$fmt2(a.cost)}</span>
+                        <span style="font-weight:700;color:var(--text-primary);flex-shrink:0;margin-left:8px">${$fmt2(a.cost)}</span>
                     </div>
-                    <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden">
-                        <div style="height:100%;width:${pct}%;background:${cloudColMap[a.cloud]||'#6366f1'};border-radius:2px;opacity:0.6"></div>
-                    </div>
-                </div>`;
+                `;
             }).join('');
         }
 
@@ -863,6 +946,8 @@ async function loadExecutiveSummary() {
 
     } catch(e) {
         console.error('Executive summary error:', e);
+    } finally {
+        hideGlobalLogoLoader();
     }
 }
 
@@ -888,7 +973,7 @@ function renderBreakdownCards(d) {
 
             return `
                 <div class="breakdown-row">
-                    <div class="breakdown-row-label" title="${item.name}">${item.name}</div>
+                    <div class="breakdown-row-label" data-tooltip="${item.name}" title="${item.name}">${item.name}</div>
                     <div class="breakdown-row-track">
                         <div class="breakdown-row-fill" style="width:${widthPct}%;background:${barColor}"></div>
                     </div>
@@ -905,7 +990,559 @@ function renderBreakdownCards(d) {
     renderSingleList('breakdownServicesList',   d.top_services || []);
     renderSingleList('breakdownUsageTypesList', d.top_usage_types || []);
     renderSingleList('breakdownRegionsList',    d.top_regions || []);
+
+    loadTopIdleResourcesWidget();
+    loadTopResourcesTable();
 }
+
+let _currentTopIdleGroup = 'all';
+
+async function loadTopIdleResourcesWidget(groupName) {
+    if (groupName !== undefined) {
+        _currentTopIdleGroup = groupName;
+    }
+    const container = document.getElementById('topIdleResourcesList');
+    if (!container) return;
+
+    container.innerHTML = getLogoLoaderHTML('Loading idle resources…');
+
+    try {
+        const url = `/api/top-idle-resources?cost_group=${encodeURIComponent(_currentTopIdleGroup)}&limit=10&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            container.innerHTML = '<div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Unable to load idle data</div>';
+            return;
+        }
+        const d = await resp.json();
+        const items = d.idle_resources || [];
+
+        const badgeCountEl = document.getElementById('topIdleBadgeCount');
+        if (badgeCountEl) {
+            badgeCountEl.textContent = d.idle_count !== undefined ? d.idle_count : items.length;
+        }
+
+        if (items.length === 0) {
+            container.innerHTML = `<div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">No idle resources found for ${_currentTopIdleGroup === 'all' ? 'selected period' : _currentTopIdleGroup}</div>`;
+            return;
+        }
+
+        const _sym = d.currency_symbol || ((window.TENANT_CUR && window.TENANT_CUR.symbol) ? window.TENANT_CUR.symbol : '$');
+        const $fmt = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+        const maxCost = Math.max(...items.map(x => x.cost || 0), 1);
+
+        const getCloudIcon = p => {
+            const pr = (p || 'azure').toLowerCase();
+            if (pr.includes('aws')) return '/static/img/aws-logo.svg';
+            if (pr.includes('gcp') || pr.includes('google')) return '/static/img/gcp-logo.svg';
+            return '/static/img/azure-logo.svg';
+        };
+
+        container.innerHTML = items.slice(0, 10).map((item, i) => {
+            const widthPct = Math.max(4, Math.round((item.cost / maxCost) * 100));
+            const barColor = i < 3 ? '#DC2626' : (i < 6 ? '#F59E0B' : '#10B981');
+            const displayPct = item.pct !== undefined ? item.pct : 0;
+            const isTopRow = i < 3;
+
+            return `
+                <div style="display:flex;flex-direction:column;gap:3px;font-size:11.5px">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                            <img src="${getCloudIcon(item.cloud_provider)}" width="12" height="12" style="object-fit:contain;flex-shrink:0" alt="">
+                            <div class="res-tooltip-trigger" style="display:inline-block;max-width:120px">
+                                <span style="font-weight:500;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;cursor:pointer">${item.name}</span>
+                                <div class="res-tooltip-card ${isTopRow ? 'res-tooltip-bottom' : ''}">
+                                    <div style="font-weight:600;color:#38bdf8">${item.name}</div>
+                                    <div style="font-size:10px;color:#cbd5e1;font-family:monospace">${item.raw_name || item.name}</div>
+                                    <div style="font-size:10px;color:#94a3b8;margin-top:2px">Status: <span style="color:#ef4444">${item.power_state || 'Stopped'}</span></div>
+                                </div>
+                            </div>
+                            <span style="font-size:10px;color:#ef4444;background:rgba(239,68,68,0.08);padding:1px 5px;border-radius:4px;font-weight:450;letter-spacing:0.01em">${item.power_state || 'Stopped'}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+                            <span style="font-weight:600;color:var(--text-primary)">${$fmt(item.cost)}</span>
+                            <span style="font-size:10.5px;color:var(--text-secondary);width:32px;text-align:right">${displayPct}%</span>
+                        </div>
+                    </div>
+                    <div style="height:2.5px;background:var(--border);border-radius:2px;overflow:hidden">
+                        <div style="height:100%;width:${widthPct}%;background:${barColor};border-radius:2px;transition:width 0.3s ease"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.error('Error loading top idle resources:', err);
+        container.innerHTML = '<div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Error loading data</div>';
+    }
+}
+
+function onTopIdleGroupChange(grp) {
+    loadTopIdleResourcesWidget(grp);
+}
+
+function toggleTopIdleDropdown(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById('customTopIdleDropdown');
+    if (!dropdown) return;
+    dropdown.classList.toggle('open');
+}
+
+function selectTopIdleOption(val, label, e) {
+    if (e) e.stopPropagation();
+    const triggerLabel = document.getElementById('topIdleTriggerLabel');
+    if (triggerLabel) triggerLabel.textContent = label;
+
+    const options = document.querySelectorAll('#topIdleMenu .custom-idle-option');
+    options.forEach(opt => {
+        const isMatch = opt.getAttribute('onclick').includes(`'${val}'`);
+        opt.classList.toggle('active', isMatch);
+        const chk = opt.querySelector('.idle-check');
+        if (chk) chk.textContent = isMatch ? '✓' : '';
+    });
+
+    const dropdown = document.getElementById('customTopIdleDropdown');
+    if (dropdown) dropdown.classList.remove('open');
+
+    onTopIdleGroupChange(val);
+}
+
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('customTopIdleDropdown');
+    if (dropdown && !dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+    }
+});
+
+async function openIdleResourcesModal() {
+    const modal = document.getElementById('modalIdleResources');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    await loadIdleResourcesTable();
+}
+
+function closeIdleResourcesModal() {
+    const modal = document.getElementById('modalIdleResources');
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+async function loadIdleResourcesTable() {
+    const tbody = document.getElementById('modalIdleTableBody');
+    if (!tbody) return;
+
+    const rgFilter = document.getElementById('modalIdleRgFilter')?.value || 'all';
+    const costGroupFilter = document.getElementById('modalIdleCostGroupFilter')?.value || 'all';
+    const providerFilter = document.getElementById('modalIdleProviderFilter')?.value || 'all';
+
+    tbody.innerHTML = `<tr><td colspan="17">${getLogoLoaderHTML('Loading idle resources inventory…')}</td></tr>`;
+
+    try {
+        const url = `/api/top-idle-resources?limit=all&cost_group=${encodeURIComponent(costGroupFilter)}&resource_group=${encodeURIComponent(rgFilter)}&cloud_provider=${encodeURIComponent(providerFilter)}&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;padding:24px;color:var(--text-secondary)">Unable to load idle table</td></tr>';
+            return;
+        }
+        const d = await resp.json();
+        const items = d.idle_resources || [];
+
+        const _sym = d.currency_symbol || '$';
+        const $fmt = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+        
+        const modalTotalEl = document.getElementById('modalIdleTotalCost');
+        if (modalTotalEl) modalTotalEl.textContent = $fmt(d.total_idle_cost || 0);
+
+        const countLabelEl = document.getElementById('modalIdleCountLabel');
+        if (countLabelEl) countLabelEl.textContent = items.length;
+
+        const rgSelect = document.getElementById('modalIdleRgFilter');
+        if (rgSelect && d.resource_groups && rgSelect.options.length <= 1) {
+            d.resource_groups.forEach(rg => {
+                const opt = document.createElement('option');
+                opt.value = rg;
+                opt.textContent = rg;
+                rgSelect.appendChild(opt);
+            });
+        }
+
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;padding:24px;color:var(--text-secondary)">No idle resources found matching filters</td></tr>';
+            return;
+        }
+
+        const getCloudBadge = (provider, isTopRow = false) => {
+            const p = (provider || 'azure').toLowerCase();
+            let name = 'Microsoft Azure';
+            let iconSrc = '/static/img/azure-logo.svg';
+            let iconStyle = 'width:14px;height:14px';
+
+            if (p.includes('aws')) {
+                name = 'Amazon Web Services (AWS)';
+                iconSrc = '/static/img/aws-logo.svg';
+                iconStyle = 'width:20px;height:13px';
+            } else if (p.includes('gcp') || p.includes('google')) {
+                name = 'Google Cloud Platform (GCP)';
+                iconSrc = '/static/img/gcp-logo.svg';
+                iconStyle = 'width:14px;height:14px';
+            }
+
+            return `
+                <div class="res-tooltip-trigger" style="flex-shrink:0">
+                    <img src="${iconSrc}" style="${iconStyle};object-fit:contain;display:block" alt="${name}">
+                    <div class="res-tooltip-card ${isTopRow ? 'res-tooltip-bottom' : ''}" style="text-align:center;font-weight:600;color:#38bdf8">
+                        ${name}
+                    </div>
+                </div>
+            `;
+        };
+
+        const getGroupBadge = grp => `<span style="display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:12px;background:var(--border);color:var(--text-primary)">${grp || 'Compute'}</span>`;
+
+        tbody.innerHTML = items.map((item, i) => {
+            const rank = i + 1;
+            const isTopRow = i < 3;
+            const tooltipPosClass = isTopRow ? 'res-tooltip-bottom' : '';
+            const rankBadgeColor = rank <= 3 ? '#DC2626' : (rank <= 6 ? '#F59E0B' : '#10B981');
+            const skuDisplay = item.sku_name || item.meter_subcategory || 'Standard Tier';
+            const locationDisplay = item.location ? item.location : 'global';
+            const resGroupDisplay = item.resource_group || '(none)';
+            const subNameDisplay = item.subscription_name || item.subscription_id || 'Subscription';
+            const subIdDisplay = item.subscription_id ? `${item.subscription_id.substring(0, 13)}…` : '—';
+            const meterCatDisplay = item.meter_category || '—';
+            const meterSubcatDisplay = item.meter_subcategory || '—';
+            const resTypeDisplay = item.resource_type || '—';
+
+            let tagsBadge = '<span style="color:var(--text-secondary);font-size:11px">—</span>';
+            if (item.tags && typeof item.tags === 'object' && Object.keys(item.tags).length > 0) {
+                const tagKeys = Object.keys(item.tags);
+                const tagStr = Object.entries(item.tags).map(([k,v]) => `${k}:${v}`).join(', ');
+                tagsBadge = `<span style="font-size:11px;padding:2px 6px;border-radius:4px;background:rgba(37,99,235,0.08);color:#2563EB;cursor:pointer" title="${tagStr}">${tagKeys.length} tag${tagKeys.length>1?'s':''}</span>`;
+            }
+
+            return `
+                <tr class="top-res-row" style="border-bottom:1px solid var(--border);transition:background 0.15s ease">
+                    <td class="sticky-col-rank" style="padding:10px 12px;text-align:center">
+                        <span style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:${rankBadgeColor}15;color:${rankBadgeColor};font-weight:700;font-size:11px">${rank}</span>
+                    </td>
+                    <td class="sticky-col-resource" style="padding:10px 12px">
+                        <div style="display:flex;align-items:center;gap:8px">
+                            ${getCloudBadge(item.cloud_provider, isTopRow)}
+                            <div style="min-width:0">
+                                <div class="res-tooltip-trigger" style="display:inline-block;max-width:140px">
+                                    <div style="font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer">${item.name}</div>
+                                    <div class="res-tooltip-card ${tooltipPosClass}">
+                                        <div style="font-weight:600;color:#38bdf8;margin-bottom:2px">${item.name}</div>
+                                        <div style="font-size:10px;color:#cbd5e1;font-family:monospace">${item.raw_name || item.name}</div>
+                                        ${item.service_name ? `<div style="font-size:10px;color:#94a3b8;margin-top:4px">Service: <span style="color:#f8fafc">${item.service_name}</span></div>` : ''}
+                                    </div>
+                                </div>
+                                ${item.raw_name && item.raw_name !== item.name ? `
+                                    <div class="res-tooltip-trigger" style="display:block;max-width:140px">
+                                        <div style="font-size:10.5px;color:var(--text-secondary);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer">${item.raw_name}</div>
+                                        <div class="res-tooltip-card ${tooltipPosClass}">
+                                            <div style="font-size:10px;color:#94a3b8;font-family:monospace;word-break:break-all">Full ID: ${item.raw_name}</div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-primary);font-weight:500">${item.service_name}</td>
+                    <td style="padding:10px 12px">${getGroupBadge(item.cost_group)}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11px;font-family:monospace" title="${resTypeDisplay}">${resTypeDisplay.length > 25 ? resTypeDisplay.substring(0, 25) + '…' : resTypeDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-primary);font-size:11.5px">${resGroupDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${locationDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-primary);font-size:11.5px">${subNameDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11px;font-family:monospace" title="${item.subscription_id}">${subIdDisplay}</td>
+                    <td style="padding:10px 12px">
+                        <span style="font-family:monospace;font-size:11.5px;padding:2px 6px;border-radius:4px;background:var(--border);color:var(--text-primary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block" title="${skuDisplay}">${skuDisplay}</span>
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${meterCatDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${meterSubcatDisplay}</td>
+                    <td style="padding:10px 12px">
+                        <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#DC2626;background:rgba(220,38,38,0.1);padding:2px 7px;border-radius:4px"><span style="width:6px;height:6px;border-radius:50%;background:#DC2626"></span>${item.power_state || 'Stopped'}</span>
+                    </td>
+                    <td style="padding:10px 12px">${tagsBadge}</td>
+                    <td style="padding:10px 12px;text-align:right;font-weight:700;color:#DC2626">${$fmt(item.cost)}</td>
+                    <td style="padding:10px 12px;text-align:right;color:var(--text-secondary);font-size:11.5px">${$fmt(item.avg_daily_cost || 0)}/d</td>
+                    <td style="padding:10px 12px;text-align:right">
+                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+                            <div style="width:40px;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+                                <div style="height:100%;width:${item.pct}%;background:${rankBadgeColor}"></div>
+                            </div>
+                            <span style="font-size:11.5px;font-weight:500;color:var(--text-primary)">${item.pct}%</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.error('Error loading idle resources table modal:', err);
+    }
+}
+
+function onIdleModalFilterChange() {
+    loadIdleResourcesTable();
+}
+
+let _currentTopResGroup = 'all';
+
+async function loadTopResourcesByGroup(groupName) {
+    if (groupName !== undefined) {
+        _currentTopResGroup = groupName;
+    }
+    const container = document.getElementById('topResByGroupList');
+    if (!container) return;
+
+    container.innerHTML = getLogoLoaderHTML('Loading top resources…');
+
+    try {
+        const url = `/api/top-resources-by-group?cost_group=${encodeURIComponent(_currentTopResGroup)}&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            container.innerHTML = '<div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Unable to load data</div>';
+            return;
+        }
+        const d = await resp.json();
+        const items = d.top_resources || [];
+
+        if (items.length === 0) {
+            container.innerHTML = `<div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">No resources found for ${_currentTopResGroup === 'all' ? 'selected period' : _currentTopResGroup}</div>`;
+            return;
+        }
+
+        const _sym = d.currency_symbol || ((window.TENANT_CUR && window.TENANT_CUR.symbol) ? window.TENANT_CUR.symbol : '$');
+        const $fmt = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+        const maxCost = Math.max(...items.map(x => x.cost || 0), 1);
+
+        container.innerHTML = items.slice(0, 10).map((item, i) => {
+            const widthPct = Math.max(4, Math.round((item.cost / maxCost) * 100));
+            // Red for Top 3 (0,1,2), Amber/Orange for Next 3 (3,4,5), Green for Next 4 (6,7,8,9)
+            const barColor = i < 3 ? '#DC2626' : (i < 6 ? '#F59E0B' : '#10B981');
+            const displayPct = item.pct !== undefined ? item.pct : 0;
+            const subtitle = item.service_name ? `${item.service_name}` : item.cost_group;
+
+            return `
+                <div class="breakdown-row" style="margin-bottom:2px">
+                    <div class="breakdown-row-label" title="${item.name} (${subtitle})">${item.name}</div>
+                    <div class="breakdown-row-track">
+                        <div class="breakdown-row-fill" style="width:${widthPct}%;background:${barColor}"></div>
+                    </div>
+                    <div class="breakdown-row-meta">
+                        <span class="breakdown-row-cost">${$fmt(item.cost)}</span>
+                        <span class="breakdown-row-pct">- ${displayPct}%</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error('Error loading top resources by group:', err);
+        container.innerHTML = '<div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Error loading resources</div>';
+    }
+}
+
+function onTopResGroupChange(val) {
+    loadTopResourcesByGroup(val);
+}
+
+let _currentTopResTableGroup = 'all';
+
+async function loadTopResourcesTable(groupName) {
+    if (groupName !== undefined) {
+        _currentTopResTableGroup = groupName;
+    }
+    const tbody = document.getElementById('topResTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `<tr><td colspan="9">${getLogoLoaderHTML('Loading resources inventory table…')}</td></tr>`;
+
+    try {
+        const url = `/api/top-resources-by-group?cost_group=${encodeURIComponent(_currentTopResTableGroup)}&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-secondary)">Unable to load data</td></tr>';
+            return;
+        }
+        const d = await resp.json();
+        const items = d.top_resources || [];
+
+        if (items.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-secondary)">No resources found for ${_currentTopResTableGroup === 'all' ? 'selected period' : _currentTopResTableGroup}</td></tr>`;
+            return;
+        }
+
+        const _sym = d.currency_symbol || ((window.TENANT_CUR && window.TENANT_CUR.symbol) ? window.TENANT_CUR.symbol : '$');
+        const $fmt = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+
+        const getCloudBadge = (provider, isTopRow = false) => {
+            const p = (provider || 'azure').toLowerCase();
+            let name = 'Microsoft Azure';
+            let iconSrc = '/static/img/azure-logo.svg';
+            let iconStyle = 'width:14px;height:14px';
+
+            if (p.includes('aws')) {
+                name = 'Amazon Web Services (AWS)';
+                iconSrc = '/static/img/aws-logo.svg';
+                iconStyle = 'width:20px;height:13px';
+            } else if (p.includes('gcp') || p.includes('google')) {
+                name = 'Google Cloud Platform (GCP)';
+                iconSrc = '/static/img/gcp-logo.svg';
+                iconStyle = 'width:14px;height:14px';
+            }
+
+            return `
+                <div class="res-tooltip-trigger" style="flex-shrink:0">
+                    <img src="${iconSrc}" style="${iconStyle};object-fit:contain;display:block" alt="${name}">
+                    <div class="res-tooltip-card ${isTopRow ? 'res-tooltip-bottom' : ''}" style="text-align:center;font-weight:600;color:#38bdf8">
+                        ${name}
+                    </div>
+                </div>
+            `;
+        };
+
+        const getGroupBadge = grp => {
+            const g = grp || 'Compute';
+            return `<span style="display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:12px;background:var(--border);color:var(--text-primary)">${g}</span>`;
+        };
+
+        const getStateBadge = state => {
+            const st = (state || 'Active').toLowerCase();
+            if (st.includes('running') || st.includes('active') || st === '') {
+                return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:#16A34A"><span style="width:6px;height:6px;border-radius:50%;background:#16A34A"></span>Running</span>`;
+            }
+            if (st.includes('stopped') || st.includes('deallocated')) {
+                return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:#DC2626"><span style="width:6px;height:6px;border-radius:50%;background:#DC2626"></span>Stopped</span>`;
+            }
+            return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:var(--text-secondary)"><span style="width:6px;height:6px;border-radius:50%;background:var(--text-secondary)"></span>${state}</span>`;
+        };
+
+        tbody.innerHTML = items.map((item, i) => {
+            const rank = i + 1;
+            const isTopRow = i < 3;
+            const tooltipPosClass = isTopRow ? 'res-tooltip-bottom' : '';
+            const rankBadgeColor = rank <= 3 ? '#DC2626' : (rank <= 6 ? '#F59E0B' : '#10B981');
+            const skuDisplay = item.sku_name || item.meter_subcategory || 'Standard Tier';
+            const locationDisplay = item.location ? item.location : 'global';
+            const resGroupDisplay = item.resource_group || '(none)';
+            const subNameDisplay = item.subscription_name || item.subscription_id || 'Subscription';
+            const subIdDisplay = item.subscription_id ? `${item.subscription_id.substring(0, 13)}…` : '—';
+            const meterCatDisplay = item.meter_category || '—';
+            const meterSubcatDisplay = item.meter_subcategory || '—';
+            const resTypeDisplay = item.resource_type || '—';
+
+            let tagsBadge = '<span style="color:var(--text-secondary);font-size:11px">—</span>';
+            if (item.tags && typeof item.tags === 'object' && Object.keys(item.tags).length > 0) {
+                const tagKeys = Object.keys(item.tags);
+                const tagStr = Object.entries(item.tags).map(([k,v]) => `${k}:${v}`).join(', ');
+                tagsBadge = `<span style="font-size:11px;padding:2px 6px;border-radius:4px;background:rgba(37,99,235,0.08);color:#2563EB;cursor:pointer" title="${tagStr}">${tagKeys.length} tag${tagKeys.length>1?'s':''}</span>`;
+            }
+
+            return `
+                <tr class="top-res-row" style="border-bottom:1px solid var(--border);transition:background 0.15s ease">
+                    <td class="sticky-col-rank" style="padding:10px 12px;text-align:center">
+                        <span style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:${rankBadgeColor}15;color:${rankBadgeColor};font-weight:700;font-size:11px">${rank}</span>
+                    </td>
+                    <td class="sticky-col-resource" style="padding:10px 12px">
+                        <div style="display:flex;align-items:center;gap:8px">
+                            ${getCloudBadge(item.cloud_provider, isTopRow)}
+                            <div style="min-width:0">
+                                <div class="res-tooltip-trigger" style="display:inline-block;max-width:140px">
+                                    <div style="font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer">${item.name}</div>
+                                    <div class="res-tooltip-card ${tooltipPosClass}">
+                                        <div style="font-weight:600;color:#38bdf8;margin-bottom:2px">${item.name}</div>
+                                        <div style="font-size:10px;color:#cbd5e1;font-family:monospace">${item.raw_name || item.name}</div>
+                                        ${item.service_name ? `<div style="font-size:10px;color:#94a3b8;margin-top:4px">Service: <span style="color:#f8fafc">${item.service_name}</span></div>` : ''}
+                                    </div>
+                                </div>
+                                ${item.raw_name && item.raw_name !== item.name ? `
+                                    <div class="res-tooltip-trigger" style="display:block;max-width:140px">
+                                        <div style="font-size:10.5px;color:var(--text-secondary);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer">${item.raw_name}</div>
+                                        <div class="res-tooltip-card ${tooltipPosClass}">
+                                            <div style="font-size:10px;color:#94a3b8;font-family:monospace;word-break:break-all">Full ID: ${item.raw_name}</div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-primary);font-weight:500">${item.service_name}</td>
+                    <td style="padding:10px 12px">${getGroupBadge(item.cost_group)}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11px;font-family:monospace" title="${resTypeDisplay}">${resTypeDisplay.length > 25 ? resTypeDisplay.substring(0, 25) + '…' : resTypeDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-primary);font-size:11.5px">${resGroupDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${locationDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-primary);font-size:11.5px">${subNameDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11px;font-family:monospace" title="${item.subscription_id}">${subIdDisplay}</td>
+                    <td style="padding:10px 12px">
+                        <span style="font-family:monospace;font-size:11.5px;padding:2px 6px;border-radius:4px;background:var(--border);color:var(--text-primary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block" title="${skuDisplay}">${skuDisplay}</span>
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${meterCatDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${meterSubcatDisplay}</td>
+                    <td style="padding:10px 12px">${getStateBadge(item.power_state)}</td>
+                    <td style="padding:10px 12px">${tagsBadge}</td>
+                    <td style="padding:10px 12px;text-align:right;font-weight:600;color:var(--text-primary)">${$fmt(item.cost)}</td>
+                    <td style="padding:10px 12px;text-align:right;color:var(--text-secondary);font-size:11.5px">${$fmt(item.avg_daily_cost || 0)}/d</td>
+                    <td style="padding:10px 12px;text-align:right">
+                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+                            <div style="width:40px;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+                                <div style="height:100%;width:${item.pct}%;background:${rankBadgeColor}"></div>
+                            </div>
+                            <span style="font-size:11.5px;font-weight:500;color:var(--text-primary)">${item.pct}%</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.error('Error loading top resources table:', err);
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-secondary)">Error loading resources table</td></tr>';
+    }
+}
+
+function onTopResTableGroupChange(val) {
+    loadTopResourcesTable(val);
+}
+
+function toggleTopResTableDropdown(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById('customTopResTableDropdown');
+    if (dropdown) dropdown.classList.toggle('open');
+}
+
+function selectTopResTableGroup(val, label, el) {
+    const textEl = document.getElementById('customTopResTableSelectedText');
+    if (textEl) textEl.textContent = label;
+
+    const menu = document.getElementById('customTopResTableMenu');
+    if (menu) {
+        menu.querySelectorAll('.custom-idle-option').forEach(opt => {
+            opt.classList.remove('active');
+            const check = opt.querySelector('.idle-check');
+            if (check) check.textContent = '';
+        });
+    }
+
+    if (el) {
+        el.classList.add('active');
+        const check = el.querySelector('.idle-check');
+        if (check) check.textContent = '✓';
+    }
+
+    const dropdown = document.getElementById('customTopResTableDropdown');
+    if (dropdown) dropdown.classList.remove('open');
+
+    onTopResTableGroupChange(val);
+}
+
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('customTopResTableDropdown');
+    if (dropdown && !dropdown.contains(e.target)) {
+        dropdown.classList.remove('open');
+    }
+});
 
 let _customCompMonthsData = [];
 let _compBaseIdx = -1;
@@ -1033,35 +1670,228 @@ function updateMonthComparisonDisplay(_sym) {
         el('compDiffBadge').textContent = `${arrow} ${Math.abs(pctTotal).toFixed(1)}%`;
     }
 
-    const updateProviderRow = (pKey, baseVal, compVal, rowElId, valElId, badgeElId, bar1Id, bar2Id) => {
-        const rowEl = el(rowElId);
-        if (baseVal === 0 && compVal === 0) {
-            if (rowEl) rowEl.style.display = 'none';
-            return;
-        }
-        if (rowEl) rowEl.style.display = 'flex';
+    // Render ECharts or Chart.js Mixed Line & Bar Chart
+    const categories = [];
+    const baseData = [];
+    const compareData = [];
 
-        const diff = baseVal - compVal;
-        const pct  = compVal > 0 ? ((baseVal - compVal) / compVal * 100) : 0;
-        if (el(valElId)) el(valElId).textContent = `${$fmt(baseVal)} vs ${$fmt(compVal)}`;
-        if (el(badgeElId)) {
-            const up = diff >= 0;
-            const cls = up ? 'trend-up' : 'trend-down';
-            const arrow = up ? '▲' : '▼';
-            el(badgeElId).className = `kpi-trend-pill ${cls}`;
-            el(badgeElId).style.color = '';
-            el(badgeElId).textContent = `${arrow} ${Math.abs(pct).toFixed(1)}%`;
-        }
-        const maxVal = Math.max(baseVal, compVal, 1);
-        const w1 = Math.round((baseVal / maxVal) * 50);
-        const w2 = Math.round((compVal / maxVal) * 50);
-        if (el(bar1Id)) el(bar1Id).style.width = w1 + '%';
-        if (el(bar2Id)) el(bar2Id).style.width = w2 + '%';
-    };
+    const providersList = [
+        { key: 'azure', label: 'Azure' },
+        { key: 'aws',   label: 'AWS' },
+        { key: 'gcp',   label: 'GCP' }
+    ];
 
-    updateProviderRow('azure', mBase.azure||0, mComp.azure||0, 'compAzureRow', 'compAzureVals', 'compAzureBadge', 'compAzureBar1', 'compAzureBar2');
-    updateProviderRow('aws',   mBase.aws||0,   mComp.aws||0,   'compAwsRow',   'compAwsVals',   'compAwsBadge',   'compAwsBar1',   'compAwsBar2');
-    updateProviderRow('gcp',   mBase.gcp||0,   mComp.gcp||0,   'compGcpRow',   'compGcpVals',   'compGcpBadge',   'compGcpBar1',   'compGcpBar2');
+    providersList.forEach(p => {
+        const bVal = mBase[p.key] || 0;
+        const cVal = mComp[p.key] || 0;
+        if (bVal > 0 || cVal > 0) {
+            categories.push(p.label);
+            baseData.push(bVal);
+            compareData.push(cVal);
+        }
+    });
+
+    // Always add Total column
+    categories.push('Total');
+    baseData.push(baseTotal);
+    compareData.push(compTotal);
+
+    const variancePctData = categories.map((cat, i) => {
+        const b = baseData[i];
+        const c = compareData[i];
+        return c > 0 ? parseFloat(((b - c) / c * 100).toFixed(1)) : 0;
+    });
+
+    const chartDom = document.getElementById('monthComparisonChart');
+    if (chartDom) {
+        if (typeof echarts !== 'undefined') {
+            let chartInstance = echarts.getInstanceByDom(chartDom);
+            if (!chartInstance) {
+                chartInstance = echarts.init(chartDom);
+            }
+
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const textColor = isDark ? '#94a3b8' : '#64748b';
+            const borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross', crossStyle: { color: '#999' } },
+                    formatter: function (params) {
+                        let res = `<div style="font-weight:600;margin-bottom:4px;color:#f8fafc">${params[0].name} Breakdown</div>`;
+                        params.forEach(p => {
+                            const valStr = p.seriesType === 'line' ? `${p.value}%` : `${_sym}${p.value.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+                            res += `<div style="display:flex;justify-content:space-between;gap:12px;font-size:11px"><span style="color:${p.color}">● ${p.seriesName}:</span> <strong>${valStr}</strong></div>`;
+                        });
+                        return res;
+                    }
+                },
+                grid: {
+                    top: 36,
+                    bottom: 24,
+                    left: 60,
+                    right: 46
+                },
+                legend: {
+                    data: [mBase.label || 'Base Month', mComp.label || 'Compare Month', 'Variance %'],
+                    textStyle: { color: textColor, fontSize: 10.5 },
+                    top: 0
+                },
+                xAxis: [
+                    {
+                        type: 'category',
+                        data: categories,
+                        axisPointer: { type: 'shadow' },
+                        axisLine: { lineStyle: { color: borderColor } },
+                        axisLabel: { color: textColor, fontSize: 10.5 }
+                    }
+                ],
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: 'Spend (' + _sym + ')',
+                        min: 0,
+                        axisLabel: {
+                            color: textColor,
+                            fontSize: 10,
+                            formatter: value => _sym + (value >= 1000 ? (value/1000).toFixed(1) + 'k' : value)
+                        },
+                        splitLine: { lineStyle: { color: borderColor, type: 'dashed' } },
+                        nameTextStyle: { color: textColor, fontSize: 10 }
+                    },
+                    {
+                        type: 'value',
+                        name: 'Variance %',
+                        axisLabel: {
+                            color: textColor,
+                            fontSize: 10,
+                            formatter: '{value}%'
+                        },
+                        splitLine: { show: false },
+                        nameTextStyle: { color: textColor, fontSize: 10 }
+                    }
+                ],
+                series: [
+                    {
+                        name: mBase.label || 'Base Month',
+                        type: 'bar',
+                        barWidth: '22%',
+                        itemStyle: { color: '#2563EB', borderRadius: [3, 3, 0, 0] },
+                        data: baseData
+                    },
+                    {
+                        name: mComp.label || 'Compare Month',
+                        type: 'bar',
+                        barWidth: '22%',
+                        itemStyle: { color: '#93C5FD', borderRadius: [3, 3, 0, 0] },
+                        data: compareData
+                    },
+                    {
+                        name: 'Variance %',
+                        type: 'line',
+                        yAxisIndex: 1,
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 7,
+                        lineStyle: { width: 2.5, color: '#DC2626' },
+                        itemStyle: { color: '#DC2626' },
+                        data: variancePctData
+                    }
+                ]
+            };
+
+            chartInstance.setOption(option, true);
+            window.addEventListener('resize', () => chartInstance.resize());
+
+        } else if (typeof Chart !== 'undefined') {
+            // Chart.js Mixed Bar + Line Chart Fallback
+            chartDom.innerHTML = '<canvas id="monthCompCanvas" style="width:100%;height:220px"></canvas>';
+            const canvas = document.getElementById('monthCompCanvas');
+            if (canvas) {
+                if (window._monthCompChartInstance) {
+                    window._monthCompChartInstance.destroy();
+                }
+                window._monthCompChartInstance = new Chart(canvas, {
+                    type: 'bar',
+                    data: {
+                        labels: categories,
+                        datasets: [
+                            {
+                                type: 'bar',
+                                label: mBase.label || 'Base Month',
+                                data: baseData,
+                                backgroundColor: '#2563EB',
+                                borderRadius: 4,
+                                order: 2
+                            },
+                            {
+                                type: 'bar',
+                                label: mComp.label || 'Compare Month',
+                                data: compareData,
+                                backgroundColor: '#93C5FD',
+                                borderRadius: 4,
+                                order: 2
+                            },
+                            {
+                                type: 'line',
+                                label: 'Variance %',
+                                data: variancePctData,
+                                borderColor: '#DC2626',
+                                backgroundColor: '#DC2626',
+                                tension: 0.3,
+                                pointRadius: 4,
+                                yAxisID: 'y1',
+                                order: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: true, position: 'top', labels: { boxWidth: 10, font: { size: 10 } } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        if (ctx.dataset.label === 'Variance %') {
+                                            return ` ${ctx.dataset.label}: ${ctx.raw}%`;
+                                        }
+                                        return ` ${ctx.dataset.label}: ${_sym}${Number(ctx.raw||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                display: true,
+                                position: 'left',
+                                ticks: { callback: v => _sym + (v>=1000 ? (v/1000).toFixed(1)+'k' : v), font: { size: 9.5 } }
+                            },
+                            y1: {
+                                display: true,
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                ticks: { callback: v => v + '%', font: { size: 9.5 } }
+                            },
+                            x: {
+                                ticks: { font: { size: 10 } }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Dynamically load ECharts script if missing
+        if (typeof echarts === 'undefined' && !window._echartsLoading) {
+            window._echartsLoading = true;
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js';
+            script.onload = () => { updateMonthComparisonDisplay(_sym); };
+            document.head.appendChild(script);
+        }
+    }
 }
 
 async function loadCloudOverview() {
@@ -9141,5 +9971,353 @@ async function deleteManualCost(id) {
     } catch (e) {
         showToast('Delete failed: ' + e.message, 'error');
     }
+}
+
+
+/* ─── Resource Inventory Module ────────────────────────────────────────────── */
+let _resInventoryPage = 1;
+let _resInventoryLimit = 50;
+let _resInventoryTotalPages = 1;
+let _resInventorySortBy = 'cost';
+let _resInventorySortOrder = 'desc';
+let _resInventoryData = [];
+let _resInventorySearchTimer = null;
+let _currentResConfigJson = null;
+
+async function loadResourceInventoryPage() {
+    await initResourceInventoryFilters();
+    await loadResourceInventory(1);
+}
+
+async function initResourceInventoryFilters() {
+    try {
+        const resp = await fetch('/api/resource-inventory/filters');
+        if (!resp.ok) return;
+        const d = await resp.json();
+
+        const subSel = document.getElementById('resInventorySubSelect');
+        if (subSel) {
+            let html = '<option value="all">All Subscriptions</option>';
+            (d.subscriptions || []).forEach(s => {
+                html += `<option value="${s.id}">${s.name || s.id}</option>`;
+            });
+            subSel.innerHTML = html;
+        }
+
+        const rgSel = document.getElementById('resInventoryRgSelect');
+        if (rgSel) {
+            let html = '<option value="all">All Groups</option>';
+            (d.resource_groups || []).forEach(rg => {
+                html += `<option value="${rg}">${rg}</option>`;
+            });
+            rgSel.innerHTML = html;
+        }
+    } catch (e) {
+        console.error('Error loading resource inventory filters:', e);
+    }
+}
+
+function onResInventorySearchKeyUp(e) {
+    if (_resInventorySearchTimer) clearTimeout(_resInventorySearchTimer);
+    _resInventorySearchTimer = setTimeout(() => {
+        loadResourceInventory(1);
+    }, 350);
+}
+
+function changeResInventorySort(col) {
+    if (_resInventorySortBy === col) {
+        _resInventorySortOrder = _resInventorySortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        _resInventorySortBy = col;
+        _resInventorySortOrder = 'desc';
+    }
+    loadResourceInventory(1);
+}
+
+function loadResourceInventoryPagePrev() {
+    if (_resInventoryPage > 1) {
+        loadResourceInventory(_resInventoryPage - 1);
+    }
+}
+
+function loadResourceInventoryPageNext() {
+    if (_resInventoryPage < _resInventoryTotalPages) {
+        loadResourceInventory(_resInventoryPage + 1);
+    }
+}
+
+async function loadResourceInventory(page = 1) {
+    _resInventoryPage = page;
+    const tbody = document.getElementById('resInventoryTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `<tr><td colspan="12">${getLogoLoaderHTML('Loading cloud resource inventory...')}</td></tr>`;
+
+    const search = document.getElementById('resInventorySearchInput')?.value?.trim() || '';
+    const provider = document.getElementById('resInventoryProviderSelect')?.value || 'all';
+    const sub_id = document.getElementById('resInventorySubSelect')?.value || 'all';
+    const rg = document.getElementById('resInventoryRgSelect')?.value || 'all';
+    const state = document.getElementById('resInventoryStateSelect')?.value || 'all';
+    const limit = parseInt(document.getElementById('resInventoryLimitSelect')?.value || '50', 10);
+    _resInventoryLimit = limit;
+
+    const query = new URLSearchParams({
+        page: _resInventoryPage,
+        limit: _resInventoryLimit,
+        sort_by: _resInventorySortBy,
+        sort_order: _resInventorySortOrder,
+        search: search,
+        provider: provider,
+        subscription_id: sub_id,
+        resource_group: rg,
+        power_state: state
+    });
+
+    try {
+        const resp = await fetch(`/api/resource-inventory?${query.toString()}`);
+        if (!resp.ok) {
+            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--text-secondary)">Failed to load resource inventory.</td></tr>`;
+            return;
+        }
+
+        const data = await resp.json();
+        _resInventoryData = data.resources || [];
+        _resInventoryTotalPages = data.total_pages || 1;
+
+        const sym = data.currency_symbol || '$';
+        const fmt = v => sym + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        // Update stats KPI cards
+        const totalCountEl = document.getElementById('resInvTotalCountVal');
+        if (totalCountEl) totalCountEl.textContent = (data.total_count || 0).toLocaleString();
+
+        const totalSpendEl = document.getElementById('resInvTotalSpendVal');
+        if (totalSpendEl) totalSpendEl.textContent = fmt(data.total_spend || 0);
+
+        const distinctRgs = new Set(_resInventoryData.map(r => r.resource_group).filter(Boolean));
+        const rgCountEl = document.getElementById('resInvRgCountVal');
+        if (rgCountEl) rgCountEl.textContent = distinctRgs.size.toLocaleString();
+
+        const runningCount = _resInventoryData.filter(r => (r.power_state || '').toLowerCase().includes('running')).length;
+        const runningEl = document.getElementById('resInvRunningVal');
+        if (runningEl) runningEl.textContent = `${runningCount} / ${_resInventoryData.length}`;
+
+        // Pagination info
+        const startIdx = (data.page - 1) * data.limit + 1;
+        const endIdx = Math.min(data.page * data.limit, data.total_count);
+        const pagInfo = document.getElementById('resInventoryPaginationInfo');
+        if (pagInfo) {
+            pagInfo.textContent = data.total_count > 0 
+                ? `Showing ${startIdx.toLocaleString()} to ${endIdx.toLocaleString()} of ${data.total_count.toLocaleString()} resources`
+                : 'No resources found';
+        }
+
+        const indicator = document.getElementById('resInvPageIndicator');
+        if (indicator) indicator.textContent = `Page ${data.page} of ${_resInventoryTotalPages}`;
+
+        const prevBtn = document.getElementById('resInvPrevBtn');
+        if (prevBtn) prevBtn.disabled = data.page <= 1;
+
+        const nextBtn = document.getElementById('resInvNextBtn');
+        if (nextBtn) nextBtn.disabled = data.page >= _resInventoryTotalPages;
+
+        const getCloudBadge = (provider, isTopRow = false) => {
+            const p = (provider || 'azure').toLowerCase();
+            let name = 'Microsoft Azure';
+            let iconSrc = '/static/img/azure-logo.svg';
+            let iconStyle = 'width:14px;height:14px';
+
+            if (p.includes('aws')) {
+                name = 'Amazon Web Services (AWS)';
+                iconSrc = '/static/img/aws-logo.svg';
+                iconStyle = 'width:20px;height:13px';
+            } else if (p.includes('gcp') || p.includes('google')) {
+                name = 'Google Cloud Platform (GCP)';
+                iconSrc = '/static/img/gcp-logo.svg';
+                iconStyle = 'width:14px;height:14px';
+            }
+
+            return `
+                <div class="res-tooltip-trigger" style="flex-shrink:0">
+                    <img src="${iconSrc}" style="${iconStyle};object-fit:contain;display:block" alt="${name}">
+                    <div class="res-tooltip-card ${isTopRow ? 'res-tooltip-bottom' : ''}" style="text-align:center;font-weight:600;color:#38bdf8">
+                        ${name}
+                    </div>
+                </div>
+            `;
+        };
+
+        const getGroupBadge = grp => {
+            const g = grp || 'Compute';
+            return `<span style="display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:12px;background:var(--border);color:var(--text-primary)">${g}</span>`;
+        };
+
+        const getStateBadge = state => {
+            const st = (state || 'Active').toLowerCase();
+            if (st.includes('running') || st.includes('started') || st.includes('succeeded') || st === 'active') {
+                return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:#16A34A"><span style="width:6px;height:6px;border-radius:50%;background:#16A34A"></span>Running</span>`;
+            }
+            if (st.includes('stopped') || st.includes('deallocated')) {
+                return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:#DC2626"><span style="width:6px;height:6px;border-radius:50%;background:#DC2626"></span>Stopped</span>`;
+            }
+            return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:var(--text-secondary)"><span style="width:6px;height:6px;border-radius:50%;background:var(--text-secondary)"></span>${state || 'Active'}</span>`;
+        };
+
+        if (_resInventoryData.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="18" style="text-align:center;padding:40px;color:var(--text-secondary)">No resources matching selected criteria</td></tr>`;
+            return;
+        }
+
+        // Render rows
+        tbody.innerHTML = _resInventoryData.map((item, idx) => {
+            const rank = startIdx + idx;
+            const isTopRow = idx < 3;
+            const tooltipPosClass = isTopRow ? 'res-tooltip-bottom' : '';
+            const rankBadgeColor = rank <= 3 ? '#DC2626' : (rank <= 6 ? '#F59E0B' : '#10B981');
+            const skuDisplay = item.sku_name || item.meter_subcategory || 'Standard Tier';
+            const locationDisplay = item.location ? item.location : 'global';
+            const resGroupDisplay = item.resource_group || '(none)';
+            const subNameDisplay = item.subscription_name || item.subscription_id || 'Subscription';
+            const subIdDisplay = item.subscription_id ? `${item.subscription_id.substring(0, 13)}…` : '—';
+            const meterCatDisplay = item.meter_category || '—';
+            const meterSubcatDisplay = item.meter_subcategory || '—';
+            const resTypeDisplay = item.resource_type || '—';
+            const resName = item.resource_name || item.name || '—';
+
+            let tagsBadge = '<span style="color:var(--text-secondary);font-size:11px">—</span>';
+            if (item.tags && typeof item.tags === 'object' && Object.keys(item.tags).length > 0) {
+                const tagKeys = Object.keys(item.tags);
+                const tagStr = Object.entries(item.tags).map(([k,v]) => `${k}:${v}`).join(', ');
+                tagsBadge = `<span style="font-size:11px;padding:2px 6px;border-radius:4px;background:rgba(37,99,235,0.08);color:#2563EB;cursor:pointer" title="${tagStr}">${tagKeys.length} tag${tagKeys.length>1?'s':''}</span>`;
+            }
+
+            return `
+                <tr class="top-res-row" style="border-bottom:1px solid var(--border);transition:background 0.15s ease">
+                    <td class="sticky-col-rank" style="padding:10px 12px;text-align:center">
+                        <span style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:${rankBadgeColor}15;color:${rankBadgeColor};font-weight:700;font-size:11px">${rank}</span>
+                    </td>
+                    <td class="sticky-col-resource" style="padding:10px 12px">
+                        <div style="display:flex;align-items:center;gap:8px">
+                            ${getCloudBadge(item.cloud_provider, isTopRow)}
+                            <div style="min-width:0">
+                                <div class="res-tooltip-trigger" style="display:inline-block;max-width:140px">
+                                    <div style="font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer">${resName}</div>
+                                    <div class="res-tooltip-card ${tooltipPosClass}">
+                                        <div style="font-weight:600;color:#38bdf8;margin-bottom:2px">${resName}</div>
+                                        <div style="font-size:10px;color:#cbd5e1;font-family:monospace">${item.raw_name || resName}</div>
+                                        ${item.service_name ? `<div style="font-size:10px;color:#94a3b8;margin-top:4px">Service: <span style="color:#f8fafc">${item.service_name}</span></div>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-primary);font-weight:500">${item.service_name || '—'}</td>
+                    <td style="padding:10px 12px">${getGroupBadge(item.cost_group)}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11px;font-family:monospace" title="${resTypeDisplay}">${resTypeDisplay.length > 25 ? resTypeDisplay.substring(0, 25) + '…' : resTypeDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-primary);font-size:11.5px">${resGroupDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${locationDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-primary);font-size:11.5px">${subNameDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11px;font-family:monospace" title="${item.subscription_id}">${subIdDisplay}</td>
+                    <td style="padding:10px 12px">
+                        <span style="font-family:monospace;font-size:11.5px;padding:2px 6px;border-radius:4px;background:var(--border);color:var(--text-primary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block" title="${skuDisplay}">${skuDisplay}</span>
+                    </td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${meterCatDisplay}</td>
+                    <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${meterSubcatDisplay}</td>
+                    <td style="padding:10px 12px">${getStateBadge(item.power_state)}</td>
+                    <td style="padding:10px 12px">${tagsBadge}</td>
+                    <td style="padding:10px 12px;text-align:right;font-weight:600;color:var(--text-primary)">${fmt(item.cost)}</td>
+                    <td style="padding:10px 12px;text-align:right;color:var(--text-secondary);font-size:11.5px">${fmt(item.avg_daily_cost || 0)}/d</td>
+                    <td style="padding:10px 12px;text-align:right">
+                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+                            <div style="width:40px;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+                                <div style="height:100%;width:${item.pct || 0}%;background:${rankBadgeColor}"></div>
+                            </div>
+                            <span style="font-size:11.5px;font-weight:500;color:var(--text-primary)">${item.pct || 0}%</span>
+                        </div>
+                    </td>
+                    <td style="padding:10px 12px;text-align:center">
+                        <button class="cp-btn-secondary" style="height:24px;padding:0 8px;font-size:10.5px" onclick="openResourceConfigModal(${idx})">JSON</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.error('Error loading resource inventory:', err);
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--text-secondary)">Error loading inventory data.</td></tr>`;
+    }
+}
+
+function openResourceConfigModal(idx) {
+    const item = _resInventoryData[idx];
+    if (!item) return;
+
+    _currentResConfigJson = item.config_json || {};
+    const titleEl = document.getElementById('resModalConfigTitle');
+    if (titleEl) titleEl.textContent = item.resource_name || 'Resource Configuration';
+
+    const jsonEl = document.getElementById('resModalConfigJson');
+    if (jsonEl) jsonEl.textContent = JSON.stringify(_currentResConfigJson, null, 2);
+
+    const modal = document.getElementById('resInventoryConfigModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeResourceConfigModal() {
+    const modal = document.getElementById('resInventoryConfigModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function copyResConfigJSON() {
+    if (!_currentResConfigJson) return;
+    navigator.clipboard.writeText(JSON.stringify(_currentResConfigJson, null, 2));
+    alert('JSON configuration copied to clipboard!');
+}
+
+async function triggerResourceGraphSync() {
+    if (!confirm('Run live Resource Graph config sync now?')) return;
+    try {
+        const resp = await fetch('/api/resource_configs/sync', { method: 'POST' });
+        if (resp.ok) {
+            alert('Resource Graph sync started in background! Data will refresh shortly.');
+            setTimeout(() => loadResourceInventory(1), 3000);
+        } else {
+            alert('Failed to trigger config sync.');
+        }
+    } catch (e) {
+        console.error('Config sync error:', e);
+        alert('Error initiating config sync.');
+    }
+}
+
+function exportResourceInventoryCSV() {
+    if (!_resInventoryData || _resInventoryData.length === 0) {
+        alert('No data available to export');
+        return;
+    }
+
+    const headers = ['Index', 'Cloud Provider', 'Resource Name', 'Subscription', 'Resource Group', 'Resource Type', 'Location', 'SKU', 'Power State', 'Cost', 'Avg Daily Cost'];
+    const rows = _resInventoryData.map((item, idx) => [
+        idx + 1,
+        item.cloud_provider || '',
+        `"${(item.resource_name || '').replace(/"/g, '""')}"`,
+        `"${(item.subscription_name || '').replace(/"/g, '""')}"`,
+        `"${(item.resource_group || '').replace(/"/g, '""')}"`,
+        `"${(item.resource_type || '').replace(/"/g, '""')}"`,
+        item.location || '',
+        item.sku_name || '',
+        item.power_state || '',
+        item.cost || 0,
+        item.avg_daily_cost || 0
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Resource_Inventory_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 

@@ -1,22 +1,11 @@
 /* ─── Root Variables ──────────────────────────────────────────────────────── */
 :root {
-    /* --bg-primary: #0f1117; */
-    /* --bg-secondary: #1a1d27; */
-    /* --bg-card: #1e2130; */
-    /* --bg-input: #252836; */
-    /* --bg: var(--bg-input); */
-    /* --border: #2d3148; */
-    /* --text-primary: #e4e6f0; */
-    /* --text-secondary: #8b8fa3; */
-    /* --accent: #4f6ef7; */
-    /* --accent-hover: #3d5ce5; */
     --green: #2ecc71;
     --red: #e74c3c;
     --orange: #f39c12;
     --purple: #9b59b6;
     --cyan: #00d2d3;
     --shadow: none;
-    /* --card-bg: var(--bg-card); */
     --page-bg-overlay: none;
     --accent-subtle: rgba(79, 110, 247, 0.08);
     --hero-gradient: linear-gradient(135deg, #1a2342 0%, #1e2a4a 50%, #1a2342 100%);
@@ -39,7 +28,96 @@
     --hero-stat-bg: rgba(255, 255, 255, 0.04);
     --hero-stat-border: rgba(255, 255, 255, 0.06);
     --hero-progress-track: rgba(255, 255, 255, 0.08);
+
+    /* ── Resolved component tokens (light default) ── */
+    --card-bg: var(--bg-card, #FFFFFF);
+    --border: var(--border-default, rgba(0,0,0,0.12));
+    --text-primary: var(--text-primary, #1A1A1A);
+    --text-secondary: var(--text-secondary, #525252);
+    --hover-bg: var(--bg-hover, #F5F5F4);
 }
+
+/* ── Theme-aware Native Select & Option Styling ── */
+select, select.filter-input, select.custom-select-styled {
+    background-color: var(--card-bg, #0f172a) !important;
+    color: var(--text-primary, #f8fafc) !important;
+    border: 1px solid var(--border, #334155) !important;
+    border-radius: 8px !important;
+    padding: 5px 28px 5px 10px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    outline: none !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 8px center !important;
+}
+
+select option {
+    background-color: var(--card-bg, #0f172a) !important;
+    color: var(--text-primary, #f8fafc) !important;
+    padding: 8px 12px !important;
+}
+
+/* ── Ocean theme (default dark) ── */
+html[data-ui-theme="ocean"] {
+    --card-bg: #111f3a;
+    --border: #1e3a5f;
+    --hover-bg: #1a2d50;
+}
+
+/* ── Forest theme ── */
+html[data-ui-theme="forest"] {
+    --card-bg: #182320;
+    --border: #2a3d34;
+    --hover-bg: #1f2e28;
+}
+
+/* ── Ember theme ── */
+html[data-ui-theme="ember"] {
+    --card-bg: var(--bg-card, #1c1410);
+    --border: var(--border, #3a2a1f);
+    --hover-bg: var(--bg-hover, #251a12);
+}
+
+/* ── Violet theme ── */
+html[data-ui-theme="violet"] {
+    --card-bg: var(--bg-card, #150f2a);
+    --border: var(--border, #2d1f5a);
+    --hover-bg: var(--bg-hover, #1e1538);
+}
+
+/* ── Rose theme ── */
+html[data-ui-theme="rose"] {
+    --card-bg: var(--bg-card, #1f1018);
+    --border: var(--border, #3d1a2a);
+    --hover-bg: var(--bg-hover, #281420);
+}
+
+/* ── Slate theme ── */
+html[data-ui-theme="slate"] {
+    --card-bg: var(--bg-card, #141a22);
+    --border: var(--border, #242e3c);
+    --hover-bg: var(--bg-hover, #1c2530);
+}
+
+/* ── Aurora theme ── */
+html[data-ui-theme="aurora"] {
+    --card-bg: var(--bg-card, #0d1a1c);
+    --border: var(--border, #1a3336);
+    --hover-bg: var(--bg-hover, #142426);
+}
+
+/* ── Light mode override (data-appearance=light) ── */
+html[data-appearance="light"] {
+    --card-bg: #FFFFFF;
+    --border: rgba(0,0,0,0.12);
+    --hover-bg: #F5F5F4;
+}
+
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -62,7 +140,7 @@ body {
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     flex-direction: column;
-    z-index: 1000;
+    z-index: 1200;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     user-select: none;
     box-sizing: border-box;
@@ -88,7 +166,7 @@ body {
     border-right: none;
 }
 
-/* Main Content stays offset by 68px permanently */
+/* Main Content stays offset by 68px permanently — sidebar floats above it on hover */
 .main-content {
     margin-left: 68px;
     padding: 24px 28px;
@@ -96,7 +174,7 @@ body {
     min-width: 0;
     width: calc(100% - 68px);
     box-sizing: border-box;
-    transition: margin-left 0.25s ease, width 0.25s ease;
+    /* No transition — sidebar overlays instead of pushing content */
 }
 
 .main-content.sidebar-hidden {
@@ -1121,42 +1199,67 @@ html[data-appearance="light"] .sidebar .nav-item.active svg {
 .breakdown-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 11.5px;
+    gap: 6px;
+    font-size: 11px;
+    position: relative;
 }
 
 .breakdown-row-label {
-    min-width: 80px;
-    max-width: 105px;
+    width: 90px;
+    min-width: 90px;
+    max-width: 90px;
     font-weight: 500;
     color: var(--text-primary, #111827);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: 11px;
+    cursor: default;
+    flex-shrink: 0;
+}
+
+/* Tooltip for truncated names */
+.breakdown-row-label[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 0;
+    top: calc(100% + 4px);
+    z-index: 9999;
+    background: #1e293b;
+    color: #f8fafc;
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    pointer-events: none;
 }
 
 .breakdown-row-track {
-    flex: 1;
-    height: 10px;
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 5px;
+    width: 55px;
+    min-width: 55px;
+    max-width: 55px;
+    flex-shrink: 0;
+    height: 3px;
+    background: rgba(0, 0, 0, 0.07);
+    border-radius: 2px;
     overflow: hidden;
     position: relative;
-    min-width: 35px;
 }
 
 .breakdown-row-fill {
     height: 100%;
-    border-radius: 5px;
+    border-radius: 2px;
     transition: width 0.4s ease;
 }
 
 .breakdown-row-meta {
-    min-width: 75px;
+    flex: 1;
     text-align: right;
     font-size: 10.5px;
     white-space: nowrap;
+    min-width: 0;
 }
 
 .breakdown-row-cost {
@@ -1458,7 +1561,7 @@ html[data-appearance="light"] .user-action-btn:hover {
     background: rgba(255, 255, 255, 0.08);
 }
 
-/* ─── Main Content Autolayout Support ───────────────────────────────────── */
+/* ─── Main Content Layout (sidebar overlays — never pushes content) ──────── */
 .main-content {
     margin-left: 68px;
     padding: 24px 28px;
@@ -1466,20 +1569,13 @@ html[data-appearance="light"] .user-action-btn:hover {
     min-width: 0;
     width: calc(100% - 68px);
     box-sizing: border-box;
-    transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1), width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Dynamic Autolayout on Sidebar Hover */
-.sidebar:hover ~ .main-content {
-    margin-left: 245px;
-    width: calc(100% - 245px);
+    /* No transition — sidebar floats above content, not beside it */
 }
 
 .main-content.sidebar-hidden {
     margin-left: 0;
     width: 100%;
 }
-
 
 /* ─── Page Header ────────────────────────────────────────────────────────── */
 .page-header {
