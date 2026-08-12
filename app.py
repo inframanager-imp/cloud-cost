@@ -761,26 +761,64 @@ def api_tenant_currency():
 def api_executive_summary():
     now = datetime.utcnow()
     tid = current_tenant_id()
-
-    try:
-        req_year  = int(request.args.get("year",  now.year))
-        req_month = int(request.args.get("month", now.month))
-    except ValueError:
-        req_year, req_month = now.year, now.month
-
-    req_year  = max(2000, min(req_year,  now.year))
-    req_month = max(1,    min(req_month, 12))
-
-    days_in_month = calendar.monthrange(req_year, req_month)[1]
-    is_current = (req_year == now.year and req_month == now.month)
-    day_of_month = now.day if is_current else days_in_month
-
-    today = datetime(req_year, req_month, day_of_month)
-    first_of_month = today.replace(day=1).strftime("%Y-%m-%d")
-    today_str = today.strftime("%Y-%m-%d")
-
     conn = get_db()
     tid_filter = f"AND tenant_id = {tid}" if tid is not None else ""
+
+    # Find max date in database or fallback to now
+    max_row = conn.execute(f"SELECT MAX(date) as md FROM cost_data WHERE 1=1 {tid_filter}").fetchone()
+    max_date_str = max_row["md"] if (max_row and max_row["md"]) else now.strftime("%Y-%m-%d")
+    try:
+        ref_today = datetime.strptime(max_date_str, "%Y-%m-%d")
+    except Exception:
+        ref_today = now
+
+    preset = request.args.get("preset", "").strip().lower()
+    preset_map = {
+        "7d": 7,
+        "15d": 15,
+        "30d": 30,
+        "60d": 60,
+        "90d": 90,
+        "6m": 180,
+    }
+
+    if preset in preset_map:
+        num_days = preset_map[preset]
+        end_dt = ref_today
+        start_dt = end_dt - timedelta(days=num_days - 1)
+        prev_end_dt = start_dt - timedelta(days=1)
+        prev_start_dt = prev_end_dt - timedelta(days=num_days - 1)
+        period_label = f"Last {num_days} Days" if preset != "6m" else "Last 6 Months"
+        compare_period_label = f"Previous {num_days} Days" if preset != "6m" else "Previous 6 Months"
+        days_elapsed = num_days
+        days_in_period = num_days
+    else:
+        try:
+            req_year  = int(request.args.get("year",  ref_today.year))
+            req_month = int(request.args.get("month", ref_today.month))
+        except ValueError:
+            req_year, req_month = ref_today.year, ref_today.month
+
+        req_year  = max(2000, min(req_year,  ref_today.year))
+        req_month = max(1,    min(req_month, 12))
+
+        days_in_month = calendar.monthrange(req_year, req_month)[1]
+        is_current = (req_year == ref_today.year and req_month == ref_today.month)
+        day_of_month = ref_today.day if is_current else days_in_month
+
+        end_dt = datetime(req_year, req_month, day_of_month)
+        start_dt = end_dt.replace(day=1)
+        prev_end_dt = start_dt - timedelta(days=1)
+        prev_start_dt = prev_end_dt.replace(day=1)
+        period_label = end_dt.strftime("%b %Y")
+        compare_period_label = prev_start_dt.strftime("%b %Y")
+        days_elapsed = day_of_month
+        days_in_period = days_in_month
+
+    first_of_month = start_dt.strftime("%Y-%m-%d")
+    today_str = end_dt.strftime("%Y-%m-%d")
+    prev_start_str = prev_start_dt.strftime("%Y-%m-%d")
+    prev_end_str = prev_end_dt.strftime("%Y-%m-%d")
 
     # Reporting currency: convert every row to the tenant's dominant currency so
     # mixed-currency tenants (e.g. AWS in USD + Azure in INR) total correctly.
@@ -789,7 +827,7 @@ def api_executive_summary():
     rep_cur = tenant_reporting_currency(tid, get_db)
     _cost = _converted_cost_sql(rep_cur)
 
-    # Current month total + per-cloud
+    # Current period total + per-cloud
     cloud_cur = conn.execute(f"""
         SELECT cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
@@ -798,39 +836,30 @@ def api_executive_summary():
     cloud_cur_map = {r["cloud_provider"]: round(r["total"] or 0, 2) for r in cloud_cur}
     total_cur = sum(cloud_cur_map.values())
 
-    # Last month totals + per-cloud
-    lm_end = today.replace(day=1) - timedelta(days=1)
-    lm_start = lm_end.replace(day=1)
+    # Previous comparison period totals + per-cloud
     cloud_lm = conn.execute(f"""
         SELECT cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
         GROUP BY cloud_provider
-    """, (lm_start.strftime("%Y-%m-%d"), lm_end.strftime("%Y-%m-%d"))).fetchall()
+    """, (prev_start_str, prev_end_str)).fetchall()
     cloud_lm_map = {r["cloud_provider"]: round(r["total"] or 0, 2) for r in cloud_lm}
     total_lm = sum(cloud_lm_map.values())
-
-    # MoM comparison using partial last month (same days elapsed)
-    prev_same_day = min(day_of_month, lm_end.day)
-    lm_partial_end = lm_start.replace(day=prev_same_day).strftime("%Y-%m-%d")
-    lm_partial = conn.execute(f"""
-        SELECT cloud_provider, SUM({_cost}) as total
-        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
-        GROUP BY cloud_provider
-    """, (lm_start.strftime("%Y-%m-%d"), lm_partial_end)).fetchall()
-    lm_partial_map = {r["cloud_provider"]: round(r["total"] or 0, 2) for r in lm_partial}
-    total_lm_partial = sum(lm_partial_map.values())
 
     def mom_pct(cur, prev):
         return round((cur - prev) / prev * 100, 1) if prev > 0 else 0
 
-    # 6-month trend by cloud
+    # 12-month trend by cloud (fixed 12-month window up to current month)
     months_trend = []
-    for i in range(5, -1, -1):
-        ref = (today.replace(day=1) - timedelta(days=1)) if i > 0 else today
-        for _ in range(i):
-            ref = ref.replace(day=1) - timedelta(days=1)
-        m_start = ref.replace(day=1)
-        m_end = ref if i == 0 else ref
+    cur_year, cur_month = ref_today.year, ref_today.month
+    for i in range(11, -1, -1):
+        m = cur_month - i
+        y = cur_year
+        while m <= 0:
+            m += 12
+            y -= 1
+        m_start = datetime(y, m, 1)
+        last_day = calendar.monthrange(y, m)[1]
+        m_end = datetime(y, m, last_day) if (y != ref_today.year or m != ref_today.month) else ref_today
         rows = conn.execute(f"""
             SELECT cloud_provider, SUM({_cost}) as total
             FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
@@ -839,6 +868,8 @@ def api_executive_summary():
         m_map = {r["cloud_provider"]: round(r["total"] or 0, 2) for r in rows}
         months_trend.append({
             "label": m_start.strftime("%b %Y"),
+            "year": y,
+            "month": m,
             "azure": m_map.get("azure", 0),
             "aws": m_map.get("aws", 0),
             "gcp": m_map.get("gcp", 0),
@@ -880,8 +911,8 @@ def api_executive_summary():
         total_budget = 0
 
     # Projected EOM
-    avg_daily = total_cur / day_of_month if day_of_month > 0 else 0
-    projected = round(avg_daily * days_in_month, 2)
+    avg_daily = total_cur / days_elapsed if days_elapsed > 0 else 0
+    projected = round(avg_daily * days_in_period, 2)
 
     # Governance metrics
     untagged = conn.execute(f"""
@@ -900,52 +931,118 @@ def api_executive_summary():
     total_res_count = total_resources["cnt"] if total_resources else 0
     tag_compliance = round((1 - untagged_count / total_res_count) * 100, 1) if total_res_count > 0 else 0
 
-    # Cost by service category (group service_name into categories)
+    # Cost by service category (group service_name into 10 cost groups from design)
     svc_cats = conn.execute(f"""
         SELECT service_name, SUM({_cost}) as total FROM cost_data
         WHERE date >= ? AND date <= ? {tid_filter}
-        GROUP BY service_name ORDER BY total DESC LIMIT 20
+        GROUP BY service_name ORDER BY total DESC
     """, (first_of_month, today_str)).fetchall()
 
     def categorize(name):
         n = (name or "").lower()
-        if any(x in n for x in ["virtual machine", "compute", "ec2", "container", "kubernetes", "aks", "gke"]): return "Compute"
-        if any(x in n for x in ["storage", "blob", "s3", "disk", "backup"]): return "Storage"
-        if any(x in n for x in ["sql", "database", "cosmos", "rds", "dynamo", "redis", "postgres"]): return "Database"
-        if any(x in n for x in ["network", "bandwidth", "vpn", "dns", "load balancer", "gateway", "cdn"]): return "Networking"
-        if any(x in n for x in ["monitor", "log", "insight", "security", "defender", "sentinel"]): return "Monitoring"
-        return "Other"
+        if 'tax' in n or 'invoice' in n or 'refund' in n:
+            return 'Tax'
+        if 'bandwidth' in n:
+            return 'Bandwidth'
+        if any(x in n for x in ['analytics', 'athena', 'bigquery', 'kinesis', 'glue', 'opensearch', 'redshift', 'event hubs', 'textract', 'bing', 'custom search']):
+            return 'Analytics & Data'
+        if any(x in n for x in ['sagemaker', 'vertex', 'openai', 'chatgpt', 'gemini', 'foundry', 'cognitive', 'speech', 'translate']):
+            return 'ML'
+        if any(x in n for x in ['sql', 'database', 'cosmos', 'rds', 'dynamo', 'redis', 'postgres', 'mysql', 'mongodb']):
+            return 'Database (RDS)'
+        if any(x in n for x in ['storage', 'blob', 's3', 'disk', 'backup', 'glacier', 'ebs', 'netapp', 'file system']):
+            return 'Storage'
+        if any(x in n for x in ['batch', 'mapreduce', 'emr', 'step functions', 'logic apps', 'devops guru']):
+            return 'Batch'
+        if any(x in n for x in ['network', 'vpn', 'dns', 'load balancer', 'gateway', 'cdn', 'cloudfront', 'bastion', 'traffic manager', 'api management', 'location service', 'transfer family']):
+            return 'Network'
+        if any(x in n for x in ['monitor', 'log', 'insight', 'security', 'defender', 'sentinel', 'config', 'cloudtrail', 'guardduty', 'inspector', 'key vault', 'kms', 'support', 'cost explorer', 'grafana', 'entra', 'active directory', 'cryptography', 'secrets manager', 'ddos', 'network watcher']):
+            return 'Monitoring & Mgmt'
+        return 'Compute'
 
-    cat_map = {}
+    cat_map = {
+        'Analytics & Data': 0.0,
+        'Compute': 0.0,
+        'Tax': 0.0,
+        'Storage': 0.0,
+        'Database (RDS)': 0.0,
+        'Batch': 0.0,
+        'Network': 0.0,
+        'ML': 0.0,
+        'Bandwidth': 0.0,
+        'Monitoring & Mgmt': 0.0
+    }
     for r in svc_cats:
         cat = categorize(r["service_name"])
-        cat_map[cat] = round(cat_map.get(cat, 0) + r["total"], 2)
+        cat_map[cat] = round(cat_map.get(cat, 0.0) + (r["total"] or 0), 2)
+
+    # 1. Top Cost Groups (Top 10)
+    top_cost_groups_list = []
+    for cat_name, cat_total in sorted(cat_map.items(), key=lambda x: x[1], reverse=True)[:10]:
+        cat_pct = round((cat_total / total_cur * 100), 1) if total_cur > 0 else 0
+        top_cost_groups_list.append({"name": cat_name, "cost": round(cat_total, 2), "pct": cat_pct})
+
+    # 2. Top Services
+    top_services_list = []
+    for r in top_services:
+        c = round(r["total"] or 0, 2)
+        if c > 0:
+            pct = round((c / total_cur * 100), 1) if total_cur > 0 else 0
+            top_services_list.append({"name": r["service_name"] or "Unknown", "cost": c, "pct": pct})
+
+    # 3. Top Usage Types
+    usage_type_rows = conn.execute(f"""
+        SELECT COALESCE(NULLIF(meter_subcategory, ''), NULLIF(meter_category, ''), service_name) as usage_type,
+               SUM({_cost}) as total
+        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
+        GROUP BY usage_type ORDER BY total DESC LIMIT 10
+    """, (first_of_month, today_str)).fetchall()
+    top_usage_types_list = []
+    for r in usage_type_rows:
+        c = round(r["total"] or 0, 2)
+        if c > 0:
+            pct = round((c / total_cur * 100), 1) if total_cur > 0 else 0
+            top_usage_types_list.append({"name": r["usage_type"] or "Standard Usage", "cost": c, "pct": pct})
+
+    # 4. Top Regions
+    region_rows = conn.execute(f"""
+        SELECT COALESCE(NULLIF(resource_group, ''), 'global/other') as region_name,
+               SUM({_cost}) as total
+        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
+        GROUP BY region_name ORDER BY total DESC LIMIT 10
+    """, (first_of_month, today_str)).fetchall()
+    top_regions_list = []
+    for r in region_rows:
+        c = round(r["total"] or 0, 2)
+        if c > 0:
+            pct = round((c / total_cur * 100), 1) if total_cur > 0 else 0
+            top_regions_list.append({"name": r["region_name"] or "global/other", "cost": c, "pct": pct})
 
     conn.close()
 
     return jsonify({
-        "period": today.strftime("%b %Y"),
-        "compare_period": lm_start.strftime("%b %Y"),
+        "period": period_label,
+        "compare_period": compare_period_label,
         "currency": rep_cur,
         "currency_symbol": _cur_symbol(rep_cur),
         "kpis": {
             "total": round(total_cur, 2),
             "total_lm": round(total_lm, 2),
-            "total_mom_pct": mom_pct(total_cur, total_lm_partial),
+            "total_mom_pct": mom_pct(total_cur, total_lm),
             "azure": cloud_cur_map.get("azure", 0),
             "azure_lm": cloud_lm_map.get("azure", 0),
-            "azure_mom_pct": mom_pct(cloud_cur_map.get("azure", 0), lm_partial_map.get("azure", 0)),
+            "azure_mom_pct": mom_pct(cloud_cur_map.get("azure", 0), cloud_lm_map.get("azure", 0)),
             "aws": cloud_cur_map.get("aws", 0),
             "aws_lm": cloud_lm_map.get("aws", 0),
-            "aws_mom_pct": mom_pct(cloud_cur_map.get("aws", 0), lm_partial_map.get("aws", 0)),
+            "aws_mom_pct": mom_pct(cloud_cur_map.get("aws", 0), cloud_lm_map.get("aws", 0)),
             "gcp": cloud_cur_map.get("gcp", 0),
             "gcp_lm": cloud_lm_map.get("gcp", 0),
-            "gcp_mom_pct": mom_pct(cloud_cur_map.get("gcp", 0), lm_partial_map.get("gcp", 0)),
+            "gcp_mom_pct": mom_pct(cloud_cur_map.get("gcp", 0), cloud_lm_map.get("gcp", 0)),
             "by_cloud": cloud_cur_map,  # current-month total per cloud (all providers)
             "projected": projected,
             "avg_daily": round(avg_daily, 2),
-            "days_elapsed": day_of_month,
-            "days_in_month": days_in_month,
+            "days_elapsed": days_elapsed,
+            "days_in_month": days_in_period,
         },
         "budget": {
             "total": round(total_budget, 2),
@@ -954,7 +1051,10 @@ def api_executive_summary():
             "remaining": round(total_budget - total_cur, 2) if total_budget > 0 else None,
         },
         "monthly_trend": months_trend,
-        "top_services": [{"name": r["service_name"] or "Unknown", "cost": round(r["total"], 2)} for r in top_services],
+        "top_cost_groups": top_cost_groups_list,
+        "top_services": top_services_list,
+        "top_usage_types": top_usage_types_list,
+        "top_regions": top_regions_list,
         "top_accounts": [
             {
                 "id": r["subscription_id"],

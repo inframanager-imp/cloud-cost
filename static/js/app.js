@@ -573,8 +573,53 @@ function updateExKpiRowGrid() {
     row.style.gridTemplateColumns = `repeat(${visible.length || 1}, minmax(0, 1fr))`;
 }
 
+let _selectedPreset = '30d';
+
+function togglePeriodDropdown(e) {
+    if (e) e.stopPropagation();
+    const dd = document.getElementById('customPeriodDropdown');
+    if (dd) dd.classList.toggle('open');
+}
+
+function selectPeriodOption(presetKey, labelText, e) {
+    if (e) e.stopPropagation();
+    _selectedPreset = presetKey;
+    const labelEl = document.getElementById('customPeriodTriggerLabel');
+    if (labelEl) labelEl.textContent = labelText;
+
+    const menu = document.getElementById('customPeriodMenu');
+    if (menu) {
+        menu.querySelectorAll('.custom-period-option').forEach(opt => {
+            const isMatch = opt.getAttribute('onclick') && opt.getAttribute('onclick').includes(`'${presetKey}'`);
+            opt.classList.toggle('active', isMatch);
+            let check = opt.querySelector('span:last-child');
+            if (isMatch) {
+                if (!check || check.textContent !== '✓') {
+                    const existingCheck = Array.from(opt.children).find(c => c.textContent === '✓');
+                    if (!existingCheck) opt.insertAdjacentHTML('beforeend', '<span style="font-size:10px;color:#2563EB">✓</span>');
+                }
+            } else {
+                if (check && check.textContent === '✓') check.remove();
+            }
+        });
+    }
+
+    const dd = document.getElementById('customPeriodDropdown');
+    if (dd) dd.classList.remove('open');
+
+    loadExecutiveSummary();
+}
+
+// Close period dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const periodDD = document.getElementById('customPeriodDropdown');
+    if (periodDD && !periodDD.contains(e.target)) {
+        periodDD.classList.remove('open');
+    }
+});
+
 async function loadExecutiveSummary() {
-    if (_exYear === null) {
+    if (!_exYear || !_exMonth) {
         const now = new Date();
         _exYear  = now.getFullYear();
         _exMonth = now.getMonth() + 1;
@@ -587,7 +632,7 @@ async function loadExecutiveSummary() {
         nextBtn.style.cursor  = atCurrent ? 'default' : 'pointer';
     }
     try {
-        const resp = await fetch(`/api/executive-summary?year=${_exYear}&month=${_exMonth}`);
+        const resp = await fetch(`/api/executive-summary?preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`);
         if (!resp.ok) { console.error('Executive summary API error:', resp.status, await resp.text()); return; }
         const d = await resp.json();
         _exSummaryData = d;
@@ -810,9 +855,213 @@ async function loadExecutiveSummary() {
             }).join('');
         }
 
+        // Render Month-over-Month Comparison Widget
+        renderMonthComparisonWidget(d);
+
+        // Render 4 Standalone Breakdown Cards (Cost groups, Services, Usage types, Regions)
+        renderBreakdownCards(d);
+
     } catch(e) {
         console.error('Executive summary error:', e);
     }
+}
+
+function renderBreakdownCards(d) {
+    const _sym = d.currency_symbol || ((window.TENANT_CUR && window.TENANT_CUR.symbol) ? window.TENANT_CUR.symbol : '$');
+    const $fmt = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    const renderSingleList = (containerId, items) => {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        if (!items || items.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-secondary);font-size:12px;text-align:center;padding:20px 0">No data available for selected period</div>';
+            return;
+        }
+
+        const maxCost = Math.max(...items.map(x => x.cost || 0), 1);
+
+        container.innerHTML = items.slice(0, 10).map((item, i) => {
+            const widthPct = Math.max(4, Math.round((item.cost / maxCost) * 100));
+            // Red for Top 3 (0,1,2), Amber/Orange for Next 3 (3,4,5), Green for Next 4 (6,7,8,9)
+            const barColor = i < 3 ? '#DC2626' : (i < 6 ? '#F59E0B' : '#10B981');
+            const displayPct = item.pct !== undefined ? item.pct : Math.round((item.cost / (d.kpis?.total || 1)) * 100);
+
+            return `
+                <div class="breakdown-row">
+                    <div class="breakdown-row-label" title="${item.name}">${item.name}</div>
+                    <div class="breakdown-row-track">
+                        <div class="breakdown-row-fill" style="width:${widthPct}%;background:${barColor}"></div>
+                    </div>
+                    <div class="breakdown-row-meta">
+                        <span class="breakdown-row-cost">${$fmt(item.cost)}</span>
+                        <span class="breakdown-row-pct">- ${displayPct}%</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    };
+
+    renderSingleList('breakdownCostGroupsList', d.top_cost_groups || []);
+    renderSingleList('breakdownServicesList',   d.top_services || []);
+    renderSingleList('breakdownUsageTypesList', d.top_usage_types || []);
+    renderSingleList('breakdownRegionsList',    d.top_regions || []);
+}
+
+let _customCompMonthsData = [];
+let _compBaseIdx = -1;
+let _compCompareIdx = -1;
+
+function toggleCompMonthDropdown(type, e) {
+    if (e) e.stopPropagation();
+    const baseDD = document.getElementById('customCompBaseDropdown');
+    const compDD = document.getElementById('customCompCompareDropdown');
+    
+    if (type === 'base') {
+        if (compDD) compDD.classList.remove('open');
+        if (baseDD) baseDD.classList.toggle('open');
+    } else if (type === 'compare') {
+        if (baseDD) baseDD.classList.remove('open');
+        if (compDD) compDD.classList.toggle('open');
+    }
+}
+
+function selectCompMonthOption(type, idx, e) {
+    if (e) e.stopPropagation();
+    if (type === 'base') {
+        _compBaseIdx = idx;
+        const baseDD = document.getElementById('customCompBaseDropdown');
+        if (baseDD) baseDD.classList.remove('open');
+    } else {
+        _compCompareIdx = idx;
+        const compDD = document.getElementById('customCompCompareDropdown');
+        if (compDD) compDD.classList.remove('open');
+    }
+    const _sym = (window.TENANT_CUR && window.TENANT_CUR.symbol) ? window.TENANT_CUR.symbol : '$';
+    updateMonthComparisonDisplay(_sym);
+}
+
+// Click outside dismissal for custom month dropdowns
+document.addEventListener('click', function(e) {
+    const baseDD = document.getElementById('customCompBaseDropdown');
+    const compDD = document.getElementById('customCompCompareDropdown');
+    if (baseDD && !baseDD.contains(e.target)) baseDD.classList.remove('open');
+    if (compDD && !compDD.contains(e.target)) compDD.classList.remove('open');
+});
+
+function renderMonthComparisonWidget(d) {
+    const trend = d.monthly_trend || [];
+    _customCompMonthsData = trend;
+    if (trend.length === 0) return;
+
+    if (_compBaseIdx < 0 || _compBaseIdx >= trend.length) {
+        _compBaseIdx = trend.length - 1;
+    }
+    if (_compCompareIdx < 0 || _compCompareIdx >= trend.length) {
+        _compCompareIdx = Math.max(0, trend.length - 2);
+    }
+
+    updateMonthComparisonDisplay(d.currency_symbol || '$');
+}
+
+function resetMonthComparisonToDefault() {
+    const trend = _customCompMonthsData;
+    if (trend.length === 0) return;
+    _compBaseIdx = trend.length - 1;
+    _compCompareIdx = Math.max(0, trend.length - 2);
+    const _sym = (window.TENANT_CUR && window.TENANT_CUR.symbol) ? window.TENANT_CUR.symbol : '$';
+    updateMonthComparisonDisplay(_sym);
+}
+
+function updateMonthComparisonDisplay(_sym) {
+    const trend = _customCompMonthsData;
+    if (trend.length === 0) return;
+
+    if (_compBaseIdx < 0 || _compBaseIdx >= trend.length) _compBaseIdx = trend.length - 1;
+    if (_compCompareIdx < 0 || _compCompareIdx >= trend.length) _compCompareIdx = Math.max(0, trend.length - 2);
+
+    const mBase = trend[_compBaseIdx] || {};
+    const mComp = trend[_compCompareIdx] || {};
+
+    // Update custom dropdown trigger labels
+    const baseLabelEl = document.getElementById('compBaseTriggerLabel');
+    const compareLabelEl = document.getElementById('compCompareTriggerLabel');
+    if (baseLabelEl) baseLabelEl.textContent = mBase.label || 'Base';
+    if (compareLabelEl) compareLabelEl.textContent = mComp.label || 'Compare';
+
+    // Populate custom month menu option items
+    const baseMenu = document.getElementById('compBaseMenu');
+    const compareMenu = document.getElementById('compCompareMenu');
+    if (baseMenu) {
+        baseMenu.innerHTML = trend.map((m, idx) => `
+            <div class="custom-month-option ${idx === _compBaseIdx ? 'active' : ''}" onclick="selectCompMonthOption('base', ${idx}, event)">
+                <span>${m.label}</span>
+                ${idx === _compBaseIdx ? '<span style="font-size:10px;color:#2563EB">✓</span>' : ''}
+            </div>
+        `).join('');
+    }
+    if (compareMenu) {
+        compareMenu.innerHTML = trend.map((m, idx) => `
+            <div class="custom-month-option ${idx === _compCompareIdx ? 'active' : ''}" onclick="selectCompMonthOption('compare', ${idx}, event)">
+                <span>${m.label}</span>
+                ${idx === _compCompareIdx ? '<span style="font-size:10px;color:#2563EB">✓</span>' : ''}
+            </div>
+        `).join('');
+    }
+
+    const $fmt = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
+
+    const baseTotal = mBase.total || 0;
+    const compTotal = mComp.total || 0;
+    const diffTotal = baseTotal - compTotal;
+    const pctTotal  = compTotal > 0 ? ((baseTotal - compTotal) / compTotal * 100) : 0;
+
+    const el = id => document.getElementById(id);
+    if (el('compBaseLabel'))    el('compBaseLabel').textContent    = mBase.label || 'Base';
+    if (el('compCompareLabel')) el('compCompareLabel').textContent = mComp.label || 'Compare';
+    if (el('compBaseVal'))      el('compBaseVal').textContent      = $fmt(baseTotal);
+    if (el('compCompareVal'))   el('compCompareVal').textContent   = $fmt(compTotal);
+
+    if (el('compDiffAmount')) {
+        const sign = diffTotal >= 0 ? '+' : '-';
+        el('compDiffAmount').textContent = `${sign}${$fmt(Math.abs(diffTotal))}`;
+    }
+    if (el('compDiffBadge')) {
+        const up = diffTotal >= 0;
+        const cls = up ? 'trend-up' : 'trend-down';
+        const arrow = up ? '▲' : '▼';
+        el('compDiffBadge').className = `kpi-trend-pill ${cls}`;
+        el('compDiffBadge').textContent = `${arrow} ${Math.abs(pctTotal).toFixed(1)}%`;
+    }
+
+    const updateProviderRow = (pKey, baseVal, compVal, rowElId, valElId, badgeElId, bar1Id, bar2Id) => {
+        const rowEl = el(rowElId);
+        if (baseVal === 0 && compVal === 0) {
+            if (rowEl) rowEl.style.display = 'none';
+            return;
+        }
+        if (rowEl) rowEl.style.display = 'flex';
+
+        const diff = baseVal - compVal;
+        const pct  = compVal > 0 ? ((baseVal - compVal) / compVal * 100) : 0;
+        if (el(valElId)) el(valElId).textContent = `${$fmt(baseVal)} vs ${$fmt(compVal)}`;
+        if (el(badgeElId)) {
+            const up = diff >= 0;
+            const cls = up ? 'trend-up' : 'trend-down';
+            const arrow = up ? '▲' : '▼';
+            el(badgeElId).className = `kpi-trend-pill ${cls}`;
+            el(badgeElId).style.color = '';
+            el(badgeElId).textContent = `${arrow} ${Math.abs(pct).toFixed(1)}%`;
+        }
+        const maxVal = Math.max(baseVal, compVal, 1);
+        const w1 = Math.round((baseVal / maxVal) * 50);
+        const w2 = Math.round((compVal / maxVal) * 50);
+        if (el(bar1Id)) el(bar1Id).style.width = w1 + '%';
+        if (el(bar2Id)) el(bar2Id).style.width = w2 + '%';
+    };
+
+    updateProviderRow('azure', mBase.azure||0, mComp.azure||0, 'compAzureRow', 'compAzureVals', 'compAzureBadge', 'compAzureBar1', 'compAzureBar2');
+    updateProviderRow('aws',   mBase.aws||0,   mComp.aws||0,   'compAwsRow',   'compAwsVals',   'compAwsBadge',   'compAwsBar1',   'compAwsBar2');
+    updateProviderRow('gcp',   mBase.gcp||0,   mComp.gcp||0,   'compGcpRow',   'compGcpVals',   'compGcpBadge',   'compGcpBar1',   'compGcpBar2');
 }
 
 async function loadCloudOverview() {

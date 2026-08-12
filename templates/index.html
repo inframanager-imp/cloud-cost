@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v=20260705f">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260709b">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260811_v11">
     <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260507n">
     <link rel="stylesheet" href="/static/css/appearance.css?v=20260507n">
     <script>
@@ -418,7 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <h1 style="font-size:22px;font-weight:600;color:#111827;margin:0;line-height:1.2;letter-spacing:-0.01em">FinOps Command Center</h1>
             </div>
             <!-- Toolbar Controls -->
-            <div class="no-print" style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+            <div class="no-print" style="display:flex;align-items:center;gap:10px;flex-shrink:0">
                 <!-- Custom Cloud Provider Dropdown (LEFT of Date Selector) -->
                 <div class="custom-cloud-dropdown" id="customCloudDropdown">
                     <button type="button" class="custom-cloud-trigger" id="cloudDropdownTrigger" onclick="toggleCloudDropdown(event)">
@@ -440,15 +440,35 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                 </div>
-                <!-- Month navigator -->
-                <div style="display:flex;align-items:center;gap:0;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden;background:#FFFFFF;height:40px;box-sizing:border-box">
-                    <button onclick="exNavMonth(-1)" style="padding:0 12px;height:100%;border:none;background:transparent;cursor:pointer;color:#6B7280;font-size:16px;display:flex;align-items:center;justify-content:center" title="Previous month">&#8249;</button>
-                    <div style="padding:0 14px;height:100%;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;font-size:13px;font-weight:600;color:#111827;min-width:96px;display:flex;align-items:center;justify-content:center" id="exPeriodLabel">—</div>
-                    <button onclick="exNavMonth(1)" id="exNextBtn" style="padding:0 12px;height:100%;border:none;background:transparent;cursor:pointer;color:#6B7280;font-size:16px;display:flex;align-items:center;justify-content:center" title="Next month">&#8250;</button>
-                </div>
-                <!-- Compare label -->
-                <div class="header-control-item" style="white-space:nowrap;box-sizing:border-box">
-                    vs <span id="exComparePeriod" style="color:#111827;font-weight:600;margin-left:4px">—</span>
+                <!-- Custom Date Range Preset Dropdown -->
+                <div class="custom-period-dropdown" id="customPeriodDropdown">
+                    <button type="button" class="custom-period-trigger" id="customPeriodTrigger" onclick="togglePeriodDropdown(event)">
+                        <span id="customPeriodTriggerLabel">Last 30 Days</span>
+                        <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                    <div class="custom-period-menu" id="customPeriodMenu">
+                        <div class="custom-period-option" onclick="selectPeriodOption('7d', 'Last 7 Days', event)">
+                            <span>Last 7 Days</span>
+                        </div>
+                        <div class="custom-period-option" onclick="selectPeriodOption('15d', 'Last 15 Days', event)">
+                            <span>Last 15 Days</span>
+                        </div>
+                        <div class="custom-period-option active" onclick="selectPeriodOption('30d', 'Last 30 Days', event)">
+                            <span>Last 30 Days</span>
+                            <span style="font-size:10px;color:#2563EB">✓</span>
+                        </div>
+                        <div class="custom-period-option" onclick="selectPeriodOption('60d', 'Last 60 Days', event)">
+                            <span>Last 60 Days</span>
+                        </div>
+                        <div class="custom-period-option" onclick="selectPeriodOption('90d', 'Last 90 Days', event)">
+                            <span>Last 90 Days</span>
+                        </div>
+                        <div class="custom-period-option" onclick="selectPeriodOption('6m', 'Last 6 Months', event)">
+                            <span>Last 6 Months</span>
+                        </div>
+                    </div>
                 </div>
                 <!-- Icon-only Refresh button with styling -->
                 <button onclick="loadExecutiveSummary()" class="header-action-icon-btn" title="Refresh Dashboard" aria-label="Refresh Dashboard">
@@ -469,44 +489,14 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         </div>
 
-        <!-- KPI Row: Single Row Guarantee -->
-        <div id="exKpiRow" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;margin-bottom:24px;align-items:stretch;width:100%;box-sizing:border-box">
+        <!-- KPI Row: 4 Essential Financial KPI Cards -->
+        <div id="exKpiRow" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:24px;align-items:stretch;width:100%;box-sizing:border-box">
 
             <div class="exec-kpi-card">
                 <div class="kpi-card-label">Total Spend</div>
                 <div class="kpi-card-value" id="exTotalSpend">$—</div>
                 <div id="exTotalMom"></div>
                 <div class="kpi-card-subtext" id="exTotalSub"></div>
-            </div>
-
-            <div data-cloud-vis="azure" class="exec-kpi-card">
-                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden">
-                    <img src="/static/azure-logo.svg" width="16" height="16" alt="Azure" style="object-fit:contain;flex-shrink:0">
-                    <span class="kpi-card-label">Azure Spend</span>
-                </div>
-                <div class="kpi-card-value" id="exAzureSpend">$—</div>
-                <div id="exAzureMom"></div>
-                <div class="kpi-card-subtext" id="exAzureSub"></div>
-            </div>
-
-            <div data-cloud-vis="aws" class="exec-kpi-card">
-                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden">
-                    <img src="/static/aws-logo.svg" width="16" height="16" alt="AWS" style="object-fit:contain;flex-shrink:0">
-                    <span class="kpi-card-label">AWS Spend</span>
-                </div>
-                <div class="kpi-card-value" id="exAwsSpend">$—</div>
-                <div id="exAwsMom"></div>
-                <div class="kpi-card-subtext" id="exAwsSub"></div>
-            </div>
-
-            <div data-cloud-vis="gcp" class="exec-kpi-card">
-                <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden">
-                    <img src="/static/gcp-logo.svg" width="16" height="16" alt="GCP" style="object-fit:contain;flex-shrink:0">
-                    <span class="kpi-card-label">GCP Spend</span>
-                </div>
-                <div class="kpi-card-value" id="exGcpSpend">$—</div>
-                <div id="exGcpMom"></div>
-                <div class="kpi-card-subtext" id="exGcpSub"></div>
             </div>
 
             <div class="exec-kpi-card">
@@ -577,9 +567,9 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
 
         <!-- Row 3: Accounts | Savings | Governance -->
-        <div class="exec-row-accounts" style="display:grid;grid-template-columns:1fr 260px 280px;gap:12px;margin-bottom:16px;align-items:stretch">
+        <div class="exec-row-accounts" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;align-items:stretch">
 
-            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
+            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                     <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Cost by Account / Subscription</span>
                     <span style="font-size:11px;color:var(--text-secondary)" id="exAccountsPeriod">This month</span>
@@ -587,50 +577,203 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div id="exAccountsList" style="display:flex;flex-direction:column;gap:6px;flex:1"></div>
             </div>
 
-            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-                    <span style="font-size:13px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:5px">
-                        <svg width="13" height="13" fill="none" stroke="#10b981" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-                        Savings Opportunities
-                    </span>
-                    <span style="font-size:10px;color:var(--text-secondary)">Est. monthly</span>
+            <!-- Single Unified Month-over-Month Comparison Widget -->
+            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box">
+                <!-- Header with Dropdowns -->
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <svg width="15" height="15" fill="none" stroke="#2563EB" stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M18 20V10M12 20V4M6 20v-6"/>
+                        </svg>
+                        <span style="font-size:13px;font-weight:600;color:var(--text-primary)">Month Comparison</span>
+                    </div>
+                    <!-- Custom Selectors for Base Month vs Compare Month -->
+                    <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+                        <div class="custom-month-dropdown" id="customCompBaseDropdown">
+                            <button type="button" class="custom-month-trigger" id="compBaseTrigger" onclick="toggleCompMonthDropdown('base', event)">
+                                <span id="compBaseTriggerLabel">Aug 2026</span>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="dropdown-chevron"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <div class="custom-month-menu" id="compBaseMenu"></div>
+                        </div>
+
+                        <span style="color:var(--text-secondary);font-weight:500;font-size:11px">vs</span>
+
+                        <div class="custom-month-dropdown" id="customCompCompareDropdown">
+                            <button type="button" class="custom-month-trigger" id="compCompareTrigger" onclick="toggleCompMonthDropdown('compare', event)">
+                                <span id="compCompareTriggerLabel">Jul 2026</span>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="dropdown-chevron"><polyline points="6 9 12 15 18 9"/></svg>
+                            </button>
+                            <div class="custom-month-menu" id="compCompareMenu"></div>
+                        </div>
+                    </div>
                 </div>
-                <div id="exSavingsList" style="display:flex;flex-direction:column;gap:10px;flex:1"></div>
-                <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-                    <span style="font-size:11px;font-weight:600;color:var(--text-secondary)">Total Potential</span>
-                    <span style="font-size:15px;font-weight:700;color:#10b981" id="exSavingsTotal">$—</span>
+
+                <!-- Overall Spend Variance Box -->
+                <div style="background:rgba(37,99,235,0.04);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+                    <div>
+                        <div style="font-size:10.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em">Total Spend Variance</div>
+                        <div style="display:flex;align-items:baseline;gap:8px;margin-top:2px">
+                            <span id="compDiffAmount" style="font-size:18px;font-weight:600;color:var(--text-primary)">$—</span>
+                            <span id="compDiffBadge" class="kpi-trend-pill trend-down" style="font-size:11px">—</span>
+                        </div>
+                    </div>
+                    <div style="text-align:right;font-size:11px">
+                        <div style="color:var(--text-secondary)"><span id="compBaseLabel">Base</span>: <strong id="compBaseVal" style="color:var(--text-primary);font-weight:600">$—</strong></div>
+                        <div style="color:var(--text-secondary);margin-top:2px"><span id="compCompareLabel">Compare</span>: <strong id="compCompareVal" style="color:var(--text-primary);font-weight:600">$—</strong></div>
+                    </div>
+                </div>
+
+                <!-- Provider Breakdown Comparison Rows -->
+                <div style="display:flex;flex-direction:column;gap:12px;flex:1;justify-content:center">
+                    <!-- Azure Comparison Row -->
+                    <div id="compAzureRow" style="display:flex;flex-direction:column;gap:4px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px">
+                            <div style="display:flex;align-items:center;gap:6px">
+                                <img src="/static/azure-logo.svg" width="14" height="14" alt="Azure">
+                                <span style="font-weight:500;color:var(--text-primary)">Azure</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <span style="color:var(--text-secondary);font-size:11px" id="compAzureVals">$— vs $—</span>
+                                <span id="compAzureBadge" class="kpi-trend-pill">—</span>
+                            </div>
+                        </div>
+                        <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;display:flex">
+                            <div id="compAzureBar1" style="height:100%;width:50%;background:#2563EB;border-radius:3px"></div>
+                            <div id="compAzureBar2" style="height:100%;width:50%;background:#93C5FD;border-radius:0 3px 3px 0"></div>
+                        </div>
+                    </div>
+
+                    <!-- AWS Comparison Row -->
+                    <div id="compAwsRow" style="display:flex;flex-direction:column;gap:4px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px">
+                            <div style="display:flex;align-items:center;gap:6px">
+                                <img src="/static/aws-logo.svg" width="14" height="14" alt="AWS">
+                                <span style="font-weight:500;color:var(--text-primary)">AWS</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <span style="color:var(--text-secondary);font-size:11px" id="compAwsVals">$— vs $—</span>
+                                <span id="compAwsBadge" class="kpi-trend-pill">—</span>
+                            </div>
+                        </div>
+                        <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;display:flex">
+                            <div id="compAwsBar1" style="height:100%;width:50%;background:#F97316;border-radius:3px"></div>
+                            <div id="compAwsBar2" style="height:100%;width:50%;background:#FDBA74;border-radius:0 3px 3px 0"></div>
+                        </div>
+                    </div>
+
+                    <!-- GCP Comparison Row -->
+                    <div id="compGcpRow" style="display:flex;flex-direction:column;gap:4px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px">
+                            <div style="display:flex;align-items:center;gap:6px">
+                                <img src="/static/gcp-logo.svg" width="14" height="14" alt="GCP">
+                                <span style="font-weight:500;color:var(--text-primary)">GCP</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <span style="color:var(--text-secondary);font-size:11px" id="compGcpVals">$— vs $—</span>
+                                <span id="compGcpBadge" class="kpi-trend-pill">—</span>
+                            </div>
+                        </div>
+                        <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;display:flex">
+                            <div id="compGcpBar1" style="height:100%;width:0%;background:#16A34A;border-radius:3px"></div>
+                            <div id="compGcpBar2" style="height:100%;width:0%;background:#86EFAC;border-radius:0 3px 3px 0"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer reset -->
+                <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-secondary)">
+                    <span>Comparing selected month billing cycles</span>
+                    <span style="font-weight:500;color:#2563EB;cursor:pointer" onclick="resetMonthComparisonToDefault()">Reset Default</span>
                 </div>
             </div>
 
-            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-                    <span style="font-size:13px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:5px">
-                        <svg width="13" height="13" fill="none" stroke="#6366f1" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                        Governance
-                    </span>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-                    <div style="text-align:center;padding:10px 6px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:8px">
-                        <div style="font-size:24px;font-weight:700;color:#ef4444;line-height:1" id="exUntagged">—</div>
-                        <div style="font-size:10px;color:var(--text-secondary);margin-top:4px">Untagged</div>
-                    </div>
-                    <div style="text-align:center;padding:10px 6px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:8px">
-                        <div style="font-size:24px;font-weight:700;color:#6366f1;line-height:1" id="exTotalRes">—</div>
-                        <div style="font-size:10px;color:var(--text-secondary);margin-top:4px">Resources</div>
-                    </div>
-                </div>
-                <div style="margin-bottom:14px">
-                    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px">
-                        <span style="color:var(--text-secondary)">Tag Compliance Score</span>
-                        <span style="font-weight:700;color:var(--text-primary)" id="exTagPct">—%</span>
-                    </div>
-                    <div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden">
-                        <div id="exTagBar" style="height:100%;width:0%;border-radius:4px;background:#10b981;transition:width .8s"></div>
+        </div>
+
+        <!-- 4 Standalone Breakdown Cards (Single Horizontal Row) -->
+        <div class="exec-row-breakdowns" style="display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:12px;margin-top:20px;box-sizing:border-box;width:100%">
+
+            <!-- Card 1: Top Cost Groups -->
+            <div class="breakdown-card" style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:14px 12px;display:flex;flex-direction:column;box-sizing:border-box">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div style="font-size:12.5px;font-weight:600;color:var(--text-primary)">Top cost groups</div>
+                    <div class="card-info-wrapper">
+                        <svg class="card-info-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                        <div class="card-info-popover">
+                            <div class="info-popover-title">Color Legend & Meaning</div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#DC2626"></span><span>Rank 1–3 — Top Cost Drivers</span></div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#F59E0B"></span><span>Rank 4–6 — Moderate Spend</span></div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#10B981"></span><span>Rank 7–10 — Minor Expenses</span></div>
+                        </div>
                     </div>
                 </div>
-                <div style="border-top:1px solid var(--border);padding-top:12px;flex:1">
-                    <div style="font-size:10px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Cost by Category</div>
-                    <div id="exCatList" style="display:flex;flex-direction:column;gap:5px"></div>
+                <div id="breakdownCostGroupsList" style="display:flex;flex-direction:column;gap:8px;flex:1">
+                    <div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Loading cost groups…</div>
+                </div>
+            </div>
+
+            <!-- Card 2: Top Services -->
+            <div class="breakdown-card" style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:14px 12px;display:flex;flex-direction:column;box-sizing:border-box">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div style="font-size:12.5px;font-weight:600;color:var(--text-primary)">Top services</div>
+                    <div class="card-info-wrapper">
+                        <svg class="card-info-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                        <div class="card-info-popover">
+                            <div class="info-popover-title">Color Legend & Meaning</div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#DC2626"></span><span>Rank 1–3 — Top Cost Drivers</span></div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#F59E0B"></span><span>Rank 4–6 — Moderate Spend</span></div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#10B981"></span><span>Rank 7–10 — Minor Expenses</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="breakdownServicesList" style="display:flex;flex-direction:column;gap:8px;flex:1">
+                    <div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Loading services…</div>
+                </div>
+            </div>
+
+            <!-- Card 3: Top Usage Types -->
+            <div class="breakdown-card" style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:14px 12px;display:flex;flex-direction:column;box-sizing:border-box">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div style="font-size:12.5px;font-weight:600;color:var(--text-primary)">Top usage types</div>
+                    <div class="card-info-wrapper">
+                        <svg class="card-info-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                        <div class="card-info-popover">
+                            <div class="info-popover-title">Color Legend & Meaning</div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#DC2626"></span><span>Rank 1–3 — Top Cost Drivers</span></div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#F59E0B"></span><span>Rank 4–6 — Moderate Spend</span></div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#10B981"></span><span>Rank 7–10 — Minor Expenses</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="breakdownUsageTypesList" style="display:flex;flex-direction:column;gap:8px;flex:1">
+                    <div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Loading usage types…</div>
+                </div>
+            </div>
+
+            <!-- Card 4: Top Regions -->
+            <div class="breakdown-card" style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:14px 12px;display:flex;flex-direction:column;box-sizing:border-box">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div style="font-size:12.5px;font-weight:600;color:var(--text-primary)">Top regions</div>
+                    <div class="card-info-wrapper">
+                        <svg class="card-info-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                        <div class="card-info-popover">
+                            <div class="info-popover-title">Color Legend & Meaning</div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#DC2626"></span><span>Rank 1–3 — Top Cost Drivers</span></div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#F59E0B"></span><span>Rank 4–6 — Moderate Spend</span></div>
+                            <div class="info-legend-row"><span class="info-legend-dot" style="background:#10B981"></span><span>Rank 7–10 — Minor Expenses</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="breakdownRegionsList" style="display:flex;flex-direction:column;gap:8px;flex:1">
+                    <div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Loading regions…</div>
                 </div>
             </div>
 
@@ -4167,7 +4310,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </div>
 
-<script src="/static/js/app.js?v=20260709c"></script>
+<script src="/static/js/app.js?v=20260811_v12"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

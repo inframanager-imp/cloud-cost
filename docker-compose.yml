@@ -12,6 +12,7 @@ services:
     # ACTIVITY_SYNC_SUBPROCESS, FLASK_THREADED — see env.example and app.py header comments.
     # Host folder so azure_costs.db is the real file (not an empty Docker named volume)
     volumes:
+      - ./app.py:/app/app.py
       - ./data:/app/data
       - ./templates:/app/templates
       - ./static:/app/static

@@ -837,14 +837,14 @@ html[data-appearance="light"] .sidebar .nav-item.active svg {
 }
 
 .custom-cloud-trigger {
-    height: 40px;
+    height: 38px;
     padding: 0 14px;
     background: var(--card-bg, #FFFFFF);
     color: var(--text-primary, #111827);
     border: 1px solid var(--border, #E5E7EB);
-    border-radius: 12px;
+    border-radius: 10px;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -919,10 +919,337 @@ html[data-appearance="light"] .sidebar .nav-item.active svg {
     font-weight: 600;
 }
 
+/* ─── Custom Date Range Preset Dropdown Component ───────────────────── */
+.custom-period-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.custom-period-trigger {
+    height: 38px;
+    padding: 0 14px;
+    background: var(--card-bg, #FFFFFF);
+    color: var(--text-primary, #111827);
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 450;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    outline: none;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+    white-space: nowrap;
+    min-width: 130px;
+}
+
+.custom-period-trigger:hover {
+    border-color: #2563EB;
+    background: rgba(37, 99, 235, 0.03);
+}
+
+.custom-period-dropdown.open .custom-period-trigger {
+    border-color: #2563EB;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.custom-period-dropdown.open .dropdown-chevron {
+    transform: rotate(180deg);
+}
+
+.custom-period-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 145px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--card-bg, #FFFFFF);
+    border: 1px solid var(--border, #CBD5E1);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    z-index: 1000;
+    padding: 4px;
+    box-sizing: border-box;
+}
+
+.custom-period-dropdown.open .custom-period-menu {
+    display: block;
+}
+
+.custom-period-option {
+    padding: 7px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary, #111827);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.custom-period-option:hover {
+    background: rgba(37, 99, 235, 0.08);
+    color: #2563EB;
+}
+
+.custom-period-option.active {
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563EB;
+    font-weight: 600;
+}
+
+/* ─── Custom Month Comparison Dropdown Component ───────────────────── */
+.custom-month-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.custom-month-trigger {
+    height: 26px;
+    padding: 0 10px;
+    background: var(--card-bg, #FFFFFF);
+    color: var(--text-primary, #111827);
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    outline: none;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+    white-space: nowrap;
+}
+
+.custom-month-trigger:hover {
+    border-color: #2563EB;
+    background: rgba(37, 99, 235, 0.03);
+}
+
+.custom-month-dropdown.open .custom-month-trigger {
+    border-color: #2563EB;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.custom-month-dropdown.open .dropdown-chevron {
+    transform: rotate(180deg);
+}
+
+.custom-month-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 125px;
+    max-height: 210px;
+    overflow-y: auto;
+    background: var(--card-bg, #FFFFFF);
+    border: 1px solid var(--border, #CBD5E1);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    z-index: 1000;
+    padding: 4px;
+    box-sizing: border-box;
+}
+
+.custom-month-menu::-webkit-scrollbar {
+    width: 4px;
+}
+
+.custom-month-menu::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.03);
+    border-radius: 4px;
+}
+
+.custom-month-menu::-webkit-scrollbar-thumb {
+    background: #94A3B8;
+    border-radius: 4px;
+}
+
+.custom-month-menu::-webkit-scrollbar-thumb:hover {
+    background: #64748B;
+}
+
+.custom-month-dropdown.open .custom-month-menu {
+    display: block;
+}
+
+.custom-month-option {
+    padding: 5px 8px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-primary, #111827);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.custom-month-option:hover {
+    background: rgba(37, 99, 235, 0.08);
+    color: #2563EB;
+}
+
+.custom-month-option.active {
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563EB;
+    font-weight: 600;
+}
+
+/* ─── Standalone Breakdown Cards ───────────────────────────────────── */
+.breakdown-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.breakdown-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.breakdown-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+}
+
+.breakdown-row-label {
+    min-width: 80px;
+    max-width: 105px;
+    font-weight: 500;
+    color: var(--text-primary, #111827);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+}
+
+.breakdown-row-track {
+    flex: 1;
+    height: 10px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 5px;
+    overflow: hidden;
+    position: relative;
+    min-width: 35px;
+}
+
+.breakdown-row-fill {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.4s ease;
+}
+
+.breakdown-row-meta {
+    min-width: 75px;
+    text-align: right;
+    font-size: 10.5px;
+    white-space: nowrap;
+}
+
+.breakdown-row-cost {
+    font-weight: 500;
+    color: var(--text-primary, #111827);
+}
+
+.breakdown-row-pct {
+    color: var(--text-secondary, #6B7280);
+    margin-left: 3px;
+    font-size: 10px;
+}
+
+/* ─── Breakdown Info Icon & Legend Popover ────────────────────────── */
+.card-info-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.card-info-icon {
+    color: var(--text-secondary, #9CA3AF);
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.card-info-wrapper:hover .card-info-icon {
+    color: #2563EB;
+    transform: scale(1.1);
+}
+
+.card-info-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: -6px;
+    min-width: 190px;
+    background: var(--card-bg, #FFFFFF);
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    padding: 10px 12px;
+    font-size: 11px;
+    z-index: 1050;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+    transform: translateY(-4px);
+    box-sizing: border-box;
+}
+
+.card-info-wrapper:hover .card-info-popover {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.info-popover-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-primary, #111827);
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border, #F3F4F6);
+}
+
+.info-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+    color: var(--text-secondary, #4B5563);
+    white-space: nowrap;
+}
+
+.info-legend-row:last-child {
+    margin-bottom: 0;
+}
+
+.info-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
 .header-action-icon-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
     border: 1px solid var(--border, #E5E7EB);
     background: var(--card-bg, #FFFFFF);
     color: var(--text-secondary, #6B7280);
