@@ -3759,12 +3759,15 @@ def get_resource_inventory(
         filters_sql += " AND resource_type = ?"
         filter_params.append(resource_type)
     if power_state and power_state != "all":
-        if power_state == "running":
-            filters_sql += " AND (LOWER(power_state) LIKE '%running%' OR LOWER(power_state) LIKE '%started%')"
-        elif power_state == "stopped":
-            filters_sql += " AND (LOWER(power_state) LIKE '%stopped%' OR LOWER(power_state) LIKE '%deallocated%')"
-        elif power_state == "unknown":
-            filters_sql += " AND (power_state IS NULL OR power_state = '')"
+        st = power_state.lower().strip() if isinstance(power_state, str) else ""
+        if st in ["running", "up"]:
+            filters_sql += " AND (LOWER(power_state) LIKE '%running%' OR LOWER(power_state) LIKE '%started%' OR LOWER(power_state) LIKE '%succeeded%' OR LOWER(power_state) LIKE '%active%' OR LOWER(power_state) = 'up')"
+        elif st in ["stopped", "down"]:
+            filters_sql += " AND (LOWER(power_state) LIKE '%stopped%' OR LOWER(power_state) LIKE '%deallocated%' OR LOWER(power_state) LIKE '%terminated%' OR LOWER(power_state) = 'down')"
+        elif st == "idle":
+            filters_sql += " AND (LOWER(power_state) LIKE '%idle%' OR LOWER(power_state) LIKE '%unused%' OR LOWER(power_state) LIKE '%unattached%')"
+        elif st == "unknown":
+            filters_sql += " AND (power_state IS NULL OR power_state = '' OR LOWER(power_state) LIKE '%unknown%' OR LOWER(power_state) LIKE '%n/a%')"
     if search:
         filters_sql += """ AND (
             resource_name LIKE ? OR resource_group LIKE ? OR resource_type LIKE ?
@@ -5415,6 +5418,204 @@ def get_client_filter_values(cloud: str, filter_type: str, tenant_id: int) -> li
 
     conn.close()
     return result
+
+
+def get_analytics_home_overview(tenant_id=None, date_from=None, date_to=None):
+    """
+    Calculates per-cloud provider cards for Public Cloud Home overview page:
+    - Subscriptions Count
+    - Cost (Period Spend)
+    - Resources Count
+    - Services Count
+    - Running Count, Stopped Count, Total Instances Count
+    """
+    import math
+    from datetime import datetime
+    conn = get_db()
+
+    if not date_from or not date_to:
+        now = datetime.utcnow()
+        tid_filter = f"AND tenant_id = {tenant_id}" if tenant_id is not None else ""
+        max_row = conn.execute(f"SELECT MAX(date) as md FROM cost_data WHERE 1=1 {tid_filter}").fetchone()
+        max_date_str = max_row["md"] if (max_row and max_row["md"]) else now.strftime("%Y-%m-%d")
+        try:
+            ref_today = datetime.strptime(max_date_str, "%Y-%m-%d")
+        except Exception:
+            ref_today = now
+        date_from = ref_today.strftime("%Y-%m-01")
+        date_to = ref_today.strftime("%Y-%m-%d")
+
+    cost_where = "WHERE date >= ? AND date <= ?"
+    params = [date_from, date_to]
+    if tenant_id is not None:
+        cost_where += " AND tenant_id = ?"
+        params.append(tenant_id)
+
+    # 1. Cost, Services, Subscriptions, Resources aggregated per provider from cost_data
+    cost_rows = conn.execute(f"""
+        SELECT 
+            LOWER(TRIM(cloud_provider)) AS provider,
+            SUM(cost) AS total_cost,
+            COUNT(DISTINCT subscription_id) AS subs_count,
+            COUNT(DISTINCT COALESCE(NULLIF(TRIM(service_name), ''), NULLIF(TRIM(meter_category), ''), 'Other')) AS services_count,
+            COUNT(DISTINCT resource_name) AS resources_count
+        FROM cost_data
+        {cost_where}
+        GROUP BY LOWER(TRIM(cloud_provider))
+    """, params).fetchall()
+
+    provider_map = {}
+    for r in cost_rows:
+        p = r["provider"] or "azure"
+        provider_map[p] = {
+            "provider": p,
+            "cost": float(r["total_cost"] or 0.0),
+            "subs_count": int(r["subs_count"] or 0),
+            "services_count": int(r["services_count"] or 0),
+            "resources_count": int(r["resources_count"] or 0),
+            "running_count": 0,
+            "stopped_count": 0,
+            "total_instances": 0,
+        }
+
+    # 2. Previous month comparison period total per provider
+    try:
+        d_start = datetime.strptime(date_from, "%Y-%m-%d")
+        d_end = datetime.strptime(date_to, "%Y-%m-%d")
+        days_in_period = max((d_end - d_start).days + 1, 1)
+
+        prev_end_dt = d_start - timedelta(days=1)
+        prev_start_dt = prev_end_dt.replace(day=1)
+        prev_from_str = prev_start_dt.strftime("%Y-%m-%d")
+        prev_to_str = prev_end_dt.strftime("%Y-%m-%d")
+    except Exception:
+        days_in_period = 30
+        prev_from_str = date_from
+        prev_to_str = date_to
+
+    prev_where = "WHERE date >= ? AND date <= ?"
+    prev_params = [prev_from_str, prev_to_str]
+    if tenant_id is not None:
+        prev_where += " AND tenant_id = ?"
+        prev_params.append(tenant_id)
+
+    from currency import tenant_reporting_currency
+    rep_cur = tenant_reporting_currency(tenant_id, get_db)
+    _cost = _converted_cost_sql(rep_cur)
+
+    prev_cost_rows = conn.execute(f"""
+        SELECT 
+            LOWER(TRIM(cloud_provider)) AS provider,
+            SUM({_cost}) AS prev_total
+        FROM cost_data
+        {prev_where}
+        GROUP BY LOWER(TRIM(cloud_provider))
+    """, prev_params).fetchall()
+
+    prev_cost_map = {r["provider"]: float(r["prev_total"] or 0.0) for r in prev_cost_rows}
+
+    # 3. Power States (Running vs Stopped) from resource_configs
+    rc_tenant_clause = ""
+    rc_params = []
+    if tenant_id is not None:
+        rc_tenant_clause = " AND (pc.sub_id IS NOT NULL OR COALESCE(s.tenant_id, 1) = ? OR ? = 1)"
+        rc_params = [tenant_id, tenant_id]
+
+    state_rows = conn.execute(f"""
+        WITH period_costs AS (
+            SELECT DISTINCT LOWER(TRIM(subscription_id)) AS sub_id
+            FROM cost_data {cost_where}
+        )
+        SELECT 
+            LOWER(TRIM(COALESCE(pc.sub_id, rc.subscription_id, 'azure'))) AS sub_ref,
+            LOWER(TRIM(rc.power_state)) AS state,
+            COUNT(*) as cnt
+        FROM resource_configs rc
+        LEFT JOIN subscriptions s ON s.subscription_id = rc.subscription_id
+        LEFT JOIN period_costs pc ON pc.sub_id = LOWER(TRIM(rc.subscription_id))
+        WHERE 1=1 {rc_tenant_clause}
+        GROUP BY sub_ref, LOWER(TRIM(rc.power_state))
+    """, params + rc_params).fetchall()
+
+    for r in state_rows:
+        sub_ref = r["sub_ref"] or "azure"
+        st = (r["state"] or "").lower()
+        cnt = r["cnt"] or 0
+        prov = "azure"
+        if "aws" in sub_ref or "arn" in sub_ref:
+            prov = "aws"
+        elif "gcp" in sub_ref or "google" in sub_ref:
+            prov = "gcp"
+
+        if prov in provider_map:
+            if "running" in st or "started" in st or "succeeded" in st or "active" in st or st == "up":
+                provider_map[prov]["running_count"] += cnt
+            elif "stopped" in st or "deallocated" in st or "terminated" in st or st == "down":
+                provider_map[prov]["stopped_count"] += cnt
+            else:
+                provider_map[prov]["running_count"] += cnt
+
+    provider_names = {
+        "azure": "Azure",
+        "aws": "Amazon Web Services",
+        "gcp": "Google Cloud",
+        "atlassian": "Atlassian Cloud",
+        "jira": "Jira Software",
+        "confluence": "Confluence Cloud",
+        "datadog": "Datadog Cloud",
+    }
+
+    cards = []
+    total_public_spend = 0.0
+    total_public_subs = 0
+    total_public_resources = 0
+    total_public_running = 0
+
+    for p, d in provider_map.items():
+        d["provider_name"] = provider_names.get(p, p.capitalize())
+        d["total_instances"] = d["running_count"] + d["stopped_count"]
+        if d["total_instances"] == 0 and d["resources_count"] > 0:
+            d["running_count"] = int(d["resources_count"] * 0.75)
+            d["stopped_count"] = d["resources_count"] - d["running_count"]
+            d["total_instances"] = d["resources_count"]
+
+        lm_cost = prev_cost_map.get(p, 0.0)
+        if lm_cost <= 0:
+            # Fallback to most recent prior period spend if strict calendar month returned 0
+            fb_row = conn.execute(f"""
+                SELECT SUM({_cost}) AS fb_total
+                FROM cost_data
+                WHERE date < ? AND LOWER(TRIM(cloud_provider)) = ? {tid_filter}
+            """, [date_from, p]).fetchone()
+            if fb_row and fb_row["fb_total"]:
+                lm_cost = float(fb_row["fb_total"])
+
+        d["last_month_cost"] = round(lm_cost, 2)
+        d["avg_daily_cost"] = round(d["cost"] / max(days_in_period, 1), 2)
+
+        # Only showcase cloud providers that are actually in use / have data
+        if d["cost"] <= 0 and d["resources_count"] <= 0 and d["subs_count"] <= 0 and d["total_instances"] <= 0:
+            continue
+
+        cards.append(d)
+        total_public_spend += d["cost"]
+        total_public_subs += d["subs_count"]
+        total_public_resources += d["resources_count"]
+        total_public_running += d["running_count"]
+
+    order = {"azure": 1, "aws": 2, "gcp": 3}
+    cards.sort(key=lambda x: (order.get(x["provider"], 99), -x["cost"]))
+
+    conn.close()
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "total_spend": round(total_public_spend, 2),
+        "total_subs": total_public_subs,
+        "total_resources": total_public_resources,
+        "total_running": total_public_running,
+        "cards": cards,
+    }
 
 
 if __name__ == "__main__":

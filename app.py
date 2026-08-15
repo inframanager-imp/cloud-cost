@@ -820,6 +820,13 @@ def api_executive_summary():
     prev_start_str = prev_start_dt.strftime("%Y-%m-%d")
     prev_end_str = prev_end_dt.strftime("%Y-%m-%d")
 
+    cloud_filter = request.args.get("cloud_provider", "").strip().lower() or request.args.get("cloud", "").strip().lower()
+    cp_sql = ""
+    cp_params = []
+    if cloud_filter and cloud_filter != "all":
+        cp_sql = " AND LOWER(cloud_provider) = ?"
+        cp_params = [cloud_filter]
+
     # Reporting currency: convert every row to the tenant's dominant currency so
     # mixed-currency tenants (e.g. AWS in USD + Azure in INR) total correctly.
     from database import _converted_cost_sql
@@ -830,18 +837,18 @@ def api_executive_summary():
     # Current period total + per-cloud
     cloud_cur = conn.execute(f"""
         SELECT cloud_provider, SUM({_cost}) as total
-        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
+        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
         GROUP BY cloud_provider
-    """, (first_of_month, today_str)).fetchall()
+    """, [first_of_month, today_str] + cp_params).fetchall()
     cloud_cur_map = {r["cloud_provider"]: round(r["total"] or 0, 2) for r in cloud_cur}
     total_cur = sum(cloud_cur_map.values())
 
     # Previous comparison period totals + per-cloud
     cloud_lm = conn.execute(f"""
         SELECT cloud_provider, SUM({_cost}) as total
-        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
+        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
         GROUP BY cloud_provider
-    """, (prev_start_str, prev_end_str)).fetchall()
+    """, [prev_start_str, prev_end_str] + cp_params).fetchall()
     cloud_lm_map = {r["cloud_provider"]: round(r["total"] or 0, 2) for r in cloud_lm}
     total_lm = sum(cloud_lm_map.values())
 
@@ -862,9 +869,9 @@ def api_executive_summary():
         m_end = datetime(y, m, last_day) if (y != ref_today.year or m != ref_today.month) else ref_today
         rows = conn.execute(f"""
             SELECT cloud_provider, SUM({_cost}) as total
-            FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
+            FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
             GROUP BY cloud_provider
-        """, (m_start.strftime("%Y-%m-%d"), m_end.strftime("%Y-%m-%d"))).fetchall()
+        """, [m_start.strftime("%Y-%m-%d"), m_end.strftime("%Y-%m-%d")] + cp_params).fetchall()
         m_map = {r["cloud_provider"]: round(r["total"] or 0, 2) for r in rows}
         months_trend.append({
             "label": m_start.strftime("%b %Y"),
@@ -879,9 +886,9 @@ def api_executive_summary():
     # Top 10 cost drivers (services this month)
     top_services = conn.execute(f"""
         SELECT service_name, SUM({_cost}) as total
-        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
+        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
         GROUP BY service_name ORDER BY total DESC LIMIT 10
-    """, (first_of_month, today_str)).fetchall()
+    """, [first_of_month, today_str] + cp_params).fetchall()
 
     # Top accounts
     cp_rows = conn.execute(
@@ -895,9 +902,9 @@ def api_executive_summary():
 
     top_accounts = conn.execute(f"""
         SELECT subscription_id, cloud_provider, SUM({_cost}) as total
-        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
+        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
         GROUP BY subscription_id, cloud_provider ORDER BY total DESC LIMIT 50
-    """, (first_of_month, today_str)).fetchall()
+    """, [first_of_month, today_str] + cp_params).fetchall()
 
     # Budget utilization
     try:
@@ -917,26 +924,26 @@ def api_executive_summary():
     # Governance metrics
     untagged = conn.execute(f"""
         SELECT COUNT(DISTINCT resource_name) as cnt FROM cost_data
-        WHERE date >= ? AND date <= ? {tid_filter}
+        WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
         AND (tags IS NULL OR tags = '' OR tags = '{{}}')
         AND resource_name IS NOT NULL AND resource_name != ''
-    """, (first_of_month, today_str)).fetchone()
+    """, [first_of_month, today_str] + cp_params).fetchone()
     untagged_count = untagged["cnt"] if untagged else 0
 
     total_resources = conn.execute(f"""
         SELECT COUNT(DISTINCT resource_name) as cnt FROM cost_data
-        WHERE date >= ? AND date <= ? {tid_filter}
+        WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
         AND resource_name IS NOT NULL AND resource_name != ''
-    """, (first_of_month, today_str)).fetchone()
+    """, [first_of_month, today_str] + cp_params).fetchone()
     total_res_count = total_resources["cnt"] if total_resources else 0
     tag_compliance = round((1 - untagged_count / total_res_count) * 100, 1) if total_res_count > 0 else 0
 
     # Cost by service category (group service_name into 10 cost groups from design)
     svc_cats = conn.execute(f"""
         SELECT service_name, SUM({_cost}) as total FROM cost_data
-        WHERE date >= ? AND date <= ? {tid_filter}
+        WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
         GROUP BY service_name ORDER BY total DESC
-    """, (first_of_month, today_str)).fetchall()
+    """, [first_of_month, today_str] + cp_params).fetchall()
 
     def categorize(name):
         n = (name or "").lower()
@@ -994,9 +1001,9 @@ def api_executive_summary():
     usage_type_rows = conn.execute(f"""
         SELECT COALESCE(NULLIF(meter_subcategory, ''), NULLIF(meter_category, ''), service_name) as usage_type,
                SUM({_cost}) as total
-        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
+        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
         GROUP BY usage_type ORDER BY total DESC LIMIT 10
-    """, (first_of_month, today_str)).fetchall()
+    """, [first_of_month, today_str] + cp_params).fetchall()
     top_usage_types_list = []
     for r in usage_type_rows:
         c = round(r["total"] or 0, 2)
@@ -1008,9 +1015,9 @@ def api_executive_summary():
     region_rows = conn.execute(f"""
         SELECT COALESCE(NULLIF(resource_group, ''), 'global/other') as region_name,
                SUM({_cost}) as total
-        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter}
+        FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
         GROUP BY region_name ORDER BY total DESC LIMIT 10
-    """, (first_of_month, today_str)).fetchall()
+    """, [first_of_month, today_str] + cp_params).fetchall()
     top_regions_list = []
     for r in region_rows:
         c = round(r["total"] or 0, 2)
@@ -1101,24 +1108,41 @@ def api_top_resources_by_group():
     except Exception:
         ref_today = now
 
+    preset = request.args.get("preset", "").strip().lower()
+    preset_map = {"7d": 7, "15d": 15, "30d": 30, "60d": 60, "90d": 90, "6m": 180}
+
     date_from_arg = request.args.get("date_from")
     date_to_arg = request.args.get("date_to")
 
     if date_from_arg and date_to_arg:
         first_of_month = date_from_arg
         today_str = date_to_arg
-    else:
-        first_of_month = ref_today.strftime("%Y-%m-01")
+    elif preset in preset_map:
+        num_days = preset_map[preset]
         today_str = ref_today.strftime("%Y-%m-%d")
+        first_of_month = (ref_today - timedelta(days=num_days - 1)).strftime("%Y-%m-%d")
+    else:
+        try:
+            req_year = int(request.args.get("year", ref_today.year))
+            req_month = int(request.args.get("month", ref_today.month))
+        except ValueError:
+            req_year, req_month = ref_today.year, ref_today.month
+
+        days_in_month = calendar.monthrange(req_year, req_month)[1]
+        is_current = (req_year == ref_today.year and req_month == ref_today.month)
+        day_of_month = ref_today.day if is_current else days_in_month
+
+        first_of_month = datetime(req_year, req_month, 1).strftime("%Y-%m-%d")
+        today_str = datetime(req_year, req_month, day_of_month).strftime("%Y-%m-%d")
 
     params = [first_of_month, today_str]
     where = f"WHERE c.date >= ? AND c.date <= ? AND c.resource_name IS NOT NULL AND c.resource_name != '' {c_tid_filter}"
     if sub_id:
         where += " AND c.subscription_id = ?"
         params.append(sub_id)
-    if cloud_provider:
-        where += " AND c.cloud_provider = ?"
-        params.append(cloud_provider)
+    if cloud_provider and cloud_provider.strip().lower() != "all":
+        where += " AND LOWER(c.cloud_provider) = ?"
+        params.append(cloud_provider.strip().lower())
 
     rep_cur = tenant_reporting_currency(tid, get_db)
     _cost = _converted_cost_sql(rep_cur, col="c.cost", cur_col="c.currency")
@@ -1267,15 +1291,32 @@ def api_top_idle_resources():
     except Exception:
         ref_today = now
 
+    preset = request.args.get("preset", "").strip().lower()
+    preset_map = {"7d": 7, "15d": 15, "30d": 30, "60d": 60, "90d": 90, "6m": 180}
+
     date_from_arg = request.args.get("date_from")
     date_to_arg = request.args.get("date_to")
 
     if date_from_arg and date_to_arg:
         first_of_month = date_from_arg
         today_str = date_to_arg
-    else:
-        first_of_month = ref_today.strftime("%Y-%m-01")
+    elif preset in preset_map:
+        num_days = preset_map[preset]
         today_str = ref_today.strftime("%Y-%m-%d")
+        first_of_month = (ref_today - timedelta(days=num_days - 1)).strftime("%Y-%m-%d")
+    else:
+        try:
+            req_year = int(request.args.get("year", ref_today.year))
+            req_month = int(request.args.get("month", ref_today.month))
+        except ValueError:
+            req_year, req_month = ref_today.year, ref_today.month
+
+        days_in_month = calendar.monthrange(req_year, req_month)[1]
+        is_current = (req_year == ref_today.year and req_month == ref_today.month)
+        day_of_month = ref_today.day if is_current else days_in_month
+
+        first_of_month = datetime(req_year, req_month, 1).strftime("%Y-%m-%d")
+        today_str = datetime(req_year, req_month, day_of_month).strftime("%Y-%m-%d")
 
     try:
         d1 = datetime.strptime(first_of_month, "%Y-%m-%d")
@@ -1289,9 +1330,9 @@ def api_top_idle_resources():
     if sub_id:
         where += " AND c.subscription_id = ?"
         params.append(sub_id)
-    if cloud_provider:
-        where += " AND c.cloud_provider = ?"
-        params.append(cloud_provider)
+    if cloud_provider and cloud_provider.strip().lower() != "all":
+        where += " AND LOWER(c.cloud_provider) = ?"
+        params.append(cloud_provider.strip().lower())
     if resource_group and resource_group.lower() != "all":
         where += " AND (c.resource_group = ? OR rc.resource_group = ?)"
         params.extend([resource_group, resource_group])
@@ -2173,7 +2214,9 @@ def api_resource_inventory():
     sub_id = request.args.get("subscription_id", "all").strip()
     resource_group = request.args.get("resource_group", "all").strip()
     resource_type = request.args.get("resource_type", "all").strip()
+    status = request.args.get("status", "all").strip()
     power_state = request.args.get("power_state", "all").strip()
+    selected_state = status if status != "all" else power_state
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
 
@@ -2196,7 +2239,7 @@ def api_resource_inventory():
         subscription_id=sub_id if sub_id != "all" else None,
         resource_group=resource_group if resource_group != "all" else None,
         resource_type=resource_type if resource_type != "all" else None,
-        power_state=power_state if power_state != "all" else None,
+        power_state=selected_state if selected_state != "all" else None,
         date_from=date_from if date_from else None,
         date_to=date_to if date_to else None,
         page=page,
@@ -2217,6 +2260,26 @@ def api_resource_inventory():
 def api_resource_inventory_filters():
     from database import get_resource_inventory_filter_options
     return jsonify(get_resource_inventory_filter_options(tenant_id=current_tenant_id()))
+
+
+@app.route("/api/analytics/home-overview")
+@login_required
+def api_analytics_home_overview():
+    from database import get_analytics_home_overview
+    from currency import tenant_reporting_currency, symbol as _cur_symbol
+    tid = current_tenant_id()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+
+    data = get_analytics_home_overview(
+        tenant_id=tid,
+        date_from=date_from if date_from else None,
+        date_to=date_to if date_to else None,
+    )
+    rep_cur = tenant_reporting_currency(tid, get_db)
+    data["currency"] = rep_cur
+    data["currency_symbol"] = _cur_symbol(rep_cur)
+    return jsonify(data)
 
 
 @app.route("/api/resource_configs/sync", methods=["POST"])

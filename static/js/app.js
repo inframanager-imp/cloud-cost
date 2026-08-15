@@ -281,6 +281,7 @@ function navigateTo(page) {
     if (page === 'clients') loadClientsPage();
     if (page === 'othercosts') loadOtherCostsPage();
     if (page === 'resource-inventory') loadResourceInventoryPage();
+    if (page === 'analytics-home' || page === 'home') loadAnalyticsHome();
 }
 
 function subParam(prefix = '?') {
@@ -509,9 +510,7 @@ document.addEventListener('click', (e) => {
 
 function onExCloudFilterChange(cloud) {
     _selectedExCloud = cloud;
-    if (_exSummaryData) {
-        applyExCloudKpiFilter(_exSummaryData);
-    }
+    loadExecutiveSummary();
 }
 
 function applyExCloudKpiFilter(d) {
@@ -674,7 +673,7 @@ async function loadExecutiveSummary() {
     }
     showGlobalLogoLoader('Loading Cloud Cost Analytics…');
     try {
-        const resp = await fetch(`/api/executive-summary?preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`);
+        const resp = await fetch(`/api/executive-summary?preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}&cloud_provider=${encodeURIComponent(_selectedExCloud)}`);
         if (!resp.ok) { console.error('Executive summary API error:', resp.status, await resp.text()); return; }
         const d = await resp.json();
         _exSummaryData = d;
@@ -1007,7 +1006,7 @@ async function loadTopIdleResourcesWidget(groupName) {
     container.innerHTML = getLogoLoaderHTML('Loading idle resources…');
 
     try {
-        const url = `/api/top-idle-resources?cost_group=${encodeURIComponent(_currentTopIdleGroup)}&limit=10&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const url = `/api/top-idle-resources?cost_group=${encodeURIComponent(_currentTopIdleGroup)}&cloud_provider=${encodeURIComponent(_selectedExCloud)}&limit=10&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
         const resp = await fetch(url);
         if (!resp.ok) {
             container.innerHTML = '<div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Unable to load idle data</div>';
@@ -1300,7 +1299,7 @@ async function loadTopResourcesByGroup(groupName) {
     container.innerHTML = getLogoLoaderHTML('Loading top resources…');
 
     try {
-        const url = `/api/top-resources-by-group?cost_group=${encodeURIComponent(_currentTopResGroup)}&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const url = `/api/top-resources-by-group?cost_group=${encodeURIComponent(_currentTopResGroup)}&cloud_provider=${encodeURIComponent(_selectedExCloud)}&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
         const resp = await fetch(url);
         if (!resp.ok) {
             container.innerHTML = '<div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Unable to load data</div>';
@@ -1360,7 +1359,7 @@ async function loadTopResourcesTable(groupName) {
     tbody.innerHTML = `<tr><td colspan="9">${getLogoLoaderHTML('Loading resources inventory table…')}</td></tr>`;
 
     try {
-        const url = `/api/top-resources-by-group?cost_group=${encodeURIComponent(_currentTopResTableGroup)}&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const url = `/api/top-resources-by-group?cost_group=${encodeURIComponent(_currentTopResTableGroup)}&cloud_provider=${encodeURIComponent(_selectedExCloud)}&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
         const resp = await fetch(url);
         if (!resp.ok) {
             tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-secondary)">Unable to load data</td></tr>';
@@ -1468,6 +1467,17 @@ async function loadTopResourcesTable(groupName) {
                             </div>
                         </div>
                     </td>
+                    <td style="padding:10px 12px">${getStateBadge(item.power_state)}</td>
+                    <td style="padding:10px 12px;text-align:right;font-weight:600;color:var(--text-primary)">${$fmt(item.cost)}</td>
+                    <td style="padding:10px 12px;text-align:right;color:var(--text-secondary);font-size:11.5px">${$fmt(item.avg_daily_cost || 0)}/d</td>
+                    <td style="padding:10px 12px;text-align:right">
+                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+                            <div style="width:40px;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+                                <div style="height:100%;width:${item.pct}%;background:${rankBadgeColor}"></div>
+                            </div>
+                            <span style="font-size:11.5px;font-weight:500;color:var(--text-primary)">${item.pct}%</span>
+                        </div>
+                    </td>
                     <td style="padding:10px 12px;color:var(--text-primary);font-weight:500">${item.service_name}</td>
                     <td style="padding:10px 12px">${getGroupBadge(item.cost_group)}</td>
                     <td style="padding:10px 12px;color:var(--text-secondary);font-size:11px;font-family:monospace" title="${resTypeDisplay}">${resTypeDisplay.length > 25 ? resTypeDisplay.substring(0, 25) + '…' : resTypeDisplay}</td>
@@ -1480,18 +1490,7 @@ async function loadTopResourcesTable(groupName) {
                     </td>
                     <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${meterCatDisplay}</td>
                     <td style="padding:10px 12px;color:var(--text-secondary);font-size:11.5px">${meterSubcatDisplay}</td>
-                    <td style="padding:10px 12px">${getStateBadge(item.power_state)}</td>
                     <td style="padding:10px 12px">${tagsBadge}</td>
-                    <td style="padding:10px 12px;text-align:right;font-weight:600;color:var(--text-primary)">${$fmt(item.cost)}</td>
-                    <td style="padding:10px 12px;text-align:right;color:var(--text-secondary);font-size:11.5px">${$fmt(item.avg_daily_cost || 0)}/d</td>
-                    <td style="padding:10px 12px;text-align:right">
-                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
-                            <div style="width:40px;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
-                                <div style="height:100%;width:${item.pct}%;background:${rankBadgeColor}"></div>
-                            </div>
-                            <span style="font-size:11.5px;font-weight:500;color:var(--text-primary)">${item.pct}%</span>
-                        </div>
-                    </td>
                 </tr>
             `;
         }).join('');
@@ -10057,6 +10056,7 @@ async function loadResourceInventory(page = 1) {
     const provider = document.getElementById('resInventoryProviderSelect')?.value || 'all';
     const sub_id = document.getElementById('resInventorySubSelect')?.value || 'all';
     const rg = document.getElementById('resInventoryRgSelect')?.value || 'all';
+    const status = document.getElementById('resInventoryStatusSelect')?.value || 'all';
     const state = document.getElementById('resInventoryStateSelect')?.value || 'all';
     const limit = parseInt(document.getElementById('resInventoryLimitSelect')?.value || '50', 10);
     _resInventoryLimit = limit;
@@ -10070,6 +10070,7 @@ async function loadResourceInventory(page = 1) {
         provider: provider,
         subscription_id: sub_id,
         resource_group: rg,
+        status: status,
         power_state: state
     });
 
@@ -10098,7 +10099,10 @@ async function loadResourceInventory(page = 1) {
         const rgCountEl = document.getElementById('resInvRgCountVal');
         if (rgCountEl) rgCountEl.textContent = distinctRgs.size.toLocaleString();
 
-        const runningCount = _resInventoryData.filter(r => (r.power_state || '').toLowerCase().includes('running')).length;
+        const runningCount = _resInventoryData.filter(r => {
+            const st = (r.power_state || '').toLowerCase();
+            return st.includes('running') || st.includes('started') || st === 'up' || st.includes('succeeded') || st === 'active';
+        }).length;
         const runningEl = document.getElementById('resInvRunningVal');
         if (runningEl) runningEl.textContent = `${runningCount} / ${_resInventoryData.length}`;
 
@@ -10153,14 +10157,17 @@ async function loadResourceInventory(page = 1) {
         };
 
         const getStateBadge = state => {
-            const st = (state || 'Active').toLowerCase();
-            if (st.includes('running') || st.includes('started') || st.includes('succeeded') || st === 'active') {
-                return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:#16A34A"><span style="width:6px;height:6px;border-radius:50%;background:#16A34A"></span>Running</span>`;
+            const st = (state || 'Unknown').toLowerCase().trim();
+            if (st.includes('running') || st.includes('started') || st.includes('succeeded') || st === 'active' || st === 'up') {
+                return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:#16A34A"><span style="width:6px;height:6px;border-radius:50%;background:#16A34A"></span>Up</span>`;
             }
-            if (st.includes('stopped') || st.includes('deallocated')) {
-                return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:#DC2626"><span style="width:6px;height:6px;border-radius:50%;background:#DC2626"></span>Stopped</span>`;
+            if (st.includes('stopped') || st.includes('deallocated') || st.includes('terminated') || st === 'down') {
+                return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:#DC2626"><span style="width:6px;height:6px;border-radius:50%;background:#DC2626"></span>Down</span>`;
             }
-            return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:var(--text-secondary)"><span style="width:6px;height:6px;border-radius:50%;background:var(--text-secondary)"></span>${state || 'Active'}</span>`;
+            if (st.includes('idle') || st.includes('unused') || st.includes('unattached')) {
+                return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:#F59E0B"><span style="width:6px;height:6px;border-radius:50%;background:#F59E0B"></span>Idle</span>`;
+            }
+            return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:var(--text-secondary)"><span style="width:6px;height:6px;border-radius:50%;background:var(--text-secondary)"></span>Unknown</span>`;
         };
 
         if (_resInventoryData.length === 0) {
@@ -10319,5 +10326,203 @@ function exportResourceInventoryCSV() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+}
+
+function navigateToExecutiveWithCloud(provider) {
+    const p = (provider || 'all').toLowerCase();
+    _selectedExCloud = p;
+    
+    const cloudMeta = {
+        all: `<span style='display:inline-flex;align-items:center;gap:6px'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='#6366f1' stroke-width='2'><path d='M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z'/></svg> All Clouds</span>`,
+        azure: `<span style='display:inline-flex;align-items:center;gap:6px'><img src='/static/img/azure-logo.svg' style='width:14px;height:14px;object-fit:contain' alt='Azure'> Azure</span>`,
+        aws: `<span style='display:inline-flex;align-items:center;gap:6px'><img src='/static/img/aws-logo.svg' style='width:18px;height:12px;object-fit:contain' alt='AWS'> AWS</span>`,
+        gcp: `<span style='display:inline-flex;align-items:center;gap:6px'><img src='/static/img/gcp-logo.svg' style='width:14px;height:14px;object-fit:contain' alt='GCP'> GCP</span>`
+    };
+
+    const labelHtml = cloudMeta[p] || `<span style='display:inline-flex;align-items:center;gap:6px'>${p.toUpperCase()}</span>`;
+    const lbl = document.getElementById('selectedCloudLabel');
+    if (lbl) lbl.innerHTML = labelHtml;
+
+    document.querySelectorAll('.custom-cloud-option').forEach(opt => {
+        const onClick = opt.getAttribute('onclick') || '';
+        opt.classList.toggle('active', onClick.includes(`'${p}'`));
+    });
+
+    navigateTo('executive');
+}
+
+function navigateToResourceInventoryWithCloud(provider) {
+    const p = (provider || 'all').toLowerCase();
+    navigateTo('resource-inventory');
+    setTimeout(() => {
+        const select = document.getElementById('resInventoryProviderSelect');
+        if (select) {
+            select.value = p;
+            loadResourceInventory(1);
+        }
+    }, 50);
+}
+
+async function loadAnalyticsHome() {
+    const grid = document.getElementById('analyticsHomeCardsGrid');
+    if (!grid) return;
+
+    grid.innerHTML = `<div style="text-align:center;padding:40px;grid-column:1/-1">${getLogoLoaderHTML('Loading Public Cloud cards overview...')}</div>`;
+
+    try {
+        const resp = await fetch('/api/analytics/home-overview');
+        if (!resp.ok) {
+            grid.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);grid-column:1/-1">Failed to load home overview.</div>`;
+            return;
+        }
+
+        const data = await resp.json();
+        const cards = data.cards || [];
+        const sym = data.currency_symbol || '$';
+        const fmt = v => sym + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+        // Update Summary KPI Cards
+        const totalSpendEl = document.getElementById('anaHomeTotalSpend');
+        if (totalSpendEl) totalSpendEl.textContent = fmt(data.total_spend || 0);
+
+        const totalSubsEl = document.getElementById('anaHomeTotalSubs');
+        if (totalSubsEl) totalSubsEl.textContent = (data.total_subs || 0).toLocaleString();
+
+        const totalRunningEl = document.getElementById('anaHomeTotalRunning');
+        if (totalRunningEl) totalRunningEl.textContent = (data.total_running || 0).toLocaleString();
+
+        const totalResEl = document.getElementById('anaHomeTotalResources');
+        if (totalResEl) totalResEl.textContent = (data.total_resources || 0).toLocaleString();
+
+        const periodEl = document.getElementById('analyticsHomePeriodText');
+        if (periodEl) periodEl.textContent = `${data.date_from || ''} to ${data.date_to || ''}`;
+
+        if (cards.length === 0) {
+            grid.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);grid-column:1/-1">No public cloud providers connected</div>`;
+            return;
+        }
+
+        grid.innerHTML = cards.map(c => {
+            const p = (c.provider || 'azure').toLowerCase();
+            let logoSrc = '/static/img/azure-logo.svg';
+            if (p.includes('aws')) logoSrc = '/static/img/aws-logo.svg';
+            else if (p.includes('gcp') || p.includes('google')) logoSrc = '/static/img/gcp-logo.svg';
+
+            return `
+                <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:16px">
+                    <!-- Header: Logo + Brand Name -->
+                    <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:12px">
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <img src="${logoSrc}" style="width:22px;height:22px;object-fit:contain" alt="${c.provider_name}">
+                            <span style="font-size:18px;font-weight:700;color:var(--text-primary);letter-spacing:-0.01em">${c.provider_name}</span>
+                        </div>
+                    </div>
+
+                    <!-- Body: Donut Gauge + KPI Grid -->
+                    <div style="display:grid;grid-template-columns:170px 1fr;gap:16px;align-items:center">
+                        <!-- Left Gauge Column -->
+                        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+                            <!-- Legend -->
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:11px;font-weight:600">
+                                <span style="display:inline-flex;align-items:center;gap:5px;color:var(--text-primary)"><span style="width:10px;height:10px;border-radius:2px;background:#7C3AED"></span> Running</span>
+                                <span style="display:inline-flex;align-items:center;gap:5px;color:var(--text-secondary)"><span style="width:10px;height:10px;border-radius:2px;background:#64748B"></span> Stopped</span>
+                            </div>
+                            <!-- Canvas Arc Chart -->
+                            <div style="position:relative;width:150px;height:80px">
+                                <canvas id="gauge_home_${c.provider}" width="150" height="80"></canvas>
+                            </div>
+                            <!-- Total VM instances -->
+                            <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-top:6px;text-align:center">${c.total_instances} VM Instances</div>
+                        </div>
+
+                        <!-- Right Metric Grid (3x2 Grid: Row 1 = Cost, Last Month, Avg/Day | Row 2 = Subscriptions, Services, Resources) -->
+                        <div style="border-left:1px solid var(--border);padding-left:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px 10px;align-items:center">
+                            <!-- Row 1, Col 1: Cost (Navigates to FinOps Command Center) -->
+                            <div onclick="navigateToExecutiveWithCloud('${c.provider}')" style="cursor:pointer;padding:4px 6px;border-radius:6px;transition:background 0.15s ease" onmouseover="this.style.background='rgba(37,99,235,0.08)'" onmouseout="this.style.background='transparent'" title="Click to view in FinOps Command Center">
+                                <div style="font-size:18px;font-weight:800;color:#2563EB">${fmt(c.cost)}</div>
+                                <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-top:2px;display:flex;align-items:center;gap:3px">Cost <span style="font-size:9px;color:#2563EB">→</span></div>
+                            </div>
+                            <!-- Row 1, Col 2: Last Month Cost -->
+                            <div style="padding:4px 6px">
+                                <div style="font-size:18px;font-weight:800;color:var(--text-primary)">${fmt(c.last_month_cost)}</div>
+                                <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-top:2px">Last Month</div>
+                            </div>
+                            <!-- Row 1, Col 3: Avg/Day Cost -->
+                            <div style="padding:4px 6px">
+                                <div style="font-size:18px;font-weight:800;color:#10B981">${fmt(c.avg_daily_cost)}</div>
+                                <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-top:2px">Avg/Day</div>
+                            </div>
+
+                            <!-- Row 2, Col 1: Subscriptions -->
+                            <div style="padding:4px 6px">
+                                <div style="font-size:18px;font-weight:800;color:#38bdf8">${c.subs_count}</div>
+                                <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-top:2px">Subscriptions</div>
+                            </div>
+                            <!-- Row 2, Col 2: Services (Static metric) -->
+                            <div style="padding:4px 6px">
+                                <div style="font-size:18px;font-weight:800;color:var(--text-primary)">${c.services_count}</div>
+                                <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-top:2px">Services</div>
+                            </div>
+                            <!-- Row 2, Col 3: Resources (Navigates to Resource Inventory) -->
+                            <div onclick="navigateToResourceInventoryWithCloud('${c.provider}')" style="cursor:pointer;padding:4px 6px;border-radius:6px;transition:background 0.15s ease" onmouseover="this.style.background='rgba(99,102,241,0.08)'" onmouseout="this.style.background='transparent'" title="Click to view in Resource Inventory">
+                                <div style="font-size:18px;font-weight:800;color:var(--text-primary)">${c.resources_count.toLocaleString()}</div>
+                                <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-top:2px;display:flex;align-items:center;gap:3px">Resources <span style="font-size:9px;color:#6366f1">→</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Draw Arc Gauge Charts for each provider card
+        setTimeout(() => {
+            cards.forEach(c => renderHomeGaugeCanvas(`gauge_home_${c.provider}`, c.running_count, c.stopped_count));
+        }, 50);
+
+    } catch (err) {
+        console.error('Error loading analytics home:', err);
+        grid.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);grid-column:1/-1">Failed to load analytics home.</div>`;
+    }
+}
+
+function renderHomeGaugeCanvas(canvasId, running, stopped) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const centerX = width / 2;
+    const centerY = height - 10;
+    const radius = 55;
+    const strokeWidth = 16;
+
+    ctx.clearRect(0, 0, width, height);
+
+    const total = running + stopped;
+    const runningRatio = total > 0 ? (running / total) : 1;
+
+    // Draw background track arc (Stopped - Gray)
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, Math.PI, 0, false);
+    ctx.lineWidth = strokeWidth;
+    ctx.strokeStyle = '#64748B';
+    ctx.stroke();
+
+    if (runningRatio > 0) {
+        // Draw running arc (Purple #7C3AED)
+        const endAngle = Math.PI + (runningRatio * Math.PI);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, Math.PI, endAngle, false);
+        ctx.lineWidth = strokeWidth;
+        ctx.strokeStyle = '#7C3AED';
+        ctx.stroke();
+    }
+
+    // Inner number inside arc center
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-primary') || '#0f172a';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(running.toString(), centerX, centerY - 20);
 }
 
