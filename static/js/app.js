@@ -617,7 +617,49 @@ document.addEventListener('click', function(e) {
     if (periodDD && !periodDD.contains(e.target)) {
         periodDD.classList.remove('open');
     }
+    const anaHomeDD = document.getElementById('anaHomePeriodDropdown');
+    if (anaHomeDD && !anaHomeDD.contains(e.target)) {
+        anaHomeDD.classList.remove('open');
+    }
 });
+
+let _anaHomePreset = 'this_month';
+
+function toggleAnaHomePeriodDropdown(e) {
+    if (e) e.stopPropagation();
+    const dd = document.getElementById('anaHomePeriodDropdown');
+    if (dd) dd.classList.toggle('open');
+}
+
+function selectAnaHomePeriodOption(presetKey, labelText, e) {
+    if (e) e.stopPropagation();
+    _anaHomePreset = presetKey;
+    const labelEl = document.getElementById('anaHomePeriodTriggerLabel');
+    if (labelEl) labelEl.textContent = labelText;
+
+    const menu = document.getElementById('anaHomePeriodMenu');
+    if (menu) {
+        menu.querySelectorAll('.custom-period-option').forEach(opt => {
+            const isMatch = opt.getAttribute('onclick') && opt.getAttribute('onclick').includes(`'${presetKey}'`);
+            opt.classList.toggle('active', isMatch);
+            let check = opt.querySelector('span:last-child');
+            if (isMatch) {
+                if (!check || check.textContent !== '✓') {
+                    const existingCheck = Array.from(opt.children).find(c => c.textContent === '✓');
+                    if (!existingCheck) opt.insertAdjacentHTML('beforeend', '<span style="font-size:10px;color:#2563EB">✓</span>');
+                }
+            } else {
+                if (check && check.textContent === '✓') check.remove();
+            }
+        });
+    }
+
+    const dd = document.getElementById('anaHomePeriodDropdown');
+    if (dd) dd.classList.remove('open');
+
+    loadAnalyticsHome();
+}
+
 
 let _globalLogoLoaderTimer = null;
 
@@ -1278,12 +1320,7 @@ async function loadTopIdleResourcesWidget(groupName) {
         const $fmt = v => _sym + (v||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
         const maxCost = Math.max(...items.map(x => x.cost || 0), 1);
 
-        const getCloudIcon = p => {
-            const pr = (p || 'azure').toLowerCase();
-            if (pr.includes('aws')) return '/static/img/aws-logo.svg';
-            if (pr.includes('gcp') || pr.includes('google')) return '/static/img/gcp-logo.svg';
-            return '/static/img/azure-logo.svg';
-        };
+        const getCloudIcon = p => getProviderLogoSrc(p);
 
         container.innerHTML = items.slice(0, 10).map((item, i) => {
             const widthPct = Math.max(4, Math.round((item.cost / maxCost) * 100));
@@ -10619,7 +10656,7 @@ async function loadAnalyticsHome() {
     grid.innerHTML = `<div style="text-align:center;padding:40px;grid-column:1/-1">${getLogoLoaderHTML('Loading Public Cloud cards overview...')}</div>`;
 
     try {
-        const resp = await fetch('/api/analytics/home-overview');
+        const resp = await fetch(`/api/analytics/home-overview?preset=${_anaHomePreset}`);
         if (!resp.ok) {
             grid.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);grid-column:1/-1">Failed to load home overview.</div>`;
             return;
@@ -10633,6 +10670,28 @@ async function loadAnalyticsHome() {
         // Update Summary KPI Cards
         const totalSpendEl = document.getElementById('anaHomeTotalSpend');
         if (totalSpendEl) totalSpendEl.textContent = fmt(data.total_spend || 0);
+
+        const daysElapsed = data.days_elapsed || 30;
+        const daysInPeriod = data.days_in_period || 30;
+        const calcAvgDaily = data.avg_daily_cost != null ? data.avg_daily_cost : ((data.total_spend || 0) / Math.max(daysElapsed, 1));
+        const calcForecasted = data.forecasted_eom != null ? data.forecasted_eom : (calcAvgDaily * daysInPeriod);
+
+        const avgDailyEl = document.getElementById('anaHomeAvgDaily');
+        if (avgDailyEl) avgDailyEl.textContent = fmt(calcAvgDaily);
+
+        const avgDailySubEl = document.getElementById('anaHomeAvgDailySub');
+        if (avgDailySubEl) {
+            avgDailySubEl.textContent = `Avg per day (${daysElapsed} of ${daysInPeriod} days)`;
+        }
+
+        const forecastEl = document.getElementById('anaHomeForecastedEOM');
+        if (forecastEl) forecastEl.textContent = fmt(calcForecasted);
+
+        const forecastSubEl = document.getElementById('anaHomeForecastedSub');
+        if (forecastSubEl) {
+            const pct = Math.round((daysElapsed / daysInPeriod) * 100);
+            forecastSubEl.textContent = `Projected EOM (${pct}% month complete)`;
+        }
 
         const totalSubsEl = document.getElementById('anaHomeTotalSubs');
         if (totalSubsEl) totalSubsEl.textContent = (data.total_subs || 0).toLocaleString();
@@ -10652,10 +10711,9 @@ async function loadAnalyticsHome() {
         }
 
         grid.innerHTML = cards.map(c => {
-            const p = (c.provider || 'azure').toLowerCase();
-            let logoSrc = '/static/img/azure-logo.svg';
-            if (p.includes('aws')) logoSrc = '/static/img/aws-logo.svg';
-            else if (p.includes('gcp') || p.includes('google')) logoSrc = '/static/img/gcp-logo.svg';
+            const logoSrc = getProviderLogoSrc(c.provider);
+
+            const subsList = c.subscription_breakdown || [];
 
             return `
                 <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:16px">
@@ -10667,21 +10725,17 @@ async function loadAnalyticsHome() {
                         </div>
                     </div>
 
-                    <!-- Body: Donut Gauge + KPI Grid -->
-                    <div style="display:grid;grid-template-columns:170px 1fr;gap:16px;align-items:center">
-                        <!-- Left Gauge Column -->
+                    <!-- Body: Subscription Donut Chart + Metric Grid -->
+                    <div style="display:grid;grid-template-columns:140px 1fr;gap:16px;align-items:center">
+                        <!-- Left Subscription Donut Column -->
                         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center">
-                            <!-- Legend -->
-                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:11px;font-weight:600">
-                                <span style="display:inline-flex;align-items:center;gap:5px;color:var(--text-primary)"><span style="width:10px;height:10px;border-radius:2px;background:#7C3AED"></span> Running</span>
-                                <span style="display:inline-flex;align-items:center;gap:5px;color:var(--text-secondary)"><span style="width:10px;height:10px;border-radius:2px;background:#64748B"></span> Stopped</span>
+                            <!-- Canvas Donut Chart with Hover Effect -->
+                            <div style="position:relative;width:130px;height:130px;display:flex;align-items:center;justify-content:center" title="Hover over slices to inspect subscriptions">
+                                <canvas id="sub_donut_home_${c.provider}" width="130" height="130"></canvas>
+                                <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none">
+                                    <div style="font-size:15px;font-weight:800;color:var(--text-primary);line-height:1">${fmt(c.cost)}</div>
+                                </div>
                             </div>
-                            <!-- Canvas Arc Chart -->
-                            <div style="position:relative;width:150px;height:80px">
-                                <canvas id="gauge_home_${c.provider}" width="150" height="80"></canvas>
-                            </div>
-                            <!-- Total VM instances -->
-                            <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-top:6px;text-align:center">${c.total_instances} VM Instances</div>
                         </div>
 
                         <!-- Right Metric Grid (3x2 Grid: Row 1 = Cost, Last Month, Avg/Day | Row 2 = Subscriptions, Services, Resources) -->
@@ -10723,16 +10777,182 @@ async function loadAnalyticsHome() {
             `;
         }).join('');
 
-        // Draw Arc Gauge Charts for each provider card
+        // Draw Interactive Subscription Donut Charts for each provider card
         setTimeout(() => {
-            cards.forEach(c => renderHomeGaugeCanvas(`gauge_home_${c.provider}`, c.running_count, c.stopped_count));
+            cards.forEach(c => renderHomeSubscriptionDonutCanvas(`sub_donut_home_${c.provider}`, c.subscription_breakdown, sym));
         }, 50);
+
+        // Update Client Cost Allocation Section
+        const clientOverview = data.client_overview || {};
+        const clientAllocCostEl = document.getElementById('anaHomeClientAllocatedCost');
+        if (clientAllocCostEl) clientAllocCostEl.textContent = fmt(clientOverview.total_client_cost || 0);
+
+        const clientCoverageEl = document.getElementById('anaHomeClientCoveragePct');
+        if (clientCoverageEl) clientCoverageEl.textContent = `${clientOverview.allocated_pct || 0}%`;
+
+        const clientActiveEl = document.getElementById('anaHomeClientActiveCount');
+        if (clientActiveEl) clientActiveEl.textContent = `${clientOverview.active_clients_count || 0} / ${clientOverview.total_clients_count || 0}`;
+
+        const clientUnallocEl = document.getElementById('anaHomeClientUnallocatedCost');
+        if (clientUnallocEl) clientUnallocEl.textContent = fmt(clientOverview.unallocated_cost || 0);
+
+        const clientGridEl = document.getElementById('anaHomeClientCardsGrid');
+        if (clientGridEl) {
+            const clientList = clientOverview.clients || [];
+            if (clientList.length === 0) {
+                clientGridEl.innerHTML = `
+                    <div style="text-align:center;padding:24px;color:var(--text-secondary);grid-column:1/-1">
+                        No clients configured yet. <a href="javascript:void(0)" onclick="navigateTo('clients')" style="color:#2563EB;font-weight:600">Create your first client →</a>
+                    </div>
+                `;
+            } else {
+                clientGridEl.innerHTML = clientList.map(cl => {
+                    const cloudBadges = (cl.clouds || []).map(cp => `
+                        <img src="${getProviderLogoSrc(cp)}" style="width:14px;height:14px;object-fit:contain" title="${cp}">
+                    `).join('');
+
+                    return `
+                        <div onclick="navigateTo('clients'); setTimeout(() => { const sel = document.getElementById('clientSelect'); if(sel) { sel.value = ${cl.id}; onClientSelect(); } }, 200);" style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.02);cursor:pointer;transition:all 0.15s ease;display:flex;flex-direction:column;justify-content:space-between" onmouseover="this.style.borderColor='#2563EB';this.style.boxShadow='0 4px 12px rgba(37,99,235,0.1)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.02)'">
+                            <div>
+                                <div style="display:flex;align-items:center;justify-content:space-between">
+                                    <div style="font-size:15px;font-weight:700;color:var(--text-primary);letter-spacing:-0.01em">${cl.name}</div>
+                                    <div style="display:flex;align-items:center;gap:4px">${cloudBadges}</div>
+                                </div>
+                                <div style="font-size:22px;font-weight:800;color:#2563EB;margin:8px 0 4px 0">${fmt(cl.cost)}</div>
+                                <!-- Cost share progress bar -->
+                                <div style="width:100%;height:6px;background:rgba(100,116,139,0.15);border-radius:3px;overflow:hidden;margin-bottom:8px">
+                                    <div style="width:${Math.min(cl.pct || 0, 100)}%;height:100%;background:linear-gradient(90deg, #2563EB, #38BDF8);border-radius:3px"></div>
+                                </div>
+                            </div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text-secondary);border-top:1px solid var(--border);padding-top:8px;margin-top:4px">
+                                <span>${cl.pct}% of total spend</span>
+                                <span>Top: <strong style="color:var(--text-primary)">${cl.top_service}</strong></span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
 
     } catch (err) {
         console.error('Error loading analytics home:', err);
         grid.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);grid-column:1/-1">Failed to load analytics home.</div>`;
     }
 }
+
+function getProviderLogoSrc(provider) {
+    const p = (provider || 'azure').toLowerCase().trim();
+    if (p.includes('aws') || p.includes('amazon')) return '/static/img/aws-logo.svg';
+    if (p.includes('gcp') || p.includes('google')) return '/static/img/gcp-logo.svg';
+    if (p.includes('atlassian') || p.includes('jira') || p.includes('confluence')) return '/static/img/atlassian-logo.svg';
+    if (p.includes('openai')) return '/static/img/openai-logo.svg';
+    if (p.includes('chatgpt')) return '/static/img/chatgpt-logo.svg';
+    if (p.includes('cursor')) return '/static/img/cursor-logo.svg';
+    return '/static/img/azure-logo.svg';
+}
+
+let _homeSubCharts = {};
+
+function renderHomeSubscriptionDonutCanvas(canvasId, items, sym = '$') {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    if (_homeSubCharts[canvasId]) {
+        _homeSubCharts[canvasId].destroy();
+        delete _homeSubCharts[canvasId];
+    }
+
+    const fmt = v => sym + (v || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    if (!items || items.length === 0) {
+        items = [{ name: 'No Data', cost: 0, pct: 100, color: '#94A3B8' }];
+    }
+
+    const ctx = canvas.getContext('2d');
+    _homeSubCharts[canvasId] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: items.map(it => it.name),
+            datasets: [{
+                data: items.map(it => it.cost > 0 ? it.cost : 0.001),
+                backgroundColor: items.map(it => it.color || '#7C3AED'),
+                borderWidth: 2,
+                borderColor: '#ffffff',
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: false,
+            cutout: '70%',
+            layout: {
+                padding: 4
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    enabled: false,
+                    external: function(context) {
+                        const { chart, tooltip } = context;
+                        let tooltipEl = chart.canvas.parentNode.querySelector('div.sub-donut-tooltip');
+                        if (!tooltipEl) {
+                            tooltipEl = document.createElement('div');
+                            tooltipEl.className = 'sub-donut-tooltip';
+                            tooltipEl.style.background = 'rgba(15, 23, 42, 0.94)';
+                            tooltipEl.style.color = '#ffffff';
+                            tooltipEl.style.borderRadius = '6px';
+                            tooltipEl.style.opacity = '0';
+                            tooltipEl.style.pointerEvents = 'none';
+                            tooltipEl.style.position = 'absolute';
+                            tooltipEl.style.transform = 'translate(-50%, -100%)';
+                            tooltipEl.style.transition = 'opacity .12s ease, transform .1s ease';
+                            tooltipEl.style.padding = '6px 10px';
+                            tooltipEl.style.zIndex = '99999';
+                            tooltipEl.style.boxShadow = '0 4px 14px rgba(0,0,0,0.25)';
+                            tooltipEl.style.whiteSpace = 'nowrap';
+                            tooltipEl.style.fontSize = '11px';
+                            tooltipEl.style.fontWeight = '500';
+                            tooltipEl.style.border = '1px solid rgba(255,255,255,0.12)';
+                            chart.canvas.parentNode.appendChild(tooltipEl);
+                        }
+
+                        if (tooltip.opacity === 0) {
+                            tooltipEl.style.opacity = '0';
+                            return;
+                        }
+
+                        const idx = tooltip.dataPoints && tooltip.dataPoints[0] ? tooltip.dataPoints[0].dataIndex : 0;
+                        const item = items[idx];
+                        if (!item) {
+                            tooltipEl.style.opacity = '0';
+                            return;
+                        }
+
+                        tooltipEl.innerHTML = `
+                            <div style="display:flex;align-items:center;gap:6px">
+                                <span style="width:8px;height:8px;border-radius:2px;background:${item.color || '#7C3AED'};flex-shrink:0"></span>
+                                <span style="font-weight:700;color:#f8fafc">${item.name}</span>
+                            </div>
+                            <div style="margin-top:2px;color:#cbd5e1;font-size:10px">
+                                Spend: <strong style="color:#ffffff">${fmt(item.cost)}</strong> (${item.pct}%)
+                            </div>
+                        `;
+
+                        const pos = chart.canvas.getBoundingClientRect();
+                        const parentPos = chart.canvas.parentNode.getBoundingClientRect();
+                        const x = tooltip.caretX + (pos.left - parentPos.left);
+                        const y = tooltip.caretY + (pos.top - parentPos.top);
+
+                        tooltipEl.style.opacity = '1';
+                        tooltipEl.style.left = x + 'px';
+                        tooltipEl.style.top = (y - 8) + 'px';
+                    }
+                }
+            }
+        }
+    });
+}
+
+
 
 function renderHomeGaugeCanvas(canvasId, running, stopped) {
     const canvas = document.getElementById(canvasId);

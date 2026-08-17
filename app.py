@@ -2311,16 +2311,19 @@ def api_analytics_home_overview():
     tid = current_tenant_id()
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
+    preset = request.args.get("preset", "").strip().lower()
 
     data = get_analytics_home_overview(
         tenant_id=tid,
         date_from=date_from if date_from else None,
         date_to=date_to if date_to else None,
+        preset=preset if preset else None,
     )
     rep_cur = tenant_reporting_currency(tid, get_db)
     data["currency"] = rep_cur
     data["currency_symbol"] = _cur_symbol(rep_cur)
     return jsonify(data)
+
 
 
 @app.route("/api/resource_configs/sync", methods=["POST"])

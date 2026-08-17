@@ -5420,7 +5420,7 @@ def get_client_filter_values(cloud: str, filter_type: str, tenant_id: int) -> li
     return result
 
 
-def get_analytics_home_overview(tenant_id=None, date_from=None, date_to=None):
+def get_analytics_home_overview(tenant_id=None, date_from=None, date_to=None, preset=None):
     """
     Calculates per-cloud provider cards for Public Cloud Home overview page:
     - Subscriptions Count
@@ -5430,20 +5430,27 @@ def get_analytics_home_overview(tenant_id=None, date_from=None, date_to=None):
     - Running Count, Stopped Count, Total Instances Count
     """
     import math
-    from datetime import datetime
+    from datetime import datetime, timedelta
     conn = get_db()
 
-    if not date_from or not date_to:
-        now = datetime.utcnow()
-        tid_filter = f"AND tenant_id = {tenant_id}" if tenant_id is not None else ""
-        max_row = conn.execute(f"SELECT MAX(date) as md FROM cost_data WHERE 1=1 {tid_filter}").fetchone()
-        max_date_str = max_row["md"] if (max_row and max_row["md"]) else now.strftime("%Y-%m-%d")
-        try:
-            ref_today = datetime.strptime(max_date_str, "%Y-%m-%d")
-        except Exception:
-            ref_today = now
+    now = datetime.utcnow()
+    tid_filter = f"AND tenant_id = {tenant_id}" if tenant_id is not None else ""
+    max_row = conn.execute(f"SELECT MAX(date) as md FROM cost_data WHERE 1=1 {tid_filter}").fetchone()
+    max_date_str = max_row["md"] if (max_row and max_row["md"]) else now.strftime("%Y-%m-%d")
+    try:
+        ref_today = datetime.strptime(max_date_str, "%Y-%m-%d")
+    except Exception:
+        ref_today = now
+
+    preset_map = {"7d": 7, "15d": 15, "30d": 30, "60d": 60, "90d": 90, "6m": 180}
+    if preset and preset.lower() in preset_map:
+        num_days = preset_map[preset.lower()]
+        date_to = ref_today.strftime("%Y-%m-%d")
+        date_from = (ref_today - timedelta(days=num_days - 1)).strftime("%Y-%m-%d")
+    elif not date_from or not date_to:
         date_from = ref_today.strftime("%Y-%m-01")
         date_to = ref_today.strftime("%Y-%m-%d")
+
 
     cost_where = "WHERE date >= ? AND date <= ?"
     params = [date_from, date_to]
@@ -5514,7 +5521,40 @@ def get_analytics_home_overview(tenant_id=None, date_from=None, date_to=None):
 
     prev_cost_map = {r["provider"]: float(r["prev_total"] or 0.0) for r in prev_cost_rows}
 
-    # 3. Power States (Running vs Stopped) from resource_configs
+    c_cost_where = "WHERE c.date >= ? AND c.date <= ?"
+    c_params = [date_from, date_to]
+    if tenant_id is not None:
+        c_cost_where += " AND c.tenant_id = ?"
+        c_params.append(tenant_id)
+
+    _c_cost = _converted_cost_sql(rep_cur, col="c.cost", cur_col="c.currency")
+
+    # 3. Subscription Breakdown per provider from cost_data
+    sub_breakdown_rows = conn.execute(f"""
+        SELECT 
+            LOWER(TRIM(c.cloud_provider)) AS provider,
+            COALESCE(NULLIF(TRIM(s.name), ''), NULLIF(TRIM(c.subscription_id), ''), 'Default Subscription') AS sub_name,
+            SUM({_c_cost}) AS sub_cost
+        FROM cost_data c
+        LEFT JOIN subscriptions s ON LOWER(TRIM(s.subscription_id)) = LOWER(TRIM(c.subscription_id))
+        {c_cost_where}
+        GROUP BY LOWER(TRIM(c.cloud_provider)), COALESCE(NULLIF(TRIM(s.name), ''), NULLIF(TRIM(c.subscription_id), ''), 'Default Subscription')
+        ORDER BY sub_cost DESC
+    """, c_params).fetchall()
+
+
+    provider_sub_breakdown = {}
+    for r in sub_breakdown_rows:
+        prov = r["provider"] or "azure"
+        if prov not in provider_sub_breakdown:
+            provider_sub_breakdown[prov] = []
+        provider_sub_breakdown[prov].append({
+            "name": r["sub_name"] or "Subscription",
+            "cost": float(r["sub_cost"] or 0.0)
+        })
+
+
+    # 4. Power States (Running vs Stopped) from resource_configs
     rc_tenant_clause = ""
     rc_params = []
     if tenant_id is not None:
@@ -5565,6 +5605,8 @@ def get_analytics_home_overview(tenant_id=None, date_from=None, date_to=None):
         "datadog": "Datadog Cloud",
     }
 
+    sub_palette = ["#7C3AED", "#2563EB", "#38BDF8", "#10B981", "#F59E0B", "#EC4899", "#8B5CF6"]
+
     cards = []
     total_public_spend = 0.0
     total_public_subs = 0
@@ -5578,6 +5620,32 @@ def get_analytics_home_overview(tenant_id=None, date_from=None, date_to=None):
             d["running_count"] = int(d["resources_count"] * 0.75)
             d["stopped_count"] = d["resources_count"] - d["running_count"]
             d["total_instances"] = d["resources_count"]
+
+        # Build full subscription breakdown
+        raw_subs = provider_sub_breakdown.get(p, [])
+        total_p_cost = d["cost"] if d["cost"] > 0 else 1.0
+        subs_formatted = []
+        for idx, item in enumerate(raw_subs):
+            pct = round((item["cost"] / total_p_cost) * 100, 1) if total_p_cost > 0 else 0
+            subs_formatted.append({
+                "name": item["name"],
+                "cost": round(item["cost"], 2),
+                "pct": pct,
+                "color": sub_palette[idx % len(sub_palette)]
+            })
+
+        # Fallback single item if no subscriptions list
+        if not subs_formatted:
+            subs_formatted.append({
+                "name": "Primary Account",
+                "cost": round(d["cost"], 2),
+                "pct": 100.0,
+                "color": "#7C3AED"
+            })
+
+
+        d["subscription_breakdown"] = subs_formatted
+
 
         lm_cost = prev_cost_map.get(p, 0.0)
         if lm_cost <= 0:
@@ -5606,16 +5674,85 @@ def get_analytics_home_overview(tenant_id=None, date_from=None, date_to=None):
     order = {"azure": 1, "aws": 2, "gcp": 3}
     cards.sort(key=lambda x: (order.get(x["provider"], 99), -x["cost"]))
 
+    today_dt = datetime.utcnow().date()
+    try:
+        d_start_dt = datetime.strptime(date_from, "%Y-%m-%d").date()
+        d_end_dt = datetime.strptime(date_to, "%Y-%m-%d").date()
+        days_in_period = max((d_end_dt - d_start_dt).days + 1, 1)
+        if d_end_dt >= today_dt >= d_start_dt:
+            days_elapsed = max((today_dt - d_start_dt).days + 1, 1)
+        elif today_dt < d_start_dt:
+            days_elapsed = 1
+        else:
+            days_elapsed = days_in_period
+    except Exception:
+        days_in_period = 30
+        days_elapsed = 30
+
+    days_for_avg = max(days_elapsed, 1)
+    total_avg_daily = round(total_public_spend / days_for_avg, 2)
+    forecasted_eom = round(total_avg_daily * days_in_period, 2)
+
+    # Calculate Client Cost Overview
+    all_clients = get_clients(tenant_id)
+    client_list = []
+    total_allocated_client_cost = 0.0
+
+    for c in all_clients:
+        cid = c["id"]
+        c_cost_data = get_client_costs(cid, date_from, date_to, tenant_id)
+        c_total = float(c_cost_data.get("total", 0) or 0)
+        total_allocated_client_cost += c_total
+
+        by_service = c_cost_data.get("by_service", [])
+        top_service_name = by_service[0].get("name", "General Cloud") if (by_service and isinstance(by_service[0], dict)) else "General Cloud"
+
+        by_cloud = c_cost_data.get("by_cloud", [])
+        clouds_used = [b.get("cloud", "azure") for b in by_cloud] if by_cloud else ["azure"]
+
+        client_list.append({
+            "id": cid,
+            "name": c["name"],
+            "cost": round(c_total, 2),
+            "top_service": top_service_name,
+            "clouds": clouds_used,
+            "rule_count": len(get_client_mappings(cid))
+        })
+
+    client_list.sort(key=lambda x: -x["cost"])
+    
+    # Calculate percentages
+    for cl in client_list:
+        cl["pct"] = round((cl["cost"] / total_public_spend * 100), 1) if total_public_spend > 0 else 0
+
+    allocated_pct = round((total_allocated_client_cost / total_public_spend * 100), 1) if total_public_spend > 0 else 0
+    unallocated_cost = max(0.0, round(total_public_spend - total_allocated_client_cost, 2))
+
+    client_overview = {
+        "total_client_cost": round(total_allocated_client_cost, 2),
+        "allocated_pct": allocated_pct,
+        "unallocated_cost": unallocated_cost,
+        "active_clients_count": len([cl for cl in client_list if cl["cost"] > 0]),
+        "total_clients_count": len(all_clients),
+        "clients": client_list
+    }
+
     conn.close()
     return {
         "date_from": date_from,
         "date_to": date_to,
         "total_spend": round(total_public_spend, 2),
+        "avg_daily_cost": total_avg_daily,
+        "forecasted_eom": forecasted_eom,
+        "days_elapsed": days_elapsed,
+        "days_in_period": days_in_period,
         "total_subs": total_public_subs,
         "total_resources": total_public_resources,
         "total_running": total_public_running,
         "cards": cards,
+        "client_overview": client_overview,
     }
+
 
 
 if __name__ == "__main__":
