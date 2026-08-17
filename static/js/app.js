@@ -752,23 +752,256 @@ async function loadExecutiveSummary() {
         const trendLabels = trend.map(t => t.label);
         const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)';
         const txtColor  = isDark ? '#9ca3af' : '#6b7280';
+        const subMeta   = d.subscriptions_meta || {};
+        const selCloud  = (_selectedExCloud || 'all').toLowerCase();
+
+        const trendDatasets = [];
+        const palette = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316'];
+
+        if (selCloud === 'all') {
+            // Show Total spend line + individual cloud lines
+            trendDatasets.push({
+                label: 'Total',
+                data: trend.map(t => t.total),
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99,102,241,0.08)',
+                tension: 0.4,
+                fill: true,
+                borderWidth: 2,
+                pointRadius: 3
+            });
+            if (cloudVisible('azure')) {
+                trendDatasets.push({
+                    label: 'Azure',
+                    data: trend.map(t => t.azure),
+                    borderColor: '#0089D6',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    fill: false,
+                    borderWidth: 1.5,
+                    pointRadius: 2,
+                    borderDash: [5,3]
+                });
+            }
+            if (cloudVisible('aws')) {
+                trendDatasets.push({
+                    label: 'AWS',
+                    data: trend.map(t => t.aws),
+                    borderColor: '#FF9900',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    fill: false,
+                    borderWidth: 1.5,
+                    pointRadius: 2,
+                    borderDash: [5,3]
+                });
+            }
+            if (cloudVisible('gcp')) {
+                trendDatasets.push({
+                    label: 'GCP',
+                    data: trend.map(t => t.gcp),
+                    borderColor: '#34A853',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    fill: false,
+                    borderWidth: 1.5,
+                    pointRadius: 2,
+                    borderDash: [3,3]
+                });
+            }
+        } else {
+            // Selected cloud mode (e.g. Azure, AWS, GCP, etc.)
+            const mainColor = (typeof CLOUD_META !== 'undefined' && CLOUD_META[selCloud]?.color) || '#0089D6';
+            const cloudLabel = (typeof CLOUD_META !== 'undefined' && CLOUD_META[selCloud]?.label) || (selCloud.toUpperCase());
+
+            // 1. Total for selected cloud
+            trendDatasets.push({
+                label: `${cloudLabel} Total`,
+                data: trend.map(t => t.total),
+                borderColor: mainColor,
+                backgroundColor: mainColor.startsWith('#') ? mainColor + '18' : 'rgba(0,137,214,0.08)',
+                tension: 0.4,
+                fill: true,
+                borderWidth: 2,
+                pointRadius: 3
+            });
+
+            // 2. Subscriptions breakdown for selected cloud
+            const subTotals = {};
+            trend.forEach(t => {
+                const subs = t.subs || {};
+                Object.keys(subs).forEach(sid => {
+                    subTotals[sid] = (subTotals[sid] || 0) + (subs[sid] || 0);
+                });
+            });
+
+            const sortedSubIds = Object.keys(subTotals).sort((a, b) => subTotals[b] - subTotals[a]);
+            const topSubIds = sortedSubIds.slice(0, 6);
+            const otherSubIds = sortedSubIds.slice(6);
+
+            topSubIds.forEach((sid, idx) => {
+                const sName = subMeta[sid] || (sid.length > 20 ? sid.substring(0, 18) + '…' : sid);
+                const color = palette[idx % palette.length];
+                trendDatasets.push({
+                    label: sName,
+                    data: trend.map(t => (t.subs && t.subs[sid]) || 0),
+                    borderColor: color,
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    fill: false,
+                    borderWidth: 1.5,
+                    pointRadius: 2,
+                    borderDash: [4, 3]
+                });
+            });
+
+            if (otherSubIds.length > 0) {
+                trendDatasets.push({
+                    label: 'Other Subscriptions',
+                    data: trend.map(t => {
+                        const subs = t.subs || {};
+                        return otherSubIds.reduce((sum, sid) => sum + (subs[sid] || 0), 0);
+                    }),
+                    borderColor: '#9ca3af',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    fill: false,
+                    borderWidth: 1.5,
+                    pointRadius: 2,
+                    borderDash: [2, 2]
+                });
+            }
+        }
+
+        // Budget Instance Line overlay (if budget data exists)
+        const hasBudget = trend.some(t => t.budget && t.budget > 0) || (d.budget && d.budget.total > 0);
+        if (hasBudget) {
+            const budgetVal = d.budget?.total || trend.find(t => t.budget > 0)?.budget || 0;
+            trendDatasets.push({
+                label: 'Budget Target',
+                data: trend.map(t => t.budget || budgetVal),
+                borderColor: '#ef4444',
+                backgroundColor: 'transparent',
+                tension: 0,
+                fill: false,
+                borderWidth: 2,
+                borderDash: [6, 4],
+                pointRadius: 0,
+                pointHoverRadius: 3
+            });
+        }
+
+        let _trendMouseY = null;
         if (_exTrendChart) { _exTrendChart.destroy(); _exTrendChart = null; }
         const trendCtx = el('exTrendChart');
         if (trendCtx) {
+            trendCtx.addEventListener('mousemove', function(e) {
+                const rect = trendCtx.getBoundingClientRect();
+                _trendMouseY = e.clientY - rect.top;
+            });
+            trendCtx.addEventListener('mouseleave', function() {
+                _trendMouseY = null;
+            });
+
             _exTrendChart = new Chart(trendCtx, {
                 type: 'line',
                 data: {
                     labels: trendLabels,
-                    datasets: [
-                        { label: 'Total',  data: trend.map(t => t.total), borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.08)', tension: 0.4, fill: true,  borderWidth: 2,   pointRadius: 3 },
-                        ...(cloudVisible('azure') ? [{ label: 'Azure',  data: trend.map(t => t.azure), borderColor: '#0089D6', backgroundColor: 'transparent', tension: 0.4, fill: false, borderWidth: 1.5, pointRadius: 2, borderDash: [5,3] }] : []),
-                        ...(cloudVisible('aws')   ? [{ label: 'AWS',    data: trend.map(t => t.aws),   borderColor: '#FF9900', backgroundColor: 'transparent', tension: 0.4, fill: false, borderWidth: 1.5, pointRadius: 2, borderDash: [5,3] }] : []),
-                        ...(cloudVisible('gcp')   ? [{ label: 'GCP',    data: trend.map(t => t.gcp),   borderColor: '#34A853', backgroundColor: 'transparent', tension: 0.4, fill: false, borderWidth: 1,   pointRadius: 2, borderDash: [3,3] }] : []),
-                    ]
+                    datasets: trendDatasets
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { position: 'top', labels: { color: txtColor, font: { size: 11 }, boxWidth: 16, padding: 12 } } },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { color: txtColor, font: { size: 11 }, boxWidth: 14, padding: 10 }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: isDark ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                            titleColor: isDark ? '#f3f4f6' : '#111827',
+                            bodyColor: isDark ? '#d1d5db' : '#374151',
+                            borderColor: isDark ? 'rgba(75, 85, 99, 0.4)' : 'rgba(229, 231, 235, 1)',
+                            borderWidth: 1,
+                            padding: 10,
+                            boxPadding: 4,
+                            usePointStyle: true,
+                            callbacks: {
+                                title: items => items[0]?.label || '',
+                                label: function(ctx) {
+                                    const val = ctx.parsed.y;
+                                    if (val == null) return null;
+                                    const dsLabel = ctx.dataset.label || '';
+                                    const mainLine = ` ${dsLabel}: ${$fmt2(val)}`;
+
+                                    if (selCloud === 'all') {
+                                        const cloudKey = dsLabel.toLowerCase();
+
+                                        // Calculate distance from actual mouse Y cursor position to each line point
+                                        const targetY = typeof _trendMouseY === 'number' ? _trendMouseY : ctx.chart.tooltip?.y;
+                                        let closestDsIndex = -1;
+                                        let minDistance = Infinity;
+
+                                        if (typeof targetY === 'number' && ctx.chart.tooltip?.dataPoints) {
+                                            ctx.chart.tooltip.dataPoints.forEach(dp => {
+                                                const ptY = dp.element?.y;
+                                                if (typeof ptY === 'number') {
+                                                    const dist = Math.abs(ptY - targetY);
+                                                    if (dist < minDistance) {
+                                                        minDistance = dist;
+                                                        closestDsIndex = dp.datasetIndex;
+                                                    }
+                                                }
+                                            });
+                                        }
+
+                                        // Only show subscription breakdown for the line closest to the mouse Y cursor
+                                        if (ctx.datasetIndex === closestDsIndex && cloudKey !== 'total' && cloudKey !== 'budget target') {
+                                            const monthData = trend[ctx.dataIndex];
+                                            const cloudSubs = monthData?.cloud_subs?.[cloudKey] || {};
+                                            const subIds = Object.keys(cloudSubs).sort((a, b) => cloudSubs[b] - cloudSubs[a]);
+
+                                            if (subIds.length > 0) {
+                                                const lines = [mainLine];
+                                                const topSubs = subIds.slice(0, 5);
+                                                topSubs.forEach(sid => {
+                                                    const sName = subMeta[sid] || (sid.length > 20 ? sid.substring(0, 18) + '…' : sid);
+                                                    lines.push(`    └ ${sName}: ${$fmt2(cloudSubs[sid])}`);
+                                                });
+                                                if (subIds.length > 5) {
+                                                    const otherSum = subIds.slice(5).reduce((acc, sid) => acc + (cloudSubs[sid] || 0), 0);
+                                                    lines.push(`    └ Others (${subIds.length - 5}): ${$fmt2(otherSum)}`);
+                                                }
+                                                return lines;
+                                            }
+                                        }
+                                    }
+
+                                    return mainLine;
+                                },
+                                footer: function(items) {
+                                    const budgetItem = items.find(i => (i.dataset.label || '').toLowerCase().includes('budget'));
+                                    const totalItem  = items.find(i => (i.dataset.label || '').toLowerCase().includes('total'));
+                                    if (budgetItem && totalItem && budgetItem.parsed.y > 0) {
+                                        const diff = totalItem.parsed.y - budgetItem.parsed.y;
+                                        const diffStr = $fmt2(Math.abs(diff));
+                                        if (diff > 0) {
+                                            return `⚠️ Over Budget by ${diffStr}`;
+                                        } else {
+                                            return `✓ Within Budget (${diffStr} under target)`;
+                                        }
+                                    }
+                                    return '';
+                                }
+                            }
+                        }
+                    },
                     scales: {
                         x: { grid: { color: gridColor }, ticks: { color: txtColor, font: { size: 11 } } },
                         y: { grid: { color: gridColor }, ticks: { color: txtColor, font: { size: 11 }, callback: v => curSym() + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) } }
@@ -829,10 +1062,24 @@ async function loadExecutiveSummary() {
         }
 
         // Top Accounts Donut/Pie Chart
-        const accounts = d.top_accounts || [];
-        const accTotal = accounts.reduce((sum, a) => sum + (a.cost || 0), 0);
-        const cloudColMap = { azure: '#0089D6', aws: '#FF9900', gcp: '#34A853' };
-        const pieColors = ['#0089D6', '#FF9900', '#34A853', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1'];
+        const rawAccounts = d.top_accounts || [];
+        const accTotal = rawAccounts.reduce((sum, a) => sum + (a.cost || 0), 0);
+        
+        const topAccs = rawAccounts.slice(0, 5);
+        let accounts = [...topAccs];
+        if (rawAccounts.length > 5) {
+            const otherSum = rawAccounts.slice(5).reduce((sum, a) => sum + (a.cost || 0), 0);
+            if (otherSum > 0) {
+                accounts.push({
+                    name: `Others (${rawAccounts.length - 5})`,
+                    cloud: 'other',
+                    cost: Math.round(otherSum * 100) / 100
+                });
+            }
+        }
+
+        const cloudColMap = { azure: '#0089D6', aws: '#FF9900', gcp: '#34A853', other: '#9ca3af' };
+        const pieColors = ['#0089D6', '#FF9900', '#34A853', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#9ca3af'];
         const accLabels = accounts.map(a => a.name);
         const accVals = accounts.map(a => a.cost || 0);
         const accColors = accounts.map((a, i) => cloudColMap[a.cloud] || pieColors[i % pieColors.length]);
@@ -875,18 +1122,20 @@ async function loadExecutiveSummary() {
         if (el('exAccountsTotal')) el('exAccountsTotal').textContent = $fmt(accTotal);
 
         if (el('exAccountsLegend')) {
+            el('exAccountsLegend').style.maxHeight = '145px';
+            el('exAccountsLegend').style.overflowY = 'auto';
             el('exAccountsLegend').innerHTML = accounts.map((a, i) => {
-                const badge = `<span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:4px;background:${cloudColMap[a.cloud]||'#6366f1'}22;color:${cloudColMap[a.cloud]||'#6366f1'};text-transform:uppercase;margin-right:4px">${a.cloud}</span>`;
+                const badge = a.cloud !== 'other' ? `<span style="font-size:9px;font-weight:600;padding:1px 4px;border-radius:3px;background:${cloudColMap[a.cloud]||'#6366f1'}22;color:${cloudColMap[a.cloud]||'#6366f1'};text-transform:uppercase;margin-right:4px;flex-shrink:0">${a.cloud}</span>` : '';
                 const pct = accTotal > 0 ? Math.round((a.cost / accTotal) * 100) : 0;
                 return `
-                    <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;padding:6px 10px;background:rgba(0,0,0,0.02);border:1px solid var(--border);border-radius:8px">
-                        <div style="display:flex;align-items:center;gap:6px;min-width:0">
-                            <div style="width:8px;height:8px;border-radius:50%;background:${accColors[i]};flex-shrink:0"></div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;font-size:10.5px;padding:3px 6px;background:rgba(0,0,0,0.02);border:1px solid var(--border);border-radius:6px;margin-bottom:3px">
+                        <div style="display:flex;align-items:center;gap:4px;min-width:0;flex:1">
+                            <div style="width:7px;height:7px;border-radius:50%;background:${accColors[i]};flex-shrink:0"></div>
                             ${badge}
-                            <span style="color:var(--text-primary);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.name}">${a.name}</span>
-                            <span style="color:var(--text-secondary);font-size:10.5px;flex-shrink:0">${pct}%</span>
+                            <span style="color:var(--text-primary);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px" title="${a.name}">${a.name}</span>
+                            <span style="color:var(--text-secondary);font-size:9.5px;flex-shrink:0;margin-left:auto">${pct}%</span>
                         </div>
-                        <span style="font-weight:700;color:var(--text-primary);flex-shrink:0;margin-left:8px">${$fmt2(a.cost)}</span>
+                        <span style="font-weight:700;color:var(--text-primary);flex-shrink:0;margin-left:6px">${$fmt2(a.cost)}</span>
                     </div>
                 `;
             }).join('');

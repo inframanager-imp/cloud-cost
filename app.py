@@ -89,6 +89,8 @@ from budget_manager import check_budgets, check_data_freshness
 from slack_notifier import test_webhook as slack_test_webhook
 
 app = Flask(__name__)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "default-secret-key")
 app.permanent_session_lifetime = timedelta(hours=12)
 # Default false: some hosts hit RuntimeError: can't start new thread when Werkzeug uses threaded=True.
@@ -532,12 +534,16 @@ def index():
     if is_impersonating and username.startswith("[Impersonating] "):
         impersonated_tenant = username[len("[Impersonating] "):]
         username = "Super Admin"
-    return render_template(
+    resp = make_response(render_template(
         "index.html",
         username=username,
         is_impersonating=is_impersonating,
         impersonated_tenant=impersonated_tenant,
-    )
+    ))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.route("/drilldown")
@@ -855,9 +861,38 @@ def api_executive_summary():
     def mom_pct(cur, prev):
         return round((cur - prev) / prev * 100, 1) if prev > 0 else 0
 
-    # 12-month trend by cloud (fixed 12-month window up to current month)
+    # Fetch names for cloud providers and subscriptions first
+    cp_rows = conn.execute(
+        "SELECT provider_id, name FROM cloud_providers WHERE tenant_id = ? OR tenant_id IS NULL", (tid,)
+    ).fetchall() if tid else conn.execute("SELECT provider_id, name FROM cloud_providers").fetchall()
+    sub_rows = conn.execute(
+        "SELECT subscription_id, name FROM subscriptions WHERE tenant_id = ? OR tenant_id IS NULL", (tid,)
+    ).fetchall() if tid else conn.execute("SELECT subscription_id, name FROM subscriptions").fetchall()
+    name_map = {r["provider_id"]: r["name"] for r in cp_rows if r["provider_id"]}
+    name_map.update({r["subscription_id"]: r["name"] for r in sub_rows if r["subscription_id"]})
+
+    # Budget utilization
+    try:
+        if tid:
+            budgets = conn.execute(
+                "SELECT name, amount, provider_type FROM budgets WHERE (tenant_id = ? OR tenant_id IS NULL) AND enabled = 1", (tid,)
+            ).fetchall()
+        else:
+            budgets = conn.execute(
+                "SELECT name, amount, provider_type FROM budgets WHERE enabled = 1"
+            ).fetchall()
+        if cloud_filter and cloud_filter != "all":
+            matched_budgets = [b for b in budgets if (b["provider_type"] or "all").lower() in [cloud_filter, "all"]]
+        else:
+            matched_budgets = budgets
+        total_budget = sum(b["amount"] for b in matched_budgets) if matched_budgets else 0
+    except Exception:
+        total_budget = 0
+
+    # 12-month trend by cloud & subscription (fixed 12-month window up to current month)
     months_trend = []
     cur_year, cur_month = ref_today.year, ref_today.month
+    all_subs_totals = {}
     for i in range(11, -1, -1):
         m = cur_month - i
         y = cur_year
@@ -867,12 +902,34 @@ def api_executive_summary():
         m_start = datetime(y, m, 1)
         last_day = calendar.monthrange(y, m)[1]
         m_end = datetime(y, m, last_day) if (y != ref_today.year or m != ref_today.month) else ref_today
+        
+        # Per cloud trend
         rows = conn.execute(f"""
             SELECT cloud_provider, SUM({_cost}) as total
             FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
             GROUP BY cloud_provider
         """, [m_start.strftime("%Y-%m-%d"), m_end.strftime("%Y-%m-%d")] + cp_params).fetchall()
         m_map = {r["cloud_provider"]: round(r["total"] or 0, 2) for r in rows}
+
+        # Per cloud & subscription breakdown
+        sub_rows_month = conn.execute(f"""
+            SELECT cloud_provider, subscription_id, SUM({_cost}) as total
+            FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
+            AND subscription_id IS NOT NULL AND subscription_id != ''
+            GROUP BY cloud_provider, subscription_id
+        """, [m_start.strftime("%Y-%m-%d"), m_end.strftime("%Y-%m-%d")] + cp_params).fetchall()
+        sub_m_map = {}
+        cloud_subs_map = {}
+        for r in sub_rows_month:
+            cp = (r["cloud_provider"] or "azure").lower()
+            sid = r["subscription_id"]
+            tot = round(r["total"] or 0, 2)
+            sub_m_map[sid] = tot
+            if cp not in cloud_subs_map:
+                cloud_subs_map[cp] = {}
+            cloud_subs_map[cp][sid] = tot
+            all_subs_totals[sid] = all_subs_totals.get(sid, 0.0) + tot
+
         months_trend.append({
             "label": m_start.strftime("%b %Y"),
             "year": y,
@@ -881,6 +938,9 @@ def api_executive_summary():
             "aws": m_map.get("aws", 0),
             "gcp": m_map.get("gcp", 0),
             "total": sum(m_map.values()),
+            "subs": sub_m_map,
+            "cloud_subs": cloud_subs_map,
+            "budget": round(total_budget, 2) if total_budget > 0 else None,
         })
 
     # Top 10 cost drivers (services this month)
@@ -891,31 +951,11 @@ def api_executive_summary():
     """, [first_of_month, today_str] + cp_params).fetchall()
 
     # Top accounts
-    cp_rows = conn.execute(
-        "SELECT provider_id, name FROM cloud_providers WHERE tenant_id = ? OR tenant_id IS NULL", (tid,)
-    ).fetchall() if tid else conn.execute("SELECT provider_id, name FROM cloud_providers").fetchall()
-    sub_rows = conn.execute(
-        "SELECT subscription_id, name FROM subscriptions WHERE tenant_id = ? OR tenant_id IS NULL", (tid,)
-    ).fetchall() if tid else conn.execute("SELECT subscription_id, name FROM subscriptions").fetchall()
-    name_map = {r["provider_id"]: r["name"] for r in cp_rows if r["provider_id"]}
-    name_map.update({r["subscription_id"]: r["name"] for r in sub_rows if r["subscription_id"]})
-
     top_accounts = conn.execute(f"""
         SELECT subscription_id, cloud_provider, SUM({_cost}) as total
         FROM cost_data WHERE date >= ? AND date <= ? {tid_filter} {cp_sql}
         GROUP BY subscription_id, cloud_provider ORDER BY total DESC LIMIT 50
     """, [first_of_month, today_str] + cp_params).fetchall()
-
-    # Budget utilization
-    try:
-        budgets = conn.execute(
-            "SELECT name, amount FROM budgets WHERE (tenant_id = ? OR tenant_id IS NULL) AND enabled = 1", (tid,)
-        ).fetchall() if tid else conn.execute(
-            "SELECT name, amount FROM budgets WHERE enabled = 1"
-        ).fetchall()
-        total_budget = sum(b["amount"] for b in budgets) if budgets else 0
-    except Exception:
-        total_budget = 0
 
     # Projected EOM
     avg_daily = total_cur / days_elapsed if days_elapsed > 0 else 0
@@ -1058,6 +1098,7 @@ def api_executive_summary():
             "remaining": round(total_budget - total_cur, 2) if total_budget > 0 else None,
         },
         "monthly_trend": months_trend,
+        "subscriptions_meta": name_map,
         "top_cost_groups": top_cost_groups_list,
         "top_services": top_services_list,
         "top_usage_types": top_usage_types_list,
