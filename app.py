@@ -4293,10 +4293,19 @@ def _run_auto_sync():
             tenant_records = 0
             provider_errors = []
 
-            # Skip if not yet due based on this tenant's own interval
+            # Skip if not yet due based on this tenant's own interval. Counting
+            # 'partial' (real progress, just one provider hit an error -- e.g.
+            # Azure rate-limiting on a large subscription) alongside 'success'
+            # matters here: a tenant that never gets a fully clean run would
+            # otherwise never accumulate a qualifying "last synced" timestamp,
+            # so the interval never actually engages -- it just retries as
+            # often as a run takes to complete, which makes the rate-limiting
+            # that caused the partial status worse, not better. 'failed' (0
+            # records, a hard exception) is deliberately excluded -- that's
+            # genuinely no progress, not just an imperfect run.
             _lc = get_db()
             _lr = _lc.execute(
-                "SELECT MAX(sync_start) FROM sync_log WHERE tenant_id=? AND triggered_by='auto' AND status='success'",
+                "SELECT MAX(sync_start) FROM sync_log WHERE tenant_id=? AND triggered_by='auto' AND status IN ('success','partial')",
                 (tid,),
             ).fetchone()
             _lc.close()
@@ -4708,8 +4717,9 @@ def api_get_sync_schedule():
     row = conn.execute(
         "SELECT COALESCE(auto_sync_interval_hours, 6) AS interval_hours FROM tenants WHERE id=?", (tid,)
     ).fetchone()
+    # Match the gating logic in _sync_tenant_costs: 'partial' counts as synced too.
     last_row = conn.execute(
-        "SELECT MAX(sync_start) AS last_sync FROM sync_log WHERE tenant_id=? AND triggered_by='auto' AND status='success'",
+        "SELECT MAX(sync_start) AS last_sync FROM sync_log WHERE tenant_id=? AND triggered_by='auto' AND status IN ('success','partial')",
         (tid,),
     ).fetchone()
     conn.close()
