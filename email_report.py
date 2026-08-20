@@ -497,7 +497,11 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                     MAX(CASE WHEN rn = 1 THEN caller END) as actor,
                     COUNT(*) as cnt
                 FROM ranked
-                GROUP BY subscription_id, resource_group, resource_name
+                -- resource_type must be grouped (or aggregated): SQLite tolerated
+                -- a bare column here, Postgres raises GroupingError and killed the
+                -- whole Resource Changes section. It's functionally dependent on
+                -- resource_name anyway, so grouping by it doesn't change the rows.
+                GROUP BY subscription_id, resource_group, resource_type, resource_name
                 ORDER BY first_ts DESC
             """, (start_ts, end_ts, tenant_id)).fetchall()
 
@@ -530,7 +534,9 @@ def _build_report_html(sections=None, settings=None, cloud_provider=None, tenant
                     MAX(CASE WHEN rn = 1 THEN caller END) as actor,
                     COUNT(*) as cnt
                 FROM ranked
-                GROUP BY subscription_id, resource_group, resource_name
+                -- see the `created` query above: resource_type must be grouped
+                -- for Postgres compatibility.
+                GROUP BY subscription_id, resource_group, resource_type, resource_name
                 ORDER BY last_ts DESC
             """, (start_ts, end_ts, tenant_id)).fetchall()
 
