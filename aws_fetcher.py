@@ -95,7 +95,10 @@ def _fetch_service_level(client, date_from: str, end_exclusive: str, account_id:
             kwargs["NextPageToken"] = paginator_token
         resp = client.get_cost_and_usage(**kwargs)
         for result_by_time in resp.get("ResultsByTime", []):
-            date_str = result_by_time["TimePeriod"]["Start"]
+            # [:10] normalises to YYYY-MM-DD -- see _fetch_resource_level for why
+            # this matters. get_cost_and_usage already returns a plain date, but
+            # normalising both call sites keeps the stored format guaranteed.
+            date_str = result_by_time["TimePeriod"]["Start"][:10]
             for group in result_by_time.get("Groups", []):
                 keys = group.get("Keys", [])
                 region = keys[0] if len(keys) > 0 else None
@@ -167,7 +170,14 @@ def _fetch_resource_level(client, date_from: str, end_exclusive: str, account_id
                     kwargs["NextPageToken"] = paginator_token
                 resp = client.get_cost_and_usage_with_resources(**kwargs)
                 for result_by_time in resp.get("ResultsByTime", []):
-                    date_str = result_by_time["TimePeriod"]["Start"]
+                    # get_cost_and_usage_with_resources returns a full ISO
+                    # timestamp ("2026-08-20T00:00:00Z"), unlike get_cost_and_usage
+                    # which returns a plain date -- an AWS API inconsistency. Storing
+                    # the raw value broke every date filter for these rows, since
+                    # cost_data.date is compared as a string:
+                    # '2026-08-20T00:00:00Z' > '2026-08-20', so a row fell outside
+                    # its own day and vanished from single-day views entirely.
+                    date_str = result_by_time["TimePeriod"]["Start"][:10]
                     for group in result_by_time.get("Groups", []):
                         keys = group.get("Keys", [])
                         service = keys[0] if len(keys) > 0 else "Unknown"
