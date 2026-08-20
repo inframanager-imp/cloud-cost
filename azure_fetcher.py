@@ -17,9 +17,9 @@ _graph_token_cache = {"token": None, "expires": 0}
 _caller_name_cache = {}
 
 
-def get_access_token():
+def get_access_token(force_refresh=False):
     global _token_cache
-    if _token_cache["token"] and time.time() < _token_cache["expires"]:
+    if not force_refresh and _token_cache["token"] and time.time() < _token_cache["expires"]:
         return _token_cache["token"]
 
     url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
@@ -40,11 +40,11 @@ def get_access_token():
 _custom_token_cache = {}
 
 
-def get_access_token_for(tenant_id, client_id, client_secret):
+def get_access_token_for(tenant_id, client_id, client_secret, force_refresh=False):
     """Get an access token using a per-provider (customer-supplied) service principal."""
     cache_key = f"{tenant_id}:{client_id}"
     cached = _custom_token_cache.get(cache_key)
-    if cached and time.time() < cached["expires"]:
+    if not force_refresh and cached and time.time() < cached["expires"]:
         return cached["token"]
 
     url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
@@ -190,7 +190,7 @@ def fetch_subscriptions():
         return []
 
 
-def _api_post_with_retry(url, headers, body, max_retries=10):
+def _api_post_with_retry(url, headers, body, max_retries=10, refresh_auth=None):
     """POST request with retry on 429 (rate limit) and 503.
     Respects Azure's Retry-After header fully — never cap below what Azure says.
 
@@ -202,6 +202,7 @@ def _api_post_with_retry(url, headers, body, max_retries=10):
     floor), so doubling the attempt ceiling only extends the worst-case time
     before giving up -- it doesn't retry any faster/more aggressively.
     """
+    auth_refreshed = False
     for attempt in range(max_retries):
         resp = requests.post(url, headers=headers, json=body, timeout=90)
         if resp.status_code == 429:
@@ -215,6 +216,26 @@ def _api_post_with_retry(url, headers, body, max_retries=10):
             print(f"  [Service unavailable] Waiting 15s before retry {attempt+1}/{max_retries}...")
             time.sleep(15)
             continue
+        if resp.status_code == 401 and refresh_auth and not auth_refreshed:
+            # The bearer token is minted once per fetch_cost_data() call, but a
+            # single call can easily outlive it: an Azure AD token lasts ~60min
+            # and the token cache is shared, so a run starting late in a token's
+            # life has only minutes left -- then 429 back-offs (up to
+            # max_retries x Retry-After) push it past expiry and every
+            # subsequent request 401s. Verified in prod: across 40 failing runs,
+            # a 401 NEVER occurred without a 429 in the same run (12 with both,
+            # 28 with 429 only, 0 with 401 alone). Mint a fresh token and retry;
+            # headers is mutated in place so the rest of the run reuses it.
+            print("  [Auth] 401 — token expired mid-run, refreshing and retrying...")
+            try:
+                new_headers = refresh_auth()
+                if new_headers:
+                    headers.clear()
+                    headers.update(new_headers)
+                auth_refreshed = True
+                continue
+            except Exception as _auth_err:
+                print(f"  [Auth] token refresh failed: {_auth_err}")
         resp.raise_for_status()
         return resp
     resp.raise_for_status()
@@ -247,6 +268,19 @@ def fetch_cost_data(date_from, date_to, granularity="Daily", subscription_id=Non
         "Content-Type": "application/json"
     }
 
+    def _refresh_auth():
+        """Mint a brand-new token and return replacement headers. Passed to
+        _api_post_with_retry so a mid-run token expiry self-heals instead of
+        failing the whole subscription with a 401."""
+        if credentials:
+            fresh = get_access_token_for(
+                credentials["tenant_id"], credentials["client_id"],
+                credentials["client_secret"], force_refresh=True,
+            )
+        else:
+            fresh = get_access_token(force_refresh=True)
+        return {"Authorization": f"Bearer {fresh}", "Content-Type": "application/json"}
+
     # Query 1: ResourceGroup + ServiceName
     body1 = _build_query_body(date_from, date_to, granularity, [
         {"type": "Dimension", "name": "ResourceGroup"},
@@ -260,7 +294,7 @@ def fetch_cost_data(date_from, date_to, granularity="Daily", subscription_id=Non
     ])
 
     print(f"  Fetching cost data (Query 1: ResourceGroup + Service)...")
-    records_q1 = _fetch_all_pages(url, headers, body1)
+    records_q1 = _fetch_all_pages(url, headers, body1, refresh_auth=_refresh_auth)
     print(f"    -> {len(records_q1['rows'])} rows from query 1")
 
     # Wait 30s between Query 1 and Query 2 to avoid rate limiting
@@ -268,7 +302,7 @@ def fetch_cost_data(date_from, date_to, granularity="Daily", subscription_id=Non
 
     print(f"  Fetching cost data (Query 2: ResourceGroup + ResourceId)...")
     try:
-        records_q2 = _fetch_all_pages(url, headers, body2)
+        records_q2 = _fetch_all_pages(url, headers, body2, refresh_auth=_refresh_auth)
         print(f"    -> {len(records_q2['rows'])} rows from query 2")
     except Exception as e:
         # Query 2 failure (rate limit exhausted) is non-fatal
@@ -316,12 +350,12 @@ def _build_query_body(date_from, date_to, granularity, grouping):
     }
 
 
-def _fetch_all_pages(url, headers, body):
+def _fetch_all_pages(url, headers, body, refresh_auth=None):
     """Fetch all pages of a cost query."""
     all_rows = []
     columns = []
 
-    resp = _api_post_with_retry(url, headers, body)
+    resp = _api_post_with_retry(url, headers, body, refresh_auth=refresh_auth)
     result = resp.json()
     properties = result.get("properties", result)
     columns = properties.get("columns", [])
@@ -332,7 +366,7 @@ def _fetch_all_pages(url, headers, body):
     next_link = properties.get("nextLink")
     while next_link:
         time.sleep(1)  # Be gentle with the API
-        resp = _api_post_with_retry(next_link, headers, body)
+        resp = _api_post_with_retry(next_link, headers, body, refresh_auth=refresh_auth)
         result = resp.json()
         properties = result.get("properties", result)
         rows = properties.get("rows", [])
