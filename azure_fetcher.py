@@ -190,9 +190,17 @@ def fetch_subscriptions():
         return []
 
 
-def _api_post_with_retry(url, headers, body, max_retries=5):
+def _api_post_with_retry(url, headers, body, max_retries=10):
     """POST request with retry on 429 (rate limit) and 503.
     Respects Azure's Retry-After header fully — never cap below what Azure says.
+
+    max_retries was 5 -- confirmed via prod sync_log that heavily-loaded
+    subscriptions (large resource counts) were exhausting that budget and
+    raising here, which the per-subscription handler in _run_auto_sync then
+    logs as a provider error, marking the whole tenant's sync 'partial' for
+    that run. Each attempt already waits Azure's own Retry-After (or a 30s
+    floor), so doubling the attempt ceiling only extends the worst-case time
+    before giving up -- it doesn't retry any faster/more aggressively.
     """
     for attempt in range(max_retries):
         resp = requests.post(url, headers=headers, json=body, timeout=90)
