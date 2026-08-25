@@ -510,7 +510,16 @@ def _merge_records(q1_data, q2_data, subscription_id=None):
             svc = row[q1_cols.get("servicename", -1)] if "servicename" in q1_cols else ""
             # Only add if this service+date wasn't already captured by Q2
             if (date_val, svc) not in q2_service_dates:
-                records.append((date_val, rg or "", svc, "", svc, svc, "",
+                # resource_name is left EMPTY, not set to the service name. These
+                # rows are a service-level total with no resource breakdown (Q2
+                # had nothing for this service/day -- account-level charges like
+                # Support/Marketplace, or Q2 was rate-limited). Writing the
+                # service name here made the Cost Data grid show e.g. "Virtual
+                # Machines" sitting in the Resource column as though it were a
+                # real resource, and put it in the Resource filter as a
+                # selectable value. Empty renders as "-" and is excluded from
+                # the filter list, which is honest about what we actually know.
+                records.append((date_val, rg or "", svc, "", "", svc, "",
                                 round(float(cost_val), 6), currency if currency else "USD",
                                 sub_id, "", "azure"))
                 print(f"  [Supplement] Added Q1-only charge: {svc} ${cost_val} on {date_val}")
