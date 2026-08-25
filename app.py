@@ -2208,6 +2208,35 @@ def api_filters():
     })
 
 
+@app.route("/api/filters/search")
+@login_required
+def api_filters_search():
+    """Server-side lookup for a single high-cardinality filter column.
+
+    /api/filters caps `resources` at 1000 of ~324k distinct values, so the
+    column funnel's browser-side search could only ever match that
+    alphabetically-first slice -- typing a real resource name returned
+    "No options" even though the resource existed. This searches the full
+    set instead."""
+    column = request.args.get("column") or "resource_name"
+    if column not in ("resource_name", "resource_group", "service_name", "resource_type", "meter_category"):
+        return jsonify([])
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify([])
+    sub_ids_raw = (request.args.get("subscription_ids") or "").strip()
+    sub_ids = [v.strip() for v in sub_ids_raw.split(",") if v.strip()] if sub_ids_raw else None
+    return jsonify(get_distinct_values(
+        column,
+        subscription_id=request.args.get("subscription_id"),
+        subscription_ids=sub_ids,
+        cloud_provider=request.args.get("cloud_provider"),
+        tenant_id=current_tenant_id(),
+        limit=200,
+        search=q,
+    ))
+
+
 # ─── API: Sync History ───────────────────────────────────────────────────────
 
 @app.route("/api/sync/history")
