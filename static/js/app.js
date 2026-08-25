@@ -1294,23 +1294,69 @@ function openColFilter(ev, key) {
     if (search) search.focus();
 }
 
+// The Resource list is capped server-side (one tenant has ~324k distinct
+// resource names vs a 1000-row cap), so filtering the pre-loaded slice in the
+// browser can only ever match the alphabetically-first fraction. For that
+// column we query the server instead once the user has typed enough.
+const _COL_FILTER_SERVER_SEARCH = { res: 'resource_name' };
+let _colSearchSeq = 0;
+let _colSearchTimer = null;
+
 function renderColFilter() {
     const key = _colFilterKey;
     if (!key) return;
-    const q = (document.getElementById('colFilterSearch')?.value || '').toLowerCase();
-    const sel = cdSel(key);
-    const opts = cdOpts(key);
-    const items = key === 'acc' ? opts : opts.map(o => ({ id: o, label: o === '__BLANK__' ? '(Blank)' : o === '__RESERVATIONS__' ? 'Reservations' : key === 'res' ? _friendlyAwsResource(o) : o }));
-    const filtered = items.filter(o => o.label.toLowerCase().includes(q));
+    const rawQ = (document.getElementById('colFilterSearch')?.value || '').trim();
+    const serverCol = _COL_FILTER_SERVER_SEARCH[key];
+    if (serverCol && rawQ.length >= 2) {
+        clearTimeout(_colSearchTimer);
+        _colSearchTimer = setTimeout(() => _renderColFilterFromServer(key, serverCol, rawQ), 250);
+        return;
+    }
+    clearTimeout(_colSearchTimer);
+    _paintColFilter(key, cdOpts(key), rawQ.toLowerCase(), serverCol && rawQ.length === 1
+        ? 'Type at least 2 characters to search all resources…' : null);
+}
+
+async function _renderColFilterFromServer(key, column, q) {
     const list = document.getElementById('colFilterList');
     if (!list) return;
-    list.innerHTML = filtered.length
+    const seq = ++_colSearchSeq;
+    list.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:var(--text-secondary)">Searching…</div>';
+    const params = new URLSearchParams({ column, q });
+    if (costsSelectedCloud) params.set('cloud_provider', costsSelectedCloud);
+    const subs = [...cdAccSelected].filter(v => v !== '__BLANK__');
+    if (subs.length) params.set('subscription_ids', subs.join(','));
+    let results = [];
+    try {
+        results = await fetch('/api/filters/search?' + params).then(r => r.json());
+    } catch (e) {
+        results = [];
+    }
+    // A slower earlier request must not overwrite a newer one's results.
+    if (seq !== _colSearchSeq || _colFilterKey !== key) return;
+    // Keep already-ticked values visible even if they fall outside this search.
+    const sel = cdSel(key);
+    const merged = [...new Set([...[...sel].filter(v => String(v).toLowerCase().includes(q.toLowerCase())), ...results])];
+    _paintColFilter(key, merged, '', results.length >= 200
+        ? 'Showing the first 200 matches — refine your search to narrow it down.' : null);
+}
+
+function _paintColFilter(key, opts, q, note) {
+    const list = document.getElementById('colFilterList');
+    if (!list) return;
+    const sel = cdSel(key);
+    const items = key === 'acc' ? opts : opts.map(o => ({ id: o, label: o === '__BLANK__' ? '(Blank)' : o === '__RESERVATIONS__' ? 'Reservations' : key === 'res' ? _friendlyAwsResource(o) : o }));
+    const filtered = q ? items.filter(o => o.label.toLowerCase().includes(q)) : items;
+    const noteHtml = note
+        ? `<div style="padding:6px 10px;font-size:11px;color:var(--text-tertiary);border-bottom:1px solid var(--border)">${note}</div>`
+        : '';
+    list.innerHTML = noteHtml + (filtered.length
         ? filtered.map(o => {
             const checked = sel.has(o.id) ? 'checked' : '';
             const safeId = String(o.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
             return `<label class="multiselect__option"><input type="checkbox" ${checked} onchange="colFilterToggle('${safeId}',this.checked)"> ${o.label}</label>`;
           }).join('')
-        : '<div style="padding:8px 10px;font-size:12px;color:var(--text-secondary)">No options</div>';
+        : '<div style="padding:8px 10px;font-size:12px;color:var(--text-secondary)">No options</div>');
 }
 
 function colFilterToggle(id, checked) {
