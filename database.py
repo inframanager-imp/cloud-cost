@@ -2738,7 +2738,12 @@ def get_available_periods(subscription_id=None, subscription_ids=None, cloud_pro
     }
 
 
-def get_distinct_values(column, subscription_id=None, subscription_ids=None, cloud_provider=None, tenant_id=None, limit=None):
+def get_distinct_values(column, subscription_id=None, subscription_ids=None, cloud_provider=None, tenant_id=None, limit=None, search=None):
+    """`search` does a server-side substring match. Needed because the
+    resource_name list is capped (high cardinality -- one tenant has 324k
+    distinct values against a 1000-row cap), so a browser-side filter over the
+    pre-loaded slice can only ever search the alphabetically-first 0.3% and
+    silently finds nothing for everything else."""
     conn = get_db()
     valid = ["resource_group", "service_name", "resource_type", "meter_category", "resource_name"]
     if column not in valid:
@@ -2763,6 +2768,9 @@ def get_distinct_values(column, subscription_id=None, subscription_ids=None, clo
     if tenant_id is not None:
         conditions.append("tenant_id = ?")
         params.append(tenant_id)
+    if search:
+        conditions.append(f"LOWER({column}) LIKE ?")
+        params.append(f"%{str(search).lower()}%")
     where = " AND ".join(conditions)
     query = f"SELECT DISTINCT {column} FROM cost_data WHERE {where} ORDER BY {column}"
     if limit:
