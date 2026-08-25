@@ -190,6 +190,36 @@ def fetch_subscriptions():
         return []
 
 
+def _retry_after_seconds(resp, default=20):
+    """How long Azure actually wants us to wait after a 429.
+
+    Cost Management does NOT send a standard `Retry-After` header -- verified
+    against the live API, a 429 comes back with only its own headers, e.g.:
+        x-ms-ratelimit-remaining-...-clienttype-requests: DefaultQuota:0
+        x-ms-ratelimit-microsoft.costmanagement-clienttype-retry-after: 17
+    Reading just `Retry-After` therefore always missed, fell through to a 60s
+    default and a 30s floor, and slept ~3.5x longer than asked. With a 10-retry
+    budget that burned up to 10 minutes per query while the quota itself
+    refills in well under a minute -- which is why Query 2 (resource-level)
+    kept exhausting its retries and falling back to service-level rows.
+
+    Several quotas (clienttype / entity / tenant) can be exhausted at once, so
+    take the longest wait any of them asks for.
+    """
+    waits = []
+    for key, val in resp.headers.items():
+        k = key.lower()
+        if k == "retry-after" or ("ratelimit" in k and k.endswith("retry-after")):
+            try:
+                waits.append(int(float(val)))
+            except (TypeError, ValueError):
+                continue
+    if not waits:
+        return default
+    # Never 0 (busy-loop) and never absurd (a bad header shouldn't stall a sync).
+    return max(1, min(max(waits), 300))
+
+
 def _api_post_with_retry(url, headers, body, max_retries=10, refresh_auth=None):
     """POST request with retry on 429 (rate limit) and 503.
     Respects Azure's Retry-After header fully — never cap below what Azure says.
@@ -206,9 +236,9 @@ def _api_post_with_retry(url, headers, body, max_retries=10, refresh_auth=None):
     for attempt in range(max_retries):
         resp = requests.post(url, headers=headers, json=body, timeout=90)
         if resp.status_code == 429:
-            # Respect Azure's Retry-After header — do not cap it
-            retry_after = int(resp.headers.get("Retry-After", 60))
-            retry_after = max(retry_after, 30)  # minimum 30s wait on 429
+            # Wait exactly as long as Azure asks (see _retry_after_seconds), plus
+            # a small buffer for clock skew -- not a fixed 60s floor.
+            retry_after = _retry_after_seconds(resp) + 2
             print(f"  [Rate limited] Waiting {retry_after}s before retry {attempt+1}/{max_retries}...")
             time.sleep(retry_after)
             continue
