@@ -2037,6 +2037,22 @@ def get_cost_totals_by_subscription(filters=None, tenant_id=None, cloud_provider
         elif filters.get("service_name"):
             query += " AND cd.service_name = ?"
             params.append(filters['service_name'])
+        if filters.get("resource_names"):
+            # Mirrors get_cost_total's handling, including the __RESERVATIONS__
+            # pseudo-value. Without this the Total-by-Subscription panel ignored
+            # a Resource filter entirely and showed unfiltered subscription
+            # totals next to a filtered grid.
+            vals = [v for v in filters["resource_names"] if v != "__RESERVATIONS__"]
+            want_resv = "__RESERVATIONS__" in filters["resource_names"]
+            conds = []
+            if vals:
+                placeholders = ",".join(["?"] * len(vals))
+                conds.append(f"cd.resource_name IN ({placeholders})")
+                params.extend(vals)
+            if want_resv:
+                conds.append("LOWER(cd.resource_type)='reservationorders'")
+            if conds:
+                query += " AND (" + " OR ".join(conds) + ")"
         if filters.get("resource_type"):
             query += " AND cd.resource_type LIKE ?"
             params.append(f"%{filters['resource_type']}%")

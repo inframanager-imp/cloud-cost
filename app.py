@@ -1616,6 +1616,9 @@ def api_costs_total_by_subscription():
         "resource_groups": _csv_list("resource_groups"),
         "service_name": request.args.get("service_name"),
         "service_names": _csv_list("service_names"),
+        # Was missing: without it the Total-by-Subscription panel ignored a
+        # Resource filter and showed unfiltered totals beside a filtered grid.
+        "resource_names": _csv_list("resource_names"),
         "include_blank_subscription": (request.args.get("include_blank_subscription") or "").lower() in ("1", "true", "yes"),
         "include_blank_resource_group": (request.args.get("include_blank_resource_group") or "").lower() in ("1", "true", "yes"),
         "include_blank_service": (request.args.get("include_blank_service") or "").lower() in ("1", "true", "yes"),
