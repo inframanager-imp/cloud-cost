@@ -1513,6 +1513,11 @@ def api_costs():
         "include_blank_meter_category": (request.args.get("include_blank_meter_category") or "").lower() in ("1", "true", "yes"),
         "search": request.args.get("search"),
         "cloud_provider": request.args.get("cloud_provider") or None,
+        # Sorting is applied in SQL over the whole result set; sorting in the
+        # browser would only reorder the current page. Column name is validated
+        # against a whitelist inside query_costs.
+        "sort_by": request.args.get("sort_by"),
+        "sort_dir": request.args.get("sort_dir"),
         "limit": request.args.get("limit", 100, type=int),
         "offset": request.args.get("offset", 0, type=int),
     }

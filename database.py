@@ -230,6 +230,31 @@ def _not_guid_prefix_expr(col):
     )
 
 
+def _display_resource_sort_expr():
+    """Sort key matching what the Resource column actually DISPLAYS.
+
+    The grid rewrites resource_name before showing it, so sorting the raw
+    column looked broken to users:
+      - reservations show "Reservation — <service>" but store a bare GUID, so
+        they scattered through the alphabet (1312ab43…, bcc22488…);
+      - AWS rows show the last ARN segment ("caprod") but store the full ARN,
+        so every AWS resource collapsed under "arn:…" in sort order.
+    This mirrors that display logic so A-Z means what it looks like it means.
+    Postgres gets the exact expression; SQLite has no regexp_replace, so it
+    falls back to the raw column (correct ordering, just not ARN-aware).
+    """
+    if DB_ENGINE == "postgres":
+        return (
+            "CASE "
+            "WHEN LOWER(COALESCE(resource_type,'')) LIKE '%reservation%' "
+            "  THEN 'Reservation - ' || COALESCE(service_name,'') "
+            "WHEN COALESCE(resource_name,'') LIKE 'arn:%' "
+            "  THEN regexp_replace(resource_name, '^.*[/:]', '') "
+            "ELSE COALESCE(resource_name,'') END"
+        )
+    return "COALESCE(resource_name,'')"
+
+
 def _nocase_order_expr(col):
     """Case-insensitive ORDER BY term. SQLite's COLLATE NOCASE has no
     built-in Postgres equivalent (Postgres collations are locale/ICU-based,
@@ -1690,6 +1715,38 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
         (f"{_dim_expr(c)} AS {c}" if c in group_dims else f"NULL AS {c}") for c in out_cols
     )
     group_by_cols = ", ".join(_dim_expr(d) for d in group_dims)
+
+    # Sorting must happen in SQL, not in the browser. The grid only ever holds
+    # one page (100 rows) of a result set that can run to tens of thousands, so
+    # a client-side sort just reorders whatever happened to load -- clicking
+    # "sort A-Z" on Resource surfaced '1312ab43-...' as first when the real
+    # first across 24,233 rows was '$system'.
+    _SORTABLE = {
+        "date": date_expr,
+        "cloud_provider": "cloud_provider",
+        "resource_group": "resource_group",
+        "service_name": "service_name",
+        "resource_name": _display_resource_sort_expr(),
+        "meter_category": "meter_category",
+        "subscription_id": "subscription_id",
+        "cost": "cost",
+    }
+    sort_by = (filters or {}).get("sort_by")
+    sort_dir = "ASC" if str((filters or {}).get("sort_dir", "")).lower() == "asc" else "DESC"
+    if sort_by == "date":
+        # Keep the original default's cost tiebreak within a day.
+        order_by = f"{date_expr} {sort_dir}, cost DESC"
+    elif sort_by in _SORTABLE:
+        col = _SORTABLE[sort_by]
+        # Text columns sort case-insensitively so "Apple" and "apple" sit
+        # together, matching what the user sees in the grid.
+        if sort_by != "cost":
+            col = _nocase_order_expr(col)
+        # Stable, predictable ordering for ties.
+        order_by = f"{col} {sort_dir}, {date_expr} DESC, cost DESC"
+    else:
+        order_by = f"{date_expr} DESC, cost DESC"   # unchanged default
+
     query = f"""
         SELECT
             {date_expr} AS date,
@@ -1703,7 +1760,7 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
         FROM cost_data
         {where}
         GROUP BY {date_expr}, {group_by_cols}, tenant_id
-        ORDER BY {date_expr} DESC, cost DESC
+        ORDER BY {order_by}
     """
 
     if filters and filters.get("limit"):
