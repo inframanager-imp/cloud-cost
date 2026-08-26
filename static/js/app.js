@@ -2100,6 +2100,11 @@ async function loadCostsTable() {
     if (costsSelectedCloud) params.set('cloud_provider', costsSelectedCloud);
     const costsClient = document.getElementById('costsClientFilter')?.value || '';
     if (costsClient) params.set('client_id', costsClient);
+    // Sort server-side so it covers every page, not just the rows on screen.
+    if (costSortBy) {
+        params.set('sort_by', costSortBy);
+        params.set('sort_dir', costSortDir || 'asc');
+    }
     params.set('limit', String(costPageLimit));
     params.set('offset', String(costPageOffset));
 
@@ -2355,10 +2360,22 @@ function sortCostsBy(field) {
         costSortBy = field;
         costSortDir = (field === 'cost' || field === 'date') ? 'desc' : 'asc';
     }
+    // Sorting now reorders the whole result set server-side, so staying on
+    // page N would drop you into the middle of a completely different ordering.
+    costPageOffset = 0;
     loadCostsTable();
 }
 
 function sortCostRows(rows) {
+    // Sorting is done in SQL (see query_costs) so it spans the whole result set
+    // rather than just the page in the browser. Re-sorting here would fight
+    // that -- especially for Resource, where the server sorts by the DISPLAYED
+    // name (reservation labels, short AWS names) which this function can't see.
+    // OpenAI's Service column is the one exception: it renders meter_category,
+    // and the server sorts the real service_name, so keep a local pass for it.
+    if (!(costsSelectedCloud === 'openai' && costSortBy === 'service_name')) {
+        return rows;
+    }
     const out = [...rows];
     out.sort((a, b) => {
         // OpenAI shows the API key (meter_category) in the Service column, so
