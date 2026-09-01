@@ -196,59 +196,97 @@ body {
     background: inherit;
     min-height: 64px;
     box-sizing: border-box;
-    transition: padding 0.25s ease;
+    transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
 }
 
 .sidebar:hover .sidebar-header {
-    padding: 14px 14px 12px;
-    justify-content: space-between;
+    padding: 14px 12px;
+    justify-content: center;
 }
 
 .sidebar-brand {
     display: flex;
     align-items: center;
-    gap: 12px;
-    text-decoration: none;
-}
-
-.sidebar-logo-box {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
-    background: linear-gradient(135deg, #3B82F6, #6366F1, #8B5CF6);
-    display: flex;
-    align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
-    flex-shrink: 0;
+    width: 100%;
+    text-decoration: none;
     margin: 0 auto;
 }
 
-.sidebar-logo-box svg {
-    width: 19px !important;
-    height: 19px !important;
+.sidebar-logo-box {
+    width: 100%;
+    height: 40px;
+    background: transparent !important;
+    box-shadow: none !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin: 0 auto;
+    position: relative;
 }
 
-.sidebar:hover .sidebar-logo-box {
-    margin: 0;
+/* Default / Collapsed State: show compact icon centered */
+.sidebar-logo-icon {
+    display: block;
+    height: 28px;
+    width: auto;
+    max-width: 32px;
+    object-fit: contain;
+    margin: 0 auto;
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.sidebar-logo-full {
+    display: none;
+    opacity: 0;
+    transform: scale(0.85);
+}
+
+/* Hover / Expanded State: smoothly animate and center enlarged TrueTec logo */
+.sidebar:hover .sidebar-logo-icon {
+    display: none;
+    opacity: 0;
+}
+
+.sidebar:hover .sidebar-logo-full {
+    display: block;
+    height: 38px;
+    width: auto;
+    max-width: 165px;
+    object-fit: contain;
+    margin: 0 auto;
+    animation: logoHoverEnlarge 0.35s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+    filter: drop-shadow(0 4px 14px rgba(6, 182, 212, 0.18));
+}
+
+@keyframes logoHoverEnlarge {
+    0% {
+        opacity: 0;
+        transform: scale(0.85) translateY(2px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Collapsed class */
+.sidebar.collapsed .sidebar-logo-icon {
+    display: block !important;
+    opacity: 1 !important;
+}
+
+.sidebar.collapsed .sidebar-logo-full {
+    display: none !important;
+    opacity: 0 !important;
 }
 
 .sidebar-brand-text {
-    display: none;
-    flex-direction: column;
-    white-space: nowrap;
-}
-
-.sidebar:hover .sidebar-brand-text {
-    display: flex;
-}
-
-.sidebar-brand-text .title-line {
-    font-size: 14px;
-    font-weight: 500;
-    color: #4b9cd3;
-    line-height: 1.2;
-    letter-spacing: -0.01em;
+    display: none !important;
 }
 
 /* Theme Toggle Button */

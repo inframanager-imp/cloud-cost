@@ -666,8 +666,14 @@ let _globalLogoLoaderTimer = null;
 function getLogoLoaderHTML(msg = 'Loading data…') {
     return `
         <div class="inline-logo-loader">
-            <div class="logo-loader-box">
-                <img src="/static/img/cloud%20cost%20logo.png" class="logo-loader-img" alt="Loading">
+            <div class="creative-loader-box compact">
+                <div class="creative-spinner compact">
+                    <div class="spinner-ring outer-ring"></div>
+                    <div class="spinner-ring inner-ring"></div>
+                    <div class="spinner-core"></div>
+                    <div class="spinner-particle p1"></div>
+                    <div class="spinner-particle p2"></div>
+                </div>
             </div>
             <div class="logo-loader-text">${msg}</div>
         </div>

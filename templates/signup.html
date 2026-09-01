@@ -3,87 +3,336 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Create Account — Cloud Cost Analyzer</title>
+  <title>Create Organisation — Cloud Cost Analyzer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f1117;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-    .card{background:#1a1d27;border:1px solid #2a2d3d;border-radius:16px;padding:40px;width:100%;max-width:460px}
-    .logo{display:flex;align-items:center;gap:12px;margin-bottom:32px;justify-content:center}
-    .logo-icon{width:42px;height:42px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px}
-    .logo-text{font-size:18px;font-weight:700;color:#fff}
-    .logo-sub{font-size:11px;color:#8b92a5;margin-top:2px}
-    h1{font-size:24px;font-weight:700;color:#fff;text-align:center;margin-bottom:6px}
-    .subtitle{font-size:14px;color:#8b92a5;text-align:center;margin-bottom:28px}
-    .form-group{margin-bottom:18px}
-    label{display:block;font-size:13px;font-weight:500;color:#c5c8d6;margin-bottom:6px}
-    input{width:100%;padding:11px 14px;background:#0f1117;border:1px solid #2a2d3d;border-radius:8px;color:#fff;font-size:14px;outline:none;transition:border-color .2s}
-    input:focus{border-color:#667eea}
-    input::placeholder{color:#4a4e63}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .btn{width:100%;padding:13px;background:linear-gradient(135deg,#667eea,#764ba2);border:none;border-radius:8px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:opacity .2s;margin-top:6px}
-    .btn:hover{opacity:.9}
-    .btn:disabled{opacity:.5;cursor:not-allowed}
-    .divider{text-align:center;color:#4a4e63;font-size:13px;margin:20px 0;position:relative}
-    .divider::before,.divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:#2a2d3d}
-    .divider::before{left:0}.divider::after{right:0}
-    .signin-link{text-align:center;font-size:14px;color:#8b92a5;margin-top:20px}
-    .signin-link a{color:#667eea;text-decoration:none;font-weight:500}
-    .signin-link a:hover{text-decoration:underline}
-    .error{background:#2d1f1f;border:1px solid #5c2626;border-radius:8px;padding:12px;color:#ff6b6b;font-size:13px;margin-bottom:16px;display:none}
-    .badges{display:flex;gap:8px;justify-content:center;margin-bottom:24px}
-    .badge{background:#1e2235;border:1px solid #2a2d3d;border-radius:20px;padding:4px 12px;font-size:11px;color:#8b92a5;display:flex;align-items:center;gap:5px}
-    .badge span{font-size:14px}
-    .terms{font-size:12px;color:#4a4e63;text-align:center;margin-top:14px;line-height:1.5}
-    .terms a{color:#667eea;text-decoration:none}
+    :root {
+      --accent:      oklch(0.55 0.22 264);
+      --accent-2:    oklch(0.48 0.23 264);
+      --accent-soft: oklch(0.55 0.22 264 / .10);
+      --accent-ring: oklch(0.55 0.22 264 / .25);
+      --accent-fg:   #ffffff;
+
+      --bg:          #f8fafc;
+      --panel:       #f1f5f9;
+      --surface:     #ffffff;
+      --surface-2:   #f8fafc;
+
+      --border:      oklch(0.88 0.01 264 / .8);
+      --border-soft: oklch(0.92 0.008 264 / .7);
+
+      --text:        oklch(0.20 0.015 264);
+      --text-muted:  oklch(0.45 0.02 264);
+      --text-dim:    oklch(0.60 0.015 264);
+
+      --ok:          oklch(0.58 0.18 152);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(12px, 2vh, 24px);
+      -webkit-font-smoothing: antialiased;
+      position: relative;
+    }
+
+    /* Ambient background grid */
+    body::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border-soft) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border-soft) 1px, transparent 1px);
+      background-size: 36px 36px;
+      -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 0%, transparent 80%);
+      mask-image: radial-gradient(ellipse at 50% 30%, #000 0%, transparent 80%);
+      opacity: .85;
+      pointer-events: none;
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: clamp(20px, 3.2vh, 32px) clamp(20px, 3.5vw, 36px);
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.07), 0 1px 3px rgba(0, 0, 0, 0.04);
+      box-sizing: border-box;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: clamp(10px, 1.8vh, 18px);
+      justify-content: center;
+    }
+
+    .logo__img {
+      height: 38px;
+      width: auto;
+      max-width: 170px;
+      object-fit: contain;
+      flex-shrink: 0;
+      display: block;
+    }
+
+    .logo-text {
+      font-size: 15.5px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -.2px;
+    }
+
+    .logo-sub {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-top: 1px;
+    }
+
+    h1 {
+      font-size: clamp(20px, 2.2vw, 24px);
+      font-weight: 800;
+      color: var(--text);
+      text-align: center;
+      letter-spacing: -.5px;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-align: center;
+      margin-bottom: clamp(10px, 1.8vh, 16px);
+    }
+
+    .badges {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: clamp(12px, 1.8vh, 18px);
+    }
+
+    .badge {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .badge__dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+    .badge__dot--azure { background: var(--accent); }
+    .badge__dot--aws   { background: #f59e0b; }
+    .badge__dot--gcp   { background: var(--ok); }
+
+    .form-group {
+      margin-bottom: clamp(8px, 1.3vh, 12px);
+    }
+
+    label {
+      display: block;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    input {
+      width: 100%;
+      min-height: 38px;
+      height: 38px;
+      padding: 8px 12px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13.5px;
+      outline: none;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+      transition: border-color .15s, box-shadow .15s;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-ring);
+    }
+
+    input::placeholder {
+      color: var(--text-dim);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btn {
+      width: 100%;
+      min-height: 40px;
+      height: 40px;
+      padding: 0 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border: none;
+      border-radius: 9px;
+      color: var(--accent-fg);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -.1px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px var(--accent-ring);
+      transition: filter .15s, transform .1s;
+      margin-top: clamp(6px, 1vh, 10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn:hover {
+      filter: brightness(1.06);
+    }
+
+    .btn:active {
+      transform: scale(.99);
+    }
+
+    .btn:disabled {
+      filter: brightness(.85);
+      cursor: not-allowed;
+    }
+
+    .signin-link {
+      text-align: center;
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-top: clamp(10px, 1.5vh, 16px);
+    }
+
+    .signin-link a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .signin-link a:hover {
+      text-decoration: underline;
+    }
+
+    .error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: #dc2626;
+      font-size: 12px;
+      line-height: 1.45;
+      margin-bottom: 10px;
+      display: none;
+    }
+
+    .terms {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-align: center;
+      margin-top: clamp(8px, 1.2vh, 12px);
+      line-height: 1.4;
+    }
+
+    .terms a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .terms a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-height: 680px) {
+      .badges { display: none; }
+      .logo { margin-bottom: 6px; }
+      .subtitle { margin-bottom: 10px; }
+      .card { padding: 16px 24px; }
+    }
   </style>
 </head>
 <body>
 <div class="card">
   <div class="logo">
-    <div class="logo-icon">&#9729;</div>
-    <div>
-      <div class="logo-text">Cloud Cost Analyzer</div>
-      <div class="logo-sub">Multi-Cloud Intelligence</div>
-    </div>
+    <img class="logo__img" src="{{ url_for('static', filename='img/truetec-logo.png') }}" alt="TrueTec Systems" />
   </div>
 
   <h1>Create your organisation</h1>
   <p class="subtitle">Start your free trial — no credit card required</p>
 
   <div class="badges">
-    <div class="badge"><span>&#9729;</span> Azure</div>
-    <div class="badge"><span>&#9881;</span> AWS</div>
-    <div class="badge"><span>&#11044;</span> GCP</div>
+    <div class="badge"><span class="badge__dot badge__dot--azure"></span> Azure</div>
+    <div class="badge"><span class="badge__dot badge__dot--aws"></span> AWS</div>
+    <div class="badge"><span class="badge__dot badge__dot--gcp"></span> GCP</div>
   </div>
 
   <div class="error" id="error-msg"></div>
 
   <form id="signup-form">
     <div class="form-group">
-      <label>Organisation Name</label>
+      <label for="org_name">Organisation Name</label>
       <input type="text" id="org_name" placeholder="Acme Corp" required autocomplete="organization"/>
     </div>
     <div class="row">
       <div class="form-group">
-        <label>First Name</label>
+        <label for="first_name">First Name</label>
         <input type="text" id="first_name" placeholder="Jane" required autocomplete="given-name"/>
       </div>
       <div class="form-group">
-        <label>Last Name</label>
+        <label for="last_name">Last Name</label>
         <input type="text" id="last_name" placeholder="Smith" required autocomplete="family-name"/>
       </div>
     </div>
     <div class="form-group">
-      <label>Work Email</label>
+      <label for="email">Work Email</label>
       <input type="email" id="email" placeholder="jane@acme.com" required autocomplete="email"/>
     </div>
     <div class="form-group">
-      <label>Password</label>
+      <label for="password">Password</label>
       <input type="password" id="password" placeholder="Min 8 characters" required autocomplete="new-password"/>
     </div>
     <button type="submit" class="btn" id="submit-btn">Create Account &rarr;</button>

@@ -12,126 +12,111 @@
 <body>
 <div class="login-shell">
 
-  <!-- ── Left: marketing panel ──────────────────────────────────────── -->
+  <!-- ── Left: Multi-Cloud Ripple & Tech Orbit Showcase ─────────────── -->
   <div class="marketing">
-    <div class="logo">
-      <div class="logo__icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
-        </svg>
-      </div>
-      <span>Cloud Cost Analyzer</span>
+    <!-- Concentric Ambient Ripple Backdrop -->
+    <div class="ripple-container" aria-hidden="true">
+      <span class="ripple-ring" style="--size: 140px; --delay: 0s;"></span>
+      <span class="ripple-ring" style="--size: 210px; --delay: 0.08s;"></span>
+      <span class="ripple-ring" style="--size: 280px; --delay: 0.16s;"></span>
+      <span class="ripple-ring" style="--size: 360px; --delay: 0.24s;"></span>
+      <span class="ripple-ring" style="--size: 440px; --delay: 0.32s;"></span>
+      <span class="ripple-ring" style="--size: 520px; --delay: 0.40s;"></span>
+      <span class="ripple-ring" style="--size: 600px; --delay: 0.48s;"></span>
     </div>
 
-    <div class="hero">
-      <h1>Full visibility into<br><span class="grad">your cloud spend</span></h1>
-      <p>Unify Azure, AWS and GCP costs in one dashboard. Track, compare and forecast spend across every team and project.</p>
-
-      <div class="features">
-        <div class="feature">
-          <div class="feature__tile">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-          Real-time cost sync across all cloud providers
-        </div>
-        <div class="feature">
-          <div class="feature__tile">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-          Budget alerts before you overspend
-        </div>
-        <div class="feature">
-          <div class="feature__tile">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-          AI-powered cost analysis and recommendations
-        </div>
-        <div class="feature">
-          <div class="feature__tile">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-          Multi-tenant with role-based access control
-        </div>
+    <!-- Centerpiece: Orbit Stage with Backdrop Text & Orbiting Cloud Logos -->
+    <div class="tech-orbit-stage">
+      <!-- Huge Stylized Centerpiece Typography -->
+      <div class="orbit-center-text">
+        <span class="orbit-big-title">CLOUD COST<br>ANALYZER</span>
+        <span class="orbit-subtitle">See where your cloud spend goes.</span>
       </div>
-    </div>
 
-    <!-- Live mini dashboard preview -->
-    <div class="preview-card">
-      <div class="preview-card__head">
-        <div class="preview-card__dots"><span></span><span></span><span></span></div>
-        <div class="preview-card__title">Cost Overview · June 2026</div>
-        <div class="live-tag"><span class="live-tag__dot"></span>LIVE</div>
-      </div>
-      <div class="preview-card__body">
-        <div class="preview-stats">
-          <div>
-            <div class="preview-stats__label">Total Spend</div>
-            <div class="preview-stats__value">
-              <span id="pkVal">$49,526</span>
-              <span class="pill-down">↓ 12.4%</span>
+      <!-- Orbit Track 1 (Radius 100px) - AWS, Azure, GCP -->
+      <div class="orbit-track track-100">
+        <svg class="orbit-svg-path" viewBox="0 0 400 400"><circle cx="200" cy="200" r="100"/></svg>
+        <div class="orbit-rotator rotator-cw-24">
+          <!-- AWS -->
+          <div class="orbit-item" style="--radius: 100px; --angle: 0deg;">
+            <div class="orbit-logo-card counter-cw-24" title="Amazon Web Services">
+              <img src="{{ url_for('static', filename='img/aws-logo.svg') }}" alt="AWS" />
             </div>
           </div>
-          <div class="preview-stats__right">
-            <div class="saved-callout">
-              <div class="saved-callout__label">Saved this mo.</div>
-              <div class="saved-callout__value">$12,640</div>
+          <!-- Azure -->
+          <div class="orbit-item" style="--radius: 100px; --angle: 120deg;">
+            <div class="orbit-logo-card counter-cw-24" title="Microsoft Azure">
+              <img src="{{ url_for('static', filename='img/azure-logo.svg') }}" alt="Azure" />
             </div>
-            <span class="peek-tip" id="pkTip">$49.5k</span>
+          </div>
+          <!-- GCP -->
+          <div class="orbit-item" style="--radius: 100px; --angle: 240deg;">
+            <div class="orbit-logo-card counter-cw-24" title="Google Cloud Platform">
+              <img src="{{ url_for('static', filename='img/gcp-logo.svg') }}" alt="GCP" />
+            </div>
           </div>
         </div>
+      </div>
 
-        <div class="peek-chart">
-          <svg class="peek-svg" viewBox="0 0 320 92" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              <linearGradient id="pkArea" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="var(--accent)" stop-opacity=".5"/>
-                <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
-              </linearGradient>
-              <linearGradient id="pkLine" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stop-color="oklch(0.7 0.16 230)"/>
-                <stop offset="100%" stop-color="var(--accent)"/>
-              </linearGradient>
-            </defs>
-            <line x1="6" y1="20" x2="314" y2="20" stroke="var(--border-soft)" stroke-width="1"/>
-            <line x1="6" y1="48" x2="314" y2="48" stroke="var(--border-soft)" stroke-width="1"/>
-            <line x1="6" y1="76" x2="314" y2="76" stroke="var(--border-soft)" stroke-width="1"/>
-            <path id="pkPathArea" fill="url(#pkArea)" d=""/>
-            <path id="pkPathLine" fill="none" stroke="url(#pkLine)" stroke-width="2.5" stroke-linecap="round" d=""/>
-            <circle id="pkDot" r="4" fill="#fff" stroke="var(--accent)" stroke-width="3"/>
-          </svg>
+      <!-- Orbit Track 2 (Radius 165px) - OpenAI, Atlassian, Cursor (Reverse Orbit) -->
+      <div class="orbit-track track-165">
+        <svg class="orbit-svg-path" viewBox="0 0 400 400"><circle cx="200" cy="200" r="165"/></svg>
+        <div class="orbit-rotator rotator-ccw-32">
+          <!-- OpenAI -->
+          <div class="orbit-item" style="--radius: 165px; --angle: 60deg;">
+            <div class="orbit-logo-card counter-ccw-32" title="OpenAI API Telemetry">
+              <img src="{{ url_for('static', filename='img/openai-logo.svg') }}" alt="OpenAI" />
+            </div>
+          </div>
+          <!-- Atlassian -->
+          <div class="orbit-item" style="--radius: 165px; --angle: 180deg;">
+            <div class="orbit-logo-card counter-ccw-32" title="Atlassian Cloud">
+              <img src="{{ url_for('static', filename='img/atlassian-logo.svg') }}" alt="Atlassian" />
+            </div>
+          </div>
+          <!-- Cursor -->
+          <div class="orbit-item" style="--radius: 165px; --angle: 300deg;">
+            <div class="orbit-logo-card counter-ccw-32" title="Cursor AI">
+              <img src="{{ url_for('static', filename='img/cursor-logo.svg') }}" alt="Cursor" />
+            </div>
+          </div>
         </div>
+      </div>
 
-        <div class="preview-legend">
-          <div class="preview-legend__item"><span class="preview-legend__dot preview-legend__dot--aws"></span>AWS 52%</div>
-          <div class="preview-legend__item"><span class="preview-legend__dot preview-legend__dot--azure"></span>Azure 31%</div>
-          <div class="preview-legend__item"><span class="preview-legend__dot preview-legend__dot--gcp"></span>GCP 17%</div>
+      <!-- Orbit Track 3 (Radius 225px) - TrueTec FinOps Engine & ChatGPT -->
+      <div class="orbit-track track-225">
+        <svg class="orbit-svg-path" viewBox="0 0 400 400"><circle cx="200" cy="200" r="225"/></svg>
+        <div class="orbit-rotator rotator-cw-40">
+          <!-- TrueTec -->
+          <div class="orbit-item" style="--radius: 225px; --angle: 30deg;">
+            <div class="orbit-logo-card orbit-logo-card--core counter-cw-40" title="TrueTec FinOps Engine">
+              <img src="{{ url_for('static', filename='img/truetec-icon.png') }}" alt="TrueTec" />
+            </div>
+          </div>
+          <!-- ChatGPT -->
+          <div class="orbit-item" style="--radius: 225px; --angle: 210deg;">
+            <div class="orbit-logo-card counter-cw-40" title="ChatGPT AI Integration">
+              <img src="{{ url_for('static', filename='img/chatgpt-logo.svg') }}" alt="ChatGPT" />
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="chips">
-      <span class="chip">Azure</span>
-      <span class="chip">AWS</span>
-      <span class="chip">GCP</span>
-      <span class="chip chip--accent">SOC 2 · Enterprise ready</span>
+    <!-- Bottom Floating FinOps Live Intelligence Pill -->
+    <div class="orbit-finops-pill">
+      <span class="pill-dot"></span>
+      <span>Continuous multi-cloud spend optimization & AI telemetry</span>
     </div>
   </div>
 
   <!-- ── Right: form panel ───────────────────────────────────────────── -->
   <div class="form-side">
-    <div class="form-side__top">
-      <div class="logo">
-        <div class="logo__icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
-          </svg>
-        </div>
-      </div>
-      <button type="button" class="lang-pill">EN <span aria-hidden="true">▾</span></button>
-    </div>
-
     <div class="form-side__center">
       <div class="form-wrap">
+        <div class="form-logo">
+          <img class="logo__img" src="{{ url_for('static', filename='img/truetec-logo.png') }}" alt="TrueTec Systems" />
+        </div>
         <h1>Welcome back</h1>
         <p class="form-wrap__sub">Sign in to your account to continue</p>
 
@@ -141,23 +126,6 @@
         {% if notice %}
           <div class="alert alert--notice" role="status" aria-live="polite">{{ notice }}</div>
         {% endif %}
-
-        <div class="sso-stack">
-          <a class="btn-sso" href="{{ url_for('sso_login', provider='microsoft') }}">
-            <svg width="16" height="16" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>
-            Continue with Microsoft
-          </a>
-          <a class="btn-sso" href="{{ url_for('sso_login', provider='google') }}">
-            <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 01-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
-            Continue with Google
-          </a>
-          <a class="btn-sso" href="{{ url_for('sso_login', provider='saml') }}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-            Single sign-on (SSO)
-          </a>
-        </div>
-
-        <div class="divider">or continue with email</div>
 
         <form method="POST" action="{{ url_for('login') }}" id="login-form">
           <div class="field">
@@ -194,9 +162,25 @@
           <button type="submit" class="btn-submit" id="submitBtn">
             <span class="spinner"></span>
             <span class="btn-submit__label">Sign in</span>
-            <svg class="btn-submit__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
           </button>
         </form>
+
+        <div class="divider">or continue with</div>
+
+        <div class="sso-row">
+          <a class="btn-sso-icon" href="{{ url_for('sso_login', provider='microsoft') }}" title="Continue with Microsoft" aria-label="Continue with Microsoft">
+            <svg width="20" height="20" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>
+            <span class="sso-tooltip">Continue with Microsoft</span>
+          </a>
+          <a class="btn-sso-icon" href="{{ url_for('sso_login', provider='google') }}" title="Continue with Google" aria-label="Continue with Google">
+            <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 01-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+            <span class="sso-tooltip">Continue with Google</span>
+          </a>
+          <a class="btn-sso-icon" href="{{ url_for('sso_login', provider='saml') }}" title="Single sign-on (SSO)" aria-label="Single sign-on (SSO)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            <span class="sso-tooltip">Single sign-on (SSO)</span>
+          </a>
+        </div>
 
         <div class="create-org">New to Cloud Cost Analyzer? <a href="{{ url_for('signup') }}">Create an organisation →</a></div>
 
