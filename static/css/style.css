@@ -2038,7 +2038,6 @@ td {
     border-bottom: 1px solid var(--border);
 }
 
-#costsTable.compact tbody td { padding: 4px 12px; }
 .cell-cost { text-align: right; }
 
 tr:hover { background: rgba(79, 110, 247, 0.05); }
@@ -3010,7 +3009,6 @@ select.filter-input option {
 #page-costs .chart-card h3 { font-size: 12px; margin-bottom: 6px; }
 #page-costs .chart-card h3::before { height: 12px; }
 #page-costs .table-container { max-height: none !important; overflow: visible; }
-#page-costs table th, #page-costs table td { padding: 5px 10px; font-size: 11px; }
 
 /* Cloud filter pills */
 #page-costs > div[style*="align-items:center"] { margin-bottom: 6px !important; }
@@ -3027,10 +3025,8 @@ select.filter-input option {
     height: 34px;
 }
 
-/* Main cost table */
+/* Main cost table container */
 #page-costs #costsTableContainer { max-height: calc(100vh - 420px); }
-#page-costs #costsTable th,
-#page-costs #costsTable td { padding: 4px 10px; font-size: 11px; }
 
 /* ─── Sortable Table Headers ─────────────────────────────────────────── */
 .sortable-th {

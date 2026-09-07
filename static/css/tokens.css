@@ -380,18 +380,19 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .sub-table-card__head { padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
 .sub-table-card__title { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
 
-.cost-table-wrap { border-radius: 10px; border: 1px solid var(--border-subtle); overflow: hidden; margin-bottom: 0; }
-.cost-table { border-collapse: collapse; width: 100%; }
-.cost-table thead th { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); padding: 10px 14px; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); }
-.cost-table tbody tr { border-bottom: 1px solid var(--border-subtle); }
+.cost-table-wrap { background: var(--card-bg, var(--bg-card)); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); margin-bottom: 16px; }
+.cost-table { border-collapse: collapse; width: 100%; font-size: 12px; white-space: nowrap; }
+.cost-table thead tr { background: rgba(0, 0, 0, 0.02); border-bottom: 1px solid var(--border); }
+.cost-table thead th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-secondary); padding: 10px 12px; background: rgba(0, 0, 0, 0.02); border-bottom: 1px solid var(--border); text-align: left; }
+.cost-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s ease; }
 .cost-table tbody tr:last-child { border-bottom: none; }
-.cost-table tbody tr:nth-child(even) { background: var(--bg-subtle); }
-.cost-table tbody tr:hover { background: var(--bg-hover); }
-.cost-table td { padding: 10px 14px; font-size: 12px; color: var(--text-primary); }
-.cost-table .cost-cell { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cost-table .cloud-cell { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-.cost-table .res-link { color: var(--text-secondary); text-decoration: none; cursor: pointer; }
-.cost-table .res-link:hover { color: var(--text-primary); text-decoration: underline; }
+.cost-table tbody tr:hover { background: rgba(99, 102, 241, 0.04); }
+.cost-table td { padding: 10px 12px; font-size: 12px; color: var(--text-primary); border-bottom: 1px solid var(--border); vertical-align: middle; }
+.cost-table .cost-cell { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-primary); }
+.cost-table .cloud-cell { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-weight: 500; }
+.cost-table .cloud-cell img { width: 14px; height: 14px; object-fit: contain; flex-shrink: 0; }
+.cost-table .res-link { color: var(--text-primary); text-decoration: none; cursor: pointer; font-weight: 500; }
+.cost-table .res-link:hover { color: var(--accent, #6366f1); text-decoration: underline; }
 
 .table-pagination { display: flex; align-items: center; justify-content: space-between; padding: 10px 4px; gap: 12px; flex-wrap: wrap; }
 .table-pagination__info { font-size: 12px; color: var(--text-secondary); }

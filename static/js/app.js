@@ -3823,7 +3823,7 @@ async function loadCostsTable() {
         updateCostSortIndicators();
         _updateColFilterIndicators();   // highlight funnels for columns with active filters
 
-        const cloudLogoH = { azure: '12', aws: '10', gcp: '12' };
+        const cloudLogoH = { azure: '14', aws: '13', gcp: '14' };
         const cloudNames = { azure: 'Azure', aws: 'AWS', gcp: 'GCP' };
         const subNameMap = {};
         (totalsBySub || []).forEach(s => { subNameMap[s.subscription_id] = s.subscription_name || s.subscription_id; });
@@ -3849,9 +3849,9 @@ async function loadCostsTable() {
         } else {
             tbody.innerHTML = sortedData.map(r => {
                 const cp = (r.cloud_provider || 'azure').toLowerCase();
-                const logoH = cloudLogoH[cp] || '12';
+                const logoH = cloudLogoH[cp] || '14';
                 const cloudLabel = cloudNames[cp] || cp.charAt(0).toUpperCase() + cp.slice(1);
-                const cloudCell = `<div class="cloud-cell"><img src="/static/img/${cp}-logo.svg" alt="${cloudLabel}" style="height:${logoH}px;flex-shrink:0"><span>${cloudLabel}</span></div>`;
+                const cloudCell = `<div class="cloud-cell"><img src="/static/img/${cp}-logo.svg" alt="${cloudLabel}" style="height:${logoH}px;object-fit:contain;flex-shrink:0"><span>${cloudLabel}</span></div>`;
                 let tags = {};
                 try { tags = r.tags ? JSON.parse(r.tags) : {}; } catch(e) {}
                 const vmName = tags.name || null;
@@ -3876,32 +3876,32 @@ async function loadCostsTable() {
                     prettyResourceName = `Reservation — ${r.service_name || 'Commitment'}`;
                 }
                 const resourceDisplay = vmName
-                    ? `<span style="font-weight:500">${vmName}</span><br><span style="font-size:11px;color:var(--text-tertiary)">${prettyResourceName}</span>`
+                    ? `<span style="font-weight:500;color:var(--text-primary)">${vmName}</span><br><span style="font-size:11px;color:var(--text-secondary)">${prettyResourceName}</span>`
                     : (isReservation
-                        ? `<span style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:8px;background:#6366f122;color:#6366f1;margin-right:6px">RI</span><span>${prettyResourceName}</span>`
+                        ? `<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:6px;background:rgba(99,102,241,0.12);color:var(--accent);margin-right:6px">RI</span><span>${prettyResourceName}</span>`
                         : (prettyResourceName || '-'));
                 const resourceTitle = vmName ? `${vmName} (${prettyResourceName})` : (prettyResourceName || '');
                 const rawDate = (r.date || '').toString();
                 const dateOnly = granularity === 'monthly' ? rawDate.slice(0, 7) : rawDate.split('T')[0];
-                const rgCell = `<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${r.resource_group||''}">${r.resource_group || '-'}</td>`;
-                const subCell = `<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${subNameMap[r.subscription_id]||''}">${subNameMap[r.subscription_id] || '-'}</td>`;
+                const rgCell = `<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary);font-size:11.5px" title="${r.resource_group||''}">${r.resource_group || '-'}</td>`;
+                const subCell = `<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary);font-size:11.5px" title="${subNameMap[r.subscription_id]||''}">${subNameMap[r.subscription_id] || '-'}</td>`;
                 // OpenAI: the Service column is always "OpenAI" (useless) — show the
                 // API key name (stored in meter_category by the sync) instead.
                 const _svcVal = (costsSelectedCloud === 'openai')
                     ? ((r.meter_category && r.meter_category !== 'Token Usage') ? r.meter_category : '-')
                     : r.service_name;
-                const serviceCell = `<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)" title="${_svcVal||''}">${_svcVal || '-'}</td>`;
-                const resourceCell = `<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))"><span class="res-link">${resourceDisplay}</span></td>`;
+                const serviceCell = `<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary);font-weight:500" title="${_svcVal||''}">${_svcVal || '-'}</td>`;
+                const resourceCell = `<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;" title="${resourceTitle}" data-sub="${r.subscription_id||''}" data-rg="${r.resource_group||''}" data-name="${r.resource_name||''}" onclick="showResourceConfig(this.getAttribute('data-sub'), this.getAttribute('data-rg'), this.getAttribute('data-name'))"><span class="res-link" style="color:var(--text-primary);font-weight:500">${resourceDisplay}</span></td>`;
                 const middleCells = isRgGroup
                     ? `${subCell}${rgCell}`
                     : isSvcGroup
                         ? `${subCell}${serviceCell}`
                         : `${subCell}${rgCell}${serviceCell}${resourceCell}`;
-                return `<tr>
+                return `<tr style="border-bottom:1px solid var(--border);transition:background 0.15s ease">
                 <td>${cloudCell}</td>
-                <td style="white-space:nowrap;color:var(--text-secondary)">${dateOnly}</td>
+                <td style="white-space:nowrap;color:var(--text-secondary);font-size:11.5px">${dateOnly}</td>
                 ${middleCells}
-                <td class="cost-cell">${curSym()}${(r.cost || 0).toFixed(2)}</td>
+                <td class="cost-cell">${curSym()}${(r.cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             </tr>`;
             }).join('');
         }
