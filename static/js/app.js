@@ -215,6 +215,17 @@ function navigateTo(page) {
         }
     }
 
+    if (page === 'drilldown') {
+        const compareItem = document.querySelector(`.nav-item[data-page="compare"]`);
+        if (compareItem) {
+            const parentGroup = compareItem.closest('.nav-card-group');
+            if (parentGroup) {
+                parentGroup.classList.add('expanded');
+                parentGroup.classList.add('has-active-page');
+            }
+        }
+    }
+
     if (page === 'executive') loadExecutiveSummary();
     if (page === 'cloud-overview') loadCloudOverview();
     if (page === 'costs') {
@@ -318,6 +329,7 @@ async function populateClientDropdowns() {
             });
             el.value = cur;
         });
+        syncCostCustomDropdown('costsClientFilter');
     } catch(e) { /* non-fatal */ }
 }
 
@@ -528,6 +540,17 @@ function applyExCloudKpiFilter(d) {
         return `<span class="kpi-trend-pill ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
     };
 
+    const presetLabels = {
+        'this_month': 'Current Month',
+        'last_month': 'Last Month',
+        '7d': 'Last 7 Days',
+        '15d': 'Last 15 Days',
+        '30d': 'Last 30 Days',
+        '60d': 'Last 60 Days',
+        '90d': 'Last 90 Days',
+        '6m': 'Last 6 Months'
+    };
+
     const cloud = _selectedExCloud || 'all';
     const azureCard = document.querySelector('#exKpiRow [data-cloud-vis="azure"]');
     const awsCard   = document.querySelector('#exKpiRow [data-cloud-vis="aws"]');
@@ -539,7 +562,13 @@ function applyExCloudKpiFilter(d) {
         if (gcpCard)   gcpCard.style.display   = '';
         if (el('exTotalSpend')) el('exTotalSpend').textContent = $fmt(kpi.total);
         if (el('exTotalMom'))   el('exTotalMom').innerHTML = momBadge(kpi.total_mom_pct);
-        if (el('exTotalSub'))   el('exTotalSub').textContent = `vs last month ${$fmt(kpi.total_lm)}`;
+        if (el('exTotalSub')) {
+            if (kpi.is_preset_aggregated) {
+                el('exTotalSub').textContent = `Total spend for ${presetLabels[_selectedPreset] || 'Selected Period'}`;
+            } else {
+                el('exTotalSub').textContent = `vs last month ${$fmt(kpi.total_lm)}`;
+            }
+        }
     } else if (cloud === 'azure') {
         if (azureCard) azureCard.style.display = '';
         if (awsCard)   awsCard.style.display   = 'none';
@@ -574,7 +603,7 @@ function updateExKpiRowGrid() {
     row.style.gridTemplateColumns = `repeat(${visible.length || 1}, minmax(0, 1fr))`;
 }
 
-let _selectedPreset = '30d';
+let _selectedPreset = 'this_month';
 
 function togglePeriodDropdown(e) {
     if (e) e.stopPropagation();
@@ -582,11 +611,55 @@ function togglePeriodDropdown(e) {
     if (dd) dd.classList.toggle('open');
 }
 
+function getPresetDateRange(presetKey) {
+    const now = new Date();
+    let from, to = new Date(now);
+    if (presetKey === 'this_month') {
+        from = new Date(now.getFullYear(), now.getMonth(), 1);
+        to = new Date(now);
+    } else if (presetKey === 'last_month') {
+        from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        to = new Date(now.getFullYear(), now.getMonth(), 0);
+    } else if (presetKey === '7d') {
+        from = new Date(now);
+        from.setDate(from.getDate() - 6);
+    } else if (presetKey === '15d') {
+        from = new Date(now);
+        from.setDate(from.getDate() - 14);
+    } else if (presetKey === '30d') {
+        from = new Date(now);
+        from.setDate(from.getDate() - 29);
+    } else if (presetKey === '60d') {
+        from = new Date(now);
+        from.setDate(from.getDate() - 59);
+    } else if (presetKey === '90d') {
+        from = new Date(now);
+        from.setDate(from.getDate() - 89);
+    } else if (presetKey === '6m') {
+        from = new Date(now);
+        from.setMonth(from.getMonth() - 6);
+    } else {
+        from = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { date_from: fmt(from), date_to: fmt(to) };
+}
+
 function selectPeriodOption(presetKey, labelText, e) {
     if (e) e.stopPropagation();
     _selectedPreset = presetKey;
     const labelEl = document.getElementById('customPeriodTriggerLabel');
     if (labelEl) labelEl.textContent = labelText;
+
+    const now = new Date();
+    if (presetKey === 'last_month') {
+        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        _exYear = prev.getFullYear();
+        _exMonth = prev.getMonth() + 1;
+    } else {
+        _exYear = now.getFullYear();
+        _exMonth = now.getMonth() + 1;
+    }
 
     const menu = document.getElementById('customPeriodMenu');
     if (menu) {
@@ -706,6 +779,75 @@ function triggerInstantTabLoader(msg = 'Loading…', autoHideDelay = 350) {
     }, autoHideDelay);
 }
 
+function computePeriodKpis(d, preset) {
+    const rawKpi = d.kpis || {};
+    const trend = d.monthly_trend || [];
+    if (!trend.length || preset === 'this_month' || preset === 'last_month') {
+        return rawKpi;
+    }
+
+    const now = new Date();
+    const curDaysElapsed = rawKpi.days_elapsed || Math.min(now.getDate(), 30);
+    const recent = [...trend].reverse();
+    const curMonthData = recent[0] || {};
+    const lmData = recent[1] || {};
+    const m2Data = recent[2] || {};
+    const m3Data = recent[3] || {};
+
+    let totalSpend = 0;
+    let daysCount = 30;
+
+    if (preset === '7d') {
+        daysCount = 7;
+        totalSpend = curMonthData.total || rawKpi.total || 0;
+    } else if (preset === '15d') {
+        daysCount = 15;
+        const remDays = Math.max(0, 15 - curDaysElapsed);
+        const lmDailyRate = (lmData.total || rawKpi.total_lm || 0) / 31;
+        totalSpend = (curMonthData.total || rawKpi.total || 0) + (lmDailyRate * remDays);
+    } else if (preset === '30d') {
+        daysCount = 30;
+        const remDays = Math.max(0, 30 - curDaysElapsed);
+        const lmDailyRate = (lmData.total || rawKpi.total_lm || 0) / 31;
+        totalSpend = (curMonthData.total || rawKpi.total || 0) + (lmDailyRate * remDays);
+    } else if (preset === '60d') {
+        daysCount = 60;
+        const remDays = Math.max(0, 60 - curDaysElapsed - 31);
+        const m2DailyRate = (m2Data.total || 0) / 31;
+        totalSpend = (curMonthData.total || rawKpi.total || 0) + (lmData.total || rawKpi.total_lm || 0) + (m2DailyRate * remDays);
+    } else if (preset === '90d') {
+        daysCount = 90;
+        const remDays = Math.max(0, 90 - curDaysElapsed - 62);
+        const m3DailyRate = (m3Data.total || 0) / 30;
+        totalSpend = (curMonthData.total || rawKpi.total || 0) + (lmData.total || 0) + (m2Data.total || 0) + (m3DailyRate * remDays);
+    } else if (preset === '6m') {
+        daysCount = 180;
+        totalSpend = recent.slice(0, 6).reduce((acc, m) => acc + (m.total || 0), 0);
+    } else {
+        totalSpend = rawKpi.total || 0;
+    }
+
+    const scaleFactor = totalSpend / (rawKpi.total || 1);
+    const byCloud = { ...(rawKpi.by_cloud || {}) };
+    Object.keys(byCloud).forEach(k => { byCloud[k] = (byCloud[k] || 0) * scaleFactor; });
+
+    const avgDaily = totalSpend / Math.max(daysCount, 1);
+    return {
+        ...rawKpi,
+        total: totalSpend,
+        azure: (rawKpi.azure || 0) * scaleFactor,
+        aws: (rawKpi.aws || 0) * scaleFactor,
+        gcp: (rawKpi.gcp || 0) * scaleFactor,
+        by_cloud: byCloud,
+        avg_daily: avgDaily,
+        projected: avgDaily * 30,
+        days_elapsed: daysCount,
+        days_in_month: daysCount,
+        scale_factor: scaleFactor,
+        is_preset_aggregated: true
+    };
+}
+
 async function loadExecutiveSummary() {
     if (!_exYear || !_exMonth) {
         const now = new Date();
@@ -721,9 +863,25 @@ async function loadExecutiveSummary() {
     }
     showGlobalLogoLoader('Loading Cloud Cost Analytics…');
     try {
-        const resp = await fetch(`/api/executive-summary?preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}&cloud_provider=${encodeURIComponent(_selectedExCloud)}`);
+        const dr = getPresetDateRange(_selectedPreset);
+        let qParams = `preset=${_selectedPreset}&cloud_provider=${encodeURIComponent(_selectedExCloud)}&date_from=${dr.date_from}&date_to=${dr.date_to}`;
+        if (_selectedPreset === 'this_month' || _selectedPreset === 'last_month') {
+            qParams += `&year=${_exYear}&month=${_exMonth}`;
+        }
+        const resp = await fetch(`/api/executive-summary?${qParams}`);
         if (!resp.ok) { console.error('Executive summary API error:', resp.status, await resp.text()); return; }
-        const d = await resp.json();
+        const rawD = await resp.json();
+        const computedKpis = computePeriodKpis(rawD, _selectedPreset);
+        const scaleFactor = computedKpis.scale_factor || 1;
+
+        // Clone and adjust top services / accounts if preset is multi-day/month
+        const d = {
+            ...rawD,
+            kpis: computedKpis,
+            top_services: (rawD.top_services || []).map(s => ({ ...s, cost: s.cost * scaleFactor })),
+            top_accounts: (rawD.top_accounts || []).map(a => ({ ...a, cost: a.cost * scaleFactor }))
+        };
+
         _exSummaryData = d;
         const _sym = d.currency_symbol || '$';
         if (typeof window !== 'undefined') window.TENANT_CUR = { code: d.currency || 'USD', symbol: _sym };
@@ -734,11 +892,21 @@ async function loadExecutiveSummary() {
 
         // Period labels
         const el = id => document.getElementById(id);
-        const periodStr = d.period || '';
+        const presetLabels = {
+            'this_month': 'Current Month',
+            'last_month': 'Last Month',
+            '7d': 'Last 7 Days',
+            '15d': 'Last 15 Days',
+            '30d': 'Last 30 Days',
+            '60d': 'Last 60 Days',
+            '90d': 'Last 90 Days',
+            '6m': 'Last 6 Months'
+        };
+        const periodStr = d.period || presetLabels[_selectedPreset] || '';
         if (el('exPeriodLabel'))   el('exPeriodLabel').textContent   = periodStr;
         if (el('exComparePeriod')) el('exComparePeriod').textContent = d.compare_period || '';
         ['exDonutPeriod','exDriversPeriod','exAccountsPeriod'].forEach(id => {
-            if (el(id)) el(id).textContent = periodStr;
+            if (el(id)) el(id).textContent = presetLabels[_selectedPreset] || periodStr;
         });
 
         // MoM badge helper
@@ -765,17 +933,35 @@ async function loadExecutiveSummary() {
 
         if (el('exAvgDay'))  el('exAvgDay').textContent = $fmt(kpi.avg_daily);
         if (el('exAvgMom'))  el('exAvgMom').innerHTML  = momBadge(kpi.total_mom_pct);
-        if (el('exAvgSub'))  el('exAvgSub').textContent = `${kpi.days_elapsed} of ${kpi.days_in_month} Days`;
+        if (el('exAvgSub')) {
+            if (kpi.is_preset_aggregated) {
+                el('exAvgSub').textContent = `Avg over ${kpi.days_elapsed} Days`;
+            } else {
+                el('exAvgSub').textContent = `${kpi.days_elapsed} of ${kpi.days_in_month} Days`;
+            }
+        }
 
         // Apply cloud filter to total & visible cards
         applyExCloudKpiFilter(d);
 
         // Projected EOM + month progress
-        if (el('exProjected'))         el('exProjected').textContent = $fmt(kpi.projected);
-        if (el('exMonthProgressLabel')) el('exMonthProgressLabel').textContent = `${Math.round(kpi.days_elapsed/kpi.days_in_month*100)}% Month Complete · Day ${kpi.days_elapsed} of ${kpi.days_in_month}`;
+        if (el('exProjected')) el('exProjected').textContent = $fmt(kpi.projected);
+        if (el('exMonthProgressLabel')) {
+            if (kpi.is_preset_aggregated) {
+                el('exMonthProgressLabel').textContent = `30-Day Run Rate · ${presetLabels[_selectedPreset]}`;
+            } else {
+                el('exMonthProgressLabel').textContent = `${Math.round(kpi.days_elapsed/kpi.days_in_month*100)}% Month Complete · Day ${kpi.days_elapsed} of ${kpi.days_in_month}`;
+            }
+        }
         if (el('exMonthProgress')) {
-            const pct = Math.round(kpi.days_elapsed / kpi.days_in_month * 100);
-            el('exMonthProgress').style.width = pct + '%';
+            if (kpi.is_preset_aggregated) {
+                el('exMonthProgress').style.width = '100%';
+                el('exMonthProgress').style.background = '#3b82f6';
+            } else {
+                const pct = Math.round(kpi.days_elapsed / kpi.days_in_month * 100);
+                el('exMonthProgress').style.width = pct + '%';
+                el('exMonthProgress').style.background = '#F59E0B';
+            }
         }
 
         // Budget vs Actual
@@ -1303,7 +1489,12 @@ async function loadTopIdleResourcesWidget(groupName) {
     container.innerHTML = getLogoLoaderHTML('Loading idle resources…');
 
     try {
-        const url = `/api/top-idle-resources?cost_group=${encodeURIComponent(_currentTopIdleGroup)}&cloud_provider=${encodeURIComponent(_selectedExCloud)}&limit=10&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const dr = getPresetDateRange(_selectedPreset);
+        let qParams = `cost_group=${encodeURIComponent(_currentTopIdleGroup)}&cloud_provider=${encodeURIComponent(_selectedExCloud)}&limit=10&preset=${_selectedPreset}&date_from=${dr.date_from}&date_to=${dr.date_to}`;
+        if (_selectedPreset === 'this_month' || _selectedPreset === 'last_month') {
+            qParams += `&year=${_exYear}&month=${_exMonth}`;
+        }
+        const url = `/api/top-idle-resources?${qParams}`;
         const resp = await fetch(url);
         if (!resp.ok) {
             container.innerHTML = '<div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Unable to load idle data</div>';
@@ -1430,7 +1621,12 @@ async function loadIdleResourcesTable() {
     tbody.innerHTML = `<tr><td colspan="17">${getLogoLoaderHTML('Loading idle resources inventory…')}</td></tr>`;
 
     try {
-        const url = `/api/top-idle-resources?limit=all&cost_group=${encodeURIComponent(costGroupFilter)}&resource_group=${encodeURIComponent(rgFilter)}&cloud_provider=${encodeURIComponent(providerFilter)}&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const dr = getPresetDateRange(_selectedPreset);
+        let qParams = `limit=all&cost_group=${encodeURIComponent(costGroupFilter)}&resource_group=${encodeURIComponent(rgFilter)}&cloud_provider=${encodeURIComponent(providerFilter)}&preset=${_selectedPreset}&date_from=${dr.date_from}&date_to=${dr.date_to}`;
+        if (_selectedPreset === 'this_month' || _selectedPreset === 'last_month') {
+            qParams += `&year=${_exYear}&month=${_exMonth}`;
+        }
+        const url = `/api/top-idle-resources?${qParams}`;
         const resp = await fetch(url);
         if (!resp.ok) {
             tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;padding:24px;color:var(--text-secondary)">Unable to load idle table</td></tr>';
@@ -1591,7 +1787,12 @@ async function loadTopResourcesByGroup(groupName) {
     container.innerHTML = getLogoLoaderHTML('Loading top resources…');
 
     try {
-        const url = `/api/top-resources-by-group?cost_group=${encodeURIComponent(_currentTopResGroup)}&cloud_provider=${encodeURIComponent(_selectedExCloud)}&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const dr = getPresetDateRange(_selectedPreset);
+        let qParams = `cost_group=${encodeURIComponent(_currentTopResGroup)}&cloud_provider=${encodeURIComponent(_selectedExCloud)}&preset=${_selectedPreset}&date_from=${dr.date_from}&date_to=${dr.date_to}`;
+        if (_selectedPreset === 'this_month' || _selectedPreset === 'last_month') {
+            qParams += `&year=${_exYear}&month=${_exMonth}`;
+        }
+        const url = `/api/top-resources-by-group?${qParams}`;
         const resp = await fetch(url);
         if (!resp.ok) {
             container.innerHTML = '<div style="color:var(--text-secondary);font-size:11.5px;text-align:center;padding:16px 0">Unable to load data</div>';
@@ -1651,7 +1852,12 @@ async function loadTopResourcesTable(groupName) {
     tbody.innerHTML = `<tr><td colspan="9">${getLogoLoaderHTML('Loading resources inventory table…')}</td></tr>`;
 
     try {
-        const url = `/api/top-resources-by-group?cost_group=${encodeURIComponent(_currentTopResTableGroup)}&cloud_provider=${encodeURIComponent(_selectedExCloud)}&preset=${_selectedPreset}&year=${_exYear}&month=${_exMonth}`;
+        const dr = getPresetDateRange(_selectedPreset);
+        let qParams = `cost_group=${encodeURIComponent(_currentTopResTableGroup)}&cloud_provider=${encodeURIComponent(_selectedExCloud)}&preset=${_selectedPreset}&date_from=${dr.date_from}&date_to=${dr.date_to}`;
+        if (_selectedPreset === 'this_month' || _selectedPreset === 'last_month') {
+            qParams += `&year=${_exYear}&month=${_exMonth}`;
+        }
+        const url = `/api/top-resources-by-group?${qParams}`;
         const resp = await fetch(url);
         if (!resp.ok) {
             tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-secondary)">Unable to load data</td></tr>';
@@ -2456,39 +2662,53 @@ function _renderSubTable() {
         return 0;
     });
 
-    // Update sort indicators
-    ['cloud','account','name','cost'].forEach(col => {
-        const el = document.getElementById(`sub-sort-${col}`);
-        if (!el) return;
-        if (col === _subTableSortBy) el.textContent = _subTableSortDir === 'asc' ? '↑' : '↓';
-        else el.textContent = '↕';
-    });
-
-    const bySubBody = document.getElementById('costBySubscriptionBody');
-    if (!bySubBody) return;
-    const awsLogo = `<img src="/static/img/aws-logo.svg" alt="AWS" style="height:10px;vertical-align:middle;margin-right:4px">`;
+    const gridEl = document.getElementById('costBySubscriptionGrid');
+    const totalBadge = document.getElementById('costsSubTotalBadge');
+    const sym = curSym();
 
     if (!sorted.length) {
-        bySubBody.innerHTML = `<tr><td colspan="${_subTableIsService ? 4 : 2}" style="text-align:center;padding:20px;color:var(--text-secondary)">No data found for current filters.</td></tr>`;
+        if (totalBadge) totalBadge.textContent = '0 items';
+        if (gridEl) {
+            gridEl.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:12px;grid-column:1/-1">
+                No subscription data found for current filters.
+            </div>`;
+        }
         return;
     }
-    if (_subTableIsService) {
-        bySubBody.innerHTML = sorted.map(s => {
-            const svcAttr = (s.service_name || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-            return `<tr style="cursor:pointer" title="Click to see individual resources"
-                data-service="${svcAttr}" onclick="openServiceDrill(this.dataset.service)">
-                <td>${awsLogo}AWS</td>
-                <td style="color:var(--text-secondary)">${s.account || ''}</td>
-                <td style="color:var(--accent)">${s.service_name || '-'} <span style="font-size:10px;opacity:0.7">&#8599;</span></td>
-                <td style="text-align:right;font-weight:500;color:var(--text-primary)">${curSym()}${(s.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-            </tr>`;
+
+    const totalSum = sorted.reduce((sum, s) => sum + (Number(s.total_cost) || 0), 0);
+    if (totalBadge) {
+        const itemWord = _subTableIsService ? (sorted.length === 1 ? 'Service' : 'Services') : (sorted.length === 1 ? 'Subscription' : 'Subscriptions');
+        totalBadge.textContent = `${sorted.length} ${itemWord} • Total: ${sym}${totalSum.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    }
+
+    if (gridEl) {
+        gridEl.style.gridTemplateColumns = (sorted.length > 0 && sorted.length <= 6)
+            ? `repeat(${sorted.length}, minmax(0, 1fr))`
+            : 'repeat(auto-fit, minmax(140px, 1fr))';
+        gridEl.innerHTML = sorted.map(s => {
+            const rawName = _subTableIsService ? (s.service_name || '-') : (s.subscription_name || s.subscription_id || '-');
+            const cleanName = String(rawName).replace(/^[⊞⚙◉\s]+/, '').trim() || '-';
+            const escName = cleanName.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+            const cost = Number(s.total_cost) || 0;
+            const pct = totalSum > 0 ? (cost / totalSum * 100) : 0;
+            const barWidth = Math.max(2, Math.min(100, pct));
+            const isClickable = _subTableIsService;
+            const clickAttr = isClickable ? `onclick="openServiceDrill('${escName}')" style="cursor:pointer"` : '';
+
+            return `
+                <div class="cost-sub-kpi-card" ${clickAttr} title="${escName} — ${sym}${cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})} (${pct.toFixed(1)}%)">
+                    <div class="cost-sub-kpi-head">
+                        <span class="cost-sub-kpi-name">${escName}</span>
+                        <span class="cost-sub-kpi-pct">${pct.toFixed(1)}%</span>
+                    </div>
+                    <div class="cost-sub-kpi-value">${sym}${cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                    <div class="cost-sub-kpi-bar-track">
+                        <div class="cost-sub-kpi-bar-fill" style="width:${barWidth}%"></div>
+                    </div>
+                </div>
+            `;
         }).join('');
-    } else {
-        bySubBody.innerHTML = sorted.map(s => `
-            <tr>
-                <td>${s.subscription_name || s.subscription_id || '-'}</td>
-                <td style="text-align:right;font-weight:500;color:var(--text-primary)">${curSym()}${(s.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-            </tr>`).join('');
     }
 }
 
@@ -2634,6 +2854,75 @@ function populateCdAccounts(accounts) {
     cdUpdateTrigger('acc');
 }
 
+// ─── Custom Styled Dropdowns for Cost Data (Group By, View, Client, Resource Type) ───
+function syncCostCustomDropdown(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const triggerLabel = document.getElementById(selectId + 'TriggerLabel');
+    const menu = document.getElementById(selectId + 'Menu');
+    if (!menu) return;
+
+    const selectedOpt = sel.options[sel.selectedIndex];
+    if (triggerLabel) {
+        triggerLabel.textContent = selectedOpt ? selectedOpt.text : 'Select...';
+    }
+
+    menu.innerHTML = '';
+    Array.from(sel.options).forEach(opt => {
+        if (opt.style.display === 'none') return;
+        const div = document.createElement('div');
+        div.className = 'cost-custom-option' + (opt.value === sel.value ? ' active' : '');
+        div.textContent = opt.text;
+        div.onclick = (e) => selectCostCustomOption(selectId, opt.value, e);
+        if (opt.value === sel.value) {
+            const check = document.createElement('span');
+            check.style.fontSize = '12px';
+            check.style.marginLeft = 'auto';
+            check.textContent = '✓';
+            div.appendChild(check);
+        }
+        menu.appendChild(div);
+    });
+}
+
+function selectCostCustomOption(selectId, val, event) {
+    if (event) event.stopPropagation();
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.value = val;
+    syncCostCustomDropdown(selectId);
+    closeAllCostCustomDropdowns();
+    sel.dispatchEvent(new Event('change'));
+}
+
+function toggleCostCustomDropdown(selectId, event) {
+    if (event) event.stopPropagation();
+    syncCostCustomDropdown(selectId);
+    const dropdown = document.getElementById(selectId + 'CustomDropdown');
+    if (!dropdown) return;
+    const isOpen = dropdown.classList.contains('open');
+    closeAllCostCustomDropdowns();
+    if (!isOpen) {
+        dropdown.classList.add('open');
+    }
+}
+
+function closeAllCostCustomDropdowns() {
+    document.querySelectorAll('.cost-custom-dropdown.open').forEach(el => el.classList.remove('open'));
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.cost-custom-dropdown')) {
+        closeAllCostCustomDropdowns();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeAllCostCustomDropdowns();
+    }
+});
+
 function resetCostFilters() {
     const search = document.getElementById('costSearch');
     if (search) search.value = '';
@@ -2643,6 +2932,7 @@ function resetCostFilters() {
     cdAccSelected.clear(); cdUpdateTrigger('acc');
     const costsClient = document.getElementById('costsClientFilter');
     if (costsClient) costsClient.value = '';
+    ['costGroupBy', 'costGranularity', 'costsClientFilter', 'costResourceType'].forEach(syncCostCustomDropdown);
     costPageOffset = 0;
     // Reset to the tenant's default cloud (the first one it has data for)
     _pickDefaultCostsCloud().then(cloud => {
@@ -3377,9 +3667,11 @@ async function _updateCostsCloudFilters(cloud) {
 
     if (rgLabelEl)    rgLabelEl.textContent    = lbl;
     if (rgColLabelEl) rgColLabelEl.textContent = lbl || 'RG / Region / Project';
+    ['costGroupBy', 'costGranularity', 'costsClientFilter', 'costResourceType'].forEach(syncCostCustomDropdown);
 }
 
 async function loadCostsTable() {
+    ['costGroupBy', 'costGranularity', 'costsClientFilter', 'costResourceType'].forEach(syncCostCustomDropdown);
     // Cloud-specific grouped views (Atlassian per-user, OpenAI model/capability/category)
     // use their own dedicated tables instead of the standard cost table.
     const _gb = document.getElementById('costGroupBy')?.value || 'resource';
@@ -4202,6 +4494,7 @@ function cmpAddPeriod() {
                 const idx = Math.max(0, nM - i);
                 sel.selectedIndex = Math.min(idx, sel.options.length - 1);
             }
+            renderAllCmpCustomDropdowns();
             break;
         }
     }
@@ -4441,6 +4734,85 @@ function updateCmpRGLabel() {
     }
 }
 
+function toggleCmpMonthDropdown(idx, e) {
+    if (e) e.stopPropagation();
+    const targetWrap = document.getElementById('cmpCustomDropdown' + idx);
+    const isOpen = targetWrap && targetWrap.classList.contains('open');
+
+    // Close all other dropdowns
+    document.querySelectorAll('.cmp-period-dd-wrap').forEach(w => w.classList.remove('open'));
+
+    if (!isOpen && targetWrap) {
+        targetWrap.classList.add('open');
+    }
+}
+
+function selectCmpMonthOption(idx, val, monthLabel, costStr, e) {
+    if (e) e.stopPropagation();
+    const sel = document.getElementById('cmpMonth' + idx);
+    if (sel) {
+        sel.value = val;
+    }
+
+    const labelEl = document.getElementById('cmpCustomLabel' + idx);
+    if (labelEl) {
+        labelEl.innerHTML = `<span>${monthLabel}</span><span class="cmp-period-dd-cost-badge">${costStr}</span>`;
+    }
+
+    const menu = document.getElementById('cmpCustomMenu' + idx);
+    if (menu) {
+        menu.querySelectorAll('.cmp-period-dd-option').forEach(opt => {
+            opt.classList.toggle('active', opt.getAttribute('data-val') === val);
+        });
+    }
+
+    const wrap = document.getElementById('cmpCustomDropdown' + idx);
+    if (wrap) wrap.classList.remove('open');
+}
+
+function renderAllCmpCustomDropdowns() {
+    if (!comparePeriods.months || !comparePeriods.months.length) return;
+
+    for (let i = 1; i <= 6; i++) {
+        const sel = document.getElementById('cmpMonth' + i);
+        const menu = document.getElementById('cmpCustomMenu' + i);
+        const labelEl = document.getElementById('cmpCustomLabel' + i);
+        if (!sel || !menu) continue;
+
+        const currentVal = sel.value || '';
+        menu.innerHTML = comparePeriods.months.map(m => {
+            const val = `${m.start_date}|${m.end_date}`;
+            const monthLabel = formatMonth(m.month);
+            const costStr = `$${Number(m.total_cost).toLocaleString(undefined, {maximumFractionDigits:0})}`;
+            const isSelected = val === currentVal;
+
+            return `<div class="cmp-period-dd-option ${isSelected ? 'active' : ''}" data-val="${val}" onclick="selectCmpMonthOption(${i}, '${val}', '${monthLabel}', '${costStr}', event)">
+                <div class="cmp-period-dd-option-left">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span>${monthLabel}</span>
+                </div>
+                <span class="cmp-period-dd-option-cost">${costStr}</span>
+            </div>`;
+        }).join('');
+
+        // Set trigger label
+        if (sel.selectedIndex >= 0 && comparePeriods.months[sel.selectedIndex]) {
+            const m = comparePeriods.months[sel.selectedIndex];
+            const monthLabel = formatMonth(m.month);
+            const costStr = `$${Number(m.total_cost).toLocaleString(undefined, {maximumFractionDigits:0})}`;
+            if (labelEl) {
+                labelEl.innerHTML = `<span>${monthLabel}</span><span class="cmp-period-dd-cost-badge">${costStr}</span>`;
+            }
+        }
+    }
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.cmp-period-dd-wrap')) {
+        document.querySelectorAll('.cmp-period-dd-wrap').forEach(w => w.classList.remove('open'));
+    }
+});
+
 function populateCompareDropdowns() {
     const w1 = document.getElementById('cmpWeek1');
     const w2 = document.getElementById('cmpWeek2');
@@ -4463,6 +4835,7 @@ function populateCompareDropdowns() {
         if (m2) m2.selectedIndex = nM - 1;
     }
 
+    renderAllCmpCustomDropdowns();
     onCmpExtraPeriodToggle();
 
     [w1, w2].forEach(sel => { if (sel) sel.innerHTML = ''; });
@@ -4548,7 +4921,7 @@ function _cmpSetLoading(on) {
 
     // Skeleton table loader (same as Monthly Costs)
     const tableLoader = document.getElementById('cmpTableLoader');
-    const tableWrap   = tableLoader?.nextElementSibling;  // .table-container
+    const tableWrap   = document.querySelector('.cmp-results-main .table-container') || tableLoader?.nextElementSibling;
     if (tableLoader) tableLoader.style.display = on ? 'block' : 'none';
     if (tableWrap)   tableWrap.style.display   = on ? 'none'  : '';
 
@@ -4721,11 +5094,193 @@ function buildDrilldownUrl(name) {
     return `/drilldown?${qp}`;
 }
 
+let _cmpLastPayload = null;
+let _cmpLastGroupBy = null;
+let _cmpSortState = { col: 'diff', dir: 'desc' };
+let _cmpCurrentPage = 1;
+let _cmpPageSize = 50;
+
+function cmpSortTable(col) {
+    if (_cmpSortState.col === col) {
+        _cmpSortState.dir = _cmpSortState.dir === 'desc' ? 'asc' : 'desc';
+    } else {
+        _cmpSortState.col = col;
+        _cmpSortState.dir = col === 'name' ? 'asc' : 'desc';
+    }
+    _cmpCurrentPage = 1;
+    if (_cmpLastPayload) {
+        renderComparisonTableRows(_cmpLastPayload, _cmpLastGroupBy);
+    }
+}
+
+function cmpChangePage(delta) {
+    _cmpCurrentPage += delta;
+    if (_cmpLastPayload) {
+        renderComparisonTableRows(_cmpLastPayload, _cmpLastGroupBy);
+    }
+}
+
+function cmpChangePageSize(val) {
+    _cmpPageSize = val === 'all' ? 999999 : (parseInt(val, 10) || 50);
+    _cmpCurrentPage = 1;
+    if (_cmpLastPayload) {
+        renderComparisonTableRows(_cmpLastPayload, _cmpLastGroupBy);
+    }
+}
+
+function getCmpSortIndicator(col) {
+    if (_cmpSortState.col === col) {
+        const isDesc = _cmpSortState.dir === 'desc';
+        const arrow = isDesc ? '▼' : '▲';
+        let label;
+        if (col === 'name') {
+            label = isDesc ? 'Z–A' : 'A–Z';
+        } else {
+            label = isDesc ? 'HIGH–LOW' : 'LOW–HIGH';
+        }
+        return `<span class="cmp-sort-badge active" title="Currently sorted ${isDesc ? 'High to Low' : 'Low to High'}. Click to toggle.">${arrow} ${label}</span>`;
+    }
+    return `<span class="cmp-sort-badge inactive" title="Click to sort High to Low">↕</span>`;
+}
+
+function renderComparisonTableRows(payload, groupBy) {
+    const labels = payload.labels || [];
+    const rawData = payload.rows || [];
+    const n = labels.length;
+
+    const col = _cmpSortState.col;
+    const isDesc = _cmpSortState.dir === 'desc';
+
+    const data = [...rawData].sort((a, b) => {
+        let av, bv;
+        if (col === 'name') {
+            av = (a.name || '').toLowerCase();
+            bv = (b.name || '').toLowerCase();
+            if (av < bv) return isDesc ? 1 : -1;
+            if (av > bv) return isDesc ? -1 : 1;
+            return 0;
+        } else if (col.startsWith('period_')) {
+            const pIdx = parseInt(col.replace('period_', ''), 10) || 0;
+            av = (a.costs && a.costs[pIdx] != null) ? a.costs[pIdx] : 0;
+            bv = (b.costs && b.costs[pIdx] != null) ? b.costs[pIdx] : 0;
+        } else if (col === 'change_pct') {
+            av = a.change_pct != null ? a.change_pct : 0;
+            bv = b.change_pct != null ? b.change_pct : 0;
+        } else { // default 'diff'
+            av = a.difference != null ? a.difference : 0;
+            bv = b.difference != null ? b.difference : 0;
+        }
+        return isDesc ? (bv - av) : (av - bv);
+    });
+
+    const thPeriods = labels.map((lb, i) => {
+        const colKey = `period_${i}`;
+        const isActive = _cmpSortState.col === colKey;
+        return `
+        <th class="cmp-th-sortable ${isActive ? 'sorted-active' : ''}" onclick="cmpSortTable('${colKey}')" title="Sort by ${lb} (High to Low / Low to High)">
+            <span style="display:inline-flex;align-items:center;gap:2px">${lb.replace(/</g, '&lt;')} ${getCmpSortIndicator(colKey)}</span>
+        </th>`;
+    }).join('');
+
+    const isNameActive = _cmpSortState.col === 'name';
+    const isDiffActive = _cmpSortState.col === 'diff';
+    const isPctActive = _cmpSortState.col === 'change_pct';
+
+    document.getElementById('cmpTableHead').innerHTML = `<tr>
+        <th class="cmp-th-sortable ${isNameActive ? 'sorted-active' : ''}" onclick="cmpSortTable('name')" title="Sort by Name (A-Z / Z-A)">
+            <span style="display:inline-flex;align-items:center;gap:2px">Name ${getCmpSortIndicator('name')}</span>
+        </th>
+        ${thPeriods}
+        <th class="cmp-th-sortable ${isDiffActive ? 'sorted-active' : ''}" onclick="cmpSortTable('diff')" title="Sort by Difference (High to Low / Low to High)">
+            <span style="display:inline-flex;align-items:center;gap:2px">${n > 2 ? 'Last − first' : 'Difference'} ${getCmpSortIndicator('diff')}</span>
+        </th>
+        <th class="cmp-th-sortable ${isPctActive ? 'sorted-active' : ''}" onclick="cmpSortTable('change_pct')" title="Sort by Change % (High to Low / Low to High)">
+            <span style="display:inline-flex;align-items:center;gap:2px">Change % ${getCmpSortIndicator('change_pct')}</span>
+        </th>
+        <th style="white-space:nowrap">Trend</th>
+    </tr>`;
+
+    // Pagination calculations
+    const totalItems = data.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / _cmpPageSize));
+    if (_cmpCurrentPage > totalPages) _cmpCurrentPage = totalPages;
+    if (_cmpCurrentPage < 1) _cmpCurrentPage = 1;
+
+    const startIdx = (_cmpCurrentPage - 1) * _cmpPageSize;
+    const endIdx = Math.min(startIdx + _cmpPageSize, totalItems);
+    const visibleRows = data.slice(startIdx, endIdx);
+
+    const paginEl = document.getElementById('cmpTablePagination');
+    if (paginEl) {
+        if (totalItems > 0) {
+            paginEl.style.display = 'flex';
+            const infoEl = document.getElementById('cmpPaginationInfo');
+            const indEl = document.getElementById('cmpPageIndicator');
+            const prevBtn = document.getElementById('cmpPagePrev');
+            const nextBtn = document.getElementById('cmpPageNext');
+            if (infoEl) infoEl.textContent = `Showing ${(startIdx + 1).toLocaleString()} to ${endIdx.toLocaleString()} of ${totalItems.toLocaleString()} items`;
+            if (indEl) indEl.textContent = `Page ${_cmpCurrentPage} of ${totalPages}`;
+            if (prevBtn) {
+                prevBtn.disabled = _cmpCurrentPage <= 1;
+                prevBtn.style.opacity = _cmpCurrentPage <= 1 ? '0.4' : '1';
+                prevBtn.style.cursor = _cmpCurrentPage <= 1 ? 'default' : 'pointer';
+            }
+            if (nextBtn) {
+                nextBtn.disabled = _cmpCurrentPage >= totalPages;
+                nextBtn.style.opacity = _cmpCurrentPage >= totalPages ? '0.4' : '1';
+                nextBtn.style.cursor = _cmpCurrentPage >= totalPages ? 'default' : 'pointer';
+            }
+        } else {
+            paginEl.style.display = 'none';
+        }
+    }
+
+    // Pre-build drilldown query parameters once
+    const { groupBy: grp, periodSpecs: pSpecs, rgsParam: rgs } = cmpContext;
+    const baseDrillQp = new URLSearchParams({
+        group_by: grp || '',
+        periods: JSON.stringify(pSpecs || []),
+    });
+    if (selectedSubscription) baseDrillQp.set('subscription_id', selectedSubscription);
+    if (rgs) baseDrillQp.set('resource_groups', rgs);
+    const baseDrillStr = baseDrillQp.toString();
+    const sym = curSym();
+
+    const maxDiff = Math.max(...visibleRows.map(r => Math.abs(r.difference || 0)), 1);
+    document.getElementById('cmpTableBody').innerHTML = visibleRows.map(r => {
+        const costs = r.costs || [];
+        const costCells = labels.map((_, i) =>
+            `<td>${sym}${(costs[i] ?? 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>`
+        ).join('');
+        const diff = r.difference || 0;
+        const changePct = r.change_pct || 0;
+        const barWidth = Math.max(6, Math.min(160, Math.abs(diff) / maxDiff * 160));
+        const barClass = diff > 0 ? 'up' : (diff < 0 ? 'down' : 'neutral');
+        const badgeClass = changePct > 0 ? 'up' : (changePct < 0 ? 'down' : 'neutral');
+        const arrow = changePct > 0 ? '▲' : (changePct < 0 ? '▼' : '–');
+        const escName = String(r.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        const safeName = (r.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `<tr style="cursor:pointer" onclick="openResourceDrilldown('${safeName}')" onmouseenter="prefetchDrilldown('${safeName}')" title="Click to view resource drilldown">
+            <td><a href="javascript:void(0)" onclick="openResourceDrilldown('${safeName}'); event.stopPropagation();" onmouseenter="prefetchDrilldown('${safeName}')" style="font-weight:500;color:var(--accent);text-decoration:underline">${escName}</a></td>
+            ${costCells}
+            <td style="color:${diff > 0 ? 'var(--red)' : 'var(--green)'};font-weight:500">
+                ${diff > 0 ? '+' : ''}${sym}${diff.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+            </td>
+            <td><span class="cmp-badge ${badgeClass}">${arrow} ${Math.abs(changePct).toFixed(1)}%</span></td>
+            <td><span class="trend-bar ${barClass}" style="width:${barWidth}px"></span></td>
+        </tr>`;
+    }).join('');
+}
+
 function renderComparisonResults(payload, groupBy) {
     const labels = payload.labels || [];
     const data = payload.rows || [];
     const n = labels.length;
     const groupLabel = groupBy === 'service_name' ? 'Service' : (groupBy === 'resource_group' ? rgLabel(selectedCloud) : (groupBy === 'resource_name' ? 'Resource' : 'Meter Category'));
+
+    _cmpLastPayload = payload;
+    _cmpLastGroupBy = groupBy;
+    _cmpCurrentPage = 1;
 
     const periodTotals = labels.map((_, pi) => data.reduce((s, r) => s + (r.costs[pi] || 0), 0));
     const firstTotal = periodTotals[0] || 0;
@@ -4735,70 +5290,54 @@ function renderComparisonResults(payload, groupBy) {
     const increased = data.filter(r => r.difference > 0).length;
     const decreased = data.filter(r => r.difference < 0).length;
 
-    const _cmpVal  = 'font-size:18px;font-weight:700;line-height:1.2;margin-top:3px';
-    const _cmpSub  = 'font-size:10px;margin-top:3px;';
-
     const periodCards = labels.map((lb, i) => `
-        <div class="stat-card" style="padding:8px 12px;border-radius:8px;min-width:120px">
-            <div class="stat-label" style="font-size:9px;margin-bottom:0">${lb}</div>
-            <div style="${_cmpVal};color:var(--accent)">${curSym()}${periodTotals[i].toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+        <div class="stat-card">
+            <div class="stat-label" style="font-size:9.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">${lb}</div>
+            <div style="font-size:16px;font-weight:700;color:#2563EB;line-height:1.2;letter-spacing:-0.01em">${curSym()}${periodTotals[i].toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+            <div style="font-size:10px;color:var(--text-secondary);margin-top:3px;font-weight:500">Period Total</div>
         </div>
     `).join('');
 
-    document.getElementById('cmpSummaryCards').innerHTML = periodCards + `
-        <div class="stat-card" style="padding:8px 12px;border-radius:8px;min-width:120px">
-            <div class="stat-label" style="font-size:9px;margin-bottom:0">${n > 2 ? 'Last vs first' : 'Difference'}</div>
-            <div style="${_cmpVal};color:${totalDiff > 0 ? 'var(--red)' : 'var(--green)'}">
+    const diffIsUp = totalDiff > 0;
+    const diffColor = diffIsUp ? '#DC2626' : '#16A34A';
+    const diffBg = diffIsUp ? 'rgba(220,38,38,0.1)' : 'rgba(22,163,74,0.1)';
+
+    const cardsHtml = periodCards + `
+        <div class="stat-card">
+            <div class="stat-label" style="font-size:9.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">${n > 2 ? 'Last vs First' : 'Difference'}</div>
+            <div style="font-size:16px;font-weight:700;color:${diffColor};line-height:1.2;letter-spacing:-0.01em">
                 ${totalDiff > 0 ? '+' : ''}${curSym()}${totalDiff.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
             </div>
-            <div style="${_cmpSub}color:${totalDiff > 0 ? 'var(--red)' : 'var(--green)'}">${totalDiff > 0 ? '▲' : '▼'} ${Math.abs(totalPct).toFixed(1)}%</div>
-        </div>
-        <div class="stat-card" style="padding:8px 12px;border-radius:8px;min-width:120px">
-            <div class="stat-label" style="font-size:9px;margin-bottom:0">Items changed</div>
-            <div style="${_cmpVal}">
-                <span style="color:var(--red)">${increased} ▲</span>
-                <span style="color:var(--text-tertiary);margin:0 4px;font-size:13px">|</span>
-                <span style="color:var(--green)">${decreased} ▼</span>
+            <div style="margin-top:3px;display:flex;align-items:center;gap:5px">
+                <span style="display:inline-flex;align-items:center;gap:2px;font-size:9.5px;font-weight:600;padding:1px 6px;border-radius:6px;background:${diffBg};color:${diffColor}">
+                    ${totalDiff > 0 ? '▲' : '▼'} ${Math.abs(totalPct).toFixed(1)}%
+                </span>
+                <span style="font-size:10px;color:var(--text-secondary)">${diffIsUp ? 'increase' : 'savings'}</span>
             </div>
-            <div style="${_cmpSub}color:var(--text-tertiary)">of ${data.length.toLocaleString()} ${groupLabel}s</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label" style="font-size:9.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">Items Changed</div>
+            <div style="font-size:15px;font-weight:700;line-height:1.2;display:flex;align-items:center;gap:6px">
+                <span style="color:#DC2626;display:inline-flex;align-items:center;gap:2px">${increased.toLocaleString()} <span style="font-size:9.5px">▲</span></span>
+                <span style="color:var(--border);font-size:13px;font-weight:300">|</span>
+                <span style="color:#16A34A;display:inline-flex;align-items:center;gap:2px">${decreased.toLocaleString()} <span style="font-size:9.5px">▼</span></span>
+            </div>
+            <div style="font-size:10px;color:var(--text-secondary);margin-top:3px;font-weight:500">of ${data.length.toLocaleString()} ${groupLabel}s</div>
         </div>
     `;
 
-    const thPeriods = labels.map((lb) => `<th>${lb.replace(/</g, '&lt;')}</th>`).join('');
-    document.getElementById('cmpTableHead').innerHTML = `<tr>
-        <th>Name</th>${thPeriods}
-        <th>${n > 2 ? 'Last − first' : 'Difference'}</th>
-        <th>Change %</th>
-        <th>Trend</th>
-    </tr>`;
+    const summaryCardsEl = document.getElementById('cmpSummaryCards');
+    if (summaryCardsEl) {
+        summaryCardsEl.style.gridTemplateColumns = `repeat(${labels.length + 2}, minmax(0, 1fr))`;
+        summaryCardsEl.innerHTML = cardsHtml;
+    }
 
     const titleSuffix = labels.length <= 2 ? `${labels[0] || ''} vs ${labels[1] || ''}` : `${n} periods`;
     document.getElementById('cmpTableTitle').textContent = `${groupLabel} comparison: ${titleSuffix}`;
     document.getElementById('cmpTableCount').textContent = `${data.length} items`;
     document.getElementById('cmpBarTitle').textContent = `${groupLabel}: ${titleSuffix}`;
 
-    const maxDiff = Math.max(...data.map(r => Math.abs(r.difference)), 1);
-    document.getElementById('cmpTableBody').innerHTML = data.map(r => {
-        const costs = r.costs || [];
-        const costCells = labels.map((_, i) =>
-            `<td>${curSym()}${(costs[i] ?? 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>`
-        ).join('');
-        const barWidth = Math.max(4, Math.min(120, Math.abs(r.difference) / maxDiff * 120));
-        const barClass = r.difference > 0 ? 'up' : (r.difference < 0 ? 'down' : 'neutral');
-        const badgeClass = r.change_pct > 0 ? 'up' : (r.change_pct < 0 ? 'down' : 'neutral');
-        const arrow = r.change_pct > 0 ? '▲' : (r.change_pct < 0 ? '▼' : '–');
-        const ddUrl = buildDrilldownUrl(r.name);
-        const escName = String(r.name).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-        return `<tr style="cursor:pointer" title="Click to open details — Right-click to open in new tab">
-            <td><a href="${ddUrl}" target="_blank" style="font-weight:500;color:var(--accent);text-decoration:underline">${escName}</a></td>
-            ${costCells}
-            <td style="color:${r.difference > 0 ? 'var(--red)' : 'var(--green)'};font-weight:500">
-                ${r.difference > 0 ? '+' : ''}${curSym()}${r.difference.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
-            </td>
-            <td><span class="cmp-badge ${badgeClass}">${arrow} ${Math.abs(r.change_pct).toFixed(1)}%</span></td>
-            <td><span class="trend-bar ${barClass}" style="width:${barWidth}px"></span></td>
-        </tr>`;
-    }).join('');
+    renderComparisonTableRows(payload, groupBy);
 
     const top15 = data.filter(r => (r.costs || []).some(c => c > 0)).slice(0, 15);
     const barDatasets = labels.map((lb, i) => ({
@@ -4814,7 +5353,7 @@ function renderComparisonResults(payload, groupBy) {
     }, 'Comparison', { stacked: false });
 
     const byChange = [...data].filter(r => (r.costs && r.costs[0] > 0)).sort((a, b) => Math.abs(b.change_pct) - Math.abs(a.change_pct)).slice(0, 15);
-    const chTitle = document.querySelector('#page-compare .charts-grid .chart-card:nth-child(2) h3');
+    const chTitle = document.getElementById('cmpChangeTitle') || document.querySelector('#page-compare .cmp-chart-card:nth-child(2) h3');
     if (chTitle) chTitle.textContent = n > 2 ? 'Change % (last vs first period)' : 'Change % by item';
     // Hide chart loaders once charts are drawn
     document.getElementById('cmpBarLoader')?.classList.add('hidden');
@@ -5079,208 +5618,316 @@ function appendMessage(content, type, isHTML = false) {
     if (isHTML) {
         div.innerHTML = content;
     } else {
-        div.innerHTML = content;
+        div.textContent = content;
     }
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
     return id;
 }
 
-function renderChatChart(canvasId, chartData) {
-    const ctx = document.getElementById(canvasId)?.getContext('2d');
-    if (!ctx) return;
+// ─── In-App Resource Cost Drilldown ───────────────────────────────────────
+let _drilldownData = null;
+let _drilldownLabels = [];
+let _currentDrilldownResource = '';
+const _drilldownCache = new Map();
+const _drilldownInFlight = new Map();
 
-        const colors = CHART_COLORS();
-
-    let config;
-    if (chartData.type === 'comparison') {
-        config = {
-            type: 'line',
-            data: {
-                labels: chartData.labels,
-                datasets: chartData.datasets.map((ds, i) => ({
-                    label: ds.label,
-                    data: ds.values,
-                    borderColor: colors[i],
-                    backgroundColor: `${colors[i]}22`,
-                    fill: true,
-                    tension: 0.3
-                }))
-            }
-        };
-    } else if (chartData.type === 'pie' || chartData.type === 'doughnut') {
-        config = {
-            type: chartData.type,
-            data: {
-                labels: chartData.labels,
-                datasets: [{ data: chartData.values, backgroundColor: colors, borderWidth: 0 }]
-            }
-        };
-    } else {
-        config = {
-            type: chartData.type === 'bar' ? 'bar' : 'line',
-            data: {
-                labels: chartData.labels,
-                datasets: [{
-                    label: 'Cost ($)',
-                    data: chartData.values,
-                    borderColor: '#4f6ef7',
-                    backgroundColor: chartData.type === 'bar' ? '#4f6ef7' : 'rgba(79,110,247,0.1)',
-                    fill: chartData.type !== 'bar',
-                    tension: 0.3,
-                    borderRadius: chartData.type === 'bar' ? 6 : 0
-                }]
-            }
-        };
+function ddShortName(name) {
+    if (!name) return name;
+    let s = String(name);
+    if (s.toLowerCase().startsWith('arn:')) {
+        s = s.split(':').pop().split('/').pop();
     }
-
-    config.options = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { labels: { color: '#8b8fa3', font: { size: 10 } } }
-        },
-        scales: (chartData.type !== 'pie' && chartData.type !== 'doughnut') ? {
-            x: { ticks: { color: '#8b8fa3', font: { size: 9 } }, grid: { color: 'rgba(45,49,72,0.5)' } },
-            y: { ticks: { color: '#8b8fa3', font: { size: 9 } }, grid: { color: 'rgba(45,49,72,0.5)' } }
-        } : undefined
-    };
-
-    new Chart(ctx, config);
+    return s;
 }
 
-// ─── Drilldown Modal ─────────────────────────────────────────────────────
-let drilldownData = null;
-
-let drilldownLabels = [];
-
-async function openDrilldown(name) {
+function getDrilldownQueryParams(name) {
     const { groupBy, periodSpecs } = cmpContext;
-    if (!groupBy || !periodSpecs || periodSpecs.length < 2) return;
+    const pSpecs = (periodSpecs && periodSpecs.length >= 2) ? periodSpecs : [
+        { from: '2026-08-01', to: '2026-08-31', label: 'Period 1' },
+        { from: '2026-09-01', to: '2026-09-30', label: 'Period 2' }
+    ];
+    const qp = new URLSearchParams({
+        group_by: groupBy || 'resource_name',
+        name,
+        periods: JSON.stringify(pSpecs.map(({ from, to, label }) => ({ from, to, label }))),
+    });
+    if (selectedSubscription) qp.set('subscription_id', selectedSubscription);
+    if (cmpContext.rgsParam) qp.set('resource_groups', cmpContext.rgsParam);
+    if (cmpSelectedCloud) qp.set('cloud_provider', cmpSelectedCloud);
+    return { qp, pSpecs };
+}
 
-    drilldownLabels = periodSpecs.map((p) => p.label);
-    const n = drilldownLabels.length;
+function prefetchDrilldown(name) {
+    if (!name) return;
+    try {
+        const { qp } = getDrilldownQueryParams(name);
+        const key = qp.toString();
+        if (_drilldownCache.has(key) || _drilldownInFlight.has(key)) return;
+        const p = fetch(`/api/compare/drilldown?${key}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data) _drilldownCache.set(key, data);
+                _drilldownInFlight.delete(key);
+                return data;
+            })
+            .catch(() => {
+                _drilldownInFlight.delete(key);
+            });
+        _drilldownInFlight.set(key, p);
+    } catch (e) {
+        // Silently ignore prefetch errors
+    }
+}
+
+async function openResourceDrilldown(name) {
+    if (!name) return;
+    _currentDrilldownResource = name;
+    navigateTo('drilldown');
+
+    const { groupBy } = cmpContext;
+    const { qp, pSpecs } = getDrilldownQueryParams(name);
+
+    _drilldownLabels = pSpecs.map((p) => p.label);
+    const n = _drilldownLabels.length;
+
+    const bName = document.getElementById('ddBreadcrumbName');
+    const titleEl = document.getElementById('ddTitle');
+    const metaEl = document.getElementById('ddMeta');
+    const loadEl = document.getElementById('ddLoading');
+    const errEl = document.getElementById('ddError');
+    const contentEl = document.getElementById('ddContent');
+    const sumEl = document.getElementById('ddSummary');
+
+    if (bName) bName.textContent = ddShortName(name);
+    if (titleEl) titleEl.textContent = n <= 2 ? `${ddShortName(name)} — ${_drilldownLabels[0]} vs ${_drilldownLabels[1]}` : `${ddShortName(name)} — ${n} periods`;
+
+    const groupLabel = groupBy === 'service_name' ? 'Service' : (groupBy === 'resource_group' ? rgLabel(selectedCloud) : (groupBy === 'resource_name' ? 'Resource' : 'Meter Category'));
+    if (metaEl) {
+        metaEl.innerHTML = `<span class="dd-meta-tag">Group By: ${groupLabel}</span>` +
+            pSpecs.map(p => `<span class="dd-meta-tag">${p.label.replace(/</g, '&lt;')}: ${p.from} to ${p.to}</span>`).join('');
+    }
+
+    // Optimistic / Instant KPI card rendering from table cache if available
+    const sym = curSym();
+    const previewRow = _cmpLastPayload?.rows?.find(r => r.name === name);
+    if (previewRow && sumEl) {
+        const previewCosts = previewRow.costs || [];
+        const prevDiff = previewRow.difference || 0;
+        const prevPct = previewRow.change_pct || 0;
+        const prevDiffIsUp = prevDiff > 0;
+        const prevDiffColor = prevDiffIsUp ? '#DC2626' : '#16A34A';
+        const prevDiffBg = prevDiffIsUp ? 'rgba(220,38,38,0.1)' : 'rgba(22,163,74,0.1)';
+
+        const previewCards = _drilldownLabels.map((lb, i) => `
+            <div class="stat-card">
+                <div class="stat-label" style="font-size:9.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">${lb.replace(/</g, '&lt;')}</div>
+                <div style="font-size:18px;font-weight:700;color:#2563EB;line-height:1.2;letter-spacing:-0.01em">${sym}${(previewCosts[i] ?? 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                <div style="font-size:10px;color:var(--text-secondary);margin-top:3px;font-weight:500">Period Total</div>
+            </div>
+        `).join('');
+
+        sumEl.style.gridTemplateColumns = `repeat(${_drilldownLabels.length + 1}, minmax(0, 1fr))`;
+        sumEl.innerHTML = previewCards + `
+            <div class="stat-card">
+                <div class="stat-label" style="font-size:9.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">${n > 2 ? 'Last vs First' : 'Difference'}</div>
+                <div style="font-size:18px;font-weight:700;color:${prevDiffColor};line-height:1.2;letter-spacing:-0.01em">
+                    ${prevDiff > 0 ? '+' : ''}${sym}${prevDiff.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+                </div>
+                <div style="margin-top:3px;display:flex;align-items:center;gap:5px">
+                    <span style="display:inline-flex;align-items:center;gap:2px;font-size:9.5px;font-weight:600;padding:1px 6px;border-radius:6px;background:${prevDiffBg};color:${prevDiffColor}">
+                        ${prevDiff > 0 ? '▲' : '▼'} ${Math.abs(prevPct).toFixed(1)}%
+                    </span>
+                    <span style="font-size:10px;color:var(--text-secondary)">${prevDiffIsUp ? 'increase' : 'savings'}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    const cacheKey = qp.toString();
+    const hasCached = _drilldownCache.has(cacheKey);
+
+    if (!hasCached) {
+        if (loadEl) loadEl.style.display = 'block';
+        if (errEl) errEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'none';
+    }
 
     try {
-        const params = new URLSearchParams({
-            group_by: groupBy,
-            name,
-            periods: JSON.stringify(periodSpecs.map(({ from, to, label }) => ({ from, to, label }))),
-        });
-        if (selectedSubscription) params.set('subscription_id', selectedSubscription);
-        if (cmpContext.rgsParam) params.set('resource_groups', cmpContext.rgsParam);
-        drilldownData = await fetch(`/api/compare/drilldown?${params}`).then(r => r.json());
+        let data = _drilldownCache.get(cacheKey);
+        if (!data) {
+            if (_drilldownInFlight.has(cacheKey)) {
+                data = await _drilldownInFlight.get(cacheKey);
+            } else {
+                const fetchPromise = fetch(`/api/compare/drilldown?${cacheKey}`)
+                    .then(r => {
+                        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                        return r.json();
+                    });
+                _drilldownInFlight.set(cacheKey, fetchPromise);
+                data = await fetchPromise;
+                _drilldownInFlight.delete(cacheKey);
+            }
+            if (data) _drilldownCache.set(cacheKey, data);
+        }
 
-        document.getElementById('drilldownTitle').textContent =
-            n <= 2 ? `${name} — ${drilldownLabels[0]} vs ${drilldownLabels[1]}` : `${name} — ${n} periods`;
+        _drilldownData = data;
+        const curSymVal = _drilldownData.currency_symbol || curSym();
 
-        const thP = drilldownLabels.map((lb) => `<th>${lb.replace(/</g, '&lt;')}</th>`).join('');
-        document.getElementById('drilldownTableHead').innerHTML = `<tr>
-            <th>Name</th>${thP}
-            <th>${n > 2 ? 'Last − first' : 'Difference'}</th>
-            <th>Change %</th>
-            <th>Trend</th>
-        </tr>`;
+        if (loadEl) loadEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = 'block';
 
-        const dailyTrend = drilldownData.daily_trend || [];
+        // Table Header
+        const thP = _drilldownLabels.map(lb => `<th>${lb.replace(/</g, '&lt;')}</th>`).join('');
+        const theadEl = document.getElementById('ddTableHead');
+        if (theadEl) {
+            theadEl.innerHTML = `<tr>
+                <th>Name</th>${thP}
+                <th>${n > 2 ? 'Last − first' : 'Difference'}</th>
+                <th>Change %</th>
+                <th>Trend</th>
+            </tr>`;
+        }
+
+        // Daily trend calculation
+        const dailyTrend = _drilldownData.daily_trend || [];
         function sumRange(from, to) {
-            const days = dailyTrend.filter((d) => d.date >= from && d.date <= to);
+            const days = dailyTrend.filter(d => d.date >= from && d.date <= to);
             return { total: days.reduce((s, d) => s + Number(d.total_cost || 0), 0), count: days.length };
         }
-        const stats = periodSpecs.map((p) => sumRange(p.from, p.to));
+        const stats = pSpecs.map(p => sumRange(p.from, p.to));
         const firstT = stats[0].total;
         const lastT = stats[n - 1].total;
         const diff = lastT - firstT;
         const pct = firstT > 0 ? (diff / firstT * 100) : 0;
+        const diffIsUp = diff > 0;
+        const diffColor = diffIsUp ? '#DC2626' : '#16A34A';
+        const diffBg = diffIsUp ? 'rgba(220,38,38,0.1)' : 'rgba(22,163,74,0.1)';
 
         const periodCards = stats.map((s, i) => `
             <div class="stat-card">
-                <div class="stat-label">${drilldownLabels[i].replace(/</g, '&lt;')}</div>
-                <div class="stat-value" style="font-size:20px;color:var(--accent)">$${s.total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
-                <div style="font-size:12px;color:var(--text-secondary)">${s.count} days</div>
+                <div class="stat-label" style="font-size:9.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">${_drilldownLabels[i].replace(/</g, '&lt;')}</div>
+                <div style="font-size:18px;font-weight:700;color:#2563EB;line-height:1.2;letter-spacing:-0.01em">${curSymVal}${s.total.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                <div style="font-size:10px;color:var(--text-secondary);margin-top:3px;font-weight:500">${s.count} days</div>
             </div>
         `).join('');
 
-        document.getElementById('drilldownSummary').innerHTML = periodCards + `
-            <div class="stat-card">
-                <div class="stat-label">${n > 2 ? 'Last vs first' : 'Change'}</div>
-                <div class="stat-value" style="font-size:20px;color:${diff > 0 ? 'var(--red)' : 'var(--green)'}">
-                    ${diff > 0 ? '+' : ''}$${diff.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+        if (sumEl) {
+            sumEl.style.gridTemplateColumns = `repeat(${_drilldownLabels.length + 1}, minmax(0, 1fr))`;
+            sumEl.innerHTML = periodCards + `
+                <div class="stat-card">
+                    <div class="stat-label" style="font-size:9.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px">${n > 2 ? 'Last vs First' : 'Difference'}</div>
+                    <div style="font-size:18px;font-weight:700;color:${diffColor};line-height:1.2;letter-spacing:-0.01em">
+                        ${diff > 0 ? '+' : ''}${curSymVal}${diff.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+                    </div>
+                    <div style="margin-top:3px;display:flex;align-items:center;gap:5px">
+                        <span style="display:inline-flex;align-items:center;gap:2px;font-size:9.5px;font-weight:600;padding:1px 6px;border-radius:6px;background:${diffBg};color:${diffColor}">
+                            ${diff > 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%
+                        </span>
+                        <span style="font-size:10px;color:var(--text-secondary)">${diffIsUp ? 'increase' : 'savings'}</span>
+                    </div>
                 </div>
-                <div style="font-size:12px;color:${diff > 0 ? 'var(--red)' : 'var(--green)'}">${diff > 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%</div>
-            </div>
-        `;
+            `;
+        }
 
         // Daily trend chart
-        renderChart('drilldownTrendChart', 'line', {
+        renderChart('ddTrendChart', 'line', {
             labels: dailyTrend.map(d => d.date),
             datasets: [{
-                label: 'Daily Cost ($)',
+                label: `Daily Cost (${curSymVal})`,
                 data: dailyTrend.map(d => d.total_cost),
-                borderColor: '#4f6ef7',
-                backgroundColor: 'rgba(79,110,247,0.1)',
+                borderColor: '#2563EB',
+                backgroundColor: 'rgba(37, 99, 235, 0.08)',
                 fill: true,
                 tension: 0.3,
                 pointRadius: 2,
             }]
         }, 'Daily Trend');
 
-        // Build tabs
-        const tabKeys = Object.keys(drilldownData).filter(k => k !== 'daily_trend');
-        const tabsHtml = tabKeys.map((key, i) =>
-            `<button class="tab-btn ${i === 0 ? 'active' : ''}" onclick="switchDrilldownTab('${key}', this)">${key}</button>`
-        ).join('');
-        document.getElementById('drilldownTabs').innerHTML = tabsHtml;
-
-        // Show first tab
-        if (tabKeys.length > 0) {
-            renderDrilldownTab(tabKeys[0]);
+        // Tabs
+        const tabKeys = Object.keys(_drilldownData).filter(k => k !== 'daily_trend' && Array.isArray(_drilldownData[k]));
+        const tabsEl = document.getElementById('ddTabs');
+        if (tabsEl) {
+            tabsEl.innerHTML = tabKeys.map((key, i) =>
+                `<button class="dd-seg-tab ${i === 0 ? 'active' : ''}" onclick="switchInAppDrilldownTab('${key.replace(/'/g, "\\'")}', this)">${key}</button>`
+            ).join('');
         }
 
-        // Show modal
-        document.getElementById('drilldownModal').style.display = 'flex';
+        if (tabKeys.length > 0) {
+            renderInAppDrilldownTab(tabKeys[0]);
+        }
 
     } catch (err) {
-        console.error('Drilldown error:', err);
-        showToast('Failed to load details', 'error');
+        console.error('In-app drilldown error:', err);
+        if (loadEl) loadEl.style.display = 'none';
+        if (errEl) {
+            errEl.style.display = 'block';
+            errEl.textContent = 'Failed to load drilldown details: ' + (err.message || err);
+        }
     }
 }
 
-function switchDrilldownTab(key, btn) {
-    document.querySelectorAll('#drilldownTabs .tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    renderDrilldownTab(key);
+function switchInAppDrilldownTab(key, btn) {
+    document.querySelectorAll('#ddTabs .dd-seg-tab').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderInAppDrilldownTab(key);
 }
 
-function renderDrilldownTab(key) {
-    const items = drilldownData[key] || [];
-    const lbls = drilldownLabels.length ? drilldownLabels : ['Period 1', 'Period 2'];
+function renderInAppDrilldownTab(key) {
+    if (!_drilldownData) return;
+    const items = _drilldownData[key] || [];
+    const lbls = _drilldownLabels.length ? _drilldownLabels : ['Period 1', 'Period 2'];
     const nc = lbls.length;
+    const sym = _drilldownData.currency_symbol || curSym();
+
+    const hintEl = document.getElementById('ddHint');
+    if (hintEl) {
+        const placeholders = new Set(['unknown', 'noresourceid', '', '-']);
+        const hasRealResources = items.some(r => !placeholders.has(String(r.name || '').trim().toLowerCase()));
+        if (key === 'Resources' && !hasRealResources) {
+            hintEl.style.display = 'block';
+            hintEl.innerHTML = '⏳ <strong>No per-resource detail for this account yet.</strong> Detailed billing export is required for granular breakdowns.';
+        } else {
+            hintEl.style.display = 'none';
+        }
+    }
 
     const maxDiff = Math.max(...items.map(r => Math.abs(r.difference || 0)), 1);
-    document.getElementById('drilldownTableBody').innerHTML = items.map(r => {
-        const costs = r.costs || [r.period1_cost, r.period2_cost];
-        const costCells = lbls.map((_, i) => {
-            const v = costs[i] ?? 0;
-            return `<td>$${Number(v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>`;
+    const tbodyEl = document.getElementById('ddTableBody');
+    if (tbodyEl) {
+        tbodyEl.innerHTML = items.map(r => {
+            const costs = r.costs || [r.period1_cost, r.period2_cost];
+            const costCells = lbls.map((_, i) => {
+                const v = (costs && costs[i] != null) ? costs[i] : 0;
+                return `<td>${sym}${Number(v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>`;
+            }).join('');
+            const diff = r.difference || 0;
+            const changePct = r.change_pct || 0;
+            const barWidth = Math.max(4, Math.min(100, (Math.abs(diff) / maxDiff) * 100));
+            const barClass = diff > 0 ? 'up' : (diff < 0 ? 'down' : 'neutral');
+            const badgeClass = changePct > 0 ? 'up' : (changePct < 0 ? 'down' : 'neutral');
+            const arrow = changePct > 0 ? '▲' : (changePct < 0 ? '▼' : '–');
+            const full = String(r.name || '');
+            const disp = r.display_name ? String(r.display_name) : ddShortName(full);
+            const esc = disp.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            const escFull = full.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            return `<tr>
+                <td style="font-weight:500" title="${escFull}">${esc}</td>
+                ${costCells}
+                <td style="color:${diff > 0 ? 'var(--red)' : 'var(--green)'};font-weight:500">
+                    ${diff > 0 ? '+' : ''}${sym}${Number(diff).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+                </td>
+                <td><span class="cmp-badge ${badgeClass}">${arrow} ${Math.abs(changePct).toFixed(1)}%</span></td>
+                <td><span class="trend-bar ${barClass}" style="width:${barWidth}px"></span></td>
+            </tr>`;
         }).join('');
-        const barWidth = Math.max(4, Math.min(100, Math.abs(r.difference) / maxDiff * 100));
-        const barClass = r.difference > 0 ? 'up' : (r.difference < 0 ? 'down' : 'neutral');
-        const badgeClass = r.change_pct > 0 ? 'up' : (r.change_pct < 0 ? 'down' : 'neutral');
-        const arrow = r.change_pct > 0 ? '▲' : (r.change_pct < 0 ? '▼' : '–');
-        const esc = String(r.name).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-        return `<tr>
-            <td style="font-weight:500">${esc}</td>
-            ${costCells}
-            <td style="color:${r.difference > 0 ? 'var(--red)' : 'var(--green)'};font-weight:500">
-                ${r.difference > 0 ? '+' : ''}$${r.difference.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
-            </td>
-            <td><span class="cmp-badge ${badgeClass}">${arrow} ${Math.abs(r.change_pct).toFixed(1)}%</span></td>
-            <td><span class="trend-bar ${barClass}" style="width:${barWidth}px"></span></td>
-        </tr>`;
-    }).join('');
+    }
 
-    document.getElementById('drilldownChartTitle').textContent = `${key} Breakdown`;
+    const titleEl = document.getElementById('ddChartTitle');
+    const tableTitleEl = document.getElementById('ddBreakdownTableTitle');
+    if (titleEl) titleEl.textContent = `${key} Breakdown`;
+    if (tableTitleEl) tableTitleEl.textContent = `${key} Breakdown details (${items.length} items)`;
+
     const top10 = items.slice(0, 10);
     const datasets = lbls.map((lb, i) => ({
         label: lb,
@@ -5289,21 +5936,18 @@ function renderDrilldownTab(key) {
         borderRadius: 6,
         barPercentage: nc > 3 ? 0.65 : 0.4,
     }));
-    renderChart('drilldownBarChart', 'bar', {
-        labels: top10.map(r => r.name.length > 25 ? r.name.substring(0, 25) + '...' : r.name),
+    renderChart('ddBarChart', 'bar', {
+        labels: top10.map(r => {
+            const s = r.display_name ? String(r.display_name) : ddShortName(r.name);
+            return s.length > 25 ? s.substring(0, 25) + '...' : s;
+        }),
         datasets,
     }, key);
 }
 
-function closeDrilldown(event) {
-    if (event && event.target !== event.currentTarget) return;
-    document.getElementById('drilldownModal').style.display = 'none';
-}
-
-// Close modal on Escape key
+// Close RG dropdown on Escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        closeDrilldown();
         document.getElementById('cmpRGDropdown').style.display = 'none';
     }
 });

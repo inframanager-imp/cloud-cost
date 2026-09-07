@@ -1,19 +1,8 @@
 flask==3.1.0
-gunicorn==22.0.0
-# PostgreSQL driver (replacing the stdlib sqlite3 data layer)
-psycopg2-binary==2.9.10
-azure-identity==1.19.0
-azure-mgmt-costmanagement==4.0.1
-azure-mgmt-resource==23.2.0
-azure-mgmt-resourcegraph==8.0.0
-python-dotenv==1.0.1
 requests==2.32.3
-pandas>=2.0.0
-# AWS billing ingestion (optional — needed for AWS Cost Explorer)
-boto3>=1.34.0
-botocore>=1.34.0
-# GCP billing ingestion (optional — needed for GCP BigQuery export mode)
-google-auth>=2.28.0
-google-auth-httplib2>=0.2.0
-google-cloud-bigquery>=3.17.0
-google-cloud-logging>=3.11.0
+python-dotenv==1.0.1
+
+# Production WSGI server. Flask's built-in server must not face a network —
+# run `waitress-serve --listen=127.0.0.1:3000 server:app` behind nginx.
+# waitress works on both Linux and Windows; on Linux gunicorn is fine too.
+waitress>=3.0,<4

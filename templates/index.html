@@ -723,6 +723,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span>Current Month</span>
                             <span style="font-size:10px;color:#2563EB">✓</span>
                         </div>
+                        <div class="custom-period-option" onclick="selectAnaHomePeriodOption('last_month', 'Last Month', event)">
+                            <span>Last Month</span>
+                        </div>
+                        <div class="custom-period-option" onclick="selectAnaHomePeriodOption('7d', 'Last 7 Days', event)">
+                            <span>Last 7 Days</span>
+                        </div>
+                        <div class="custom-period-option" onclick="selectAnaHomePeriodOption('15d', 'Last 15 Days', event)">
+                            <span>Last 15 Days</span>
+                        </div>
                         <div class="custom-period-option" onclick="selectAnaHomePeriodOption('30d', 'Last 30 Days', event)">
                             <span>Last 30 Days</span>
                         </div>
@@ -731,12 +740,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="custom-period-option" onclick="selectAnaHomePeriodOption('90d', 'Last 90 Days', event)">
                             <span>Last 90 Days</span>
-                        </div>
-                        <div class="custom-period-option" onclick="selectAnaHomePeriodOption('7d', 'Last 7 Days', event)">
-                            <span>Last 7 Days</span>
-                        </div>
-                        <div class="custom-period-option" onclick="selectAnaHomePeriodOption('15d', 'Last 15 Days', event)">
-                            <span>Last 15 Days</span>
                         </div>
                         <div class="custom-period-option" onclick="selectAnaHomePeriodOption('6m', 'Last 6 Months', event)">
                             <span>Last 6 Months</span>
@@ -907,21 +910,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 <!-- Custom Date Range Preset Dropdown -->
                 <div class="custom-period-dropdown" id="customPeriodDropdown">
                     <button type="button" class="custom-period-trigger" id="customPeriodTrigger" onclick="togglePeriodDropdown(event)">
-                        <span id="customPeriodTriggerLabel">Last 30 Days</span>
+                        <span id="customPeriodTriggerLabel">Current Month</span>
                         <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="6 9 12 15 18 9"/>
                         </svg>
                     </button>
                     <div class="custom-period-menu" id="customPeriodMenu">
+                        <div class="custom-period-option active" onclick="selectPeriodOption('this_month', 'Current Month', event)">
+                            <span>Current Month</span>
+                            <span style="font-size:10px;color:#2563EB">✓</span>
+                        </div>
+                        <div class="custom-period-option" onclick="selectPeriodOption('last_month', 'Last Month', event)">
+                            <span>Last Month</span>
+                        </div>
                         <div class="custom-period-option" onclick="selectPeriodOption('7d', 'Last 7 Days', event)">
                             <span>Last 7 Days</span>
                         </div>
                         <div class="custom-period-option" onclick="selectPeriodOption('15d', 'Last 15 Days', event)">
                             <span>Last 15 Days</span>
                         </div>
-                        <div class="custom-period-option active" onclick="selectPeriodOption('30d', 'Last 30 Days', event)">
+                        <div class="custom-period-option" onclick="selectPeriodOption('30d', 'Last 30 Days', event)">
                             <span>Last 30 Days</span>
-                            <span style="font-size:10px;color:#2563EB">✓</span>
                         </div>
                         <div class="custom-period-option" onclick="selectPeriodOption('60d', 'Last 60 Days', event)">
                             <span>Last 60 Days</span>
@@ -1453,188 +1462,211 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         </div>
 
-        <!-- Unified filter strip -->
+        <!-- Unified filter strip (2 rows: Row 1 = Search + Cloud, Row 2 = Date Range, Group By, View, Client) -->
         <div class="cost-filter-strip">
-            <div class="cost-filter-field cost-filter-field--grow">
-                <label class="cost-filter-label">Search</label>
-                <div class="cost-search-wrap">
-                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                    <input type="text" id="costSearch" class="cost-search-input" placeholder="Resources, services, groups…">
+            <!-- Row 1: Search & Cloud -->
+            <div class="cost-filter-strip__row">
+                <div class="cost-filter-field cost-filter-field--grow" style="flex:1;min-width:240px">
+                    <label class="cost-filter-label">Search</label>
+                    <div class="cost-search-wrap">
+                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        <input type="text" id="costSearch" class="cost-search-input" placeholder="Resources, services, groups…">
+                    </div>
                 </div>
-            </div>
-            <div class="cost-filter-field">
-                <label class="cost-filter-label">Cloud</label>
-                <div class="cp-segmented cp-segmented--cloud">
-                    <button class="cp-seg cp-seg--cloud active" data-costs-cloud="azure" onclick="setCostsCloud(this,'azure')">
-                        <img src="/static/img/azure-logo.svg" alt="">Azure
-                    </button>
-                    <button class="cp-seg cp-seg--cloud" data-costs-cloud="aws" onclick="setCostsCloud(this,'aws')">
-                        <img src="/static/img/aws-logo.svg" alt="">AWS
-                    </button>
-                    <button class="cp-seg cp-seg--cloud" data-costs-cloud="gcp" onclick="setCostsCloud(this,'gcp')">
-                        <img src="/static/img/gcp-logo.svg" alt="">GCP
-                    </button>
-                    <button class="cp-seg cp-seg--cloud" data-costs-cloud="openai" onclick="setCostsCloud(this,'openai')">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="cp-seg__icon" style="color:#10a37f"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0L4.06 14.2A4.501 4.501 0 0 1 2.34 7.895zm16.597 3.855l-5.843-3.369 2.02-1.168a.076.076 0 0 1 .071 0l4.757 2.746a4.494 4.494 0 0 1-.695 8.104v-5.678a.79.79 0 0 0-.31-.635zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.756-2.746a4.5 4.5 0 0 1 6.679 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.392.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>OpenAI
-                    </button>
-                    <button class="cp-seg cp-seg--cloud" data-costs-cloud="chatgpt" onclick="setCostsCloud(this,'chatgpt')">
-                        <img src="/static/img/chatgpt-logo.svg" alt="" class="cp-seg__icon" style="width:14px;height:14px">ChatGPT
-                    </button>
-                    <button class="cp-seg cp-seg--cloud" data-costs-cloud="atlassian" onclick="setCostsCloud(this,'atlassian')">
-                        <svg width="14" height="14" viewBox="0 0 32 32" class="cp-seg__icon"><defs><linearGradient id="atlsg" x1="50%" y1="40%" x2="0%" y2="100%"><stop offset="0" stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs><path fill="url(#atlsg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/><path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/></svg>Atlassian
-                    </button>
-                    <button class="cp-seg cp-seg--cloud" data-costs-cloud="cursor" onclick="setCostsCloud(this,'cursor')">
-                        <img src="/static/img/cursor-logo.svg" alt="" class="cp-seg__icon" style="width:14px;height:14px">Cursor
-                    </button>
-                </div>
-            </div>
-            <div class="cost-filter-field" id="costDateRangeField">
-                <label class="cost-filter-label">Date range</label>
-                <div class="cost-date-range">
-                    <!-- Single calendar range picker (flatpickr). It keeps the hidden
-                         costDateFrom/costDateTo inputs in sync so existing code works. -->
-                    <input type="text" class="cost-date-range__input cd-range-box" id="costDateRange" placeholder="Select date range…" readonly>
-                    <input type="hidden" id="costDateFrom">
-                    <input type="hidden" id="costDateTo">
-                </div>
-            </div>
-            <div class="cost-filter-field" id="costGroupByWrap">
-                <label class="cost-filter-label">Group by</label>
-                <select class="cost-filter-input" id="costGroupBy" onchange="loadCostsTable()">
-                    <option value="resource_group" id="costGroupByRgOpt">Resource Group</option>
-                    <option value="service">Service</option>
-                    <option value="resource">Resource (line items)</option>
-                    <option value="user" id="costGroupByUserOpt" style="display:none">User</option>
-                    <option value="oai_model" class="oai-gb-opt" style="display:none">Model</option>
-                    <option value="oai_apikey" class="oai-gb-opt" style="display:none">API Key</option>
-                    <option value="oai_capability" class="oai-gb-opt" style="display:none">API Capability</option>
-                    <option value="oai_category" class="oai-gb-opt" style="display:none">Spend Category</option>
-                    <option value="cur_model" class="cur-gb-opt" style="display:none">Model</option>
-                    <option value="cur_user_model" class="cur-gb-opt" style="display:none">User × Model</option>
-                </select>
-            </div>
-            <div class="cost-filter-field">
-                <label class="cost-filter-label">View</label>
-                <select class="cost-filter-input" id="costGranularity" onchange="loadCostsTable()">
-                    <option value="daily">Daily</option>
-                    <option value="monthly" selected>Monthly</option>
-                </select>
-            </div>
-            <div class="cost-filter-field" id="costResourceTypeWrap" style="display:none">
-                <label class="cost-filter-label">Resource Type</label>
-                <select class="cost-filter-input" id="costResourceType" onchange="loadCostsTable()">
-                    <option value="">All</option>
-                    <option value="EC2 Instance">EC2 Instances</option>
-                    <option value="EBS Volume">EBS Volumes</option>
-                    <option value="NAT Gateway">NAT Gateways</option>
-                    <option value="Load Balancer">Load Balancers</option>
-                    <option value="Network Interface">Network Interfaces</option>
-                </select>
-            </div>
-            <div class="cost-filter-field" id="costAccountWrap" style="position:relative;display:none">
-                <label class="cost-filter-label" id="costAccountLabel">Account / Subscription</label>
-                <div class="multiselect" id="cdAccMultiselect">
-                    <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('acc')">
-                        <span id="cdAccTriggerText" class="multiselect__placeholder">All</span>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                    </button>
-                    <div class="multiselect__panel" id="cdAccPanel" hidden>
-                        <input class="multiselect__search" id="cdAccSearch" placeholder="Search accounts..." oninput="cdFilterList('acc')">
-                        <div class="multiselect__actions">
-                            <button class="btn-link" onclick="cdSelectAll('acc')">Select all</button>
-                            <button class="btn-link" onclick="cdDeselectAll('acc')">Clear</button>
-                        </div>
-                        <div class="multiselect__options" id="cdAccList"></div>
+                <div class="cost-filter-field">
+                    <label class="cost-filter-label">Cloud</label>
+                    <div class="cp-segmented cp-segmented--cloud">
+                        <button class="cp-seg cp-seg--cloud active" data-costs-cloud="azure" onclick="setCostsCloud(this,'azure')">
+                            <img src="/static/img/azure-logo.svg" alt="">Azure
+                        </button>
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="aws" onclick="setCostsCloud(this,'aws')">
+                            <img src="/static/img/aws-logo.svg" alt="">AWS
+                        </button>
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="gcp" onclick="setCostsCloud(this,'gcp')">
+                            <img src="/static/img/gcp-logo.svg" alt="">GCP
+                        </button>
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="openai" onclick="setCostsCloud(this,'openai')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="cp-seg__icon" style="color:#10a37f"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0L4.06 14.2A4.501 4.501 0 0 1 2.34 7.895zm16.597 3.855l-5.843-3.369 2.02-1.168a.076.076 0 0 1 .071 0l4.757 2.746a4.494 4.494 0 0 1-.695 8.104v-5.678a.79.79 0 0 0-.31-.635zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.756-2.746a4.5 4.5 0 0 1 6.679 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.392.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>OpenAI
+                        </button>
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="chatgpt" onclick="setCostsCloud(this,'chatgpt')">
+                            <img src="/static/img/chatgpt-logo.svg" alt="" class="cp-seg__icon" style="width:14px;height:14px">ChatGPT
+                        </button>
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="atlassian" onclick="setCostsCloud(this,'atlassian')">
+                            <svg width="14" height="14" viewBox="0 0 32 32" class="cp-seg__icon"><defs><linearGradient id="atlsg" x1="50%" y1="40%" x2="0%" y2="100%"><stop offset="0" stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs><path fill="url(#atlsg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/><path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/></svg>Atlassian
+                        </button>
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="cursor" onclick="setCostsCloud(this,'cursor')">
+                            <img src="/static/img/cursor-logo.svg" alt="" class="cp-seg__icon" style="width:14px;height:14px">Cursor
+                        </button>
                     </div>
                 </div>
             </div>
-            <div class="cost-filter-field" id="costRGWrap" style="position:relative;display:none">
-                <label class="cost-filter-label" id="costRGLabel">Project</label>
-                <div class="multiselect" id="cdRgMultiselect">
-                    <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('rg')">
-                        <span id="cdRgTriggerText" class="multiselect__placeholder">All</span>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                    </button>
-                    <div class="multiselect__panel" id="cdRgPanel" hidden>
-                        <input class="multiselect__search" id="cdRgSearch" placeholder="Search..." oninput="cdFilterList('rg')">
-                        <div class="multiselect__actions">
-                            <button class="btn-link" onclick="cdSelectAll('rg')">Select all</button>
-                            <button class="btn-link" onclick="cdDeselectAll('rg')">Clear</button>
-                        </div>
-                        <div class="multiselect__options" id="cdRgList"></div>
+
+            <!-- Row 2: Date Range, Group By, View, Client, and other filters -->
+            <div class="cost-filter-strip__row">
+                <div class="cost-filter-field" id="costDateRangeField">
+                    <label class="cost-filter-label">Date range</label>
+                    <div class="cost-date-range">
+                        <!-- Single calendar range picker (flatpickr). It keeps the hidden
+                             costDateFrom/costDateTo inputs in sync so existing code works. -->
+                        <input type="text" class="cost-date-range__input cd-range-box" id="costDateRange" placeholder="Select date range…" readonly>
+                        <input type="hidden" id="costDateFrom">
+                        <input type="hidden" id="costDateTo">
                     </div>
                 </div>
-            </div>
-            <div class="cost-filter-field" style="position:relative;display:none">
-                <label class="cost-filter-label">Service</label>
-                <div class="multiselect" id="cdSvcMultiselect">
-                    <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('svc')">
-                        <span id="cdSvcTriggerText" class="multiselect__placeholder">All</span>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                    </button>
-                    <div class="multiselect__panel" id="cdSvcPanel" hidden>
-                        <input class="multiselect__search" id="cdSvcSearch" placeholder="Search..." oninput="cdFilterList('svc')">
-                        <div class="multiselect__actions">
-                            <button class="btn-link" onclick="cdSelectAll('svc')">Select all</button>
-                            <button class="btn-link" onclick="cdDeselectAll('svc')">Clear</button>
+                <!-- Group By -->
+                <div class="cost-filter-field" id="costGroupByWrap" style="position:relative">
+                    <label class="cost-filter-label">Group by</label>
+                    <div class="cost-custom-dropdown" id="costGroupByCustomDropdown">
+                        <button type="button" class="cost-custom-trigger" id="costGroupByTrigger" onclick="toggleCostCustomDropdown('costGroupBy', event)">
+                            <span id="costGroupByTriggerLabel">Resource (line items)</span>
+                            <svg class="dropdown-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cost-custom-menu" id="costGroupByMenu"></div>
+                    </div>
+                    <select class="cost-filter-input" id="costGroupBy" onchange="loadCostsTable()" style="display:none">
+                        <option value="resource_group" id="costGroupByRgOpt">Resource Group</option>
+                        <option value="service">Service</option>
+                        <option value="resource" selected>Resource (line items)</option>
+                        <option value="user" id="costGroupByUserOpt" style="display:none">User</option>
+                        <option value="oai_model" class="oai-gb-opt" style="display:none">Model</option>
+                        <option value="oai_apikey" class="oai-gb-opt" style="display:none">API Key</option>
+                        <option value="oai_capability" class="oai-gb-opt" style="display:none">API Capability</option>
+                        <option value="oai_category" class="oai-gb-opt" style="display:none">Spend Category</option>
+                        <option value="cur_model" class="cur-gb-opt" style="display:none">Model</option>
+                        <option value="cur_user_model" class="cur-gb-opt" style="display:none">User × Model</option>
+                    </select>
+                </div>
+
+                <!-- View -->
+                <div class="cost-filter-field" style="position:relative">
+                    <label class="cost-filter-label">View</label>
+                    <div class="cost-custom-dropdown" id="costGranularityCustomDropdown">
+                        <button type="button" class="cost-custom-trigger" id="costGranularityTrigger" onclick="toggleCostCustomDropdown('costGranularity', event)">
+                            <span id="costGranularityTriggerLabel">Monthly</span>
+                            <svg class="dropdown-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cost-custom-menu" id="costGranularityMenu"></div>
+                    </div>
+                    <select class="cost-filter-input" id="costGranularity" onchange="loadCostsTable()" style="display:none">
+                        <option value="daily">Daily</option>
+                        <option value="monthly" selected>Monthly</option>
+                    </select>
+                </div>
+
+                <!-- Resource Type (if visible) -->
+                <div class="cost-filter-field" id="costResourceTypeWrap" style="position:relative;display:none">
+                    <label class="cost-filter-label">Resource Type</label>
+                    <div class="cost-custom-dropdown" id="costResourceTypeCustomDropdown">
+                        <button type="button" class="cost-custom-trigger" id="costResourceTypeTrigger" onclick="toggleCostCustomDropdown('costResourceType', event)">
+                            <span id="costResourceTypeTriggerLabel">All</span>
+                            <svg class="dropdown-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cost-custom-menu" id="costResourceTypeMenu"></div>
+                    </div>
+                    <select class="cost-filter-input" id="costResourceType" onchange="loadCostsTable()" style="display:none">
+                        <option value="">All</option>
+                    </select>
+                </div>
+                <div class="cost-filter-field" id="costAccountWrap" style="position:relative;display:none">
+                    <label class="cost-filter-label" id="costAccountLabel">Account / Subscription</label>
+                    <div class="multiselect" id="cdAccMultiselect">
+                        <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('acc')">
+                            <span id="cdAccTriggerText" class="multiselect__placeholder">All</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="multiselect__panel" id="cdAccPanel" hidden>
+                            <input class="multiselect__search" id="cdAccSearch" placeholder="Search accounts..." oninput="cdFilterList('acc')">
+                            <div class="multiselect__actions">
+                                <button class="btn-link" onclick="cdSelectAll('acc')">Select all</button>
+                                <button class="btn-link" onclick="cdDeselectAll('acc')">Clear</button>
+                            </div>
+                            <div class="multiselect__options" id="cdAccList"></div>
                         </div>
-                        <div class="multiselect__options" id="cdSvcList"></div>
                     </div>
                 </div>
-            </div>
-            <div class="cost-filter-field" style="position:relative;display:none">
-                <label class="cost-filter-label">Resource</label>
-                <div class="multiselect" id="cdResMultiselect">
-                    <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('res')">
-                        <span id="cdResTriggerText" class="multiselect__placeholder">All</span>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                    </button>
-                    <div class="multiselect__panel" id="cdResPanel" hidden>
-                        <input class="multiselect__search" id="cdResSearch" placeholder="Search..." oninput="cdFilterList('res')">
-                        <div class="multiselect__actions">
-                            <button class="btn-link" onclick="cdSelectAll('res')">Select all</button>
-                            <button class="btn-link" onclick="cdDeselectAll('res')">Clear</button>
+                <div class="cost-filter-field" id="costRGWrap" style="position:relative;display:none">
+                    <label class="cost-filter-label" id="costRGLabel">Project</label>
+                    <div class="multiselect" id="cdRgMultiselect">
+                        <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('rg')">
+                            <span id="cdRgTriggerText" class="multiselect__placeholder">All</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="multiselect__panel" id="cdRgPanel" hidden>
+                            <input class="multiselect__search" id="cdRgSearch" placeholder="Search..." oninput="cdFilterList('rg')">
+                            <div class="multiselect__actions">
+                                <button class="btn-link" onclick="cdSelectAll('rg')">Select all</button>
+                                <button class="btn-link" onclick="cdDeselectAll('rg')">Clear</button>
+                            </div>
+                            <div class="multiselect__options" id="cdRgList"></div>
                         </div>
-                        <div class="multiselect__options" id="cdResList"></div>
                     </div>
                 </div>
-            </div>
-            <div class="cost-filter-field">
-                <label class="cost-filter-label">Client</label>
-                <select id="costsClientFilter" class="cost-filter-input" onchange="loadCostsTable()">
-                    <option value="">All Clients</option>
-                </select>
-            </div>
-            <div class="cost-filter-field" style="align-self:flex-end;padding-bottom:1px">
-                <button class="cp-btn-secondary" onclick="resetCostFilters()" style="height:30px;font-size:12px;padding:0 10px">Reset</button>
+                <div class="cost-filter-field" style="position:relative;display:none">
+                    <label class="cost-filter-label">Service</label>
+                    <div class="multiselect" id="cdSvcMultiselect">
+                        <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('svc')">
+                            <span id="cdSvcTriggerText" class="multiselect__placeholder">All</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="multiselect__panel" id="cdSvcPanel" hidden>
+                            <input class="multiselect__search" id="cdSvcSearch" placeholder="Search..." oninput="cdFilterList('svc')">
+                            <div class="multiselect__actions">
+                                <button class="btn-link" onclick="cdSelectAll('svc')">Select all</button>
+                                <button class="btn-link" onclick="cdDeselectAll('svc')">Clear</button>
+                            </div>
+                            <div class="multiselect__options" id="cdSvcList"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="cost-filter-field" style="position:relative;display:none">
+                    <label class="cost-filter-label">Resource</label>
+                    <div class="multiselect" id="cdResMultiselect">
+                        <button type="button" class="multiselect__trigger" onclick="cdTogglePanel('res')">
+                            <span id="cdResTriggerText" class="multiselect__placeholder">All</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="multiselect__panel" id="cdResPanel" hidden>
+                            <input class="multiselect__search" id="cdResSearch" placeholder="Search..." oninput="cdFilterList('res')">
+                            <div class="multiselect__actions">
+                                <button class="btn-link" onclick="cdSelectAll('res')">Select all</button>
+                                <button class="btn-link" onclick="cdDeselectAll('res')">Clear</button>
+                            </div>
+                            <div class="multiselect__options" id="cdResList"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Client -->
+                <div class="cost-filter-field" style="position:relative">
+                    <label class="cost-filter-label">Client</label>
+                    <div class="cost-custom-dropdown" id="costsClientFilterCustomDropdown">
+                        <button type="button" class="cost-custom-trigger" id="costsClientFilterTrigger" onclick="toggleCostCustomDropdown('costsClientFilter', event)">
+                            <span id="costsClientFilterTriggerLabel">All Clients</span>
+                            <svg class="dropdown-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cost-custom-menu" id="costsClientFilterMenu"></div>
+                    </div>
+                    <select id="costsClientFilter" class="cost-filter-input" onchange="loadCostsTable()" style="display:none">
+                        <option value="">All Clients</option>
+                    </select>
+                </div>
+                <div class="cost-filter-field" style="align-self:flex-end;padding-bottom:1px">
+                    <button class="cp-btn-secondary" onclick="resetCostFilters()" style="height:30px;font-size:12px;padding:0 10px">Reset</button>
+                </div>
             </div>
         </div>
 
-        <!-- Sub-table card (totals by subscription / account / project) -->
-        <div class="sub-table-card">
-            <div class="sub-table-card__head">
-                <span class="sub-table-card__title" id="costsSubTitle">Total by Subscription / Account / Project</span>
+        <!-- Sub-table card (totals by subscription / account / project as KPIs) -->
+        <div class="sub-table-card" id="costsSubCard" style="margin-bottom:16px">
+            <div class="sub-table-card__head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:12px 16px">
+                <span class="sub-table-card__title" id="costsSubTitle" style="font-size:13px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em">Total Cost by Subscription (Selected Dates)</span>
+                <span id="costsSubTotalBadge" style="font-size:11px;font-weight:600;color:var(--text-secondary);background:var(--bg-page);padding:3px 10px;border-radius:6px;border:1px solid var(--border-default)"></span>
             </div>
-            <div class="table-container" style="max-height:320px;overflow:auto">
-                <table>
-                    <thead>
-                        <tr>
-                            <th id="costSubCloudHeader" style="display:none;cursor:pointer;white-space:nowrap" onclick="sortSubTable('cloud')">Cloud <span id="sub-sort-cloud" class="sort-indicator">↕</span></th>
-                            <th id="costSubAccHeader" style="display:none;cursor:pointer;white-space:nowrap" onclick="sortSubTable('account')">Account <span id="sub-sort-account" class="sort-indicator">↕</span></th>
-                            <th id="costSubColHeader" style="cursor:pointer;white-space:nowrap" onclick="sortSubTable('name')">Account / Subscription / Project <span id="sub-sort-name" class="sort-indicator">↕</span></th>
-                            <th style="text-align:right;cursor:pointer;white-space:nowrap" onclick="sortSubTable('cost')">Cost <span id="sub-sort-cost" class="sort-indicator">↑</span></th>
-                        </tr>
-                    </thead>
-                    <tbody id="costBySubscriptionBody">
-                        <tr>
-                            <td colspan="4" style="text-align:center;padding:25px;color:var(--text-secondary)">
-                                Select dates and load cost data to see totals.
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div id="costBySubscriptionGrid" class="cost-sub-kpi-grid">
+                <div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:12px;grid-column:1/-1">
+                    Select dates and load cost data to see subscription totals.
+                </div>
             </div>
         </div>
 
@@ -1880,13 +1912,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="filter-bar__field">
                     <span class="micro-label">Cloud</span>
                     <div class="segmented-control segmented-control--small">
-                        <button class="seg active" data-cmp-cloud="azure" onclick="setCmpCloud(this,'azure')">Azure</button>
-                        <button class="seg" data-cmp-cloud="aws" onclick="setCmpCloud(this,'aws')">AWS</button>
-                        <button class="seg" data-cmp-cloud="gcp" onclick="setCmpCloud(this,'gcp')">GCP</button>
-                        <button class="seg" data-cmp-cloud="openai" onclick="setCmpCloud(this,'openai')">OpenAI</button>
-                        <button class="seg" data-cmp-cloud="chatgpt" onclick="setCmpCloud(this,'chatgpt')">ChatGPT</button>
-                        <button class="seg" data-cmp-cloud="atlassian" onclick="setCmpCloud(this,'atlassian')">Atlassian</button>
-                        <button class="seg" data-cmp-cloud="cursor" onclick="setCmpCloud(this,'cursor')">Cursor</button>
+                        <button class="seg active" data-cmp-cloud="azure" onclick="setCmpCloud(this,'azure')">
+                            <img src="/static/img/azure-logo.svg" alt="" style="width:13px;height:13px">Azure
+                        </button>
+                        <button class="seg" data-cmp-cloud="aws" onclick="setCmpCloud(this,'aws')">
+                            <img src="/static/img/aws-logo.svg" alt="" style="width:13px;height:13px">AWS
+                        </button>
+                        <button class="seg" data-cmp-cloud="gcp" onclick="setCmpCloud(this,'gcp')">
+                            <img src="/static/img/gcp-logo.svg" alt="" style="width:13px;height:13px">GCP
+                        </button>
+                        <button class="seg" data-cmp-cloud="openai" onclick="setCmpCloud(this,'openai')">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="color:#10a37f"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0L4.06 14.2A4.501 4.501 0 0 1 2.34 7.895zm16.597 3.855l-5.843-3.369 2.02-1.168a.076.076 0 0 1 .071 0l4.757 2.746a4.494 4.494 0 0 1-.695 8.104v-5.678a.79.79 0 0 0-.31-.635zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.756-2.746a4.5 4.5 0 0 1 6.679 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.392.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>OpenAI
+                        </button>
+                        <button class="seg" data-cmp-cloud="chatgpt" onclick="setCmpCloud(this,'chatgpt')">
+                            <img src="/static/img/chatgpt-logo.svg" alt="" style="width:13px;height:13px">ChatGPT
+                        </button>
+                        <button class="seg" data-cmp-cloud="atlassian" onclick="setCmpCloud(this,'atlassian')">
+                            <svg width="13" height="13" viewBox="0 0 32 32"><defs><linearGradient id="cmpatlsg" x1="50%" y1="40%" x2="0%" y2="100%"><stop offset="0" stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs><path fill="url(#cmpatlsg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/><path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/></svg>Atlassian
+                        </button>
+                        <button class="seg" data-cmp-cloud="cursor" onclick="setCmpCloud(this,'cursor')">
+                            <img src="/static/img/cursor-logo.svg" alt="" style="width:13px;height:13px">Cursor
+                        </button>
                     </div>
                 </div>
 
@@ -1945,33 +1991,75 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <!-- Row 2a: Monthly periods (visible when mode=monthly) -->
-            <div class="filter-bar__row cmp-monthly" id="cmpMonthlySection" style="margin-top:10px;flex-wrap:wrap">
-                <div class="filter-bar__field">
+            <div class="filter-bar__row cmp-monthly" id="cmpMonthlySection" style="margin-top:10px;flex-wrap:wrap;align-items:flex-end;gap:10px">
+                <div class="filter-bar__field" id="cmpMonthWrap1">
                     <span class="micro-label">Period 1</span>
-                    <select class="filter-bar__select cmp-month-select" id="cmpMonth1"></select>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth1" style="display:none"></select>
+                    <div class="cmp-period-dd-wrap" id="cmpCustomDropdown1">
+                        <button type="button" class="cmp-period-dd-trigger" id="cmpCustomTrigger1" onclick="toggleCmpMonthDropdown(1, event)">
+                            <span class="cmp-period-dd-label" id="cmpCustomLabel1">Select Month</span>
+                            <svg class="cmp-period-dd-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cmp-period-dd-menu" id="cmpCustomMenu1"></div>
+                    </div>
                 </div>
-                <span class="period-arrow">→</span>
-                <div class="filter-bar__field">
+                <span class="period-arrow" style="margin-bottom:8px">→</span>
+                <div class="filter-bar__field" id="cmpMonthWrap2">
                     <span class="micro-label">Period 2</span>
-                    <select class="filter-bar__select cmp-month-select" id="cmpMonth2"></select>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth2" style="display:none"></select>
+                    <div class="cmp-period-dd-wrap" id="cmpCustomDropdown2">
+                        <button type="button" class="cmp-period-dd-trigger" id="cmpCustomTrigger2" onclick="toggleCmpMonthDropdown(2, event)">
+                            <span class="cmp-period-dd-label" id="cmpCustomLabel2">Select Month</span>
+                            <svg class="cmp-period-dd-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cmp-period-dd-menu" id="cmpCustomMenu2"></div>
+                    </div>
                 </div>
                 <div id="cmpMonthWrap3" class="filter-bar__field" style="display:none">
                     <span class="micro-label">Period 3 <button class="period-remove" onclick="cmpRemovePeriod(3)" title="Remove">×</button></span>
-                    <select class="filter-bar__select cmp-month-select" id="cmpMonth3"></select>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth3" style="display:none"></select>
+                    <div class="cmp-period-dd-wrap" id="cmpCustomDropdown3">
+                        <button type="button" class="cmp-period-dd-trigger" id="cmpCustomTrigger3" onclick="toggleCmpMonthDropdown(3, event)">
+                            <span class="cmp-period-dd-label" id="cmpCustomLabel3">Select Month</span>
+                            <svg class="cmp-period-dd-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cmp-period-dd-menu" id="cmpCustomMenu3"></div>
+                    </div>
                 </div>
                 <div id="cmpMonthWrap4" class="filter-bar__field" style="display:none">
                     <span class="micro-label">Period 4 <button class="period-remove" onclick="cmpRemovePeriod(4)" title="Remove">×</button></span>
-                    <select class="filter-bar__select cmp-month-select" id="cmpMonth4"></select>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth4" style="display:none"></select>
+                    <div class="cmp-period-dd-wrap" id="cmpCustomDropdown4">
+                        <button type="button" class="cmp-period-dd-trigger" id="cmpCustomTrigger4" onclick="toggleCmpMonthDropdown(4, event)">
+                            <span class="cmp-period-dd-label" id="cmpCustomLabel4">Select Month</span>
+                            <svg class="cmp-period-dd-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cmp-period-dd-menu" id="cmpCustomMenu4"></div>
+                    </div>
                 </div>
                 <div id="cmpMonthWrap5" class="filter-bar__field" style="display:none">
                     <span class="micro-label">Period 5 <button class="period-remove" onclick="cmpRemovePeriod(5)" title="Remove">×</button></span>
-                    <select class="filter-bar__select cmp-month-select" id="cmpMonth5"></select>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth5" style="display:none"></select>
+                    <div class="cmp-period-dd-wrap" id="cmpCustomDropdown5">
+                        <button type="button" class="cmp-period-dd-trigger" id="cmpCustomTrigger5" onclick="toggleCmpMonthDropdown(5, event)">
+                            <span class="cmp-period-dd-label" id="cmpCustomLabel5">Select Month</span>
+                            <svg class="cmp-period-dd-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cmp-period-dd-menu" id="cmpCustomMenu5"></div>
+                    </div>
                 </div>
                 <div id="cmpMonthWrap6" class="filter-bar__field" style="display:none">
                     <span class="micro-label">Period 6 <button class="period-remove" onclick="cmpRemovePeriod(6)" title="Remove">×</button></span>
-                    <select class="filter-bar__select cmp-month-select" id="cmpMonth6"></select>
+                    <select class="filter-bar__select cmp-month-select" id="cmpMonth6" style="display:none"></select>
+                    <div class="cmp-period-dd-wrap" id="cmpCustomDropdown6">
+                        <button type="button" class="cmp-period-dd-trigger" id="cmpCustomTrigger6" onclick="toggleCmpMonthDropdown(6, event)">
+                            <span class="cmp-period-dd-label" id="cmpCustomLabel6">Select Month</span>
+                            <svg class="cmp-period-dd-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cmp-period-dd-menu" id="cmpCustomMenu6"></div>
+                    </div>
                 </div>
-                <button class="cmp-add-period-btn" id="cmpAddPeriodBtn" onclick="cmpAddPeriod()">+ Add period</button>
+                <button class="cmp-add-period-btn" id="cmpAddPeriodBtn" onclick="cmpAddPeriod()" style="height:36px;display:flex;align-items:center">+ Add period</button>
             </div>
 
             <!-- Row 2b: Weekly periods (visible when mode=weekly) -->
@@ -2008,10 +2096,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <!-- Comparison Summary Cards -->
         <div id="cmpSummaryCards" class="stats-grid" style="margin-bottom:16px"></div>
 
-        <!-- Main layout: Table (left) + Charts (right) -->
+        <!-- Main layout: Full Width Table + Charts Below -->
         <div class="cmp-results-layout">
 
-            <!-- LEFT: Comparison Table -->
+            <!-- Comparison Table (Full Width) -->
             <div class="cmp-results-main">
                 <!-- Skeleton loader — same pattern as Monthly Costs -->
                 <div id="cmpTableLoader" class="skeleton-table-wrap" style="display:none">
@@ -2024,8 +2112,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="table-container" style="margin-bottom:0">
                     <div class="table-header">
-                        <h3 id="cmpTableTitle" style="font-size:14px;font-weight:500;margin:0">Comparison details</h3>
-                        <span id="cmpTableCount" style="font-size:13px;color:var(--text-secondary)"></span>
+                        <h3 id="cmpTableTitle" style="font-size:14px;font-weight:600;margin:0">Comparison details</h3>
+                        <span id="cmpTableCount" style="font-size:12px;color:var(--text-secondary);background:var(--bg-card);padding:2px 8px;border-radius:12px;border:1px solid var(--border-default)"></span>
                     </div>
                     <table>
                         <thead id="cmpTableHead">
@@ -2050,27 +2138,115 @@ document.addEventListener('DOMContentLoaded', () => {
                             </td></tr>
                         </tbody>
                     </table>
+                    <div id="cmpTablePagination" style="display:none;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--text-secondary);background:var(--card-bg);flex-wrap:wrap;gap:10px">
+                        <div id="cmpPaginationInfo">Showing 1 to 50 of 0 items</div>
+                        <div style="display:flex;align-items:center;gap:6px">
+                            <button id="cmpPagePrev" type="button" onclick="cmpChangePage(-1)" class="btn-secondary" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;background:var(--bg-card);border:1px solid var(--border-default);color:var(--text-primary)">Previous</button>
+                            <span id="cmpPageIndicator" style="font-weight:600;padding:0 6px;color:var(--text-primary)">Page 1 of 1</span>
+                            <button id="cmpPageNext" type="button" onclick="cmpChangePage(1)" class="btn-secondary" style="padding:4px 10px;font-size:12px;border-radius:6px;cursor:pointer;background:var(--bg-card);border:1px solid var(--border-default);color:var(--text-primary)">Next</button>
+                            <select id="cmpPageSize" onchange="cmpChangePageSize(this.value)" class="form-control" style="font-size:12px;padding:3px 8px;height:28px;border-radius:6px;margin-left:6px;cursor:pointer">
+                                <option value="50" selected>50 / page</option>
+                                <option value="100">100 / page</option>
+                                <option value="250">250 / page</option>
+                                <option value="500">500 / page</option>
+                                <option value="all">All</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- RIGHT: Charts sidebar -->
+            <!-- Charts Below Table in a 2-Column Grid -->
             <div class="cmp-results-charts">
                 <div class="chart-card cmp-chart-card">
                     <h3 id="cmpBarTitle" class="cmp-chart-title">Side-by-side</h3>
-                    <div style="position:relative;height:200px">
+                    <div style="position:relative;height:240px">
                         <div id="cmpBarLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
                         <canvas id="cmpBarChart"></canvas>
                     </div>
                 </div>
                 <div class="chart-card cmp-chart-card">
-                    <h3 class="cmp-chart-title">Change % by item</h3>
-                    <div style="position:relative;height:200px">
+                    <h3 id="cmpChangeTitle" class="cmp-chart-title">Change % by item</h3>
+                    <div style="position:relative;height:240px">
                         <div id="cmpChangeLoader" class="chart-loader"><div class="spinner"></div><span>Loading chart…</span></div>
                         <canvas id="cmpChangeChart"></canvas>
                     </div>
                 </div>
             </div>
 
+        </div>
+    </section>
+
+    <!-- ═══ Resource Cost Drilldown Page ═══════════════════════════════════ -->
+    <section id="page-drilldown" class="page-section">
+        <div class="cp-page-header" style="margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+                <button type="button" onclick="navigateTo('compare')" class="dd-back-arrow-btn" title="Back to Cost Comparison" aria-label="Back to Cost Comparison" style="background:transparent;border:none;padding:4px;cursor:pointer;color:#6B7280;display:inline-flex;align-items:center;justify-content:center">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="stroke:#6B7280">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                </button>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                    <div class="cp-breadcrumb" style="font-size:11.5px;color:var(--text-secondary);display:flex;align-items:center;gap:6px">
+                        <span style="cursor:pointer;color:var(--accent)" onclick="navigateTo('executive')">Dashboard</span>
+                        <span>/</span>
+                        <span style="cursor:pointer;color:var(--accent)" onclick="navigateTo('compare')">Cost Comparison</span>
+                        <span>/</span>
+                        <span id="ddBreadcrumbName" style="color:var(--text-primary);font-weight:600">Resource</span>
+                    </div>
+                    <h1 id="ddTitle" class="cp-page-title" style="font-size:18px;font-weight:700;margin:0;color:var(--text-primary);line-height:1.2">Resource Cost Drilldown</h1>
+                </div>
+            </div>
+            <div id="ddMeta" class="dd-meta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:4px"></div>
+        </div>
+
+        <!-- Compact Equidistant KPI Summary Cards (Visible Immediately) -->
+        <div id="ddSummary" class="stats-grid" style="margin-bottom:14px"></div>
+
+        <div id="ddLoading" class="dd-loading" style="text-align:center;padding:40px 20px;color:var(--text-secondary);font-size:13px;background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;margin-bottom:16px">
+            <div class="spinner" style="display:inline-block;width:22px;height:22px;margin-bottom:8px"></div>
+            <div>Loading breakdown details & charts...</div>
+        </div>
+        <div id="ddError" class="dd-error" style="display:none;text-align:center;padding:24px 20px;color:var(--red);background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;margin-bottom:16px"></div>
+
+        <div id="ddContent" style="display:none">
+
+            <!-- Breakdown Table with Integrated Segmented Tab Bar -->
+            <div class="table-container" style="margin-bottom:16px">
+                <div class="table-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                        <h3 id="ddBreakdownTableTitle" style="font-size:13.5px;font-weight:600;margin:0">Breakdown</h3>
+                        <div id="ddTabs" class="dd-segmented-tabs"></div>
+                    </div>
+                </div>
+                <div id="ddHint" style="display:none;margin:12px 14px;padding:10px 14px;border-radius:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);font-size:12.5px;color:var(--text-secondary)"></div>
+                <table>
+                    <thead id="ddTableHead">
+                        <tr>
+                            <th>Name</th>
+                            <th>Period 1</th>
+                            <th>Period 2</th>
+                            <th>Difference</th>
+                            <th>Change %</th>
+                            <th>Trend</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ddTableBody"></tbody>
+                </table>
+            </div>
+
+            <!-- 2-Column Grid for Daily Trend & Distribution -->
+            <div class="cmp-results-charts">
+                <div class="chart-card cmp-chart-card">
+                    <h3 class="cmp-chart-title">Daily Cost Trend</h3>
+                    <div style="position:relative;height:220px"><canvas id="ddTrendChart"></canvas></div>
+                </div>
+                <div class="chart-card cmp-chart-card">
+                    <h3 id="ddChartTitle" class="cmp-chart-title">Breakdown Distribution</h3>
+                    <div style="position:relative;height:220px"><canvas id="ddBarChart"></canvas></div>
+                </div>
+            </div>
         </div>
     </section>
 

@@ -355,23 +355,23 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .ch-inline { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); }
 
 /* ── Cost Data page ─────────────────────────────────────────────────────── */
-.cost-filter-strip { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; position: sticky; top: 0; z-index: 40; }
+.cost-filter-strip { display: flex; flex-direction: column; gap: 12px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; position: relative; }
+.cost-filter-strip__row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; width: 100%; }
 .cost-filter-field { display: flex; flex-direction: column; gap: 4px; }
-.cost-filter-field--grow { flex: 0 1 200px; max-width: 220px; }
+.cost-filter-field--grow { flex: 1 1 200px; }
 .cost-filter-label { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
 .cost-filter-input { height: 30px; padding: 0 8px; font-size: 12px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-page); color: var(--text-primary); outline: none; }
 .cost-filter-input:focus { border-color: var(--accent); }
 .cost-date-range { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-page); }
 .cost-date-range__input { height: 100%; padding: 0; font-size: 12px; border: none; background: transparent; color: var(--text-primary); outline: none; width: 108px; }
 .cost-date-range__sep { color: var(--text-tertiary); font-size: 12px; flex-shrink: 0; }
-.cost-search-wrap { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-page); }
+.cost-search-wrap { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-page); width: 100%; box-sizing: border-box; }
 .cost-search-wrap svg { flex-shrink: 0; color: var(--text-tertiary); }
 .cost-search-wrap:focus-within { border-color: var(--accent); }
 .cost-search-input { flex: 1; border: none; background: transparent; color: var(--text-primary); font-size: 12px; outline: none; min-width: 120px; }
 .cost-search-input::placeholder { color: var(--text-tertiary); }
 
 @media (max-width: 900px) {
-    .cost-filter-strip { position: static; }
     .cost-filter-field { flex: 1 1 160px; }
     .cost-filter-field--grow { flex: 1 1 100%; }
 }
@@ -486,10 +486,128 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .period-remove { background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; font-size: 11px; padding: 0 2px; margin-left: 2px; border-radius: 3px; line-height: 1; vertical-align: middle; }
 .period-remove:hover { background: var(--danger-bg); color: var(--danger-text); }
 
+/* Comparison Period Custom Dropdowns */
+.cmp-period-dd-wrap {
+    position: relative;
+    display: inline-block;
+}
+.cmp-period-dd-trigger {
+    height: 36px;
+    padding: 0 12px;
+    background: var(--bg-card, #FFFFFF);
+    color: var(--text-primary, #111827);
+    border: 1px solid var(--border-default, #E2E8F0);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    outline: none;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+    white-space: nowrap;
+    min-width: 205px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.cmp-period-dd-trigger:hover {
+    border-color: #2563EB;
+    background: var(--bg-hover, rgba(37, 99, 235, 0.03));
+}
+.cmp-period-dd-wrap.open .cmp-period-dd-trigger {
+    border-color: #2563EB;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.cmp-period-dd-wrap.open .cmp-period-dd-chevron {
+    transform: rotate(180deg);
+}
+.cmp-period-dd-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+.cmp-period-dd-cost-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #2563EB;
+    background: rgba(37, 99, 235, 0.08);
+    padding: 2px 7px;
+    border-radius: 12px;
+    font-variant-numeric: tabular-nums;
+}
+.cmp-period-dd-chevron {
+    color: var(--text-secondary, #64748B);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+.cmp-period-dd-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 235px;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--bg-card, #FFFFFF);
+    border: 1px solid var(--border-default, #CBD5E1);
+    border-radius: 10px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+    z-index: 1100;
+    padding: 6px;
+    box-sizing: border-box;
+}
+.cmp-period-dd-wrap.open .cmp-period-dd-menu {
+    display: block;
+}
+.cmp-period-dd-option {
+    padding: 8px 10px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-primary, #111827);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.cmp-period-dd-option:hover {
+    background: rgba(37, 99, 235, 0.06);
+    color: #2563EB;
+}
+.cmp-period-dd-option.active {
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563EB;
+    font-weight: 600;
+}
+.cmp-period-dd-option-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.cmp-period-dd-option-cost {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--bg-hover, rgba(0,0,0,0.04));
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-variant-numeric: tabular-nums;
+}
+.cmp-period-dd-option.active .cmp-period-dd-option-cost {
+    background: rgba(37, 99, 235, 0.15);
+    color: #2563EB;
+}
+
 /* Segmented control */
-.segmented-control { display: flex; background: var(--bg-page); border: 1px solid var(--border-subtle); border-radius: 7px; padding: 2px; gap: 2px; }
-.segmented-control--small .seg { font-size: 11px; padding: 3px 8px; }
-.seg { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 5px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; transition: background 0.12s, color 0.12s; }
+.segmented-control { display: flex; align-items: center; background: var(--bg-page); border: 1px solid var(--border-subtle); border-radius: 7px; padding: 2px; gap: 2px; }
+.segmented-control--small .seg { font-size: 11px; padding: 3px 8px; gap: 5px; }
+.seg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 5px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; transition: background 0.12s, color 0.12s; }
+.seg img, .seg svg { flex-shrink: 0; vertical-align: middle; }
 .seg:hover { color: var(--text-primary); }
 .seg.active { background: var(--bg-card); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
@@ -593,45 +711,417 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
 .sc-sync-detail-name { flex: 1; color: var(--text-primary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sc-sync-detail-count { color: var(--text-tertiary); flex-shrink: 0; }
 
-/* ── Compare page: table-main + charts-sidebar layout ──────────────────── */
+/* ── Compare page: full-width table + 2-column charts below ──────────────────── */
 .cmp-results-layout {
   display: flex;
+  flex-direction: column;
   gap: 16px;
-  align-items: flex-start;
+  width: 100%;
 }
 .cmp-results-main {
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
+.cmp-results-main .table-container {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+}
+.cmp-results-main table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.cmp-results-main th,
+.cmp-results-main td {
+  padding: 10px 14px;
+}
+.cmp-th-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s, color 0.15s;
+}
+.cmp-th-sortable:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.03));
+}
+.cmp-th-sortable.sorted-active {
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563EB;
+}
+.cmp-sort-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.cmp-sort-badge.active {
+  background: rgba(37, 99, 235, 0.15);
+  color: #2563EB;
+}
+.cmp-sort-badge.inactive {
+  color: var(--text-tertiary);
+  opacity: 0.45;
+}
+.cmp-results-main th:first-child,
+.cmp-results-main td:first-child {
+  width: 30%;
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cmp-results-charts {
-  width: 300px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
 }
 .cmp-chart-card {
-  padding: 12px 14px !important;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 .cmp-chart-title {
-  font-size: 12px !important;
-  font-weight: 500;
-  margin: 0 0 8px !important;
-  color: var(--text-secondary);
+  font-size: 13px !important;
+  font-weight: 600;
+  margin: 0 0 12px !important;
+  color: var(--text-primary);
 }
 @media (max-width: 900px) {
-  .cmp-results-layout { flex-direction: column; }
-  .cmp-results-charts { width: 100%; flex-direction: row; }
-  .cmp-chart-card { flex: 1; }
+  .cmp-results-charts {
+    grid-template-columns: 1fr;
+  }
 }
 
-/* ── Compare summary cards — compact (sizing handled fully in JS) ────────── */
+/* ── Compare summary cards — compact equidistant cards ────────── */
 #page-compare #cmpSummaryCards {
-  gap: 8px;
-  margin-bottom: 12px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
 }
+
 #page-compare #cmpSummaryCards .stat-card {
-  flex: 0 0 auto;
+  background: var(--card-bg, #FFFFFF);
+  border: 1px solid var(--border, #E5E7EB);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 72px;
+  min-width: 0;
+  box-sizing: border-box;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
 }
+
+#page-compare #cmpSummaryCards .stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  border-color: #2563EB;
+}
+
+/* ── Page Drilldown Styling ───────────────────────────── */
+#page-drilldown .dd-back-arrow-btn {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 4px !important;
+  color: #6B7280 !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, color 0.15s ease;
+  line-height: 1;
+}
+#page-drilldown .dd-back-arrow-btn:hover {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #374151 !important;
+  transform: translateX(-3px);
+}
+#page-drilldown .dd-back-arrow-btn svg {
+  stroke: #6B7280 !important;
+  display: block;
+}
+#page-drilldown .dd-back-arrow-btn:hover svg {
+  stroke: #374151 !important;
+}
+#page-drilldown .dd-meta-tag {
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border-default, #E2E8F0);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dd-segmented-tabs {
+  display: inline-flex;
+  background: var(--bg-page, #F8FAFC);
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default, #E2E8F0);
+  gap: 2px;
+}
+.dd-seg-tab {
+  border: none;
+  background: transparent;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.dd-seg-tab:hover {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.03);
+}
+.dd-seg-tab.active {
+  background: var(--bg-card, #FFFFFF);
+  color: #2563EB;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+#page-drilldown #ddSummary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
+}
+#page-drilldown #ddSummary .stat-card {
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border-default, #E2E8F0);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 70px;
+  min-width: 0;
+  box-sizing: border-box;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+}
+#page-drilldown #ddSummary .stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  border-color: #2563EB;
+}
+
+/* ── Cost Data Subscription KPI Grid ─────────────────── */
+.cost-sub-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 12px 16px 14px 16px;
+  background: var(--bg-card, #FFFFFF);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cost-sub-kpi-card {
+  background: var(--bg-page, #F8FAFC);
+  border: 1px solid var(--border-default, #E2E8F0);
+  border-radius: 8px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  box-sizing: border-box;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  position: relative;
+}
+
+.cost-sub-kpi-card:hover {
+  transform: translateY(-1px);
+  border-color: #2563EB;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+  background: var(--bg-card, #FFFFFF);
+}
+
+.cost-sub-kpi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cost-sub-kpi-name {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-secondary, #64748B);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  min-width: 0;
+  flex: 1;
+}
+
+.cost-sub-kpi-pct {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: #2563EB;
+  background: rgba(37, 99, 235, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.cost-sub-kpi-value {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary, #0F172A);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin: 1px 0;
+}
+
+.cost-sub-kpi-bar-track {
+  width: 100%;
+  height: 3px;
+  background: var(--border-default, #E2E8F0);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.cost-sub-kpi-bar-fill {
+  height: 100%;
+  background: #2563EB;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* ── Cost Custom Styled Dropdown ──────────────────────── */
+.cost-custom-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.cost-custom-trigger {
+  height: 30px;
+  padding: 0 10px;
+  background: var(--bg-page, #F8FAFC);
+  color: var(--text-primary, #111827);
+  border: 1px solid var(--border-default, #CBD5E1);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  outline: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+.cost-custom-trigger:hover {
+  border-color: #2563EB;
+  background: rgba(37, 99, 235, 0.02);
+}
+
+.cost-custom-dropdown.open .cost-custom-trigger {
+  border-color: #2563EB;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.cost-custom-dropdown.open .dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.cost-custom-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  width: max-content;
+  max-width: 280px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border-default, #CBD5E1);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.cost-custom-dropdown.open .cost-custom-menu {
+  display: block;
+}
+
+.cost-custom-option {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary, #111827);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.cost-custom-option:hover {
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563EB;
+}
+
+.cost-custom-option.active {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563EB;
+  font-weight: 600;
+}
+
+/* ── Comparison Table Trend Bar ────────────────────────── */
+.trend-bar {
+  display: inline-block;
+  height: 4px;
+  border-radius: 2px;
+  min-width: 4px;
+  max-width: 120px;
+  vertical-align: middle;
+}
+.trend-bar.up { background: var(--red, #ef4444); }
+.trend-bar.down { background: var(--green, #10b981); }
+.trend-bar.neutral { background: var(--text-secondary, #64748b); }
+
+

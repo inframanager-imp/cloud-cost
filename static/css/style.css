@@ -2363,8 +2363,8 @@ select.filter-input option {
 /* ─── Comparison Page ─────────────────────────────────────────────────── */
 .trend-bar {
     display: inline-block;
-    height: 8px;
-    border-radius: 4px;
+    height: 4px;
+    border-radius: 2px;
     min-width: 4px;
     max-width: 120px;
     vertical-align: middle;
