@@ -5339,6 +5339,18 @@ function renderComparisonResults(payload, groupBy) {
 
     renderComparisonTableRows(payload, groupBy);
 
+    // Auto-prefetch top rows in background for instantaneous drilldown page loading
+    if (Array.isArray(data) && data.length > 0) {
+        const topToPrefetch = data.slice(0, 10);
+        let delay = 100;
+        for (const r of topToPrefetch) {
+            if (r && r.name) {
+                setTimeout(() => prefetchDrilldown(r.name), delay);
+                delay += 250;
+            }
+        }
+    }
+
     const top15 = data.filter(r => (r.costs || []).some(c => c > 0)).slice(0, 15);
     const barDatasets = labels.map((lb, i) => ({
         label: lb,
@@ -5427,6 +5439,12 @@ function renderChart(canvasId, type, data, title, extraOpts = {}) {
         extraOpts.centerLabel = { text: curSym() + total.toLocaleString(undefined, { maximumFractionDigits: 0 }) };
     }
 
+    const isCompact = extraOpts.compact || false;
+    const legendFontSize = isCompact ? 9 : 10;
+    const legendPadding = isCompact ? 4 : 8;
+    const legendBoxWidth = isCompact ? 8 : 12;
+    const tickFontSize = isCompact ? 9 : 10;
+
     chartInstances[canvasId] = new Chart(ctx, {
         type: actualType,
         data: chartData,
@@ -5434,12 +5452,13 @@ function renderChart(canvasId, type, data, title, extraOpts = {}) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: isCompact ? { padding: { top: 2, bottom: 0, left: 0, right: 2 } } : {},
             indexAxis: indexAxis,
             plugins: {
                 legend: {
                     display: showLegend,
-                    position: isStacked ? 'top' : 'right',
-                    labels: { color: CHART_TEXT(), font: { size: 10 }, padding: 8, boxWidth: 12 }
+                    position: isStacked ? 'top' : (isCompact ? 'top' : 'right'),
+                    labels: { color: CHART_TEXT(), font: { size: legendFontSize }, padding: legendPadding, boxWidth: legendBoxWidth }
                 },
                 title: { display: false },
                 centerLabel: extraOpts.centerLabel || {}
@@ -5447,12 +5466,12 @@ function renderChart(canvasId, type, data, title, extraOpts = {}) {
             scales: (type !== 'doughnut' && type !== 'pie') ? {
                 x: {
                     stacked: isStacked,
-                    ticks: { color: CHART_TEXT(), font: { size: 10 }, maxTicksLimit: 15 },
+                    ticks: { color: CHART_TEXT(), font: { size: tickFontSize }, maxTicksLimit: isCompact ? 6 : 15 },
                     grid: { color: CHART_GRID() }
                 },
                 y: {
                     stacked: isStacked,
-                    ticks: { color: CHART_TEXT(), font: { size: 10 } },
+                    ticks: { color: CHART_TEXT(), font: { size: tickFontSize }, maxTicksLimit: isCompact ? 4 : undefined },
                     grid: { color: CHART_GRID() }
                 }
             } : undefined
@@ -5710,7 +5729,8 @@ async function openResourceDrilldown(name) {
 
     // Optimistic / Instant KPI card rendering from table cache if available
     const sym = curSym();
-    const previewRow = _cmpLastPayload?.rows?.find(r => r.name === name);
+    const cmpRows = _cmpLastPayload?.rows || (Array.isArray(_cmpLastPayload) ? _cmpLastPayload : []);
+    const previewRow = cmpRows.find(r => r && (r.name === name || String(r.name || '').trim() === String(name || '').trim()));
     if (previewRow && sumEl) {
         const previewCosts = previewRow.costs || [];
         const prevDiff = previewRow.difference || 0;
@@ -5830,19 +5850,8 @@ async function openResourceDrilldown(name) {
             `;
         }
 
-        // Daily trend chart
-        renderChart('ddTrendChart', 'line', {
-            labels: dailyTrend.map(d => d.date),
-            datasets: [{
-                label: `Daily Cost (${curSymVal})`,
-                data: dailyTrend.map(d => d.total_cost),
-                borderColor: '#2563EB',
-                backgroundColor: 'rgba(37, 99, 235, 0.08)',
-                fill: true,
-                tension: 0.3,
-                pointRadius: 2,
-            }]
-        }, 'Daily Trend');
+        // Render all 4 charts at once (Daily Trend, Resource Group, Resources, Service)
+        renderAllDrilldownCharts();
 
         // Tabs
         const tabKeys = Object.keys(_drilldownData).filter(k => k !== 'daily_trend' && Array.isArray(_drilldownData[k]));
@@ -5867,6 +5876,62 @@ async function openResourceDrilldown(name) {
     }
 }
 
+function renderDrilldownBreakdownChart(canvasId, titleId, key, fallbackTitle) {
+    const title = key || fallbackTitle;
+    const titleEl = document.getElementById(titleId);
+    if (titleEl) titleEl.textContent = `${title} Breakdown`;
+
+    const items = (_drilldownData && key) ? (_drilldownData[key] || []) : [];
+    const lbls = _drilldownLabels.length ? _drilldownLabels : ['Period 1', 'Period 2'];
+    const nc = lbls.length;
+    const top7 = items.slice(0, 7);
+    const datasets = lbls.map((lb, i) => ({
+        label: lb,
+        data: top7.map(r => (r.costs || [])[i] ?? 0),
+        backgroundColor: CMP_PERIOD_COLORS[i % CMP_PERIOD_COLORS.length],
+        borderRadius: 4,
+        barPercentage: nc > 3 ? 0.75 : 0.5,
+    }));
+    renderChart(canvasId, 'bar', {
+        labels: top7.map(r => {
+            const s = r.display_name ? String(r.display_name) : ddShortName(r.name);
+            return s.length > 20 ? s.substring(0, 20) + '…' : s;
+        }),
+        datasets,
+    }, title, { compact: true });
+}
+
+function renderAllDrilldownCharts() {
+    if (!_drilldownData) return;
+    const curSymVal = _drilldownData.currency_symbol || curSym();
+    const dailyTrend = _drilldownData.daily_trend || [];
+
+    // 1. Daily trend chart
+    renderChart('ddTrendChart', 'line', {
+        labels: dailyTrend.map(d => d.date),
+        datasets: [{
+            label: `Daily Cost (${curSymVal})`,
+            data: dailyTrend.map(d => d.total_cost),
+            borderColor: '#2563EB',
+            backgroundColor: 'rgba(37, 99, 235, 0.08)',
+            fill: true,
+            tension: 0.3,
+            borderWidth: 1.5,
+            pointRadius: 1.5,
+        }]
+    }, 'Daily Trend', { compact: true });
+
+    // 2. Identify tab keys for RG, Resources, Service
+    const tabKeys = Object.keys(_drilldownData).filter(k => k !== 'daily_trend' && k !== 'currency_symbol' && Array.isArray(_drilldownData[k]));
+    const rgKey = tabKeys.find(k => /resource\s*group|compartment|project/i.test(k)) || tabKeys[0] || 'Resource Group';
+    const resKey = tabKeys.find(k => /^resource/i.test(k) && k !== rgKey) || tabKeys.find(k => /^resource/i.test(k)) || 'Resources';
+    const svcKey = tabKeys.find(k => /^service/i.test(k)) || tabKeys.find(k => k !== rgKey && k !== resKey) || 'Service';
+
+    renderDrilldownBreakdownChart('ddRGChart', 'ddRGChartTitle', rgKey, 'Resource Group');
+    renderDrilldownBreakdownChart('ddResChart', 'ddResChartTitle', resKey, 'Resources');
+    renderDrilldownBreakdownChart('ddSvcChart', 'ddSvcChartTitle', svcKey, 'Service');
+}
+
 function switchInAppDrilldownTab(key, btn) {
     document.querySelectorAll('#ddTabs .dd-seg-tab').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
@@ -5877,7 +5942,6 @@ function renderInAppDrilldownTab(key) {
     if (!_drilldownData) return;
     const items = _drilldownData[key] || [];
     const lbls = _drilldownLabels.length ? _drilldownLabels : ['Period 1', 'Period 2'];
-    const nc = lbls.length;
     const sym = _drilldownData.currency_symbol || curSym();
 
     const hintEl = document.getElementById('ddHint');
@@ -5923,26 +5987,8 @@ function renderInAppDrilldownTab(key) {
         }).join('');
     }
 
-    const titleEl = document.getElementById('ddChartTitle');
     const tableTitleEl = document.getElementById('ddBreakdownTableTitle');
-    if (titleEl) titleEl.textContent = `${key} Breakdown`;
     if (tableTitleEl) tableTitleEl.textContent = `${key} Breakdown details (${items.length} items)`;
-
-    const top10 = items.slice(0, 10);
-    const datasets = lbls.map((lb, i) => ({
-        label: lb,
-        data: top10.map(r => (r.costs || [])[i] ?? 0),
-        backgroundColor: CMP_PERIOD_COLORS[i % CMP_PERIOD_COLORS.length],
-        borderRadius: 6,
-        barPercentage: nc > 3 ? 0.65 : 0.4,
-    }));
-    renderChart('ddBarChart', 'bar', {
-        labels: top10.map(r => {
-            const s = r.display_name ? String(r.display_name) : ddShortName(r.name);
-            return s.length > 25 ? s.substring(0, 25) + '...' : s;
-        }),
-        datasets,
-    }, key);
 }
 
 // Close RG dropdown on Escape key
@@ -8913,6 +8959,56 @@ function initAppearanceToggle() {
     }
 }
 
+// ─── Sticky / Pinned Sidebar ──────────────────────────────────────────────────
+const SIDEBAR_STICKY_KEY = 'sidebarSticky';
+
+function syncSidebarStickyUI(isSticky) {
+    const sidebar = document.getElementById('main-sidebar');
+    const toggleBtn = document.getElementById('sidebarStickyToggle');
+    if (sidebar) {
+        sidebar.classList.toggle('is-sticky', isSticky);
+    }
+    if (isSticky) {
+        document.documentElement.setAttribute('data-sidebar-sticky', 'true');
+        document.body.classList.add('sidebar-is-sticky');
+    } else {
+        document.documentElement.removeAttribute('data-sidebar-sticky');
+        document.body.classList.remove('sidebar-is-sticky');
+    }
+    if (toggleBtn) {
+        toggleBtn.classList.toggle('active', isSticky);
+        toggleBtn.title = isSticky ? 'Unpin sidebar (auto-collapse)' : 'Pin sidebar (keep expanded)';
+        toggleBtn.setAttribute('aria-label', toggleBtn.title);
+    }
+}
+
+function toggleSidebarSticky() {
+    let isSticky = false;
+    try {
+        isSticky = localStorage.getItem(SIDEBAR_STICKY_KEY) === 'true';
+    } catch (e) {}
+    isSticky = !isSticky;
+    try {
+        localStorage.setItem(SIDEBAR_STICKY_KEY, isSticky ? 'true' : 'false');
+    } catch (e) {}
+    syncSidebarStickyUI(isSticky);
+
+    // Dispatch resize event so charts / responsive components reflow smoothly
+    setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+        if (typeof refreshAllCharts === 'function') refreshAllCharts();
+    }, 300);
+}
+window.toggleSidebarSticky = toggleSidebarSticky;
+
+function initSidebarSticky() {
+    let isSticky = false;
+    try {
+        isSticky = localStorage.getItem(SIDEBAR_STICKY_KEY) === 'true';
+    } catch (e) {}
+    syncSidebarStickyUI(isSticky);
+}
+
 function applyUiTheme(theme) {
     if (document.documentElement.getAttribute('data-appearance') === 'light') return;
     const t = (theme || '').trim();
@@ -9009,6 +9105,7 @@ function _initNavContextMenu() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     initAppearanceToggle();
+    initSidebarSticky();
     initUiThemeTrial();
     initRangePicker('curRangePick', 'curDateFrom', 'curDateTo'); // CUR-import modal (no programmatic setters)
     _scLoadAutoSync();   // load auto-sync state into drawer + badge on startup

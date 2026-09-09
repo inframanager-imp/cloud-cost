@@ -154,8 +154,10 @@ body {
     display: none;
 }
 
-/* Hover State: Expands to full 245px width */
-.sidebar:hover {
+/* Hover & Sticky States: Expands to full 245px width */
+.sidebar:hover,
+.sidebar.is-sticky,
+html[data-sidebar-sticky="true"] .sidebar {
     width: 245px;
     box-shadow: 10px 0 32px rgba(0, 0, 0, 0.5);
 }
@@ -166,7 +168,7 @@ body {
     border-right: none;
 }
 
-/* Main Content stays offset by 68px permanently — sidebar floats above it on hover */
+/* Main Content: offset by 68px in mini mode; in sticky mode shifts to 245px smoothly */
 .main-content {
     margin-left: 68px;
     padding: 24px 28px;
@@ -174,7 +176,13 @@ body {
     min-width: 0;
     width: calc(100% - 68px);
     box-sizing: border-box;
-    /* No transition — sidebar overlays instead of pushing content */
+    transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1), width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html[data-sidebar-sticky="true"] .main-content,
+body.sidebar-is-sticky .main-content {
+    margin-left: 245px;
+    width: calc(100% - 245px);
 }
 
 .main-content.sidebar-hidden {
@@ -200,9 +208,24 @@ body {
     position: relative;
 }
 
-.sidebar:hover .sidebar-header {
+.sidebar:hover .sidebar-header,
+.sidebar.is-sticky .sidebar-header,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-header {
     padding: 14px 12px;
-    justify-content: center;
+    justify-content: space-between;
+}
+
+.sidebar-header-actions {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.sidebar:hover .sidebar-header-actions,
+.sidebar.is-sticky .sidebar-header-actions,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-header-actions {
+    display: flex;
 }
 
 .sidebar-brand {
@@ -247,18 +270,22 @@ body {
 }
 
 /* Hover / Expanded State: smoothly animate and center enlarged TrueTec logo */
-.sidebar:hover .sidebar-logo-icon {
+.sidebar:hover .sidebar-logo-icon,
+.sidebar.is-sticky .sidebar-logo-icon,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-logo-icon {
     display: none;
     opacity: 0;
 }
 
-.sidebar:hover .sidebar-logo-full {
+.sidebar:hover .sidebar-logo-full,
+.sidebar.is-sticky .sidebar-logo-full,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-logo-full {
     display: block;
     height: 38px;
     width: auto;
-    max-width: 165px;
+    max-width: 135px;
     object-fit: contain;
-    margin: 0 auto;
+    margin: 0;
     animation: logoHoverEnlarge 0.35s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
     filter: drop-shadow(0 4px 14px rgba(6, 182, 212, 0.18));
 }
@@ -289,50 +316,119 @@ body {
     display: none !important;
 }
 
-/* Theme Toggle Button */
-.sidebar-theme-toggle {
-    display: none !important;
-    width: 32px !important;
-    height: 32px !important;
-    min-width: 32px !important;
-    min-height: 32px !important;
-    border-radius: 8px !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    background: rgba(255, 255, 255, 0.06) !important;
-    color: #FFFFFF !important;
+/* Sticky / Dock Toggle Button */
+.sidebar-sticky-toggle {
+    display: flex !important;
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    border-radius: 7px !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: #94A3B8 !important;
     align-items: center !important;
     justify-content: center !important;
     cursor: pointer !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.18s ease !important;
     flex-shrink: 0 !important;
     box-sizing: border-box !important;
     padding: 0 !important;
 }
 
-.sidebar:hover .sidebar-theme-toggle {
+.sidebar-sticky-toggle:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    color: #E2E8F0 !important;
+}
+
+.sidebar-sticky-toggle svg {
+    width: 15px !important;
+    height: 15px !important;
+    min-width: 15px !important;
+    min-height: 15px !important;
+    stroke: #94A3B8 !important;
+    stroke-width: 1.8px !important;
+    display: block !important;
+    transition: stroke 0.18s ease, color 0.18s ease;
+}
+
+.sidebar-sticky-toggle:hover svg {
+    stroke: #E2E8F0 !important;
+}
+
+.sidebar-sticky-toggle .dock-pin-indicator {
+    opacity: 0;
+    transition: opacity 0.18s ease, fill 0.18s ease;
+}
+
+/* Pinned active state */
+.sidebar.is-sticky .sidebar-sticky-toggle,
+html[data-sidebar-sticky="true"] .sidebar-sticky-toggle {
+    background: rgba(75, 156, 211, 0.14) !important;
+    border-color: rgba(75, 156, 211, 0.45) !important;
+    color: #4b9cd3 !important;
+}
+
+.sidebar.is-sticky .sidebar-sticky-toggle svg,
+html[data-sidebar-sticky="true"] .sidebar-sticky-toggle svg {
+    stroke: #4b9cd3 !important;
+}
+
+.sidebar.is-sticky .sidebar-sticky-toggle .dock-pin-indicator,
+html[data-sidebar-sticky="true"] .sidebar-sticky-toggle .dock-pin-indicator {
+    opacity: 0.5;
+    fill: #4b9cd3 !important;
+}
+
+/* Theme Toggle Button */
+.sidebar-theme-toggle {
     display: flex !important;
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    border-radius: 7px !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: #94A3B8 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: all 0.18s ease !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
 }
 
 .sidebar-theme-toggle:hover {
-    background: rgba(255, 255, 255, 0.12) !important;
-    border-color: rgba(255, 255, 255, 0.4) !important;
-    color: #FFFFFF !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    color: #E2E8F0 !important;
 }
 
 .sidebar-theme-toggle svg {
-    width: 16px !important;
-    height: 16px !important;
-    min-width: 16px !important;
-    min-height: 16px !important;
-    stroke: #FFFFFF !important;
-    stroke-width: 2px !important;
+    width: 15px !important;
+    height: 15px !important;
+    min-width: 15px !important;
+    min-height: 15px !important;
+    stroke: #94A3B8 !important;
+    stroke-width: 1.8px !important;
     display: block !important;
+    transition: stroke 0.18s ease;
 }
 
-/* Dark mode (default): show white Moon icon */
+.sidebar-theme-toggle:hover svg {
+    stroke: #E2E8F0 !important;
+}
+
+/* Dark mode (default): show Moon icon */
 .sidebar-theme-toggle .icon-moon {
     display: block !important;
-    stroke: #FFFFFF !important;
+    stroke: #94A3B8 !important;
+}
+.sidebar-theme-toggle:hover .icon-moon {
+    stroke: #E2E8F0 !important;
 }
 .sidebar-theme-toggle .icon-sun {
     display: none !important;
@@ -349,7 +445,9 @@ body {
     gap: 8px;
 }
 
-.sidebar:hover .sidebar-nav-body {
+.sidebar:hover .sidebar-nav-body,
+.sidebar.is-sticky .sidebar-nav-body,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-nav-body {
     padding: 10px 10px;
 }
 
@@ -361,29 +459,46 @@ body {
     border-radius: 4px;
 }
 
-/* Card Section Group (Collapsible Accordion Card) */
-.nav-card-group {
-    background: transparent !important;
+/* ─── Sidebar Primary Main Nav (Home & Dashboard) ─────────────────────── */
+.sidebar-main-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 2px;
+}
+
+/* In mini sidebar, main nav items appear centered with icon only */
+.sidebar:not(:hover):not(.is-sticky) .sidebar-main-nav .nav-item,
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .sidebar-main-nav .nav-item {
+    justify-content: center;
+    padding: 10px 0;
+    min-height: 42px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+.sidebar:not(:hover):not(.is-sticky) .sidebar-main-nav .nav-item .nav-text,
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .sidebar-main-nav .nav-item .nav-text {
+    display: none;
+}
+
+.sidebar:not(:hover):not(.is-sticky) .sidebar-main-nav .nav-item svg,
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .sidebar-main-nav .nav-item svg {
+    width: 17px !important;
+    height: 17px !important;
+    stroke-width: 2px !important;
+}
+
+.sidebar:not(:hover):not(.is-sticky) .sidebar-main-nav .nav-item.active,
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .sidebar-main-nav .nav-item.active {
+    background: rgba(75, 156, 211, 0.05) !important;
+    border: 1px solid rgba(75, 156, 211, 0.18) !important;
     border-radius: 12px;
-    transition: background 0.2s ease, border-color 0.2s ease;
-    border: 1px solid transparent !important;
     position: relative;
 }
 
-/* Expanded / Active Group Styling in Mini vs Hover State */
-.sidebar:hover .nav-card-group.expanded {
-    background: rgba(75, 156, 211, 0.05) !important;
-    border: 1px solid rgba(75, 156, 211, 0.18) !important;
-}
-
-/* In mini state (sidebar:not(:hover)), ONLY the group containing the active page gets card styling & blue pill */
-.sidebar:not(:hover) .nav-card-group.has-active-page {
-    background: rgba(75, 156, 211, 0.05) !important;
-    border: 1px solid rgba(75, 156, 211, 0.18) !important;
-    border-radius: 12px;
-}
-
-.sidebar:not(:hover) .nav-card-group.has-active-page::before {
+.sidebar:not(:hover):not(.is-sticky) .sidebar-main-nav .nav-item.active::before,
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .sidebar-main-nav .nav-item.active::before {
     content: '';
     position: absolute;
     left: 2px;
@@ -396,17 +511,116 @@ body {
     z-index: 2;
 }
 
-/* In mini state (sidebar:not(:hover)), non-active groups (even if expanded) MUST be transparent with no border and no pill */
-.sidebar:not(:hover) .nav-card-group:not(.has-active-page) {
+/* In expanded sidebar (hovered or sticky) */
+.sidebar:hover .sidebar-main-nav .nav-item,
+.sidebar.is-sticky .sidebar-main-nav .nav-item,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-main-nav .nav-item {
+    padding: 9px 12px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 500;
+    gap: 12px;
+    border: 1px solid transparent;
+}
+
+.sidebar:hover .sidebar-main-nav .nav-item svg,
+.sidebar.is-sticky .sidebar-main-nav .nav-item svg,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-main-nav .nav-item svg {
+    width: 17px !important;
+    height: 17px !important;
+    stroke-width: 2px !important;
+}
+
+.sidebar:hover .sidebar-main-nav .nav-item .nav-text,
+.sidebar.is-sticky .sidebar-main-nav .nav-item .nav-text,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-main-nav .nav-item .nav-text {
+    display: block;
+}
+
+.sidebar:hover .sidebar-main-nav .nav-item.active,
+.sidebar.is-sticky .sidebar-main-nav .nav-item.active,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-main-nav .nav-item.active {
+    background: rgba(75, 156, 211, 0.12) !important;
+    border: 1px solid rgba(75, 156, 211, 0.22) !important;
+    color: #F0F8FF;
+    font-weight: 600;
+}
+
+.sidebar:hover .sidebar-main-nav .nav-item.active::before,
+.sidebar.is-sticky .sidebar-main-nav .nav-item.active::before,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-main-nav .nav-item.active::before {
+    left: 4px;
+    width: 4px;
+    height: 20px;
+}
+
+/* Divider between Main nav and card groups */
+.sidebar-nav-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.07);
+    margin: 4px 6px 6px 6px;
+}
+
+.sidebar:hover .sidebar-nav-divider,
+.sidebar.is-sticky .sidebar-nav-divider,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-nav-divider {
+    margin: 4px 4px 6px 4px;
+}
+
+/* Card Section Group (Collapsible Accordion Card) */
+.nav-card-group {
+    background: transparent !important;
+    border-radius: 12px;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    border: 1px solid transparent !important;
+    position: relative;
+}
+
+/* Expanded / Active Group Styling in Mini vs Hover/Sticky State */
+.sidebar:hover .nav-card-group.expanded,
+.sidebar.is-sticky .nav-card-group.expanded,
+html[data-sidebar-sticky="true"] .sidebar .nav-card-group.expanded {
+    background: rgba(75, 156, 211, 0.05) !important;
+    border: 1px solid rgba(75, 156, 211, 0.18) !important;
+}
+
+/* In mini state, ONLY the group containing the active page gets card styling & blue pill */
+.sidebar:not(:hover):not(.is-sticky) .nav-card-group.has-active-page,
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .nav-card-group.has-active-page {
+    background: rgba(75, 156, 211, 0.05) !important;
+    border: 1px solid rgba(75, 156, 211, 0.18) !important;
+    border-radius: 12px;
+}
+
+.sidebar:not(:hover):not(.is-sticky) .nav-card-group.has-active-page::before,
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .nav-card-group.has-active-page::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 22px;
+    background: #4b9cd3;
+    border-radius: 4px;
+    z-index: 2;
+}
+
+/* In mini state, non-active groups MUST be transparent with no border and no pill */
+.sidebar:not(:hover):not(.is-sticky) .nav-card-group:not(.has-active-page),
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .nav-card-group:not(.has-active-page) {
     background: transparent !important;
     border-color: transparent !important;
 }
 
-.sidebar:not(:hover) .nav-card-group:not(.has-active-page)::before {
+.sidebar:not(:hover):not(.is-sticky) .nav-card-group:not(.has-active-page)::before,
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .nav-card-group:not(.has-active-page)::before {
     display: none !important;
 }
 
-.sidebar:hover .nav-card-group::before {
+.sidebar:hover .nav-card-group::before,
+.sidebar.is-sticky .nav-card-group::before,
+html[data-sidebar-sticky="true"] .sidebar .nav-card-group::before {
     display: none !important;
 }
 
@@ -422,7 +636,9 @@ body {
     box-sizing: border-box;
 }
 
-.sidebar:hover .nav-card-header {
+.sidebar:hover .nav-card-header,
+.sidebar.is-sticky .nav-card-header,
+html[data-sidebar-sticky="true"] .sidebar .nav-card-header {
     padding: 12px 14px;
     justify-content: space-between;
 }
@@ -439,7 +655,9 @@ body {
     width: 100%;
 }
 
-.sidebar:hover .nav-card-header-left {
+.sidebar:hover .nav-card-header-left,
+.sidebar.is-sticky .nav-card-header-left,
+html[data-sidebar-sticky="true"] .sidebar .nav-card-header-left {
     justify-content: flex-start;
     gap: 10px;
     width: auto;
@@ -463,7 +681,9 @@ body {
     white-space: nowrap;
 }
 
-.sidebar:hover .nav-card-title {
+.sidebar:hover .nav-card-title,
+.sidebar.is-sticky .nav-card-title,
+html[data-sidebar-sticky="true"] .sidebar .nav-card-title {
     display: block;
 }
 
@@ -474,7 +694,9 @@ body {
     align-items: center;
 }
 
-.sidebar:hover .nav-card-chevron {
+.sidebar:hover .nav-card-chevron,
+.sidebar.is-sticky .nav-card-chevron,
+html[data-sidebar-sticky="true"] .sidebar .nav-card-chevron {
     display: flex;
 }
 
@@ -493,7 +715,9 @@ body {
     display: none !important;
 }
 
-.sidebar:hover .nav-card-group.expanded .nav-card-body {
+.sidebar:hover .nav-card-group.expanded .nav-card-body,
+.sidebar.is-sticky .nav-card-group.expanded .nav-card-body,
+html[data-sidebar-sticky="true"] .sidebar .nav-card-group.expanded .nav-card-body {
     display: flex !important;
     flex-direction: column;
     gap: 2px;
@@ -565,7 +789,9 @@ body {
     transition: background 0.15s ease;
 }
 
-.sidebar:hover .sidebar-ai-item {
+.sidebar:hover .sidebar-ai-item,
+.sidebar.is-sticky .sidebar-ai-item,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-ai-item {
     justify-content: flex-start;
     padding: 8px 14px;
     margin: 2px 10px 0;
@@ -588,7 +814,9 @@ body {
     margin: 0 auto;
 }
 
-.sidebar:hover .ai-icon-box {
+.sidebar:hover .ai-icon-box,
+.sidebar.is-sticky .ai-icon-box,
+html[data-sidebar-sticky="true"] .sidebar .ai-icon-box {
     margin: 0;
 }
 
@@ -605,7 +833,9 @@ body {
     white-space: nowrap;
 }
 
-.sidebar:hover .ai-text {
+.sidebar:hover .ai-text,
+.sidebar.is-sticky .ai-text,
+html[data-sidebar-sticky="true"] .sidebar .ai-text {
     display: block;
 }
 
@@ -624,7 +854,9 @@ body {
     margin: 4px 14px;
 }
 
-.sidebar:hover .sidebar-divider {
+.sidebar:hover .sidebar-divider,
+.sidebar.is-sticky .sidebar-divider,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-divider {
     display: block;
 }
 
@@ -633,7 +865,9 @@ body {
     display: none;
 }
 
-.sidebar:hover .sidebar-tenant-row {
+.sidebar:hover .sidebar-tenant-row,
+.sidebar.is-sticky .sidebar-tenant-row,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-tenant-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -692,7 +926,9 @@ body {
     padding: 6px 0;
 }
 
-.sidebar:hover .sidebar-user-row {
+.sidebar:hover .sidebar-user-row,
+.sidebar.is-sticky .sidebar-user-row,
+html[data-sidebar-sticky="true"] .sidebar .sidebar-user-row {
     justify-content: space-between;
     padding: 6px 16px 4px;
     gap: 10px;
@@ -706,7 +942,9 @@ body {
     margin: 0 auto;
 }
 
-.sidebar:hover .user-avatar-wrap {
+.sidebar:hover .user-avatar-wrap,
+.sidebar.is-sticky .user-avatar-wrap,
+html[data-sidebar-sticky="true"] .sidebar .user-avatar-wrap {
     margin: 0;
 }
 
@@ -740,7 +978,11 @@ body {
 }
 
 .sidebar:hover .user-details,
-.sidebar:hover .user-actions {
+.sidebar:hover .user-actions,
+.sidebar.is-sticky .user-details,
+.sidebar.is-sticky .user-actions,
+html[data-sidebar-sticky="true"] .sidebar .user-details,
+html[data-sidebar-sticky="true"] .sidebar .user-actions {
     display: flex;
 }
 
@@ -816,21 +1058,66 @@ html[data-appearance="light"] .sidebar-header {
     border-bottom: 1px solid #E2E8F0;
 }
 
-html[data-appearance="light"] .sidebar-theme-toggle {
+html[data-appearance="light"] .sidebar-sticky-toggle {
+    background: #F8FAFC !important;
+    border: 1px solid #E2E8F0 !important;
+    color: #64748B !important;
+}
+
+html[data-appearance="light"] .sidebar-sticky-toggle:hover {
     background: #F1F5F9 !important;
-    border: 1px solid #CBD5E1 !important;
-    color: #0F172A !important;
+    border-color: #CBD5E1 !important;
+    color: #334155 !important;
+}
+
+html[data-appearance="light"] .sidebar-sticky-toggle svg {
+    stroke: #64748B !important;
+    color: #64748B !important;
+    stroke-width: 1.8px !important;
+}
+
+html[data-appearance="light"] .sidebar-sticky-toggle:hover svg {
+    stroke: #334155 !important;
+}
+
+html[data-appearance="light"] .sidebar.is-sticky .sidebar-sticky-toggle,
+html[data-appearance="light"][data-sidebar-sticky="true"] .sidebar-sticky-toggle {
+    background: #EBF5FC !important;
+    border-color: #B4DBF4 !important;
+    color: #0284C7 !important;
+}
+
+html[data-appearance="light"] .sidebar.is-sticky .sidebar-sticky-toggle svg,
+html[data-appearance="light"][data-sidebar-sticky="true"] .sidebar-sticky-toggle svg {
+    stroke: #0284C7 !important;
+}
+
+html[data-appearance="light"] .sidebar.is-sticky .sidebar-sticky-toggle .dock-pin-indicator,
+html[data-appearance="light"][data-sidebar-sticky="true"] .sidebar-sticky-toggle .dock-pin-indicator {
+    opacity: 0.45;
+    fill: #0284C7 !important;
+}
+
+html[data-appearance="light"] .sidebar-theme-toggle {
+    background: #F8FAFC !important;
+    border: 1px solid #E2E8F0 !important;
+    color: #64748B !important;
 }
 
 html[data-appearance="light"] .sidebar-theme-toggle:hover {
-    background: #E2E8F0 !important;
-    border-color: #94A3B8 !important;
-    color: #0F172A !important;
+    background: #F1F5F9 !important;
+    border-color: #CBD5E1 !important;
+    color: #334155 !important;
 }
 
 html[data-appearance="light"] .sidebar-theme-toggle svg {
-    stroke: #0F172A !important;
-    color: #0F172A !important;
+    stroke: #64748B !important;
+    color: #64748B !important;
+    stroke-width: 1.8px !important;
+}
+
+html[data-appearance="light"] .sidebar-theme-toggle:hover svg {
+    stroke: #334155 !important;
 }
 
 html[data-appearance="light"] .sidebar-theme-toggle .icon-moon {
@@ -839,8 +1126,12 @@ html[data-appearance="light"] .sidebar-theme-toggle .icon-moon {
 
 html[data-appearance="light"] .sidebar-theme-toggle .icon-sun {
     display: block !important;
-    stroke: #0F172A !important;
-    color: #0F172A !important;
+    stroke: #64748B !important;
+    color: #64748B !important;
+}
+
+html[data-appearance="light"] .sidebar-theme-toggle:hover .icon-sun {
+    stroke: #334155 !important;
 }
 
 html[data-appearance="light"] .sidebar-divider {
@@ -878,19 +1169,56 @@ html[data-appearance="light"] .sidebar .nav-item.active::before {
     box-shadow: none !important;
 }
 
-html[data-appearance="light"] .sidebar:hover .nav-card-group.expanded {
+html[data-appearance="light"] .sidebar:hover .nav-card-group.expanded,
+html[data-appearance="light"] .sidebar.is-sticky .nav-card-group.expanded,
+html[data-appearance="light"][data-sidebar-sticky="true"] .sidebar .nav-card-group.expanded {
     background: #F7FAFD !important;
     border: 1px solid #E1F0FA !important;
 }
 
-html[data-appearance="light"] .sidebar:not(:hover) .nav-card-group.has-active-page {
+html[data-appearance="light"] .sidebar:not(:hover):not(.is-sticky) .nav-card-group.has-active-page,
+html[data-appearance="light"]:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .nav-card-group.has-active-page {
     background: #F7FAFD !important;
     border: 1px solid #E1F0FA !important;
 }
 
-html[data-appearance="light"] .sidebar:not(:hover) .nav-card-group.has-active-page::before {
+html[data-appearance="light"] .sidebar:not(:hover):not(.is-sticky) .nav-card-group.has-active-page::before,
+html[data-appearance="light"]:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .nav-card-group.has-active-page::before {
     background: #4b9cd3 !important;
     box-shadow: none !important;
+}
+
+html[data-appearance="light"] .sidebar-main-nav .nav-item {
+    color: #334155;
+}
+
+html[data-appearance="light"] .sidebar-main-nav .nav-item:hover {
+    background: rgba(75, 156, 211, 0.08);
+    color: #0F172A;
+}
+
+html[data-appearance="light"] .sidebar:not(:hover):not(.is-sticky) .sidebar-main-nav .nav-item.active,
+html[data-appearance="light"]:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .sidebar-main-nav .nav-item.active {
+    background: #F7FAFD !important;
+    border: 1px solid #E1F0FA !important;
+}
+
+html[data-appearance="light"] .sidebar:not(:hover):not(.is-sticky) .sidebar-main-nav .nav-item.active::before,
+html[data-appearance="light"]:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .sidebar-main-nav .nav-item.active::before {
+    background: #4b9cd3 !important;
+    box-shadow: none !important;
+}
+
+html[data-appearance="light"] .sidebar:hover .sidebar-main-nav .nav-item.active,
+html[data-appearance="light"] .sidebar.is-sticky .sidebar-main-nav .nav-item.active,
+html[data-appearance="light"][data-sidebar-sticky="true"] .sidebar .sidebar-main-nav .nav-item.active {
+    background: #EBF5FC !important;
+    border: 1px solid #CCE7F6 !important;
+    color: #1C5A85 !important;
+}
+
+html[data-appearance="light"] .sidebar-nav-divider {
+    background: rgba(0, 0, 0, 0.07);
 }
 
 html[data-appearance="light"] .user-role {
@@ -898,7 +1226,8 @@ html[data-appearance="light"] .user-role {
     text-shadow: none !important;
 }
 
-html[data-appearance="light"] .sidebar:not(:hover) .nav-card-group:not(.has-active-page) {
+html[data-appearance="light"] .sidebar:not(:hover):not(.is-sticky) .nav-card-group:not(.has-active-page),
+html[data-appearance="light"]:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .nav-card-group:not(.has-active-page) {
     background: transparent !important;
     border-color: transparent !important;
 }

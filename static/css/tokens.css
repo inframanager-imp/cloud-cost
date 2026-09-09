@@ -781,22 +781,28 @@ html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: 10px;
+}
+.cmp-results-charts .chart-canvas-wrap {
+  height: 120px !important;
 }
 .cmp-chart-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px 18px !important;
+  border-radius: 8px;
+  padding: 8px 12px !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 .cmp-chart-title {
-  font-size: 13px !important;
+  font-size: 11.5px !important;
   font-weight: 600;
-  margin: 0 0 12px !important;
+  margin: 0 0 4px !important;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .cmp-results-charts {
     grid-template-columns: 1fr;
   }

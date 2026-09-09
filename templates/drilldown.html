@@ -38,13 +38,29 @@
     <div id="ddError" class="dd-error" style="display:none"></div>
 
     <div id="ddContent" style="display:none">
-        <div id="ddSummary" class="stats-grid" style="margin-bottom:24px"></div>
+        <div id="ddSummary" class="stats-grid" style="margin-bottom:20px"></div>
 
-        <div class="chart-card" style="margin-bottom:24px">
-            <h3>Daily Cost Trend</h3>
-            <div style="height:280px"><canvas id="ddTrendChart"></canvas></div>
+        <!-- 2x2 Grid for Daily Trend & All Breakdowns (Upper side) -->
+        <div class="cmp-results-charts" style="display:grid;grid-template-columns:repeat(2, 1fr);gap:10px;margin-bottom:20px">
+            <div class="chart-card" style="padding:8px 12px;border-radius:8px">
+                <h3 style="font-size:11.5px;margin:0 0 4px;font-weight:600">Daily Cost Trend</h3>
+                <div style="height:120px"><canvas id="ddTrendChart"></canvas></div>
+            </div>
+            <div class="chart-card" style="padding:8px 12px;border-radius:8px">
+                <h3 id="ddRGChartTitle" style="font-size:11.5px;margin:0 0 4px;font-weight:600">Resource Group Breakdown</h3>
+                <div style="height:120px"><canvas id="ddRGChart"></canvas></div>
+            </div>
+            <div class="chart-card" style="padding:8px 12px;border-radius:8px">
+                <h3 id="ddResChartTitle" style="font-size:11.5px;margin:0 0 4px;font-weight:600">Resources Breakdown</h3>
+                <div style="height:120px"><canvas id="ddResChart"></canvas></div>
+            </div>
+            <div class="chart-card" style="padding:8px 12px;border-radius:8px">
+                <h3 id="ddSvcChartTitle" style="font-size:11.5px;margin:0 0 4px;font-weight:600">Service Breakdown</h3>
+                <div style="height:120px"><canvas id="ddSvcChart"></canvas></div>
+            </div>
         </div>
 
+        <!-- Breakdown Details Table (Bottom) -->
         <div id="ddTabs" class="tab-bar"></div>
 
         <div id="ddHint" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);font-size:13px;color:var(--text-secondary)"></div>
@@ -63,11 +79,6 @@
                 </thead>
                 <tbody id="ddTableBody"></tbody>
             </table>
-        </div>
-
-        <div class="chart-card">
-            <h3 id="ddChartTitle">Breakdown</h3>
-            <div style="height:300px"><canvas id="ddBarChart"></canvas></div>
         </div>
     </div>
 </div>
@@ -287,25 +298,7 @@ async function loadDrilldown() {
             </div>
         `;
 
-        renderChart(
-            'ddTrendChart',
-            'line',
-            {
-                labels: dailyTrend.map((d) => d.date),
-                datasets: [
-                    {
-                        label: 'Daily Cost ($)',
-                        data: dailyTrend.map((d) => d.total_cost),
-                        borderColor: '#4f6ef7',
-                        backgroundColor: 'rgba(79,110,247,0.1)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 2,
-                    },
-                ],
-            },
-            'Daily Trend'
-        );
+        renderAllCharts();
 
         // Only real breakdown lists become tabs (skips daily_trend chart data and
         // scalar metadata like currency_symbol, which would crash renderTab).
@@ -324,6 +317,75 @@ async function loadDrilldown() {
         document.getElementById('ddError').style.display = 'block';
         document.getElementById('ddError').textContent = 'Failed to load drilldown data: ' + err.message;
     }
+}
+
+function renderBreakdownChart(canvasId, titleId, key, fallbackTitle) {
+    const title = key || fallbackTitle;
+    const titleEl = document.getElementById(titleId);
+    if (titleEl) titleEl.textContent = `${title} Breakdown`;
+
+    const items = (ddData && key) ? (ddData[key] || []) : [];
+    const top10 = items.slice(0, 10);
+    const datasets = labels.map((lb, i) => ({
+        label: lb,
+        data: top10.map((r) => (r.costs || [])[i] ?? 0),
+        backgroundColor: DD_COLORS[i % DD_COLORS.length],
+        borderRadius: 6,
+        barPercentage: n > 3 ? 0.65 : 0.4,
+    }));
+    renderChart(
+        canvasId,
+        'bar',
+        {
+            labels: top10.map((r) => {
+                const s = r.display_name ? String(r.display_name) : ddShortName(r.name);
+                return s.length > 25 ? s.substring(0, 25) + '...' : s;
+            }),
+            datasets,
+        },
+        title
+    );
+}
+
+function renderAllCharts() {
+    if (!ddData) return;
+    const dailyTrend = ddData.daily_trend || [];
+    const isMultiPeriod = labels.length > 2;
+
+    const gridEl = document.querySelector('.cmp-results-charts');
+    if (gridEl) {
+        gridEl.classList.toggle('grid-2x2', isMultiPeriod);
+        gridEl.classList.toggle('grid-1row', !isMultiPeriod);
+    }
+
+    renderChart(
+        'ddTrendChart',
+        'line',
+        {
+            labels: dailyTrend.map((d) => d.date),
+            datasets: [
+                {
+                    label: 'Daily Cost ($)',
+                    data: dailyTrend.map((d) => d.total_cost),
+                    borderColor: '#4f6ef7',
+                    backgroundColor: 'rgba(79,110,247,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 2,
+                },
+            ],
+        },
+        'Daily Trend'
+    );
+
+    const tabKeys = Object.keys(ddData).filter((k) => k !== 'daily_trend' && Array.isArray(ddData[k]));
+    const rgKey = tabKeys.find((k) => /resource\s*group|compartment|project/i.test(k)) || tabKeys[0] || 'Resource Group';
+    const resKey = tabKeys.find((k) => /^resource/i.test(k) && k !== rgKey) || tabKeys.find((k) => /^resource/i.test(k)) || 'Resources';
+    const svcKey = tabKeys.find((k) => /^service/i.test(k)) || tabKeys.find((k) => k !== rgKey && k !== resKey) || 'Service';
+
+    renderBreakdownChart('ddRGChart', 'ddRGChartTitle', rgKey, 'Resource Group');
+    renderBreakdownChart('ddResChart', 'ddResChartTitle', resKey, 'Resources');
+    renderBreakdownChart('ddSvcChart', 'ddSvcChartTitle', svcKey, 'Service');
 }
 
 function switchTab(key, btn) {
@@ -385,28 +447,6 @@ function renderTab(key) {
         </tr>`;
         })
         .join('');
-
-    document.getElementById('ddChartTitle').textContent = `${key} Breakdown`;
-    const top10 = items.slice(0, 10);
-    const datasets = labels.map((lb, i) => ({
-        label: lb,
-        data: top10.map((r) => (r.costs || [])[i] ?? 0),
-        backgroundColor: DD_COLORS[i % DD_COLORS.length],
-        borderRadius: 6,
-        barPercentage: n > 3 ? 0.65 : 0.4,
-    }));
-    renderChart(
-        'ddBarChart',
-        'bar',
-        {
-            labels: top10.map((r) => {
-                const s = r.display_name ? String(r.display_name) : ddShortName(r.name);
-                return s.length > 25 ? s.substring(0, 25) + '...' : s;
-            }),
-            datasets,
-        },
-        key
-    );
 }
 
 loadDrilldown();

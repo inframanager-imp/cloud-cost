@@ -15,6 +15,9 @@
     (function () {
         var THEME_IDS = ['forest','ocean','ember','violet','rose','slate','aurora'];
         try {
+            if (localStorage.getItem('sidebarSticky') === 'true') {
+                document.documentElement.setAttribute('data-sidebar-sticky', 'true');
+            }
             if (localStorage.getItem('uiAppearance') === 'light') {
                 document.documentElement.setAttribute('data-appearance', 'light');
                 return;
@@ -384,26 +387,72 @@
                 <img class="sidebar-logo-full" src="/static/img/truetec-logo.png" alt="TrueTec Systems">
             </div>
         </a>
-        <button class="sidebar-theme-toggle theme-toggle" id="themeToggle" title="Toggle dark / light mode" aria-label="Toggle theme">
-            <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-            </svg>
-            <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
-                <circle cx="12" cy="12" r="5"></circle>
-                <line x1="12" y1="1" x2="12" y2="3"></line>
-                <line x1="12" y1="21" x2="12" y2="23"></line>
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                <line x1="1" y1="12" x2="3" y2="12"></line>
-                <line x1="21" y1="12" x2="23" y2="12"></line>
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-            </svg>
-        </button>
+        <div class="sidebar-header-actions">
+            <button class="sidebar-sticky-toggle" id="sidebarStickyToggle" title="Pin sidebar (keep expanded)" aria-label="Pin sidebar" onclick="toggleSidebarSticky()">
+                <svg class="icon-dock" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" shape-rendering="geometricPrecision">
+                    <rect x="3" y="3" width="18" height="18" rx="3" ry="3"></rect>
+                    <line x1="9" y1="3" x2="9" y2="21"></line>
+                    <path class="dock-pin-indicator" d="M4.5 4.5h3v15h-3z" fill="currentColor" stroke="none"></path>
+                </svg>
+            </button>
+            <button class="sidebar-theme-toggle theme-toggle" id="themeToggle" title="Toggle dark / light mode" aria-label="Toggle theme">
+                <svg class="icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" shape-rendering="geometricPrecision">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+                <svg class="icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" shape-rendering="geometricPrecision" style="display:none">
+                    <circle cx="12" cy="12" r="4.5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+            </button>
+        </div>
     </div>
 
     <!-- Nav Body -->
     <div class="sidebar-nav-body">
+
+        <!-- MAIN / PRIMARY NAV (Home, Dashboard, Clients, Resource Inventory) -->
+        <div class="sidebar-main-nav">
+            <div class="nav-item" data-page="analytics-home" onclick="navigateTo('analytics-home')" title="Home">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                    <polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+                <span class="nav-text">Home</span>
+            </div>
+            <div class="nav-item active" data-page="executive" onclick="navigateTo('executive')" title="Dashboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7"/>
+                    <rect x="14" y="3" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                </svg>
+                <span class="nav-text">Dashboard</span>
+            </div>
+            <div class="nav-item" data-page="clients" onclick="navigateTo('clients')" title="Clients">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="7" width="20" height="14" rx="2"/>
+                    <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+                </svg>
+                <span class="nav-text">Clients</span>
+            </div>
+            <div class="nav-item" data-page="resource-inventory" onclick="navigateTo('resource-inventory')" title="Resource Inventory">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                </svg>
+                <span class="nav-text">Resource Inventory</span>
+            </div>
+        </div>
+
+        <div class="sidebar-nav-divider"></div>
 
         <!-- ANALYTICS GROUP -->
         <div class="nav-card-group expanded" id="group-analytics">
@@ -423,22 +472,6 @@
                 </div>
             </div>
             <div class="nav-card-body">
-                <div class="nav-item" data-page="analytics-home" onclick="navigateTo('analytics-home')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                        <polyline points="9 22 9 12 15 12 15 22"/>
-                    </svg>
-                    <span class="nav-text">Home</span>
-                </div>
-                <div class="nav-item active" data-page="executive" onclick="navigateTo('executive')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
-                    </svg>
-                    <span class="nav-text">Dashboard</span>
-                </div>
                 <div class="nav-item" data-page="cloud-overview" onclick="navigateTo('cloud-overview')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"/>
@@ -480,13 +513,6 @@
                     </svg>
                     <span class="nav-text">Custom Cost</span>
                 </div>
-                <div class="nav-item" data-page="clients" onclick="navigateTo('clients')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="2" y="7" width="20" height="14" rx="2"/>
-                        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
-                    </svg>
-                    <span class="nav-text">Clients</span>
-                </div>
                 <div class="nav-item" data-page="othercosts" onclick="navigateTo('othercosts')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -495,14 +521,6 @@
                         <line x1="8" y1="17" x2="13" y2="17"/>
                     </svg>
                     <span class="nav-text">Other Costs</span>
-                </div>
-                <div class="nav-item" data-page="resource-inventory" onclick="navigateTo('resource-inventory')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                        <line x1="12" y1="22.08" x2="12" y2="12"/>
-                    </svg>
-                    <span class="nav-text">Resource Inventory</span>
                 </div>
             </div>
         </div>
@@ -705,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <section id="page-analytics-home" class="page-section">
         <div class="cp-page-header" style="margin-bottom:20px;display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px">
             <div>
-                <div class="cp-breadcrumb">ANALYTICS / HOME</div>
+                <div class="cp-breadcrumb">HOME</div>
                 <h1 class="cp-page-title" style="font-size:22px;font-weight:700;color:var(--text-primary);margin:2px 0 0 0">Public Cloud</h1>
                 <p class="cp-page-subtitle" style="font-size:12px;color:var(--text-secondary);margin-top:4px">Connected cloud infrastructure overview, instance power states, services, and period costs.</p>
             </div>
@@ -881,7 +899,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <!-- Header -->
         <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
             <div>
-                <div style="font-size:11px;font-weight:500;color:#6B7280;margin-bottom:3px">Analytics / Dashboard</div>
+                <div style="font-size:11px;font-weight:500;color:#6B7280;margin-bottom:3px">Dashboard</div>
                 <h1 style="font-size:22px;font-weight:600;color:#111827;margin:0;line-height:1.2;letter-spacing:-0.01em">FinOps Command Center</h1>
             </div>
             <!-- Toolbar Controls -->
@@ -2204,23 +2222,43 @@ document.addEventListener('DOMContentLoaded', () => {
         <!-- Compact Equidistant KPI Summary Cards (Visible Immediately) -->
         <div id="ddSummary" class="stats-grid" style="margin-bottom:14px"></div>
 
-        <div id="ddLoading" class="dd-loading" style="text-align:center;padding:40px 20px;color:var(--text-secondary);font-size:13px;background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;margin-bottom:16px">
-            <div class="spinner" style="display:inline-block;width:22px;height:22px;margin-bottom:8px"></div>
-            <div>Loading breakdown details & charts...</div>
+        <div id="ddLoading" class="dd-loading" style="text-align:center;padding:24px 16px;color:var(--text-secondary);font-size:12.5px;background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;margin-bottom:14px">
+            <div class="spinner" style="display:inline-block;width:20px;height:20px;margin-bottom:6px"></div>
+            <div>Loading breakdown details &amp; charts...</div>
         </div>
-        <div id="ddError" class="dd-error" style="display:none;text-align:center;padding:24px 20px;color:var(--red);background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;margin-bottom:16px"></div>
+        <div id="ddError" class="dd-error" style="display:none;text-align:center;padding:20px 16px;color:var(--red);background:var(--bg-card);border:1px solid var(--border-default);border-radius:10px;margin-bottom:14px"></div>
 
         <div id="ddContent" style="display:none">
 
-            <!-- Breakdown Table with Integrated Segmented Tab Bar -->
-            <div class="table-container" style="margin-bottom:16px">
+            <!-- 2x2 Grid for Daily Trend & All Breakdowns (Upper side) -->
+            <div id="ddChartsGrid" class="cmp-results-charts" style="margin-bottom:14px">
+                <div class="chart-card cmp-chart-card">
+                    <h3 class="cmp-chart-title">Daily Cost Trend</h3>
+                    <div class="chart-canvas-wrap" style="position:relative;height:120px"><canvas id="ddTrendChart"></canvas></div>
+                </div>
+                <div class="chart-card cmp-chart-card">
+                    <h3 id="ddRGChartTitle" class="cmp-chart-title">Resource Group Breakdown</h3>
+                    <div class="chart-canvas-wrap" style="position:relative;height:120px"><canvas id="ddRGChart"></canvas></div>
+                </div>
+                <div class="chart-card cmp-chart-card">
+                    <h3 id="ddResChartTitle" class="cmp-chart-title">Resources Breakdown</h3>
+                    <div class="chart-canvas-wrap" style="position:relative;height:120px"><canvas id="ddResChart"></canvas></div>
+                </div>
+                <div class="chart-card cmp-chart-card">
+                    <h3 id="ddSvcChartTitle" class="cmp-chart-title">Service Breakdown</h3>
+                    <div class="chart-canvas-wrap" style="position:relative;height:120px"><canvas id="ddSvcChart"></canvas></div>
+                </div>
+            </div>
+
+            <!-- Breakdown Table with Integrated Segmented Tab Bar (Bottom) -->
+            <div class="table-container">
                 <div class="table-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
                     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-                        <h3 id="ddBreakdownTableTitle" style="font-size:13.5px;font-weight:600;margin:0">Breakdown</h3>
+                        <h3 id="ddBreakdownTableTitle" style="font-size:13px;font-weight:600;margin:0">Breakdown</h3>
                         <div id="ddTabs" class="dd-segmented-tabs"></div>
                     </div>
                 </div>
-                <div id="ddHint" style="display:none;margin:12px 14px;padding:10px 14px;border-radius:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);font-size:12.5px;color:var(--text-secondary)"></div>
+                <div id="ddHint" style="display:none;margin:10px 12px;padding:8px 12px;border-radius:6px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);font-size:12px;color:var(--text-secondary)"></div>
                 <table>
                     <thead id="ddTableHead">
                         <tr>
@@ -2234,18 +2272,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     </thead>
                     <tbody id="ddTableBody"></tbody>
                 </table>
-            </div>
-
-            <!-- 2-Column Grid for Daily Trend & Distribution -->
-            <div class="cmp-results-charts">
-                <div class="chart-card cmp-chart-card">
-                    <h3 class="cmp-chart-title">Daily Cost Trend</h3>
-                    <div style="position:relative;height:220px"><canvas id="ddTrendChart"></canvas></div>
-                </div>
-                <div class="chart-card cmp-chart-card">
-                    <h3 id="ddChartTitle" class="cmp-chart-title">Breakdown Distribution</h3>
-                    <div style="position:relative;height:220px"><canvas id="ddBarChart"></canvas></div>
-                </div>
             </div>
         </div>
     </section>
@@ -2509,7 +2535,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <!-- Header -->
         <div class="db-header">
             <div class="db-header-left">
-                <div class="db-breadcrumb">ANALYTICS / CLIENTS</div>
+                <div class="db-breadcrumb">CLIENTS</div>
                 <h1 class="db-title">Client Cost Allocation</h1>
                 <div class="db-sync-line">
                     <span style="font-size:12px;color:var(--text-secondary)">Allocate cloud spend to clients by subscription, resource group, or service</span>
@@ -2831,7 +2857,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <section id="page-resource-inventory" class="page-section">
         <div class="db-header">
             <div class="db-header-left">
-                <div class="db-breadcrumb">ANALYTICS / RESOURCE INVENTORY</div>
+                <div class="db-breadcrumb">RESOURCE INVENTORY</div>
                 <h1 class="db-title">Cloud Resource Inventory</h1>
                 <div class="db-sync-line">
                     <span style="font-size:12px;color:var(--text-secondary)">Complete inventory of cloud resources across Azure, AWS &amp; GCP with config, power state, and spend metadata</span>
