@@ -724,6 +724,16 @@ html[data-sidebar-sticky="true"] .sidebar .nav-card-group.expanded .nav-card-bod
     padding: 0 6px 4px 6px;
 }
 
+.sidebar:not(:hover):not(.is-sticky) .nav-card-body,
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) .nav-card-body {
+    display: none !important;
+}
+
+.sidebar:not(:hover):not(.is-sticky),
+html:not([data-sidebar-sticky="true"]) .sidebar:not(:hover) {
+    overflow: hidden !important;
+}
+
 /* Navigation Sub-Items (.nav-item) */
 .sidebar .nav-item {
     position: relative;
@@ -4333,6 +4343,455 @@ select.filter-input option {
 .user-tile__name { font-size: 12px; color: var(--text-primary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .user-tile__role { font-size: 11px; color: var(--text-tertiary, var(--text-secondary)); }
 
+/* ─── Cloud Cost Analyzer: Report Builder & Generator ───────────────────── */
+.rpt-config-card {
+    background: var(--card-bg, #ffffff);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 14px;
+    padding: 28px;
+    margin-bottom: 28px;
+}
+
+.rpt-section-block {
+    padding-bottom: 24px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+.rpt-section-block:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+
+.rpt-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.rpt-section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rpt-section-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--accent, #2563EB);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.rpt-section-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+}
+
+/* 1. Cloud Provider Cards */
+.rpt-cloud-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.rpt-cloud-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border, #e5e7eb);
+    background: var(--bg-card, rgba(255,255,255,0.02));
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+.rpt-cloud-card:hover {
+    border-color: rgba(37, 99, 235, 0.4);
+    background: rgba(37, 99, 235, 0.03);
+}
+.rpt-cloud-card.selected {
+    border-color: var(--accent, #2563EB);
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.rpt-cloud-card__icon {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.rpt-cloud-card__icon img, .rpt-cloud-card__icon svg {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.rpt-cloud-card__info {
+    flex: 1;
+    min-width: 0;
+}
+.rpt-cloud-card__name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.rpt-cloud-card__sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 1px;
+}
+
+.rpt-cloud-card__check {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 1.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+.rpt-cloud-card.selected .rpt-cloud-card__check {
+    background: var(--accent, #2563EB);
+    border-color: var(--accent, #2563EB);
+    color: #ffffff;
+}
+
+.rpt-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.rpt-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(37, 99, 235, 0.1);
+    border: 1px solid rgba(37, 99, 235, 0.25);
+    color: var(--accent, #2563EB);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+.rpt-chip__remove {
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+    font-size: 14px;
+    line-height: 1;
+}
+.rpt-chip__remove:hover {
+    opacity: 1;
+    color: #ef4444;
+}
+
+/* 2. Scope Segmented Control */
+.rpt-scope-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+@media (max-width: 768px) {
+    .rpt-scope-grid { grid-template-columns: 1fr; }
+}
+
+.rpt-scope-card {
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    background: var(--bg-card, rgba(255,255,255,0.02));
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.rpt-scope-card:hover {
+    border-color: rgba(37, 99, 235, 0.4);
+}
+.rpt-scope-card.selected {
+    border-color: var(--accent, #2563EB);
+    background: rgba(37, 99, 235, 0.08);
+}
+.rpt-scope-card__title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.rpt-scope-card__desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* 3. Metrics Semantic Groups & Compact Chips */
+.rpt-metrics-groups-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.rpt-metric-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.rpt-metric-group__title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+}
+
+.rpt-metric-group__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.rpt-metric-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: var(--card-bg, #ffffff);
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+}
+
+.rpt-metric-chip:hover {
+    border-color: rgba(37, 99, 235, 0.4);
+    background: rgba(37, 99, 235, 0.03);
+}
+
+.rpt-metric-chip.active {
+    background: rgba(37, 99, 235, 0.08);
+    border-color: var(--accent, #2563EB);
+    color: var(--accent, #2563EB);
+    font-weight: 600;
+}
+
+.rpt-metric-chip input[type="checkbox"] {
+    accent-color: var(--accent, #2563EB);
+    cursor: pointer;
+    margin: 0;
+    width: 14px;
+    height: 14px;
+}
+
+html[data-appearance="dark"] .rpt-metric-chip {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-appearance="dark"] .rpt-metric-chip.active {
+    background: rgba(37, 99, 235, 0.16);
+    color: #60a5fa;
+    border-color: #3b82f6;
+}
+
+/* 4. Date Range Segmented */
+.rpt-period-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.rpt-period-btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.rpt-period-btn:hover {
+    color: var(--text-primary);
+    border-color: rgba(37, 99, 235, 0.4);
+}
+.rpt-period-btn.active {
+    background: var(--accent, #2563EB);
+    border-color: var(--accent, #2563EB);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.rpt-custom-dates-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(0,0,0,0.02);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    max-width: 480px;
+}
+html[data-appearance="dark"] .rpt-custom-dates-wrap {
+    background: rgba(255,255,255,0.02);
+}
+
+/* 5. Live Summary Strip */
+.rpt-summary-card {
+    background: rgba(37, 99, 235, 0.04);
+    border: 1px solid rgba(37, 99, 235, 0.18);
+    border-radius: 12px;
+    padding: 18px 22px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+}
+.rpt-summary-col {
+    display: flex;
+    flex-direction: column;
+}
+.rpt-summary-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+.rpt-summary-val {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Primary Action CTA Bar */
+.rpt-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 14px;
+}
+.rpt-generate-btn {
+    padding: 12px 28px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 9px;
+    background: #2563EB;
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s ease;
+}
+.rpt-generate-btn:hover:not(:disabled) {
+    background: #1d4ed8;
+}
+.rpt-generate-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Results Display Area */
+.rpt-results-container {
+    background: var(--card-bg, #ffffff);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 14px;
+    padding: 28px;
+    margin-top: 28px;
+    display: none;
+}
+.rpt-results-container.visible {
+    display: block;
+    animation: fadeIn .3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.rpt-results-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 14px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 18px;
+}
+
+.rpt-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-top: 16px;
+}
+.rpt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+.rpt-table th {
+    background: rgba(0,0,0,0.03);
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+html[data-appearance="dark"] .rpt-table th {
+    background: rgba(255,255,255,0.03);
+}
+.rpt-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+.rpt-table tr:last-child td {
+    border-bottom: none;
+}
+.rpt-table tr:hover td {
+    background: rgba(37,99,235,0.02);
+}
+
 /* ============================================================
    100% PURE FLAT DESIGN OVERRIDES (NO SHADOWS / NO GLOWS)
    ============================================================ */
@@ -4341,3 +4800,4 @@ select.filter-input option {
     text-shadow: none !important;
     filter: none !important;
 }
+

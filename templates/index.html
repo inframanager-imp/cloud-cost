@@ -15,7 +15,8 @@
     (function () {
         var THEME_IDS = ['forest','ocean','ember','violet','rose','slate','aurora'];
         try {
-            if (localStorage.getItem('sidebarSticky') === 'true') {
+            var sticky = localStorage.getItem('sidebarSticky');
+            if (sticky !== 'false') {
                 document.documentElement.setAttribute('data-sidebar-sticky', 'true');
             }
             if (localStorage.getItem('uiAppearance') === 'light') {
@@ -417,7 +418,7 @@
     <!-- Nav Body -->
     <div class="sidebar-nav-body">
 
-        <!-- MAIN / PRIMARY NAV (Home, Dashboard, Clients, Resource Inventory) -->
+        <!-- MAIN / PRIMARY NAV (Home, Clients, Resource Inventory) -->
         <div class="sidebar-main-nav">
             <div class="nav-item" data-page="analytics-home" onclick="navigateTo('analytics-home')" title="Home">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -425,15 +426,6 @@
                     <polyline points="9 22 9 12 15 12 15 22"/>
                 </svg>
                 <span class="nav-text">Home</span>
-            </div>
-            <div class="nav-item active" data-page="executive" onclick="navigateTo('executive')" title="Dashboard">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="7" height="7"/>
-                    <rect x="14" y="3" width="7" height="7"/>
-                    <rect x="14" y="14" width="7" height="7"/>
-                    <rect x="3" y="14" width="7" height="7"/>
-                </svg>
-                <span class="nav-text">Dashboard</span>
             </div>
             <div class="nav-item" data-page="clients" onclick="navigateTo('clients')" title="Clients">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -454,14 +446,50 @@
 
         <div class="sidebar-nav-divider"></div>
 
-        <!-- ANALYTICS GROUP -->
-        <div class="nav-card-group expanded" id="group-analytics">
-            <div class="nav-card-header" onclick="toggleNavGroup(this)">
+        <!-- DASHBOARD GROUP -->
+        <div class="nav-card-group expanded" id="group-dashboard">
+            <div class="nav-card-header" onclick="toggleNavGroup(this)" title="Dashboard">
                 <div class="nav-card-header-left">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                    </svg>
+                    <span class="nav-card-title">DASHBOARD</span>
+                </div>
+                <div class="nav-card-chevron">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </div>
+            </div>
+            <div class="nav-card-body">
+                <div class="nav-item" data-page="cloud-overview" onclick="navigateTo('cloud-overview')" title="Cloud Overview">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/>
+                    </svg>
+                    <span class="nav-text">Cloud Overview</span>
+                </div>
+                <div class="nav-item active" data-page="executive" onclick="navigateTo('executive')" title="FinOps Center">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="18" y1="20" x2="18" y2="10"/>
                         <line x1="12" y1="20" x2="12" y2="4"/>
                         <line x1="6" y1="20" x2="6" y2="14"/>
+                    </svg>
+                    <span class="nav-text">FinOps Center</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ANALYTICS GROUP -->
+        <div class="nav-card-group expanded" id="group-analytics">
+            <div class="nav-card-header" onclick="toggleNavGroup(this)" title="Analytics">
+                <div class="nav-card-header-left">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                     </svg>
                     <span class="nav-card-title">ANALYTICS</span>
                 </div>
@@ -472,14 +500,6 @@
                 </div>
             </div>
             <div class="nav-card-body">
-                <div class="nav-item" data-page="cloud-overview" onclick="navigateTo('cloud-overview')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <line x1="2" y1="12" x2="22" y2="12"/>
-                        <path d="M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/>
-                    </svg>
-                    <span class="nav-text">Cloud Overview</span>
-                </div>
                 <div class="nav-item" data-page="costs" onclick="navigateTo('costs')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -526,7 +546,7 @@
         </div>
 
         <!-- SETUP GROUP -->
-        <div class="nav-card-group" id="group-setup">
+        <div class="nav-card-group expanded" id="group-setup">
             <div class="nav-card-header" onclick="toggleNavGroup(this)">
                 <div class="nav-card-header-left">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -566,7 +586,7 @@
         </div>
 
         <!-- OPERATIONS GROUP -->
-        <div class="nav-card-group" id="group-operations">
+        <div class="nav-card-group expanded" id="group-operations">
             <div class="nav-card-header" onclick="toggleNavGroup(this)">
                 <div class="nav-card-header-left">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -581,6 +601,16 @@
                 </div>
             </div>
             <div class="nav-card-body">
+                <div class="nav-item" data-page="report-builder" onclick="navigateTo('report-builder')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    <span class="nav-text">Cost Reports</span>
+                </div>
                 <div class="nav-item" data-page="activity" onclick="navigateTo('activity')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"/>
@@ -874,8 +904,8 @@ document.addEventListener('DOMContentLoaded', () => {
     <section id="page-cloud-overview" class="page-section">
         <div class="cp-page-header">
             <div>
-                <div class="cp-breadcrumb">ANALYTICS</div>
-                <h1 class="cp-page-title">Cloud overview</h1>
+                <div class="cp-breadcrumb" style="font-size:11px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">DASHBOARD &rsaquo; CLOUD OVERVIEW</div>
+                <h1 class="cp-page-title" style="font-size:22px;font-weight:700;color:var(--text-primary);margin:0">Cloud Overview</h1>
                 <p class="cp-page-subtitle">Per-provider snapshot — current month costs, top accounts, and key services across connected clouds.</p>
             </div>
             <div style="padding-top:6px">
@@ -892,15 +922,15 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </section>
 
-    <!-- ═══ Dashboard Page ══════════════════════════════════════════ -->
+    <!-- ═══ Dashboard Page (FinOps Center) ═══════════════════════════ -->
     <!-- ═══ Executive Summary Page ══════════════════════════════════════ -->
     <section id="page-executive" class="page-section active">
 
         <!-- Header -->
         <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
             <div>
-                <div style="font-size:11px;font-weight:500;color:#6B7280;margin-bottom:3px">Dashboard</div>
-                <h1 style="font-size:22px;font-weight:600;color:#111827;margin:0;line-height:1.2;letter-spacing:-0.01em">FinOps Command Center</h1>
+                <div class="cp-breadcrumb" style="font-size:11px;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">DASHBOARD &rsaquo; FINOPS CENTER</div>
+                <h1 style="font-size:22px;font-weight:700;color:var(--text-primary);margin:0;line-height:1.2;letter-spacing:-0.01em">FinOps Command Center</h1>
             </div>
             <!-- Toolbar Controls -->
             <div class="no-print" style="display:flex;align-items:center;gap:10px;flex-shrink:0">
@@ -3327,6 +3357,372 @@ document.addEventListener('DOMContentLoaded', () => {
             <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
                 <button class="btn btn-secondary" onclick="closeCallerNamesModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="saveCallerNames()">Save Names</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Cloud Cost Analyzer – Report Generation Page ═════════════════════ -->
+    <section id="page-report-builder" class="page-section">
+        <!-- Page Header -->
+        <div class="cp-page-header" style="margin-bottom:20px;display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px">
+            <div>
+                <div class="cp-breadcrumb">REPORTS / GENERATOR</div>
+                <h1 class="cp-page-title" style="font-size:22px;font-weight:700;color:var(--text-primary);margin:2px 0 0 0">Generate Cost Report</h1>
+                <p class="cp-page-subtitle" style="font-size:12px;color:var(--text-secondary);margin-top:4px">
+                    Configure your cloud cost data and generate a detailed report based on your selected providers, scope, metrics, and time period.
+                </p>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding-top:4px">
+                <button class="cp-btn-secondary" onclick="openSavedReportsModal()" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    Saved Reports
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Configuration Card -->
+        <div class="rpt-config-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:14px">
+                <h2 style="font-size:17px;font-weight:700;color:var(--text-primary);margin:0">Report Configuration</h2>
+            </div>
+
+            <!-- 1. CLOUD PROVIDERS -->
+            <div class="rpt-section-block">
+                <div class="rpt-section-header">
+                    <div>
+                        <div class="rpt-section-title">
+                            <span class="rpt-section-step">1</span>
+                            Cloud Providers
+                        </div>
+                        <div class="rpt-section-sub">Select one or more cloud providers to include in the report.</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <button type="button" class="btn-ghost" onclick="selectAllReportProviders()" style="font-size:11.5px;color:var(--accent);cursor:pointer;background:none;border:none;font-weight:600">Select All</button>
+                        <span style="color:var(--border)">|</span>
+                        <button type="button" class="btn-ghost" onclick="clearReportProviders()" style="font-size:11.5px;color:var(--text-secondary);cursor:pointer;background:none;border:none">Clear All</button>
+                        <span id="rptCloudCountBadge" style="margin-left:6px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:rgba(37,99,235,0.08);color:var(--accent)">3 selected</span>
+                    </div>
+                </div>
+
+                <div class="rpt-cloud-grid">
+                    <!-- Azure -->
+                    <div class="rpt-cloud-card selected" id="rptCard-azure" onclick="toggleReportProvider('azure')">
+                        <div class="rpt-cloud-card__icon">
+                            <img src="/static/img/azure-logo.svg" alt="Azure">
+                        </div>
+                        <div class="rpt-cloud-card__info">
+                            <div class="rpt-cloud-card__name">Microsoft Azure</div>
+                        </div>
+                        <div class="rpt-cloud-card__check">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                    </div>
+                    <!-- AWS -->
+                    <div class="rpt-cloud-card selected" id="rptCard-aws" onclick="toggleReportProvider('aws')">
+                        <div class="rpt-cloud-card__icon">
+                            <img src="/static/img/aws-logo.svg" alt="AWS">
+                        </div>
+                        <div class="rpt-cloud-card__info">
+                            <div class="rpt-cloud-card__name">Amazon Web Services</div>
+                        </div>
+                        <div class="rpt-cloud-card__check">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                    </div>
+                    <!-- GCP -->
+                    <div class="rpt-cloud-card selected" id="rptCard-gcp" onclick="toggleReportProvider('gcp')">
+                        <div class="rpt-cloud-card__icon">
+                            <img src="/static/img/gcp-logo.svg" alt="GCP">
+                        </div>
+                        <div class="rpt-cloud-card__info">
+                            <div class="rpt-cloud-card__name">Google Cloud</div>
+                        </div>
+                        <div class="rpt-cloud-card__check">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Validation Msg -->
+                <div id="rptCloudValidationMsg" style="display:none;color:#ef4444;font-size:12px;margin-top:6px;font-weight:500">
+                    ⚠ Select at least one cloud provider to generate a report.
+                </div>
+            </div>
+
+            <!-- 2. REPORT SCOPE -->
+            <div class="rpt-section-block">
+                <div class="rpt-section-header">
+                    <div>
+                        <div class="rpt-section-title">
+                            <span class="rpt-section-step">2</span>
+                            Report Scope
+                        </div>
+                        <div class="rpt-section-sub">Choose the level of cloud resources you want to analyze.</div>
+                    </div>
+                </div>
+
+                <div class="rpt-scope-grid">
+                    <div class="rpt-scope-card" id="rptScope-services" onclick="setReportScope('services')">
+                        <div class="rpt-scope-card__title">
+                            <span>Services</span>
+                            <span style="font-size:11px;color:var(--text-secondary);font-weight:500">Level 1</span>
+                        </div>
+                    </div>
+                    <div class="rpt-scope-card" id="rptScope-resources" onclick="setReportScope('resources')">
+                        <div class="rpt-scope-card__title">
+                            <span>Resources</span>
+                            <span style="font-size:11px;color:var(--text-secondary);font-weight:500">Level 2</span>
+                        </div>
+                    </div>
+                    <div class="rpt-scope-card selected" id="rptScope-both" onclick="setReportScope('both')">
+                        <div class="rpt-scope-card__title">
+                            <span>Services + Resources</span>
+                            <span style="font-size:10px;background:rgba(37,99,235,0.1);color:var(--accent);padding:2px 6px;border-radius:4px;font-weight:600">Recommended</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. METRICS -->
+            <div class="rpt-section-block">
+                <div class="rpt-section-header">
+                    <div>
+                        <div class="rpt-section-title">
+                            <span class="rpt-section-step">3</span>
+                            Metrics
+                        </div>
+                        <div class="rpt-section-sub">Choose the cost and usage metrics you want to include in the report.</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px" id="rptMetricsToolbar">
+                        <button type="button" class="btn-ghost" onclick="selectAllReportMetrics()" style="font-size:11.5px;color:var(--accent);cursor:pointer;background:none;border:none;font-weight:600">Select All</button>
+                        <span style="color:var(--border)">|</span>
+                        <button type="button" class="btn-ghost" onclick="clearReportMetrics()" style="font-size:11.5px;color:var(--text-secondary);cursor:pointer;background:none;border:none">Clear All</button>
+                        <span id="rptMetricsCountBadge" style="margin-left:6px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:rgba(37,99,235,0.08);color:var(--accent)">10 selected</span>
+                    </div>
+                </div>
+
+                <div class="rpt-metrics-groups-container" id="rptMetricsGroupsContainer"></div>
+                <div id="rptMetricValidationMsg" style="display:none;color:#ef4444;font-size:12px;margin-top:6px;font-weight:500">
+                    ⚠ Select at least one metric to continue.
+                </div>
+            </div>
+
+            <!-- 4. DATE RANGE -->
+            <div class="rpt-section-block">
+                <div class="rpt-section-header">
+                    <div>
+                        <div class="rpt-section-title">
+                            <span class="rpt-section-step">4</span>
+                            Date Range
+                        </div>
+                        <div class="rpt-section-sub">Select the period for which the report should be generated.</div>
+                    </div>
+                </div>
+
+                <div class="rpt-period-bar">
+                    <button type="button" class="rpt-period-btn" data-period="7d" onclick="setReportDatePreset('7d')">Last 7 Days</button>
+                    <button type="button" class="rpt-period-btn active" data-period="30d" onclick="setReportDatePreset('30d')">Last 30 Days</button>
+                    <button type="button" class="rpt-period-btn" data-period="3m" onclick="setReportDatePreset('3m')">Last 3 Months</button>
+                    <button type="button" class="rpt-period-btn" data-period="6m" onclick="setReportDatePreset('6m')">Last 6 Months</button>
+                    <button type="button" class="rpt-period-btn" data-period="12m" onclick="setReportDatePreset('12m')">Last 12 Months</button>
+                    <button type="button" class="rpt-period-btn" data-period="custom" onclick="setReportDatePreset('custom')">Custom Range</button>
+                </div>
+
+                <div class="rpt-custom-dates-wrap" id="rptCustomDateWrap" style="display:none">
+                    <div style="flex:1">
+                        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">FROM</label>
+                        <input type="date" id="rptDateFrom" class="filter-input" style="width:100%;font-size:12px;padding:6px 10px" onchange="onReportCustomDateChange()">
+                    </div>
+                    <span style="color:var(--text-tertiary);margin-top:14px">→</span>
+                    <div style="flex:1">
+                        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">TO</label>
+                        <input type="date" id="rptDateTo" class="filter-input" style="width:100%;font-size:12px;padding:6px 10px" onchange="onReportCustomDateChange()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. REPORT SUMMARY -->
+            <div class="rpt-section-block">
+                <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:10px">Report Summary</div>
+                <div class="rpt-summary-card">
+                    <div class="rpt-summary-col">
+                        <span class="rpt-summary-label">Cloud Providers</span>
+                        <span class="rpt-summary-val" id="rptSumClouds">AWS, Azure, GCP</span>
+                    </div>
+                    <div class="rpt-summary-col">
+                        <span class="rpt-summary-label">Scope</span>
+                        <span class="rpt-summary-val" id="rptSumScope">Services + Resources</span>
+                    </div>
+                    <div class="rpt-summary-col">
+                        <span class="rpt-summary-label">Metrics</span>
+                        <span class="rpt-summary-val" id="rptSumMetrics">All Metrics (10)</span>
+                    </div>
+                    <div class="rpt-summary-col">
+                        <span class="rpt-summary-label">Period</span>
+                        <span class="rpt-summary-val" id="rptSumPeriod">Last 30 Days</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="rpt-action-bar">
+                <div>
+                    <span id="rptValidationStatusText" style="font-size:12px;color:var(--text-secondary)">Configuration is ready.</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px">
+                    <button type="button" class="cp-btn-secondary" onclick="resetReportBuilder()" style="padding:10px 18px;font-size:13px">Reset</button>
+                    <button type="button" class="rpt-generate-btn" id="rptGenerateBtn" onclick="generateReport()">
+                        <span id="rptGenerateBtnText">Generate Report →</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GENERATED REPORT RESULTS AREA -->
+        <div class="rpt-results-container" id="rptResultsArea">
+            <div class="rpt-results-topbar">
+                <div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin:0">Generated Cost Report</h2>
+                        <span class="badge" style="background:#10B981;color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">Ready</span>
+                    </div>
+                    <p style="font-size:12px;color:var(--text-secondary);margin:4px 0 0" id="rptGeneratedTimestamp">Generated for selected providers • Period: Last 30 Days</p>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <button class="cp-btn-secondary" onclick="saveCurrentReport()" title="Save preset" style="display:inline-flex;align-items:center;gap:6px">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Save Report
+                    </button>
+                    <div class="custom-period-dropdown" id="rptExportDropdown" style="position:relative">
+                        <button class="cp-btn-primary" onclick="toggleRptExportMenu(event)" style="display:inline-flex;align-items:center;gap:6px">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            <span>Export</span>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="custom-cloud-menu" id="rptExportMenu" style="right:0;left:auto;min-width:140px">
+                            <div class="custom-cloud-option" onclick="exportReportData('pdf', event)">📄 Export PDF</div>
+                            <div class="custom-cloud-option" onclick="exportReportData('csv', event)">📊 Export CSV</div>
+                            <div class="custom-cloud-option" onclick="exportReportData('excel', event)">📑 Export Excel</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI Cards Overview -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:14px;margin-bottom:24px" id="rptKpiGrid">
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em">Total Cost</div>
+                    <div id="rptKpiTotalCost" style="font-size:24px;font-weight:800;color:var(--accent);margin-top:4px">$0.00</div>
+                    <div style="font-size:11px;color:var(--text-secondary);margin-top:4px" id="rptKpiSubAccounts">Across selected clouds</div>
+                </div>
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em">Previous Period</div>
+                    <div id="rptKpiPrevCost" style="font-size:24px;font-weight:800;color:var(--text-primary);margin-top:4px">$0.00</div>
+                    <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">Prior period comparison</div>
+                </div>
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em">Cost Change</div>
+                    <div id="rptKpiCostChange" style="font-size:24px;font-weight:800;margin-top:4px">0.0%</div>
+                    <div style="font-size:11px;color:var(--text-secondary);margin-top:4px" id="rptKpiCostChangeSub">MoM Variance</div>
+                </div>
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px">
+                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em">Monitored Items</div>
+                    <div id="rptKpiResourcesCount" style="font-size:24px;font-weight:800;color:var(--text-primary);margin-top:4px">0</div>
+                    <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">Services &amp; active accounts</div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:18px;margin-bottom:24px" class="rpt-charts-row">
+                <!-- Cost Trend -->
+                <div class="chart-card" style="margin-bottom:0">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                        <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin:0">Cost Trend Over Period</h3>
+                        <span style="font-size:11px;color:var(--text-secondary)" id="rptTrendChartSubtitle">Daily Spend</span>
+                    </div>
+                    <div id="rptCostTrendChart" style="height:280px;width:100%"></div>
+                </div>
+                <!-- Cost by Cloud Provider -->
+                <div class="chart-card" style="margin-bottom:0">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                        <h3 style="font-size:14px;font-weight:600;color:var(--text-primary);margin:0">Cost by Cloud Provider</h3>
+                        <span style="font-size:11px;color:var(--text-secondary)">Multi-Cloud Share</span>
+                    </div>
+                    <div id="rptCloudShareChart" style="height:280px;width:100%"></div>
+                </div>
+            </div>
+
+            <!-- Cost by Service Table -->
+            <div class="chart-card" id="rptServiceSection" style="margin-bottom:20px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <div>
+                        <h3 style="font-size:14px;font-weight:700;color:var(--text-primary);margin:0">Cost by Cloud Service</h3>
+                        <p style="font-size:12px;color:var(--text-secondary);margin:2px 0 0">Aggregated service costs, usage units, and share of total cloud spend.</p>
+                    </div>
+                    <span id="rptServicesCountBadge" style="font-size:11px;color:var(--text-tertiary)"></span>
+                </div>
+                <div class="rpt-table-wrap">
+                    <table class="rpt-table" id="rptServiceTable">
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Cloud</th>
+                                <th style="text-align:right">Cost</th>
+                                <th style="text-align:right">% of Total</th>
+                                <th style="text-align:right">Usage Units</th>
+                                <th style="text-align:center">Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rptServiceTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Resource Cost Table (Visible when scope includes Resources) -->
+            <div class="chart-card" id="rptResourceSection" style="margin-bottom:10px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <div>
+                        <h3 style="font-size:14px;font-weight:700;color:var(--text-primary);margin:0">Resource Level Cost Breakdown</h3>
+                        <p style="font-size:12px;color:var(--text-secondary);margin:2px 0 0">Individual resource instances, subscriptions, and regions.</p>
+                    </div>
+                    <span id="rptResourcesCountBadge" style="font-size:11px;color:var(--text-tertiary)"></span>
+                </div>
+                <div class="rpt-table-wrap">
+                    <table class="rpt-table" id="rptResourceTable">
+                        <thead>
+                            <tr>
+                                <th>Resource Name</th>
+                                <th>Service Category</th>
+                                <th>Cloud Provider</th>
+                                <th>Account / Region</th>
+                                <th style="text-align:right">Cost</th>
+                                <th style="text-align:right">Status / Power</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rptResourceTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══ Saved Reports Modal ══════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="savedReportsModal" style="display:none" onclick="if(event.target===this) closeSavedReportsModal()">
+        <div class="modal-card" style="max-width:540px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <h3 style="font-size:16px;font-weight:700;color:var(--text-primary);margin:0">Saved Report Presets</h3>
+                <button class="icon-btn-ghost" onclick="closeSavedReportsModal()" style="font-size:18px;line-height:1;background:none;border:none;cursor:pointer;color:var(--text-secondary)">×</button>
+            </div>
+            <p style="font-size:12.5px;color:var(--text-secondary);margin-bottom:16px">
+                Quickly load previously saved report configurations or choose from built-in enterprise templates.
+            </p>
+            <div id="savedReportsList" style="display:flex;flex-direction:column;gap:10px;max-height:360px;overflow-y:auto;margin-bottom:16px"></div>
+            <div style="display:flex;justify-content:flex-end">
+                <button class="cp-btn-secondary" onclick="closeSavedReportsModal()">Close</button>
             </div>
         </div>
     </div>
