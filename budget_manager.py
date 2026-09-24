@@ -10,6 +10,7 @@ Called after every cost sync.  For each enabled budget:
 """
 
 import os
+import time
 import calendar
 from datetime import datetime, timedelta
 
@@ -61,46 +62,124 @@ def _period_dates(period: str, budget: dict = None):
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
-def get_current_spend(budget: dict) -> float:
-    """Query cost_data for the budget's scope and period (scoped to the budget's own tenant)."""
+# Resolving a tenant's reporting currency and building the FX conversion
+# expression costs ~5s (rate lookup), and it was being redone for every single
+# budget -- so a tenant with 20 budgets spent ~2 minutes on nothing but repeat
+# currency lookups on every post-sync check. Cache per tenant behind a short
+# TTL: long enough to collapse one check_budgets() run (and one Budgets page
+# load) into a single lookup, short enough that rates can't go meaningfully
+# stale.
+_CUR_CACHE_TTL_SECONDS = 300
+_cur_cache = {}
+
+
+def _cost_expr_for(tenant_id):
+    """Return (reporting_currency, converted-cost SQL expression) for a tenant."""
     from database import _converted_cost_sql
     from currency import tenant_reporting_currency
 
-    date_from, date_to = _period_dates(budget["period"], budget)
-    tenant_id      = budget.get("tenant_id") or 1
-    provider_type  = budget.get("provider_type", "all")
-    provider_id    = budget.get("provider_id", "")
-    resource_group = budget.get("resource_group", "")
-    service_name   = budget.get("service_name", "")
+    now = time.time()
+    hit = _cur_cache.get(tenant_id)
+    if hit and now - hit[0] < _CUR_CACHE_TTL_SECONDS:
+        return hit[1], hit[2]
+    rep = tenant_reporting_currency(tenant_id, get_db)
+    expr = _converted_cost_sql(rep)
+    _cur_cache[tenant_id] = (now, rep, expr)
+    return rep, expr
+
+
+def _scope_clause(budget: dict):
+    """WHERE fragment + params for a budget's scope (tenant + optional filters).
+
+    Dates are deliberately excluded so the same scope can be reused both to
+    find the budget's evaluation window and to sum spend over it.
+    """
+    conds = ["tenant_id = ?"]
+    params = [budget.get("tenant_id") or 1]
+
+    provider_type = budget.get("provider_type", "all")
+    if provider_type and provider_type != "all":
+        conds.append("cloud_provider = ?")
+        params.append(provider_type)
+    if budget.get("provider_id"):
+        conds.append("subscription_id = ?")
+        params.append(budget["provider_id"])
+    if budget.get("resource_group"):
+        conds.append("LOWER(resource_group) = LOWER(?)")
+        params.append(budget["resource_group"])
+    if budget.get("service_name"):
+        conds.append("LOWER(service_name) = LOWER(?)")
+        params.append(budget["service_name"])
+
+    return " AND ".join(conds), params
+
+
+def _latest_closed_day(conn, budget: dict):
+    """Most recent day holding data for this scope, EXCLUDING today.
+
+    Cloud billing only reports a day once it has closed, so "today" is always
+    partial -- measured against live data, Azure and GCP run ~1 day behind and
+    AWS up to 5. A daily budget that evaluated `date == today` therefore
+    compared a partial (usually near-zero) figure against a whole day's budget
+    and could never fire; the next day the window moved on, so the now-complete
+    figure was never re-checked. Resolving to the latest CLOSED day instead
+    self-adjusts to whatever lag each provider actually has, with no hardcoded
+    offset to keep in sync.
+
+    Returns None when the scope has no closed-day data at all.
+    """
+    scope, params = _scope_clause(budget)
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    row = conn.execute(
+        f"SELECT MAX(substr(date, 1, 10)) AS d FROM cost_data "
+        f"WHERE {scope} AND substr(date, 1, 10) < ?",
+        params + [today],
+    ).fetchone()
+    return row["d"] if row and row["d"] else None
+
+
+def budget_window(budget: dict, conn=None):
+    """Resolve the (start, end) dates a budget is actually evaluated over.
+
+    Every period except 'daily' is plain calendar maths (see _period_dates).
+    'daily' resolves to the latest closed day -- see _latest_closed_day for why
+    the literal calendar date cannot be used.
+    """
+    if (budget.get("period") or "") != "daily":
+        return _period_dates(budget.get("period"), budget)
+
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db()
+    try:
+        day = _latest_closed_day(conn, budget)
+    finally:
+        if own_conn:
+            conn.close()
+
+    # No closed day with data yet (brand-new scope): fall back to today so the
+    # behaviour stays defined -- it reads 0 rather than raising.
+    return (day, day) if day else (datetime.utcnow().strftime("%Y-%m-%d"),) * 2
+
+
+def get_current_spend(budget: dict) -> float:
+    """Query cost_data for the budget's scope and period (scoped to the budget's own tenant)."""
+    tenant_id = budget.get("tenant_id") or 1
+    _rep_cur, _cost = _cost_expr_for(tenant_id)
 
     conn = get_db()
-    rep_cur = tenant_reporting_currency(tenant_id, get_db)
-    _cost = _converted_cost_sql(rep_cur)
-    params = [date_from, date_to, tenant_id]
-    # Use substr(date,1,10) so timestamps like '2026-06-16T00:00:00Z' match plain date strings
-    where = "WHERE substr(date,1,10) >= ? AND substr(date,1,10) <= ? AND tenant_id = ?"
-
-    if provider_type and provider_type != "all":
-        where += " AND cloud_provider = ?"
-        params.append(provider_type)
-
-    if provider_id:
-        where += " AND subscription_id = ?"
-        params.append(provider_id)
-
-    if resource_group:
-        where += " AND LOWER(resource_group) = LOWER(?)"
-        params.append(resource_group)
-
-    if service_name:
-        where += " AND LOWER(service_name) = LOWER(?)"
-        params.append(service_name)
-
-    row = conn.execute(
-        f"SELECT COALESCE(SUM({_cost}), 0) AS total FROM cost_data {where}",
-        params,
-    ).fetchone()
-    conn.close()
+    try:
+        date_from, date_to = budget_window(budget, conn)
+        scope, params = _scope_clause(budget)
+        # substr(date,1,10) so timestamps like '2026-06-16T00:00:00Z' still match
+        # plain date strings.
+        row = conn.execute(
+            f"SELECT COALESCE(SUM({_cost}), 0) AS total FROM cost_data "
+            f"WHERE {scope} AND substr(date, 1, 10) >= ? AND substr(date, 1, 10) <= ?",
+            params + [date_from, date_to],
+        ).fetchone()
+    finally:
+        conn.close()
     return float(row["total"]) if row else 0.0
 
 
@@ -118,7 +197,7 @@ def _send_email_alert(budget: dict, threshold_pct: int, current_spend: float):
 
         b_tenant_id = budget.get("tenant_id") or 1
         settings = get_email_settings(b_tenant_id)
-        currency_symbol = _cur_symbol_fn(tenant_reporting_currency(b_tenant_id, get_db))
+        currency_symbol = _cur_symbol_fn(_cost_expr_for(b_tenant_id)[0])
         smtp_host = settings.get("smtp_host", "")
         smtp_port = settings.get("smtp_port", 587)
         smtp_user = settings.get("smtp_user", "")
@@ -142,6 +221,11 @@ def _send_email_alert(budget: dict, threshold_pct: int, current_spend: float):
         pct_used = round(current_spend / budget_amount * 100, 1) if budget_amount else 0
         remaining = max(0, budget_amount - current_spend)
         period = budget["period"].capitalize()
+        # A daily alert can be about a day that closed some time ago (AWS
+        # lags several days), so name the window rather than just "Daily".
+        _w_from, _w_to = budget_window(budget)
+        period_display = (f"{period} ({_w_from})" if _w_from == _w_to
+                          else f"{period} ({_w_from} → {_w_to})")
         provider = budget.get("provider_type", "all").upper()
         severity = "CRITICAL" if threshold_pct >= 100 else "WARNING"
 
@@ -160,7 +244,7 @@ def _send_email_alert(budget: dict, threshold_pct: int, current_spend: float):
           <div style="padding:24px">
             <table style="width:100%;border-collapse:collapse">
               <tr><td style="padding:8px 0;color:#666">Provider</td><td style="padding:8px 0;font-weight:600">{provider if provider!='ALL' else 'All Clouds'}</td></tr>
-              <tr><td style="padding:8px 0;color:#666">Period</td><td style="padding:8px 0;font-weight:600">{period}</td></tr>
+              <tr><td style="padding:8px 0;color:#666">Period</td><td style="padding:8px 0;font-weight:600">{period_display}</td></tr>
               <tr><td style="padding:8px 0;color:#666">Current Spend</td><td style="padding:8px 0;font-weight:600">{currency_symbol}{current_spend:,.2f}</td></tr>
               <tr><td style="padding:8px 0;color:#666">Budget</td><td style="padding:8px 0;font-weight:600">{currency_symbol}{budget_amount:,.2f}</td></tr>
               <tr><td style="padding:8px 0;color:#666">Remaining</td><td style="padding:8px 0;font-weight:600;color:{'#E53E3E' if remaining==0 else '#38A169'}">{currency_symbol}{remaining:,.2f}</td></tr>
@@ -232,7 +316,7 @@ def check_budgets(provider_filter: str = None) -> list:
             continue
 
         pct_used = (current_spend / budget_amount) * 100
-        b_currency_symbol = _cur_symbol_fn(tenant_reporting_currency(budget.get("tenant_id") or 1, get_db))
+        b_currency_symbol = _cur_symbol_fn(_cost_expr_for(budget.get("tenant_id") or 1)[0])
 
         for threshold in sorted(budget["alert_thresholds"]):
             if pct_used < threshold:
