@@ -8958,12 +8958,15 @@ function setAppearance(mode) { applyAppearance(mode === 'night' ? 'dark' : mode)
 
 function initAppearanceToggle() {
     try {
-        const saved = localStorage.getItem('theme');
-        if (saved === 'dark' || saved === 'light') {
-            document.documentElement.setAttribute('data-theme', saved);
-            applyAppearance(saved);
+        const saved = localStorage.getItem('theme') || localStorage.getItem(UI_APPEARANCE_KEY);
+        if (saved === 'dark') {
+            applyAppearance('dark');
+        } else {
+            applyAppearance('light');
         }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+        applyAppearance('light');
+    }
     syncAppearanceToggleActive();
 
     // Wire in-header theme toggle button
@@ -9044,29 +9047,21 @@ function applyUiTheme(theme) {
 
 function initUiThemeTrial() {
     const sel = document.getElementById('themeTrialSelect');
-    if (!sel) return;
     if (document.documentElement.getAttribute('data-appearance') === 'light') {
-        sel.disabled = true;
-        sel.addEventListener('change', () => applyUiTheme(sel.value));
+        document.documentElement.removeAttribute('data-ui-theme');
+        if (sel) {
+            sel.disabled = true;
+            sel.addEventListener('change', () => applyUiTheme(sel.value));
+        }
         return;
     }
+    if (!sel) return;
     sel.disabled = false;
     let raw = null;
     try {
         raw = localStorage.getItem(THEME_TRIAL_KEY);
     } catch (e) { /* ignore */ }
-    // First visit (key missing): default to Ocean so the trial palette is obvious
-    if (raw === null) {
-        try {
-            localStorage.setItem(THEME_TRIAL_KEY, 'ocean');
-        } catch (e) { /* ignore */ }
-        applyUiTheme('ocean');
-        sel.addEventListener('change', () => applyUiTheme(sel.value));
-        return;
-    }
-    if (raw === '') {
-        applyUiTheme('');
-    } else if (UI_THEME_IDS.includes(raw)) {
+    if (raw && UI_THEME_IDS.includes(raw)) {
         applyUiTheme(raw);
     } else {
         applyUiTheme('');

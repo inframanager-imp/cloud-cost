@@ -230,7 +230,7 @@
 <!-- Topbar -->
 <div class="topbar">
   <div class="topbar-left">
-    <img src="/static/img/truetec-logo.png" alt="TrueTec" style="height:28px;width:auto;max-width:135px;object-fit:contain;display:block;">
+    <img src="/static/brand-logo.png" alt="Brand Logo" style="height:36px;width:auto;max-width:180px;object-fit:contain;display:block;">
     <div class="badge-admin">SUPER ADMIN</div>
   </div>
   <div class="topbar-right">
@@ -1139,11 +1139,11 @@ function applyTheme(theme) {
   localStorage.setItem('sa-theme', theme);
 }
 function toggleTheme() {
-  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
   applyTheme(current === 'dark' ? 'light' : 'dark');
 }
 (function() {
-  const saved = localStorage.getItem('sa-theme') || 'dark';
+  const saved = localStorage.getItem('sa-theme') || 'light';
   applyTheme(saved);
 })();
 

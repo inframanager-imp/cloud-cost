@@ -349,9 +349,9 @@ body {
 }
 
 .form-logo .logo__img {
-  height: clamp(34px, 4.2vh, 42px);
+  height: clamp(40px, 5.2vh, 52px);
   width: auto;
-  max-width: 190px;
+  max-width: 230px;
   object-fit: contain;
   display: block;
 }
