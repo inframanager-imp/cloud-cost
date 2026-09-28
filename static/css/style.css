@@ -2837,6 +2837,20 @@ select.filter-input option {
     background-size: 600px 100%;
     animation: shimmer 1.4s infinite linear;
 }
+.kpi-skeleton-loader {
+    display: inline-block;
+    width: 80px;
+    height: 22px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--bg-input, rgba(148, 163, 184, 0.15)) 25%, var(--border, rgba(148, 163, 184, 0.35)) 50%, var(--bg-input, rgba(148, 163, 184, 0.15)) 75%);
+    background-size: 600px 100%;
+    animation: shimmer 1.4s infinite linear;
+    vertical-align: middle;
+}
+.kpi-skeleton-loader.sm {
+    width: 60px;
+    height: 18px;
+}
 .chart-loader {
     position: absolute;
     inset: 0;

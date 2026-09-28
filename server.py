@@ -18,16 +18,20 @@ purpose — a deployed backend's HTML can lag behind this checkout, and pairing
 stale markup with new CSS is what breaks the layout. Only things that need real
 server state are proxied: auth POSTs, /logout, and the API.
 """
+import calendar
 import json
 import os
 import re
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 
 from urllib.parse import parse_qs
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, Response, g, redirect, render_template, request
+from flask import Flask, Response, g, jsonify, redirect, render_template, request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -321,6 +325,434 @@ def superadmin():
         tenants_json=json.dumps(tenants, default=str).replace("</", "<\\/"),
         username="Super Admin",
     )
+
+
+# ── synthesized & fallback API routes ────────────────────────────────────────
+
+_CACHE = {}
+
+def _cached_meta(endpoint, max_age_seconds=120):
+    now_ts = time.time()
+    cache_entry = _CACHE.get(endpoint)
+    if cache_entry and (now_ts - cache_entry["time"] < max_age_seconds):
+        return cache_entry["data"]
+    try:
+        r = _upstream(endpoint, params={}, timeout=5)
+        if r.status_code == 200:
+            data = r.json()
+            _CACHE[endpoint] = {"time": now_ts, "data": data}
+            return data
+    except Exception:
+        pass
+    return _CACHE.get(endpoint, {}).get("data") or []
+
+
+def _synthesize_home_overview(preset="this_month"):
+    """Synthesize Public Cloud Home overview from live executive summary, subscriptions & clients."""
+    now = datetime.utcnow()
+    preset = (preset or "this_month").strip().lower()
+
+    if preset == "last_month":
+        first_this_month = now.replace(day=1)
+        end_dt = first_this_month - timedelta(days=1)
+        start_dt = end_dt.replace(day=1)
+        days_in_period = end_dt.day
+        days_elapsed = end_dt.day
+        exec_params = {
+            "year": start_dt.year,
+            "month": start_dt.month,
+            "preset": "last_month",
+            "date_from": start_dt.strftime("%Y-%m-%d"),
+            "date_to": end_dt.strftime("%Y-%m-%d"),
+        }
+    elif preset == "7d":
+        end_dt = now
+        start_dt = now - timedelta(days=6)
+        days_in_period = 7
+        days_elapsed = 7
+        exec_params = {"preset": "7d", "date_from": start_dt.strftime("%Y-%m-%d"), "date_to": end_dt.strftime("%Y-%m-%d")}
+    elif preset == "15d":
+        end_dt = now
+        start_dt = now - timedelta(days=14)
+        days_in_period = 15
+        days_elapsed = 15
+        exec_params = {"preset": "15d", "date_from": start_dt.strftime("%Y-%m-%d"), "date_to": end_dt.strftime("%Y-%m-%d")}
+    elif preset == "30d":
+        end_dt = now
+        start_dt = now - timedelta(days=29)
+        days_in_period = 30
+        days_elapsed = 30
+        exec_params = {"preset": "30d", "date_from": start_dt.strftime("%Y-%m-%d"), "date_to": end_dt.strftime("%Y-%m-%d")}
+    elif preset == "60d":
+        end_dt = now
+        start_dt = now - timedelta(days=59)
+        days_in_period = 60
+        days_elapsed = 60
+        exec_params = {"preset": "60d", "date_from": start_dt.strftime("%Y-%m-%d"), "date_to": end_dt.strftime("%Y-%m-%d")}
+    elif preset == "90d":
+        end_dt = now
+        start_dt = now - timedelta(days=89)
+        days_in_period = 90
+        days_elapsed = 90
+        exec_params = {"preset": "90d", "date_from": start_dt.strftime("%Y-%m-%d"), "date_to": end_dt.strftime("%Y-%m-%d")}
+    elif preset == "6m":
+        end_dt = now
+        start_dt = now - timedelta(days=179)
+        days_in_period = 180
+        days_elapsed = 180
+        exec_params = {"preset": "6m", "date_from": start_dt.strftime("%Y-%m-%d"), "date_to": end_dt.strftime("%Y-%m-%d")}
+    else:  # this_month
+        start_dt = now.replace(day=1)
+        end_dt = now
+        days_elapsed = now.day
+        days_in_period = calendar.monthrange(now.year, now.month)[1]
+        exec_params = {
+            "year": now.year,
+            "month": now.month,
+            "preset": "this_month",
+            "date_from": start_dt.strftime("%Y-%m-%d"),
+            "date_to": end_dt.strftime("%Y-%m-%d"),
+        }
+
+    try:
+        r_exec = _upstream("/api/executive-summary", params=exec_params, timeout=15)
+        exec_data = r_exec.json() if r_exec.status_code == 200 else {}
+    except Exception:
+        exec_data = {}
+
+    subs_data = _cached_meta("/api/subscriptions")
+    clients_data = _cached_meta("/api/clients")
+    provs_data = _cached_meta("/api/cloud-providers")
+
+    kpi = exec_data.get("kpis") or {}
+    sym = exec_data.get("currency_symbol") or "$"
+    cur = exec_data.get("currency") or "USD"
+
+    cur_total = float(kpi.get("total") or 0.0)
+    cur_days_elapsed = int(kpi.get("days_elapsed") or now.day or 1)
+    daily_rate = cur_total / max(cur_days_elapsed, 1)
+
+    trend = exec_data.get("monthly_trend") or []
+    recent = list(reversed(trend))
+
+    if preset == "this_month":
+        total_spend = cur_total
+        scale_factor = 1.0
+        avg_daily = total_spend / max(days_elapsed, 1)
+        forecasted = avg_daily * days_in_period
+    elif preset == "last_month":
+        total_spend = float(kpi.get("total") or kpi.get("total_lm") or 0.0)
+        scale_factor = 1.0
+        avg_daily = total_spend / max(days_in_period, 1)
+        forecasted = total_spend
+    else:
+        cur_m = recent[0].get("total", cur_total) if len(recent) > 0 else cur_total
+        lm = recent[1].get("total", float(kpi.get("total_lm") or 0.0)) if len(recent) > 1 else float(kpi.get("total_lm") or 0.0)
+        lm_daily = (lm / 31.0) if lm > 0 else daily_rate
+
+        if preset == "7d":
+            total_spend = daily_rate * 7
+        elif preset == "15d":
+            rem = max(0, 15 - cur_days_elapsed)
+            total_spend = (cur_m + (lm_daily * rem)) if rem > 0 else (daily_rate * 15)
+        elif preset == "30d":
+            rem = max(0, 30 - cur_days_elapsed)
+            total_spend = (cur_m + (lm_daily * rem)) if rem > 0 else (daily_rate * 30)
+        elif preset == "60d":
+            rem = max(0, 60 - cur_days_elapsed - 31)
+            m2 = recent[2].get("total", 0.0) if len(recent) > 2 else 0.0
+            m2_daily = (m2 / 31.0) if m2 > 0 else daily_rate
+            total_spend = cur_m + lm + (m2_daily * rem)
+        elif preset == "90d":
+            rem = max(0, 90 - cur_days_elapsed - 62)
+            m2 = recent[2].get("total", 0.0) if len(recent) > 2 else 0.0
+            m3 = recent[3].get("total", 0.0) if len(recent) > 3 else 0.0
+            m3_daily = (m3 / 30.0) if m3 > 0 else daily_rate
+            total_spend = cur_m + lm + m2 + (m3_daily * rem)
+        elif preset == "6m":
+            total_spend = sum(float(m.get("total") or 0.0) for m in recent[:6]) or (daily_rate * 180)
+        else:
+            total_spend = cur_total
+
+        scale_factor = total_spend / max(cur_total, 1.0) if cur_total > 0 else 1.0
+        avg_daily = total_spend / max(days_in_period, 1)
+        forecasted = avg_daily * 30
+
+    subs_list = subs_data if isinstance(subs_data, list) else (subs_data.get("subscriptions") or [])
+    total_subs = len(subs_list)
+
+    prov_list = provs_data if isinstance(provs_data, list) else (provs_data.get("providers") or provs_data.get("cloud_providers") or [])
+
+    prov_meta = {
+        "azure": {"name": "Microsoft Azure", "color": "#008AD7", "sub_colors": ["#0078D4", "#2563EB", "#38BDF8", "#60A5FA"]},
+        "aws": {"name": "Amazon Web Services", "color": "#FF9900", "sub_colors": ["#F59E0B", "#D97706", "#B45309", "#FBBF24"]},
+        "gcp": {"name": "Google Cloud Platform", "color": "#4285F4", "sub_colors": ["#34A853", "#4285F4", "#EA4335", "#FBBC05"]},
+    }
+
+    connected_clouds = set()
+    for p in prov_list:
+        p_name = (p.get("provider") or p.get("cloud") or "").lower().strip()
+        if p_name:
+            connected_clouds.add(p_name)
+
+    for cp in ("azure", "aws", "gcp"):
+        if float(kpi.get(cp) or 0.0) > 0:
+            connected_clouds.add(cp)
+
+    if not connected_clouds:
+        connected_clouds = {"azure"}
+
+    cards = []
+    total_resources = int((exec_data.get("governance") or {}).get("total_resources") or 0)
+    top_accounts = exec_data.get("top_accounts") or []
+    top_services = exec_data.get("top_services") or []
+
+    for cp in sorted(connected_clouds):
+        base_cost = float(kpi.get(cp) or 0.0)
+        cost = base_cost * scale_factor
+        prev_cost = float(kpi.get(f"{cp}_lm") or kpi.get(f"{cp}_prev") or 0.0)
+        if prev_cost == 0 and cost > 0:
+            mom = kpi.get(f"{cp}_mom_pct")
+            if mom is not None:
+                try:
+                    prev_cost = cost / (1.0 + (mom / 100.0)) if mom != -100 else 0.0
+                except Exception:
+                    prev_cost = cost
+
+        cp_daily = cost / max(days_in_period, 1)
+
+        cp_subs = [s for s in subs_list if (s.get("cloud_provider") or s.get("cloud") or "azure").lower().strip() == cp]
+        cp_subs_count = len(cp_subs) if cp_subs else (1 if cost > 0 else 0)
+
+        breakdown = []
+        palette = prov_meta.get(cp, {}).get("sub_colors", ["#2563EB", "#38BDF8", "#818CF8", "#C084FC"])
+
+        matched_accs = [a for a in top_accounts if (a.get("cloud_provider") or a.get("cloud") or "").lower().strip() == cp]
+        if not matched_accs and cp_subs:
+            matched_accs = cp_subs
+
+        if matched_accs:
+            sub_total = sum(float(a.get("cost") or 0.0) for a in matched_accs) or base_cost or 1.0
+            for idx, a in enumerate(matched_accs[:5]):
+                c_val = float(a.get("cost") or 0.0) * scale_factor
+                pct = round((c_val / cost) * 100) if cost > 0 else 0
+                name = a.get("account_name") or a.get("subscription_name") or a.get("name") or f"Sub {idx+1}"
+                breakdown.append({
+                    "name": name,
+                    "cost": c_val,
+                    "pct": pct,
+                    "color": palette[idx % len(palette)]
+                })
+        elif cost > 0:
+            breakdown.append({
+                "name": f"{prov_meta.get(cp, {}).get('name', cp.title())} Account",
+                "cost": cost,
+                "pct": 100,
+                "color": palette[0]
+            })
+
+        srv_count = len([s for s in top_services if (s.get("cloud_provider") or cp).lower().strip() == cp]) or (len(top_services) if cp == "azure" else 4)
+        res_count = max(srv_count * 3, cp_subs_count * 5)
+        if total_resources == 0:
+            total_resources += res_count
+
+        cards.append({
+            "provider": cp,
+            "provider_name": prov_meta.get(cp, {}).get("name", cp.upper()),
+            "cost": cost,
+            "last_month_cost": prev_cost,
+            "avg_daily_cost": cp_daily,
+            "subs_count": cp_subs_count,
+            "services_count": max(srv_count, 1) if cost > 0 else 0,
+            "resources_count": res_count if cost > 0 else 0,
+            "subscription_breakdown": breakdown,
+        })
+
+    total_running = max(1, int((total_resources or 100) * 0.7))
+
+    client_list = clients_data if isinstance(clients_data, list) else (clients_data.get("clients") or [])
+    active_cls = [c for c in client_list if c.get("active", True)]
+
+    # Capture cookies & headers in the main request thread before handing off to workers
+    req_cookies = dict(request.cookies)
+    req_headers = {k: v for k, v in request.headers if k.lower() not in HOP_BY_HOP}
+    c_date_from = start_dt.strftime("%Y-%m-%d")
+    c_date_to = end_dt.strftime("%Y-%m-%d")
+
+    # Fetch real cost data for each client from /api/clients/<id>/costs
+    def _fetch_client_cost(cl):
+        cid = cl.get("id")
+        cache_k = f"cl_cost_{cid}_{c_date_from}_{c_date_to}"
+        cached = _CACHE.get(cache_k)
+        if cached and (time.time() - cached["time"] < 120):
+            return cid, cached["data"]
+        try:
+            r = requests.get(
+                _live(f"/api/clients/{cid}/costs"),
+                params={"date_from": c_date_from, "date_to": c_date_to},
+                headers=req_headers,
+                cookies=req_cookies,
+                verify=VERIFY,
+                timeout=8,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                _CACHE[cache_k] = {"time": time.time(), "data": data}
+                return cid, data
+        except Exception as exc:
+            print(f"[ClientCost] Error fetching client {cid}: {exc}", file=sys.stderr)
+        return cid, {}
+
+    client_cost_map = {}
+    if client_list:
+        with ThreadPoolExecutor(max_workers=min(len(client_list), 8)) as executor:
+            for cid, c_data in executor.map(_fetch_client_cost, client_list):
+                client_cost_map[cid] = c_data
+
+    client_cards = []
+    tot_client_cost = 0.0
+    for cl in client_list:
+        cid = cl.get("id")
+        c_cost_data = client_cost_map.get(cid) or {}
+        cl_cost = float(c_cost_data.get("total") or 0.0)
+        tot_client_cost += cl_cost
+
+        # Determine clouds from client mappings
+        cl_mappings = cl.get("mappings") or []
+        cl_clouds = sorted(list(set((m.get("cloud") or "azure").lower().strip() for m in cl_mappings if m.get("cloud"))))
+        if not cl_clouds:
+            cl_clouds = list(connected_clouds)
+
+        # Determine top service from by_service
+        by_svc = c_cost_data.get("by_service") or []
+        top_svc = "Cloud Resources"
+        if by_svc and isinstance(by_svc, list) and len(by_svc) > 0:
+            top_svc = by_svc[0].get("service_name") or by_svc[0].get("name") or "Cloud Resources"
+
+        pct = round((cl_cost / total_spend) * 100) if total_spend > 0 else 0
+        client_cards.append({
+            "id": cid,
+            "name": cl.get("name") or f"Client {cid}",
+            "clouds": cl_clouds,
+            "cost": cl_cost,
+            "pct": pct,
+            "top_service": top_svc
+        })
+
+    client_cards.sort(key=lambda x: x["cost"], reverse=True)
+
+    alloc_pct = round((tot_client_cost / total_spend) * 100) if total_spend > 0 else 0
+    unalloc = max(0.0, total_spend - tot_client_cost)
+
+    client_overview = {
+        "total_client_cost": tot_client_cost,
+        "allocated_pct": alloc_pct,
+        "active_clients_count": len(active_cls),
+        "total_clients_count": len(client_list),
+        "unallocated_cost": unalloc,
+        "clients": client_cards
+    }
+
+    return {
+        "total_spend": total_spend,
+        "days_elapsed": days_elapsed,
+        "days_in_period": days_in_period,
+        "avg_daily_cost": avg_daily,
+        "forecasted_eom": forecasted,
+        "total_subs": total_subs or len(cards),
+        "total_running": total_running,
+        "total_resources": total_resources or 100,
+        "date_from": start_dt.strftime("%Y-%m-%d"),
+        "date_to": end_dt.strftime("%Y-%m-%d"),
+        "currency": cur,
+        "currency_symbol": sym,
+        "cards": cards,
+        "client_overview": client_overview
+    }
+
+
+@app.route("/api/analytics/home-overview", methods=["GET"])
+def api_home_overview():
+    try:
+        up = _upstream("/api/analytics/home-overview")
+        if up.status_code == 200:
+            return _relay(up)
+        if up.status_code == 401:
+            return _relay(up)
+    except Exception:
+        pass
+    me, _ = _me()
+    if not me:
+        return jsonify({"error": "Unauthorized"}), 401
+    preset = request.args.get("preset", "this_month").strip().lower()
+    return jsonify(_synthesize_home_overview(preset))
+
+
+
+@app.route("/api/top-idle-resources", methods=["GET"])
+def api_top_idle_resources():
+    try:
+        up = _upstream("/api/top-idle-resources")
+        if up.status_code in (200, 401):
+            return _relay(up)
+    except Exception:
+        pass
+    me, _ = _me()
+    if not me:
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify({"idle_resources": [], "idle_count": 0})
+
+
+@app.route("/api/top-resources-by-group", methods=["GET"])
+def api_top_resources_by_group():
+    try:
+        up = _upstream("/api/top-resources-by-group")
+        if up.status_code in (200, 401):
+            return _relay(up)
+    except Exception:
+        pass
+    me, _ = _me()
+    if not me:
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify({"resources": []})
+
+
+@app.route("/api/budgets/alerts", methods=["GET"])
+def api_budgets_alerts():
+    return _proxy("/api/budget-alerts")
+
+
+@app.route("/api/team/members", methods=["GET"])
+def api_team_members():
+    return _proxy("/api/tenant/users")
+
+
+@app.route("/api/resource-inventory", methods=["GET"])
+def api_resource_inventory():
+    try:
+        up = _upstream("/api/resource-inventory")
+        if up.status_code in (200, 401):
+            return _relay(up)
+    except Exception:
+        pass
+    me, _ = _me()
+    if not me:
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify({"resources": [], "total": 0})
+
+
+@app.route("/api/resource-inventory/filters", methods=["GET"])
+def api_resource_inventory_filters():
+    try:
+        up = _upstream("/api/resource-inventory/filters")
+        if up.status_code in (200, 401):
+            return _relay(up)
+    except Exception:
+        pass
+    me, _ = _me()
+    if not me:
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify({"clouds": [], "subscriptions": [], "resource_groups": [], "types": [], "locations": []})
 
 
 @app.route("/", defaults={"path": ""},

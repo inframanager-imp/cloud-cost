@@ -11415,10 +11415,31 @@ async function loadAnalyticsHome() {
 
     grid.innerHTML = `<div style="text-align:center;padding:40px;grid-column:1/-1">${getLogoLoaderHTML('Loading Public Cloud cards overview...')}</div>`;
 
+    // Show loaders in Summary KPI Cards
+    const kpiIds = ['anaHomeTotalSpend', 'anaHomeAvgDaily', 'anaHomeForecastedEOM', 'anaHomeTotalSubs', 'anaHomeTotalRunning', 'anaHomeTotalResources'];
+    kpiIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<span class="kpi-skeleton-loader"></span>';
+    });
+
+    // Show loaders in Client KPI Cards
+    const clientKpiIds = ['anaHomeClientAllocatedCost', 'anaHomeClientCoveragePct', 'anaHomeClientActiveCount', 'anaHomeClientUnallocatedCost'];
+    clientKpiIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '<span class="kpi-skeleton-loader sm"></span>';
+    });
+
+    const clientGrid = document.getElementById('anaHomeClientCardsGrid');
+    if (clientGrid) {
+        clientGrid.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-secondary);grid-column:1/-1">${getLogoLoaderHTML('Loading client cost allocation...')}</div>`;
+    }
+
     try {
         const resp = await fetch(`/api/analytics/home-overview?preset=${_anaHomePreset}`);
         if (!resp.ok) {
             grid.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);grid-column:1/-1">Failed to load home overview.</div>`;
+            kpiIds.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+            clientKpiIds.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
             return;
         }
 
@@ -11597,6 +11618,8 @@ async function loadAnalyticsHome() {
     } catch (err) {
         console.error('Error loading analytics home:', err);
         grid.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);grid-column:1/-1">Failed to load analytics home.</div>`;
+        kpiIds.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+        clientKpiIds.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
     }
 }
 
