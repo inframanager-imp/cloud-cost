@@ -9763,27 +9763,86 @@ function _clientDateRange() {
     return { firstDay: `${y}-${m}-01`, todayStr: `${y}-${m}-${d}` };
 }
 
-function _clientPeriodLabel() {
+function _clientComparisonRange() {
     const preset = document.getElementById('clientDatePreset')?.value || 'this_month';
-    const labels = { this_month: 'This Month', last_month: 'Last Month', last_30: 'Last 30 Days', last_90: 'Last 90 Days' };
-    if (preset === 'custom') return `${_clientDateFrom} to ${_clientDateTo}`;
-    return labels[preset] || 'This Month';
+    const { firstDay, todayStr } = _clientDateRange();
+    const today = new Date();
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const _fmtDatePretty = d => d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    if (preset === 'this_month') {
+        const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+        const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
+        return {
+            from: fmt(lastMonthStart),
+            to: fmt(lastMonthEnd),
+            curLabel: 'This Month',
+            priorLabel: 'Last Month',
+            mode: 'MoM',
+            refPeriodStr: `${_fmtDatePretty(lastMonthStart)} – ${_fmtDatePretty(lastMonthEnd)}`
+        };
+    }
+
+    if (preset === 'last_month') {
+        const prevMonthEnd = new Date(today.getFullYear(), today.getMonth() - 1, 0);
+        const prevMonthStart = new Date(prevMonthEnd.getFullYear(), prevMonthEnd.getMonth(), 1);
+        return {
+            from: fmt(prevMonthStart),
+            to: fmt(prevMonthEnd),
+            curLabel: 'Last Month',
+            priorLabel: 'Prior Month',
+            mode: 'MoM',
+            refPeriodStr: `${_fmtDatePretty(prevMonthStart)} – ${_fmtDatePretty(prevMonthEnd)}`
+        };
+    }
+
+    const curStart = new Date(firstDay + 'T00:00:00');
+    const curEnd = new Date(todayStr + 'T00:00:00');
+    const diffMs = curEnd.getTime() - curStart.getTime();
+    const days = Math.max(1, Math.round(diffMs / 864e5) + 1);
+
+    const priorEnd = new Date(curStart.getTime() - 864e5);
+    const priorStart = new Date(priorEnd.getTime() - (days - 1) * 864e5);
+
+    let curLabel = `Selected ${days}d`;
+    let priorLabel = `Prior ${days}d`;
+    if (preset === 'last_90') {
+        curLabel = 'Last 90 Days';
+        priorLabel = 'Prior 90 Days';
+    } else if (preset === 'last_30') {
+        curLabel = 'Last 30 Days';
+        priorLabel = 'Prior 30 Days';
+    } else if (preset === 'custom') {
+        curLabel = 'Custom Period';
+        priorLabel = `Preceding ${days} Days`;
+    }
+
+    return {
+        from: fmt(priorStart),
+        to: fmt(priorEnd),
+        curLabel,
+        priorLabel,
+        mode: 'PoP',
+        refPeriodStr: `${_fmtDatePretty(priorStart)} – ${_fmtDatePretty(priorEnd)}`
+    };
+}
+
+function _clientPeriodLabel() {
+    return _clientComparisonRange().curLabel;
 }
 
 function onClientDatePreset() {
-    const preset = document.getElementById('clientDatePreset')?.value;
-    const customWrap = document.getElementById('clientCustomDateWrap');
+    let preset = document.getElementById('clientDatePreset')?.value;
     const today = new Date();
     // Format in LOCAL time — toISOString() converts to UTC and shifts local
     // midnight (e.g. 1st of month) back a day in UTC+ timezones (off-by-one).
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
-    if (preset === 'custom') {
-        if (customWrap) customWrap.style.display = 'flex';
-        initRangePicker('clientRangePick', 'clientDateFrom', 'clientDateTo');
-        return;
+    if (!preset || preset === 'custom') {
+        preset = 'this_month';
+        const presetSel = document.getElementById('clientDatePreset');
+        if (presetSel) presetSel.value = 'this_month';
     }
-    if (customWrap) customWrap.style.display = 'none';
 
     if (preset === 'this_month') {
         _clientDateFrom = fmt(new Date(today.getFullYear(), today.getMonth(), 1));
@@ -9799,6 +9858,15 @@ function onClientDatePreset() {
         _clientDateFrom = fmt(new Date(today - 90*864e5));
         _clientDateTo   = fmt(today);
     }
+
+    const fEl = document.getElementById('clientDateFrom');
+    const tEl = document.getElementById('clientDateTo');
+    if (fEl) fEl.value = _clientDateFrom;
+    if (tEl) tEl.value = _clientDateTo;
+
+    if (typeof _syncClientDateDropdownUI === 'function') {
+        _syncClientDateDropdownUI(preset, _clientDateFrom, _clientDateTo);
+    }
     if (_selectedClientId) {
         _clientDateSettings[_selectedClientId] = { preset, from: _clientDateFrom, to: _clientDateTo };
         selectClient(_selectedClientId);
@@ -9809,7 +9877,7 @@ function applyClientDateFilter() {
     _clientDateFrom = document.getElementById('clientDateFrom')?.value || '';
     _clientDateTo   = document.getElementById('clientDateTo')?.value   || '';
     if (_selectedClientId && _clientDateFrom && _clientDateTo) {
-        _clientDateSettings[_selectedClientId] = { preset: 'custom', from: _clientDateFrom, to: _clientDateTo };
+        _clientDateSettings[_selectedClientId] = { preset: 'this_month', from: _clientDateFrom, to: _clientDateTo };
         selectClient(_selectedClientId);
     }
 }
@@ -9819,9 +9887,17 @@ function applyClientDateFilter() {
 // WITHOUT calling onClientDatePreset()/selectClient() (both would recurse).
 function _restoreClientDateSettings(clientId) {
     const presetSel = document.getElementById('clientDatePreset');
-    const customWrap = document.getElementById('clientCustomDateWrap');
+
+    // Preserve the currently selected date range across client switches
+    let currentPreset = presetSel ? presetSel.value : 'this_month';
+    if (currentPreset === 'custom') currentPreset = 'this_month';
+
+    if (_clientDateFrom && _clientDateTo && currentPreset) {
+        _clientDateSettings[clientId] = { preset: currentPreset, from: _clientDateFrom, to: _clientDateTo };
+    }
+
     let saved = _clientDateSettings[clientId];
-    if (!saved) {
+    if (!saved || saved.preset === 'custom') {
         const today = new Date();
         const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         saved = { preset: 'this_month', from: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), to: fmt(today) };
@@ -9830,13 +9906,14 @@ function _restoreClientDateSettings(clientId) {
     _clientDateFrom = saved.from;
     _clientDateTo = saved.to;
     if (presetSel) presetSel.value = saved.preset;
-    if (customWrap) customWrap.style.display = saved.preset === 'custom' ? 'flex' : 'none';
-    if (saved.preset === 'custom') {
-        const fEl = document.getElementById('clientDateFrom');
-        const tEl = document.getElementById('clientDateTo');
-        if (fEl) fEl.value = saved.from;
-        if (tEl) tEl.value = saved.to;
-        initRangePicker('clientRangePick', 'clientDateFrom', 'clientDateTo');
+
+    const fEl = document.getElementById('clientDateFrom');
+    const tEl = document.getElementById('clientDateTo');
+    if (fEl) fEl.value = saved.from;
+    if (tEl) tEl.value = saved.to;
+
+    if (typeof _syncClientDateDropdownUI === 'function') {
+        _syncClientDateDropdownUI(saved.preset, saved.from, saved.to);
     }
 }
 
@@ -9845,58 +9922,349 @@ function _fmt$(n) {
 }
 
 
+let _clientCostCache = {};
+
+function _renderClientDropdownList(clients, query = '') {
+    const listEl = document.getElementById('clientDropdownList');
+    const countEl = document.getElementById('clientDropdownCount');
+    if (countEl) countEl.textContent = `${clients.length} client${clients.length !== 1 ? 's' : ''}`;
+    if (!listEl) return;
+
+    if (!clients.length) {
+        listEl.innerHTML = `
+            <div class="cca-dropdown-empty">
+                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" style="margin:0 auto 8px;display:block;opacity:.4"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <div style="font-weight:600;color:var(--text-primary);margin-bottom:2px">No clients found</div>
+                <div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:8px">${query ? `No match for "${_esc(query)}"` : 'No clients available'}</div>
+                ${query ? '<button type="button" class="cca-dropdown-add-btn" onclick="clearClientSearch()">Clear search</button>' : '<button type="button" class="cca-dropdown-add-btn" onclick="closeClientDropdown();openClientForm()">+ Create Client</button>'}
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = clients.map(c => {
+        const isActive = c.id === _selectedClientId;
+        return `
+            <div class="cca-dropdown-item${isActive ? ' is-active' : ''}" data-client-id="${c.id}" role="option" aria-selected="${isActive}" onclick="onDropdownSelectClient(${c.id})">
+                <div class="cca-item-left">
+                    <span class="cca-item-check">${isActive ? '✓' : ''}</span>
+                    <span class="cca-item-name" title="${_esc(c.name)}">${_esc(c.name)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleClientDropdown(event) {
+    if (event) event.stopPropagation();
+    const menu = document.getElementById('clientDropdownMenu');
+    const trigger = document.getElementById('clientDropdownTrigger');
+    if (!menu || !trigger) return;
+
+    const isOpen = menu.style.display !== 'none';
+    if (isOpen) {
+        closeClientDropdown();
+        return;
+    }
+
+    // Close any other popups
+    document.querySelectorAll('.cm-dropdown').forEach(d => d.style.display = 'none');
+    if (typeof closeClientDateDropdown === 'function') closeClientDateDropdown();
+
+    menu.style.display = 'flex';
+    trigger.classList.add('is-open');
+    trigger.setAttribute('aria-expanded', 'true');
+
+    // Reset search
+    const searchInp = document.getElementById('clientSearchInput');
+    if (searchInp) {
+        searchInp.value = '';
+        setTimeout(() => searchInp.focus({ preventScroll: true }), 40);
+    }
+    filterClientDropdown('');
+
+    // Ensure dropdown fits within viewport
+    const rect = trigger.getBoundingClientRect();
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+    if (rect.left + 390 > vw) {
+        menu.style.left = 'auto';
+        menu.style.right = '0';
+    } else {
+        menu.style.left = '0';
+        menu.style.right = 'auto';
+    }
+    if (vh - rect.bottom < 340 && rect.top > 340) {
+        menu.style.top = 'auto';
+        menu.style.bottom = 'calc(100% + 6px)';
+    } else {
+        menu.style.top = 'calc(100% + 6px)';
+        menu.style.bottom = 'auto';
+    }
+}
+
+function closeClientDropdown() {
+    const menu = document.getElementById('clientDropdownMenu');
+    const trigger = document.getElementById('clientDropdownTrigger');
+    if (menu) menu.style.display = 'none';
+    if (trigger) {
+        trigger.classList.remove('is-open');
+        trigger.setAttribute('aria-expanded', 'false');
+    }
+    document.querySelectorAll('#clientDropdownList .cca-dropdown-item.is-focused').forEach(el => el.classList.remove('is-focused'));
+}
+
+function filterClientDropdown(query) {
+    const q = (query || '').trim().toLowerCase();
+    const clearBtn = document.getElementById('clientSearchClearBtn');
+    if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
+
+    if (!Array.isArray(_clientsData)) return;
+    const filtered = _clientsData.filter(c => {
+        if (!q) return true;
+        const nameMatch = (c.name || '').toLowerCase().includes(q);
+        const cloudMatch = (c.mappings || []).some(m =>
+            (m.cloud || '').toLowerCase().includes(q) ||
+            (m.value || '').toLowerCase().includes(q)
+        );
+        return nameMatch || cloudMatch;
+    });
+    _renderClientDropdownList(filtered, q);
+}
+
+function clearClientSearch() {
+    const inp = document.getElementById('clientSearchInput');
+    if (inp) {
+        inp.value = '';
+        inp.focus();
+    }
+    filterClientDropdown('');
+}
+
+function onDropdownSelectClient(clientId) {
+    closeClientDropdown();
+    selectClient(clientId);
+}
+
+function onClientDropdownKeyDown(event) {
+    const items = [...document.querySelectorAll('#clientDropdownList .cca-dropdown-item')];
+    if (!items.length) return;
+
+    let focusedIdx = items.findIndex(el => el.classList.contains('is-focused'));
+
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        focusedIdx = (focusedIdx + 1) % items.length;
+        items.forEach((el, idx) => el.classList.toggle('is-focused', idx === focusedIdx));
+        items[focusedIdx].scrollIntoView({ block: 'nearest' });
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        focusedIdx = focusedIdx <= 0 ? items.length - 1 : focusedIdx - 1;
+        items.forEach((el, idx) => el.classList.toggle('is-focused', idx === focusedIdx));
+        items[focusedIdx].scrollIntoView({ block: 'nearest' });
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        if (focusedIdx >= 0 && items[focusedIdx]) {
+            const cid = Number(items[focusedIdx].dataset.clientId);
+            if (cid) onDropdownSelectClient(cid);
+        } else if (items.length === 1) {
+            const cid = Number(items[0].dataset.clientId);
+            if (cid) onDropdownSelectClient(cid);
+        }
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeClientDropdown();
+        document.getElementById('clientDropdownTrigger')?.focus();
+    }
+}
+
+// Date Preset Custom Dropdown Card Handlers
+function _updateClientDatePresetLabels() {
+    const today = new Date();
+    const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    // This Month: 1st of this month to today
+    const tmStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const tmEl = document.getElementById('presetDates-this_month');
+    if (tmEl) tmEl.textContent = `${fmt(tmStart)} – ${fmt(today)}`;
+
+    // Last Month: 1st of last month to last day of last month
+    const lmEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+    const lmStart = new Date(lmEnd.getFullYear(), lmEnd.getMonth(), 1);
+    const lmEl = document.getElementById('presetDates-last_month');
+    if (lmEl) lmEl.textContent = `${fmt(lmStart)} – ${fmt(lmEnd)}`;
+
+    // Last 30 Days
+    const l30Start = new Date(today.getTime() - 30 * 864e5);
+    const l30El = document.getElementById('presetDates-last_30');
+    if (l30El) l30El.textContent = `${fmt(l30Start)} – ${fmt(today)}`;
+
+    // Last 90 Days
+    const l90Start = new Date(today.getTime() - 90 * 864e5);
+    const l90El = document.getElementById('presetDates-last_90');
+    if (l90El) l90El.textContent = `${fmt(l90Start)} – ${fmt(today)}`;
+}
+
+function _syncClientDateDropdownUI(preset, from, to) {
+    const triggerText = document.getElementById('clientDateTriggerText');
+    const cardRangeText = document.getElementById('clientDateCardRangeText');
+    const items = document.querySelectorAll('#clientDateCardList .cca-date-card-item');
+
+    const labels = {
+        'this_month': 'This Month',
+        'last_month': 'Last Month',
+        'last_30': 'Last 30 Days',
+        'last_90': 'Last 90 Days'
+    };
+
+    items.forEach(item => {
+        const val = item.getAttribute('data-val');
+        const isActive = val === preset;
+        item.classList.toggle('is-active', isActive);
+        item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    const displayLabel = labels[preset] || 'This Month';
+
+    if (triggerText) triggerText.textContent = displayLabel;
+    if (cardRangeText) cardRangeText.textContent = displayLabel;
+}
+
+function toggleClientDateDropdown(event) {
+    if (event) event.stopPropagation();
+    const card = document.getElementById('clientDateDropdownCard');
+    const trigger = document.getElementById('clientDateTrigger');
+    if (!card || !trigger) return;
+
+    const isOpen = card.style.display !== 'none';
+    if (isOpen) {
+        closeClientDateDropdown();
+        return;
+    }
+
+    // Close client dropdown and any other menus
+    closeClientDropdown();
+    document.querySelectorAll('.cm-dropdown').forEach(d => d.style.display = 'none');
+
+    _updateClientDatePresetLabels();
+    const currentPreset = document.getElementById('clientDatePreset')?.value || 'this_month';
+    _syncClientDateDropdownUI(currentPreset, _clientDateFrom, _clientDateTo);
+
+    card.style.display = 'flex';
+    trigger.classList.add('is-open');
+    trigger.setAttribute('aria-expanded', 'true');
+
+    // Position check to avoid right-edge overflow
+    const rect = trigger.getBoundingClientRect();
+    const vw = window.innerWidth;
+    if (rect.left + 280 > vw) {
+        card.style.left = 'auto';
+        card.style.right = '0';
+    } else {
+        card.style.left = '0';
+        card.style.right = 'auto';
+    }
+}
+
+function closeClientDateDropdown() {
+    const card = document.getElementById('clientDateDropdownCard');
+    const trigger = document.getElementById('clientDateTrigger');
+    if (card) card.style.display = 'none';
+    if (trigger) {
+        trigger.classList.remove('is-open');
+        trigger.setAttribute('aria-expanded', 'false');
+    }
+}
+
+function selectClientDatePreset(preset) {
+    const presetSel = document.getElementById('clientDatePreset');
+    if (presetSel) presetSel.value = preset;
+    closeClientDateDropdown();
+    onClientDatePreset();
+}
+
+// Global outside-click dismiss for the client dropdown, date dropdown, and client context menu
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#clientPickerWrap')) {
+        closeClientDropdown();
+    }
+    if (!e.target.closest('#clientDatePickerWrap')) {
+        closeClientDateDropdown();
+    }
+    if (!e.target.closest('.cca-context-menu-wrap')) {
+        closeClientMoreMenu();
+    }
+});
+
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeClientDateDropdown();
+    }
+});
+
 async function loadClientsPage() {
-    // Initialise date range from preset if not already set
     if (!_clientDateFrom) onClientDatePreset();
-    const panel = document.getElementById('clientListPanel');
-    const countEl = document.getElementById('clientCount');
-    if (panel) panel.innerHTML = `<div style="text-align:center;padding:32px;color:var(--text-secondary);font-size:13px">Loading…</div>`;
+    else if (typeof _syncClientDateDropdownUI === 'function') {
+        _syncClientDateDropdownUI(document.getElementById('clientDatePreset')?.value || 'this_month', _clientDateFrom, _clientDateTo);
+    }
+    const panel = document.getElementById('clientDetailPanel');
+    const triggerName = document.getElementById('clientTriggerName');
+
+    if (triggerName) triggerName.textContent = 'Loading clients…';
+
     try {
         _clientsData = await fetch('/api/clients').then(r => r.json());
-        if (countEl) countEl.textContent = `${_clientsData.length} client${_clientsData.length !== 1 ? 's' : ''}`;
-        if (!panel) return;
-        if (!_clientsData.length) {
-            panel.innerHTML = `<div style="text-align:center;padding:40px 16px;color:var(--text-secondary);font-size:13px">No clients yet.<br>Click <strong>+ New Client</strong> to get started.</div>`;
+        if (!_clientsData || !_clientsData.length) {
+            _clientsData = [];
+            _renderClientDropdownList([]);
+            if (triggerName) triggerName.textContent = 'No clients yet';
+            if (panel) {
+                panel.innerHTML = `
+                    <div class="db-card" style="text-align:center;padding:64px 24px;color:var(--text-secondary)">
+                        <svg width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block;opacity:.4">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+                        </svg>
+                        <div style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:6px">No clients configured yet</div>
+                        <div style="font-size:13px;color:var(--text-secondary);max-width:420px;margin:0 auto 20px">
+                            Allocate cloud spend to clients by subscription, resource group, or service. Add your first client to start generating cost allocation breakdowns.
+                        </div>
+                        <button class="cp-btn-primary" onclick="openClientForm()" style="height:36px;font-size:13px">+ Create Client</button>
+                    </div>
+                `;
+            }
+            document.getElementById('clientSendReportBtn')?.style.setProperty('display', 'none');
+            document.getElementById('clientPreviewBtn')?.style.setProperty('display', 'none');
+            document.getElementById('clientSchedulesBtn')?.style.setProperty('display', 'none');
+            document.getElementById('clientActiveActionsWrap')?.style.setProperty('display', 'none');
             return;
         }
 
-        // Fetch this-month totals for all clients
+        // Fetch this-month costs for all clients in parallel so the dropdown has spend values
         const { firstDay, todayStr } = _clientDateRange();
         const costResults = await Promise.all(_clientsData.map(c =>
             fetch(`/api/clients/${c.id}/costs?date_from=${firstDay}&date_to=${todayStr}`)
                 .then(r => r.json()).catch(() => ({ total: 0 }))
         ));
 
-        panel.innerHTML = _clientsData.map((c, i) => {
-            const cost = costResults[i]?.total ?? 0;
-            const clouds = [...new Set((c.mappings || []).map(m => m.cloud.toUpperCase()))].join(' · ');
-            const isActive = c.id === _selectedClientId;
-            return `<div class="client-list-item${isActive ? ' active' : ''}" onclick="selectClient(${c.id})"
-                        style="padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;${isActive?'background:var(--accent-subtle,rgba(79,110,247,.08));':''}">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                    <span style="font-size:13px;font-weight:500;color:var(--text-primary)">${_esc(c.name)}</span>
-                    <span style="font-size:13px;font-weight:600;color:var(--accent)">${_fmt$(cost)}</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="font-size:11px;color:var(--text-secondary)">${clouds || 'No mappings'}</span>
-                    <div style="display:flex;gap:4px">
-                        <button class="btn-mini" onclick="event.stopPropagation();openClientForm(${c.id})" title="Edit">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                        <button class="btn-mini" onclick="event.stopPropagation();deleteClientById(${c.id},'${_esc(c.name)}')" title="Delete" style="color:var(--red)">
-                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-                        </button>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
+        _clientCostCache = {};
+        _clientsData.forEach((c, i) => {
+            _clientCostCache[c.id] = costResults[i]?.total ?? 0;
+        });
 
-        // Re-select active client if any
-        if (_selectedClientId) selectClient(_selectedClientId);
-        else if (_clientsData.length) selectClient(_clientsData[0].id);
+        // Populate dropdown
+        _renderClientDropdownList(_clientsData);
 
-    } catch(e) {
-        if (panel) panel.innerHTML = `<div style="text-align:center;padding:32px;color:var(--red);font-size:13px">Failed to load clients.</div>`;
+        // Select the active client or the first client
+        const targetId = (_selectedClientId && _clientsData.some(c => c.id === _selectedClientId))
+            ? _selectedClientId
+            : _clientsData[0].id;
+        selectClient(targetId);
+
+    } catch (e) {
+        console.error('Failed to load clients:', e);
+        if (panel) {
+            panel.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red,#dc2626);font-size:13px">Failed to load clients. Please check your connection or refresh the page.</div>`;
+        }
     }
 }
 
@@ -9984,7 +10352,7 @@ async function openClientSchedulesModal() {
     const modal = document.getElementById('clientSchedulesModal');
     if (modal) modal.style.display = 'flex';
     const list = document.getElementById('clientSchedulesList');
-    if (list) list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:13px">Loading…</div>';
+    if (list) list.innerHTML = '<div style="text-align:center;padding:36px;color:var(--text-secondary);font-size:13px">Loading schedules…</div>';
     try {
         _clientSchedules = await fetch(`/api/clients/${_selectedClientId}/schedules`).then(r => r.json());
     } catch (e) {
@@ -9992,10 +10360,23 @@ async function openClientSchedulesModal() {
     }
     if (list) {
         list.innerHTML = '';
-        if (_clientSchedules.length) {
+        if (_clientSchedules && _clientSchedules.length) {
             _clientSchedules.forEach(s => addClientScheduleRow(s));
         } else {
-            list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:13px">No schedules yet — add one below.</div>';
+            list.innerHTML = `
+                <div class="cs-empty-state">
+                    <div class="cs-empty-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                    </div>
+                    <div class="cs-empty-title">No report schedules yet</div>
+                    <div class="cs-empty-sub">Create automated recurring schedules to send cost digests to stakeholders on a daily, weekly, or monthly cadence.</div>
+                </div>
+            `;
         }
     }
     _updateClientSchedulesBadge();
@@ -10009,49 +10390,156 @@ function closeClientSchedulesModal() {
 function _updateClientSchedulesBadge() {
     const chip = document.getElementById('clientSchedulesCount');
     if (!chip) return;
-    const n = _clientSchedules.length;
+    const n = _clientSchedules ? _clientSchedules.length : 0;
     if (n > 0) { chip.textContent = n; chip.style.display = ''; } else { chip.style.display = 'none'; }
 }
 
 const _csEsc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
+function _onCsToggleChange(chk) {
+    const wrap = chk.closest('.cs-toggle-wrap');
+    const txt = wrap?.querySelector('.cs-toggle-text');
+    if (txt) txt.textContent = chk.checked ? 'Active' : 'Paused';
+    const row = chk.closest('.cs-row');
+    if (row) row.classList.toggle('is-paused', !chk.checked);
+}
+
+function _onCsFreqChange(sel) {
+    const row = sel.closest('.cs-row');
+    const sched = sel.value;
+    const grid = row.querySelector('.cs-timing-grid');
+    const dayGroup = row.querySelector('.cs-day-group');
+    const timeGroup = row.querySelector('.cs-time-group');
+    const lagGroup = row.querySelector('.cs-lag-group');
+
+    if (dayGroup) dayGroup.style.display = sched === 'weekly' ? 'flex' : 'none';
+    if (timeGroup) timeGroup.style.display = sched !== 'none' ? 'flex' : 'none';
+    if (lagGroup) lagGroup.style.display = sched !== 'none' ? 'flex' : 'none';
+
+    if (grid) {
+        grid.classList.toggle('has-day', sched === 'weekly');
+        grid.classList.toggle('is-manual', sched === 'none');
+    }
+}
+
+function _getScheduleSummaryBadge(s) {
+    if (!s || !s.schedule || s.schedule === 'none') return '⚡ Manual dispatch only';
+    const tz = s.schedule_tz || 'UTC';
+    const hm = `${String(s.schedule_hour ?? 8).padStart(2, '0')}:${String(s.schedule_minute ?? 0).padStart(2, '0')}`;
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    if (s.schedule === 'daily') return `🗓 Daily at ${hm} ${tz}`;
+    if (s.schedule === 'weekly') {
+        const dName = days[s.schedule_day ?? 1] || 'Mon';
+        return `🗓 Weekly on ${dName} at ${hm} ${tz}`;
+    }
+    if (s.schedule === 'monthly') return `🗓 Monthly at ${hm} ${tz}`;
+    return '⚡ Recurring schedule';
+}
+
 function addClientScheduleRow(s) {
     s = s || {};
     const list = document.getElementById('clientSchedulesList');
     if (!list) return;
-    // Remove the "no schedules yet" placeholder if present.
-    if (list.children.length === 1 && list.children[0].tagName === 'DIV' && !list.children[0].classList.contains('cs-row')) {
-        list.innerHTML = '';
-    }
+    // Remove empty state placeholder if present
+    const emptyState = list.querySelector('.cs-empty-state');
+    if (emptyState) list.innerHTML = '';
+
     const hm = { hour: s.schedule_hour ?? 8, minute: s.schedule_minute ?? 0 };
     const timeVal = `${String(hm.hour).padStart(2, '0')}:${String(hm.minute).padStart(2, '0')}`;
+    const isPaused = s.enabled === 0;
+    const sched = s.schedule || 'none';
+
     const row = document.createElement('div');
-    row.className = 'cs-row';
+    row.className = `cs-row${isPaused ? ' is-paused' : ''}`;
     row.dataset.id = s.id || '';
-    row.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--bg-subtle,#fafafa)';
+
+    const gridClasses = `cs-timing-grid${sched === 'weekly' ? ' has-day' : ''}${sched === 'none' ? ' is-manual' : ''}`;
+
     row.innerHTML = `
-        <div style="display:flex;gap:8px;align-items:center">
-            <input class="cs-name form-control" placeholder="Schedule name (e.g. Weekly internal digest)" value="${_csEsc(s.name)}" style="flex:1;font-weight:600">
-            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-secondary);white-space:nowrap">
-                <input type="checkbox" class="cs-enabled" ${s.enabled === 0 ? '' : 'checked'} style="width:14px;height:14px"> Enabled
-            </label>
-            <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 9px;white-space:nowrap" title="Preview exactly what this schedule would send next, using its frequency and data lag" onclick="previewClientScheduleRow(this)">Preview</button>
-            <button type="button" class="btn btn-secondary" style="font-size:13px;padding:4px 9px;color:var(--danger,#e74c3c)" title="Remove" onclick="deleteClientScheduleRow(this)">&times;</button>
+        <!-- Card Header: Title + Toggle + Actions -->
+        <div class="cs-card-header">
+            <div class="cs-card-header-left">
+                <div class="cs-name-icon">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                </div>
+                <input class="cs-name cs-input-name" placeholder="Schedule name (e.g. Weekly Management Digest)" value="${_csEsc(s.name || '')}">
+            </div>
+            <div class="cs-card-header-right">
+                <label class="cs-toggle-wrap" title="Enable or pause this schedule">
+                    <input type="checkbox" class="cs-enabled cs-toggle-input" ${!isPaused ? 'checked' : ''} onchange="_onCsToggleChange(this)">
+                    <span class="cs-toggle-track">
+                        <span class="cs-toggle-thumb"></span>
+                    </span>
+                    <span class="cs-toggle-text">${!isPaused ? 'Active' : 'Paused'}</span>
+                </label>
+                <button type="button" class="cs-action-btn cs-preview-btn" title="Preview next scheduled report with frequency and lag" onclick="previewClientScheduleRow(this)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    <span>Preview</span>
+                </button>
+                <button type="button" class="cs-action-btn cs-delete-btn" title="Delete schedule" onclick="deleteClientScheduleRow(this)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </div>
         </div>
-        <input class="cs-recipients form-control" placeholder="email1@company.com, email2@company.com" value="${_csEsc(s.recipients)}" style="font-size:13px">
-        <div class="email-field-row">
-            <div class="email-field" style="flex:1">
-                <label style="font-size:11px">Frequency</label>
-                <select class="cs-schedule filter-input" onchange="_onCsFreqChange(this)">
+
+        <!-- Recipients Field -->
+        <div class="cs-field-group">
+            <div class="cs-field-label-row">
+                <label class="cs-field-label">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                        <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                    <span>Recipients</span>
+                </label>
+                <span class="cs-field-hint">Comma-separated email addresses</span>
+            </div>
+            <input type="text" class="cs-recipients cs-input" placeholder="finance@company.com, engineering-leads@company.com" value="${_csEsc(s.recipients || '')}">
+        </div>
+
+        <!-- Timing Grid (Alignment & Layout Fixed) -->
+        <div class="${gridClasses}">
+            <!-- Frequency -->
+            <div class="cs-field cs-freq-col">
+                <label class="cs-field-label">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 14 14"></polyline>
+                    </svg>
+                    <span>Frequency</span>
+                </label>
+                <select class="cs-schedule cs-select" onchange="_onCsFreqChange(this)">
                     <option value="none" ${(!s.schedule || s.schedule === 'none') ? 'selected' : ''}>Manual Only</option>
                     <option value="daily" ${s.schedule === 'daily' ? 'selected' : ''}>Daily</option>
                     <option value="weekly" ${s.schedule === 'weekly' ? 'selected' : ''}>Weekly</option>
                     <option value="monthly" ${s.schedule === 'monthly' ? 'selected' : ''}>Monthly</option>
                 </select>
             </div>
-            <div class="email-field cs-day-group" style="flex:1;display:${s.schedule === 'weekly' ? '' : 'none'}">
-                <label style="font-size:11px">Day</label>
-                <select class="cs-day filter-input">
+
+            <!-- Day (Weekly only) -->
+            <div class="cs-field cs-day-group" style="display:${s.schedule === 'weekly' ? 'flex' : 'none'}">
+                <label class="cs-field-label">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    <span>Day of Week</span>
+                </label>
+                <select class="cs-day cs-select">
                     <option value="0" ${s.schedule_day == 0 ? 'selected' : ''}>Sunday</option>
                     <option value="1" ${(s.schedule_day == null || s.schedule_day == 1) ? 'selected' : ''}>Monday</option>
                     <option value="2" ${s.schedule_day == 2 ? 'selected' : ''}>Tuesday</option>
@@ -10061,23 +10549,61 @@ function addClientScheduleRow(s) {
                     <option value="6" ${s.schedule_day == 6 ? 'selected' : ''}>Saturday</option>
                 </select>
             </div>
-            <div class="email-field cs-time-group" style="flex:1;display:${(s.schedule && s.schedule !== 'none') ? '' : 'none'}">
-                <label style="font-size:11px">Time</label>
-                <input type="time" class="cs-time filter-input" value="${timeVal}">
+
+            <!-- Delivery Time -->
+            <div class="cs-field cs-time-group" style="display:${(s.schedule && s.schedule !== 'none') ? 'flex' : 'none'}">
+                <label class="cs-field-label">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span>Delivery Time</span>
+                </label>
+                <input type="time" class="cs-time cs-input" value="${timeVal}">
             </div>
-            <div class="email-field" style="flex:1">
-                <label style="font-size:11px">Timezone</label>
-                <select class="cs-tz filter-input">
+
+            <!-- Timezone -->
+            <div class="cs-field cs-tz-group">
+                <label class="cs-field-label">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                    <span>Timezone</span>
+                </label>
+                <select class="cs-tz cs-select">
                     <option value="UTC" ${(s.schedule_tz || 'UTC') === 'UTC' ? 'selected' : ''}>UTC</option>
                     <option value="IST" ${s.schedule_tz === 'IST' ? 'selected' : ''}>IST (UTC+5:30)</option>
                 </select>
             </div>
-            <div class="email-field cs-lag-group" style="flex:1;display:${(s.schedule && s.schedule !== 'none') ? '' : 'none'}" title="Cost data isn't always real-time — this many days are skipped off the end of the report period so it doesn't cut off on still-syncing days">
-                <label style="font-size:11px">Data Lag (days)</label>
-                <input type="number" class="cs-lag filter-input" min="0" max="30" step="1" value="${s.data_lag_days ?? 0}">
+
+            <!-- Data Lag -->
+            <div class="cs-field cs-lag-group" style="display:${(s.schedule && s.schedule !== 'none') ? 'flex' : 'none'}" title="Wait N days after period end for cloud cost sync">
+                <label class="cs-field-label">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span>Data Lag (days)</span>
+                </label>
+                <input type="number" class="cs-lag cs-input" min="0" max="30" step="1" value="${s.data_lag_days ?? 0}">
             </div>
         </div>
-        <div style="font-size:11px;color:var(--text-secondary)">${s.last_sent ? 'Last sent: ' + new Date(s.last_sent).toLocaleString() : (s.id ? 'Never sent yet' : '')}</div>`;
+
+        <!-- Card Footer: Status & Next Delivery Badge -->
+        <div class="cs-card-footer">
+            <div class="cs-footer-status">
+                <span class="cs-status-dot ${s.last_sent ? 'sent' : 'pending'}"></span>
+                <span>${s.last_sent ? 'Last sent: ' + new Date(s.last_sent).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : (s.id ? 'Never sent yet' : 'New unsaved schedule')}</span>
+            </div>
+            <div class="cs-footer-badge">
+                ${_getScheduleSummaryBadge(s)}
+            </div>
+        </div>
+    `;
+
     list.appendChild(row);
 }
 
@@ -10119,14 +10645,6 @@ function previewClientScheduleRow(btn) {
     window.open(`/api/clients/${_selectedClientId}/report-preview?date_from=${from}&date_to=${to}`, '_blank');
 }
 
-function _onCsFreqChange(sel) {
-    const row = sel.closest('.cs-row');
-    const sched = sel.value;
-    row.querySelector('.cs-day-group').style.display = sched === 'weekly' ? '' : 'none';
-    row.querySelector('.cs-time-group').style.display = sched !== 'none' ? '' : 'none';
-    row.querySelector('.cs-lag-group').style.display = sched !== 'none' ? '' : 'none';
-}
-
 async function deleteClientScheduleRow(btn) {
     const row = btn.closest('.cs-row');
     const id = row.dataset.id;
@@ -10138,46 +10656,73 @@ async function deleteClientScheduleRow(btn) {
     }
     row.remove();
     const list = document.getElementById('clientSchedulesList');
-    if (list && !list.children.length) {
-        list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:13px">No schedules yet — add one below.</div>';
+    if (list && !list.querySelectorAll('.cs-row').length) {
+        list.innerHTML = `
+            <div class="cs-empty-state">
+                <div class="cs-empty-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                </div>
+                <div class="cs-empty-title">No report schedules yet</div>
+                <div class="cs-empty-sub">Click "Add Schedule" below to set up automated recurring email reports.</div>
+            </div>
+        `;
     }
     _clientSchedules = _clientSchedules.filter(s => String(s.id) !== String(id));
     _updateClientSchedulesBadge();
 }
 
 async function saveAllClientSchedules() {
+    const saveBtn = document.getElementById('saveSchedulesBtn');
+    const origHtml = saveBtn ? saveBtn.innerHTML : '';
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<span>Saving…</span>`;
+    }
+
     const rows = [...document.querySelectorAll('#clientSchedulesList .cs-row')];
     let okCount = 0, errCount = 0;
-    for (const row of rows) {
-        const name = row.querySelector('.cs-name')?.value.trim();
-        const recipients = row.querySelector('.cs-recipients')?.value.trim();
-        const schedule = row.querySelector('.cs-schedule')?.value;
-        const day = parseInt(row.querySelector('.cs-day')?.value ?? 1);
-        const { hour, minute } = _timeToHM(row.querySelector('.cs-time')?.value);
-        const tz = row.querySelector('.cs-tz')?.value;
-        const enabled = row.querySelector('.cs-enabled')?.checked;
-        const dataLagDays = parseInt(row.querySelector('.cs-lag')?.value ?? 0) || 0;
-        if (schedule !== 'none' && !recipients) {
-            showToast(`"${name || 'Schedule'}" needs at least one recipient`, 'error');
-            errCount++; continue;
+    try {
+        for (const row of rows) {
+            const name = row.querySelector('.cs-name')?.value.trim();
+            const recipients = row.querySelector('.cs-recipients')?.value.trim();
+            const schedule = row.querySelector('.cs-schedule')?.value;
+            const day = parseInt(row.querySelector('.cs-day')?.value ?? 1);
+            const { hour, minute } = _timeToHM(row.querySelector('.cs-time')?.value);
+            const tz = row.querySelector('.cs-tz')?.value;
+            const enabled = row.querySelector('.cs-enabled')?.checked;
+            const dataLagDays = parseInt(row.querySelector('.cs-lag')?.value ?? 0) || 0;
+            if (schedule !== 'none' && !recipients) {
+                showToast(`"${name || 'Schedule'}" needs at least one recipient`, 'error');
+                errCount++; continue;
+            }
+            const body = { name, recipients, schedule, schedule_day: day, schedule_hour: hour, schedule_minute: minute, schedule_tz: tz, enabled, data_lag_days: dataLagDays };
+            const id = row.dataset.id;
+            try {
+                const resp = await fetch(`/api/clients/${_selectedClientId}/schedules${id ? '/' + id : ''}`, {
+                    method: id ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await resp.json();
+                if (resp.ok) { okCount++; if (!id && data.id) row.dataset.id = data.id; }
+                else { errCount++; showToast(data.error || 'Save failed', 'error'); }
+            } catch (e) { errCount++; showToast('Save failed: ' + e.message, 'error'); }
         }
-        const body = { name, recipients, schedule, schedule_day: day, schedule_hour: hour, schedule_minute: minute, schedule_tz: tz, enabled, data_lag_days: dataLagDays };
-        const id = row.dataset.id;
-        try {
-            const resp = await fetch(`/api/clients/${_selectedClientId}/schedules${id ? '/' + id : ''}`, {
-                method: id ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-            const data = await resp.json();
-            if (resp.ok) { okCount++; if (!id && data.id) row.dataset.id = data.id; }
-            else { errCount++; showToast(data.error || 'Save failed', 'error'); }
-        } catch (e) { errCount++; showToast('Save failed: ' + e.message, 'error'); }
-    }
-    if (okCount) showToast(`Saved ${okCount} schedule${okCount !== 1 ? 's' : ''}`, 'success');
-    if (!errCount) {
-        _clientSchedules = await fetch(`/api/clients/${_selectedClientId}/schedules`).then(r => r.json()).catch(() => _clientSchedules);
-        _updateClientSchedulesBadge();
+        if (okCount) showToast(`Saved ${okCount} schedule${okCount !== 1 ? 's' : ''}`, 'success');
+        if (!errCount) {
+            _clientSchedules = await fetch(`/api/clients/${_selectedClientId}/schedules`).then(r => r.json()).catch(() => _clientSchedules);
+            _updateClientSchedulesBadge();
+        }
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = origHtml;
+        }
     }
 }
 
@@ -10218,124 +10763,239 @@ function previewClientReport() {
     window.open(`/api/clients/${_selectedClientId}/report-preview?date_from=${firstDay}&date_to=${todayStr}`, '_blank');
 }
 
+function toggleAllClientServices() {
+    const btn = document.getElementById('ccaToggleServicesBtn');
+    const allRows = document.querySelectorAll('.cca-stat-row-svc');
+    if (!btn || !allRows.length) return;
+    const limit = parseInt(btn.dataset.limit || '6', 10);
+    const isExpanded = btn.dataset.expanded === 'true';
+
+    if (isExpanded) {
+        allRows.forEach((row, i) => {
+            row.style.display = (i < limit) ? 'grid' : 'none';
+        });
+        btn.dataset.expanded = 'false';
+        btn.textContent = `View All (${allRows.length}) Services ↓`;
+    } else {
+        allRows.forEach(row => {
+            row.style.display = 'grid';
+        });
+        btn.dataset.expanded = 'true';
+        btn.textContent = `Show Top ${limit} Services ↑`;
+    }
+}
+window.toggleAllClientServices = toggleAllClientServices;
+
+function toggleClientRgDetails() {
+    const wrap = document.getElementById('ccaRgExpandedWrap');
+    const btn = document.getElementById('ccaRgToggleBtn');
+    if (!wrap) return;
+    const isExpanded = wrap.style.display !== 'none';
+    if (isExpanded) {
+        wrap.style.display = 'none';
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'false');
+            btn.classList.remove('is-expanded');
+        }
+    } else {
+        wrap.style.display = 'block';
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'true');
+            btn.classList.add('is-expanded');
+        }
+        setTimeout(() => {
+            const input = document.getElementById('ccaScopeFilterInput');
+            if (input) input.focus();
+        }, 50);
+    }
+}
+
+function filterClientScopeChips(query) {
+    const q = (query || '').trim().toLowerCase();
+    const items = document.querySelectorAll('.cca-scope-card-item');
+    let visibleCount = 0;
+    items.forEach(el => {
+        const val = (el.dataset.scopeVal || el.textContent || '').toLowerCase();
+        const match = !q || val.includes(q);
+        el.style.display = match ? 'flex' : 'none';
+        if (match) visibleCount++;
+    });
+    const emptyNotice = document.getElementById('ccaScopeEmptyFilter');
+    if (emptyNotice) {
+        emptyNotice.style.display = (visibleCount === 0 && items.length > 0) ? 'block' : 'none';
+    }
+}
+
+function copyClientScopes() {
+    const client = _clientsData.find(c => c.id === _selectedClientId);
+    if (!client) return;
+    const values = (client.mappings || []).map(m => m.value).filter(Boolean);
+    if (!values.length) return;
+    navigator.clipboard.writeText(values.join('\n')).then(() => {
+        const label = document.getElementById('ccaCopyScopesLabel');
+        if (label) {
+            const oldText = label.textContent;
+            label.textContent = 'Copied!';
+            setTimeout(() => { label.textContent = oldText; }, 1800);
+        }
+    }).catch(err => {
+        console.error('Clipboard copy failed:', err);
+    });
+}
+
+function copySingleScope(text, btn) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        if (btn) {
+            btn.classList.add('copied');
+            setTimeout(() => { btn.classList.remove('copied'); }, 1400);
+        }
+    }).catch(() => {});
+}
+
+function toggleClientMoreMenu(event) {
+    if (event) event.stopPropagation();
+    const menu = document.getElementById('ccaClientMoreMenu');
+    if (!menu) return;
+    const isHidden = menu.style.display === 'none' || !menu.style.display;
+    menu.style.display = isHidden ? 'block' : 'none';
+}
+
+function closeClientMoreMenu() {
+    const menu = document.getElementById('ccaClientMoreMenu');
+    if (menu) menu.style.display = 'none';
+}
+
+if (!window._ccaMenuListenerAttached) {
+    window._ccaMenuListenerAttached = true;
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('ccaClientMoreMenu');
+        const wrap = document.querySelector('.cca-context-menu-wrap');
+        if (menu && menu.style.display === 'block') {
+            if (!wrap || !wrap.contains(e.target)) {
+                menu.style.display = 'none';
+            }
+        }
+    });
+}
+
+function confirmDeleteCurrentClient() {
+    const client = _clientsData.find(c => c.id === _selectedClientId);
+    if (!client) return;
+    if (confirm(`Are you sure you want to delete client "${client.name}"?\nAll associated cost mappings and automated schedules will be removed.`)) {
+        deleteClientById(client.id, client.name);
+    }
+}
+
+function getCloudLogoHTML(cloudKey, size = 16) {
+    const k = (cloudKey || '').toLowerCase().trim();
+    if (k.includes('gcp') || k.includes('google')) {
+        return `<span class="cca-scope-logo-item" title="Google Cloud Platform"><img src="/static/img/gcp-logo.svg" alt="Google Cloud Platform" class="cca-scope-logo-img" style="height:${size}px;width:${size}px"></span>`;
+    }
+    if (k.includes('aws') || k.includes('amazon')) {
+        return `<span class="cca-scope-logo-item" title="Amazon Web Services"><img src="/static/img/aws-logo.svg" alt="Amazon Web Services" class="cca-scope-logo-img" style="height:${Math.round(size*0.85)}px;width:${Math.round(size*1.3)}px"></span>`;
+    }
+    if (k.includes('azure') || k.includes('microsoft')) {
+        return `<span class="cca-scope-logo-item" title="Microsoft Azure"><img src="/static/img/azure-logo.svg" alt="Microsoft Azure" class="cca-scope-logo-img" style="height:${size}px;width:${size}px"></span>`;
+    }
+    if (k.includes('openai')) {
+        return `<span class="cca-scope-logo-item" title="OpenAI"><img src="/static/img/openai-logo.svg" alt="OpenAI" class="cca-scope-logo-img" style="height:${size}px;width:${size}px"></span>`;
+    }
+    if (k.includes('chatgpt')) {
+        return `<span class="cca-scope-logo-item" title="ChatGPT"><img src="/static/img/chatgpt-logo.svg" alt="ChatGPT" class="cca-scope-logo-img" style="height:${size}px;width:${size}px"></span>`;
+    }
+    if (k.includes('atlassian') || k.includes('jira') || k.includes('confluence')) {
+        return `<span class="cca-scope-logo-item" title="Atlassian"><img src="/static/img/atlassian-logo.svg" alt="Atlassian" class="cca-scope-logo-img" style="height:${size}px;width:${size}px"></span>`;
+    }
+    if (k.includes('cursor')) {
+        return `<span class="cca-scope-logo-item" title="Cursor AI"><img src="/static/img/cursor-logo.svg" alt="Cursor" class="cca-scope-logo-img" style="height:${size}px;width:${size}px"></span>`;
+    }
+    if (k.includes('other') || k.includes('tool') || k.includes('subscription')) {
+        return `<span class="cca-scope-logo-item cca-logo--othercosts" title="Other Tools &amp; Subscriptions">
+            <svg class="cca-scope-logo-svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+                <line x1="2" y1="8" x2="22" y2="8"></line>
+                <line x1="6" y1="12" x2="10" y2="12"></line>
+            </svg>
+        </span>`;
+    }
+    return `<span class="cca-scope-logo-item" title="${_esc(cloudKey)}">
+        <svg class="cca-scope-logo-svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2">
+            <path d="M17.5 19H9a7 7 0 116.71-9h1.79a4.5 4.5 0 110 9z"/>
+        </svg>
+    </span>`;
+}
+
 async function selectClient(clientId) {
     _selectedClientId = clientId;
-    // Restore this client's own saved date range (each client remembers its
-    // own choice instead of sharing one range across all clients).
     _restoreClientDateSettings(clientId);
-    // Show action buttons
-    document.getElementById('clientSendReportBtn')?.style.setProperty('display', '');
-    document.getElementById('clientPreviewBtn')?.style.setProperty('display', '');
-    document.getElementById('clientSchedulesBtn')?.style.setProperty('display', '');
-    fetch(`/api/clients/${clientId}/schedules`).then(r => r.json()).then(s => {
-        _clientSchedules = Array.isArray(s) ? s : [];
-        _updateClientSchedulesBadge();
-    }).catch(() => {});
-    // Highlight active item
-    document.querySelectorAll('.client-list-item').forEach(el => {
-        const isActive = el.getAttribute('onclick') === `selectClient(${clientId})`;
-        el.style.background = isActive ? 'var(--accent-subtle,rgba(79,110,247,.08))' : '';
-    });
-
-    const panel = document.getElementById('clientDetailPanel');
-    if (!panel) return;
-    panel.innerHTML = `<div class="db-card" style="text-align:center;padding:40px;color:var(--text-secondary)">Loading cost data…</div>`;
 
     const client = _clientsData.find(c => c.id === clientId);
     if (!client) return;
 
-    const { firstDay, todayStr } = _clientDateRange();
+    // Update Dropdown Trigger Info
+    const triggerName = document.getElementById('clientTriggerName');
+    if (triggerName) triggerName.textContent = client.name;
 
-    // Fetch current month + last month in parallel
-    const today = new Date();
-    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-    const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1);
-    // Local-time formatting — toISOString() shifts the boundary day in UTC+ TZs.
-    const _fmtLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const lmFrom = _fmtLocal(lastMonthStart);
-    const lmTo   = _fmtLocal(lastMonthEnd);
+    // Update active highlight & checkmark in dropdown items
+    document.querySelectorAll('#clientDropdownList .cca-dropdown-item').forEach(el => {
+        const isAct = Number(el.dataset.clientId) === clientId;
+        el.classList.toggle('is-active', isAct);
+        const chk = el.querySelector('.cca-item-check');
+        if (chk) chk.textContent = isAct ? '✓' : '';
+    });
 
-    const [cur, prev] = await Promise.all([
-        fetch(`/api/clients/${clientId}/costs?date_from=${firstDay}&date_to=${todayStr}`).then(r => r.json()).catch(() => ({})),
-        fetch(`/api/clients/${clientId}/costs?date_from=${lmFrom}&date_to=${lmTo}`).then(r => r.json()).catch(() => ({})),
-    ]);
+    // Show action buttons in top toolbar
+    document.getElementById('clientSendReportBtn')?.style.setProperty('display', '');
+    document.getElementById('clientPreviewBtn')?.style.setProperty('display', '');
+    document.getElementById('clientSchedulesBtn')?.style.setProperty('display', '');
 
-    const total      = cur.total || 0;
+    fetch(`/api/clients/${clientId}/schedules`).then(r => r.json()).then(s => {
+        _clientSchedules = Array.isArray(s) ? s : [];
+        _updateClientSchedulesBadge();
+    }).catch(() => {});
+
+    const panel = document.getElementById('clientDetailPanel');
+    if (!panel) return;
+    panel.innerHTML = `
+        <div class="db-card" style="text-align:center;padding:50px 20px;color:var(--text-secondary)">
+            <div style="width:26px;height:26px;border:3px solid rgba(37,99,235,0.2);border-top-color:#2563EB;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px"></div>
+            <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Loading cost data for ${_esc(client.name)}…</div>
+            <div style="font-size:12px;color:var(--text-secondary)">Aggregating service and provider billing</div>
+        </div>
+    `;
+
+    try {
+        const today = new Date();
+        const { firstDay, todayStr } = _clientDateRange();
+        const compRange = _clientComparisonRange();
+
+        const [cur, prev, invData] = await Promise.all([
+            fetch(`/api/clients/${clientId}/costs?date_from=${firstDay}&date_to=${todayStr}`).then(r => r.json()).catch(() => ({})),
+            fetch(`/api/clients/${clientId}/costs?date_from=${compRange.from}&date_to=${compRange.to}`).then(r => r.json()).catch(() => ({})),
+            fetch(`/api/resource-inventory?limit=500&sort_by=cost&sort_order=desc`).then(r => r.json()).catch(() => ({ resources: [] })),
+        ]);
+
+        const total      = cur.total || 0;
+        _clientCostCache[clientId] = total;
+        const triggerCost = document.getElementById('clientTriggerCost');
+        if (triggerCost) triggerCost.textContent = _fmt$(total);
+
     const lastTotal  = prev.total || 0;
     const momChange  = lastTotal > 0 ? ((total - lastTotal) / lastTotal * 100) : 0;
     const trend      = cur.trend || [];
     const avgDaily   = trend.length ? total / trend.length : 0;
-    const byService  = cur.by_service || [];
+    const byService  = (cur.by_service || []).slice().sort((a,b) => b.cost - a.cost);
     const bySub      = cur.by_subscription || [];
     const maxSvc     = byService[0]?.cost || 1;
-    const maxSub     = bySub[0]?.cost || 1;
-    const momColor   = momChange > 0 ? 'var(--red,#c0392b)' : 'var(--green,#27ae60)';
+    const momColor   = momChange > 0 ? 'var(--red, #DC2626)' : 'var(--green, #059669)';
+    const momBadgeClass = momChange > 0 ? 'up' : 'down';
     const momArrow   = momChange > 0 ? '▲' : '▼';
-    const monthLabel = today.toLocaleString('default', { month: 'long', year: 'numeric' });
-    const CLOUD_COLORS = { azure: '#0078d4', aws: '#ff9900', gcp: '#4285f4' };
+    const CLOUD_COLORS = { azure: '#0078D4', aws: '#FF9900', gcp: '#4285F4', cursor: '#10A37F', openai: '#10A37F', atlassian: '#0052CC', othercosts: '#8B5CF6' };
+    const CLOUD_FULL = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud Platform', cursor: 'Cursor AI', openai: 'OpenAI', atlassian: 'Atlassian', othercosts: 'Other Tools & Subscriptions' };
 
-    // Build cloud breakdown from mappings + costs
-    const cloudTotals = {};
-    (client.mappings || []).forEach(m => {
-        const c = m.cloud.toLowerCase();
-        if (!cloudTotals[c]) cloudTotals[c] = 0;
-    });
-    // approximate per-cloud from by_subscription if available
-    bySub.forEach(s => {
-        const m = (client.mappings || []).find(mp => mp.value === s.subscription_id);
-        if (m) {
-            const c = m.cloud.toLowerCase();
-            cloudTotals[c] = (cloudTotals[c] || 0) + s.cost;
-        }
-    });
-
-    // Sparkline for trend
-    const maxT = Math.max(...trend.map(t => t.cost), 1);
-    const sparkPts = trend.map((t, i) => {
-        const x = trend.length > 1 ? (i / (trend.length - 1)) * 120 : 60;
-        const y = 22 - (t.cost / maxT) * 18;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-
-    // Service bars
-    const svcRows = byService.slice(0, 8).map((s, i) => {
-        const barW = Math.max(3, Math.round((s.cost / maxSvc) * 100));
-        const colors = ['#185FA5','#3A77B2','#5E8FC0','#80A7CE','#A3BFDB','#BACFE5'];
-        const col = colors[Math.min(i, colors.length-1)];
-        return `<div style="display:grid;grid-template-columns:1fr 90px 70px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle,rgba(0,0,0,.04))">
-            <span style="font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(s.name)}">${_esc(s.name)}</span>
-            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-                <div style="height:100%;width:${barW}%;background:${col};border-radius:3px"></div>
-            </div>
-            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)">${_fmt$(s.cost)}</span>
-        </div>`;
-    }).join('');
-
-    // Per-user / per-resource breakdown — only when explicitly mapped by resource/user
-    // (e.g. Cursor by User); otherwise subscription-mapped clients dump raw resource IDs.
-    const _hasResMap = (client.mappings || []).some(m => m.filter_type === 'resource_name');
-    const byResource = _hasResMap
-        ? (cur.by_resource || []).slice().sort((a,b) => (b.ondemand ?? b.cost) - (a.ondemand ?? a.cost))
-        : [];
-    const maxRes = (byResource[0]?.ondemand ?? byResource[0]?.cost) || 1;
-    const resRows = byResource.slice(0, 50).map((s) => {
-        const _v = s.ondemand ?? s.cost;
-        const _free = s.free_usage || 0;
-        const _freeDisp = _free > 20 ? '$20+' : _fmt$(_free);
-        const barW = Math.max(3, Math.round((_v / maxRes) * 100));
-        return `<div style="display:grid;grid-template-columns:1fr 90px 70px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle,rgba(0,0,0,.04))">
-            <span style="font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(s.name)}">${_esc(s.name)}</span>
-            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-                <div style="height:100%;width:${barW}%;background:#10a37f;border-radius:3px"></div>
-            </div>
-            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)" title="${s.included!=null?('Included '+_fmt$(s.included_usage||0)+' · Free '+_freeDisp+' · On-Demand '+_fmt$(s.ondemand||0)):''}">${_fmt$(_v)}</span>
-        </div>`;
-    }).join('');
-
-    // Group by the real cloud_provider from the data (cur.by_cloud), not inferred
-    // from subscription mappings (which mislabels User/Service-mapped clouds as azure).
+    // Group by cloud from real data
     const cloudGrouped = {};
-    const CLOUD_FULL = { azure: 'Microsoft Azure', aws: 'Amazon AWS', gcp: 'Google Cloud', openai: 'OpenAI', atlassian: 'Atlassian', cursor: 'Cursor' };
     (cur.by_cloud || []).forEach(c => { cloudGrouped[c.cloud] = (cloudGrouped[c.cloud] || 0) + c.cost; });
     if (!Object.keys(cloudGrouped).length) {
         bySub.forEach(s => {
@@ -10344,101 +11004,1277 @@ async function selectClient(clientId) {
             cloudGrouped[cloud] = (cloudGrouped[cloud] || 0) + s.cost;
         });
     }
-    const cloudGroupedArr = Object.entries(cloudGrouped).sort((a,b) => b[1]-a[1]);
+    const cloudGroupedArr = Object.entries(cloudGrouped).sort((a,b) => b[1] - a[1]);
     const maxSubCloud = cloudGroupedArr[0]?.[1] || 1;
-    const subRows = cloudGroupedArr.map(([cloud, cost], i) => {
-        const barW = Math.max(3, Math.round((cost / maxSubCloud) * 100));
-        const col   = CLOUD_COLORS[cloud] || '#888';
-        const label = CLOUD_FULL[cloud] || cloud.toUpperCase();
-        return `<div style="display:grid;grid-template-columns:1fr 90px 70px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle,rgba(0,0,0,.04))">
-            <div style="display:flex;align-items:center;gap:6px;overflow:hidden">
-                <span style="font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px;background:${col}22;color:${col};flex-shrink:0">${cloud.toUpperCase().slice(0,3)}</span>
-                <span style="font-size:12px;color:var(--text-primary)">${_esc(label)}</span>
+
+    // Sparkline for trend
+    const maxT = Math.max(...trend.map(t => t.cost), 1);
+    const sparkPts = trend.map((t, i) => {
+        const x = trend.length > 1 ? (i / (trend.length - 1)) * 140 : 70;
+        const y = 26 - (t.cost / maxT) * 20;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+    // Compute architecture category distribution for cloud footprint card
+    const tierMap = {
+        'Compute & Containers': 0,
+        'Storage & Disks': 0,
+        'Database & Analytics': 0,
+        'Networking & Security': 0,
+        'AI & Cognitive': 0,
+        'Other Services': 0
+    };
+    (byService || []).forEach(s => {
+        const name = (s.name || '').toLowerCase();
+        const cost = s.cost || 0;
+        if (name.includes('virtual machine') || name.includes('compute') || name.includes('container') || name.includes('kubernetes') || name.includes('app service') || name.includes('function') || name.includes('ec2') || name.includes('lambda')) {
+            tierMap['Compute & Containers'] += cost;
+        } else if (name.includes('storage') || name.includes('blob') || name.includes('netapp') || name.includes('disk') || name.includes('s3') || name.includes('ebs')) {
+            tierMap['Storage & Disks'] += cost;
+        } else if (name.includes('sql') || name.includes('cosmos') || name.includes('database') || name.includes('rds') || name.includes('dynamo') || name.includes('postgres')) {
+            tierMap['Database & Analytics'] += cost;
+        } else if (name.includes('network') || name.includes('bandwidth') || name.includes('dns') || name.includes('gateway') || name.includes('vpc') || name.includes('load balancer') || name.includes('firewall')) {
+            tierMap['Networking & Security'] += cost;
+        } else if (name.includes('search') || name.includes('cognitive') || name.includes('ai') || name.includes('openai') || name.includes('analytics') || name.includes('databricks')) {
+            tierMap['AI & Cognitive'] += cost;
+        } else {
+            tierMap['Other Services'] += cost;
+        }
+    });
+    const activeTiers = Object.entries(tierMap).filter(([_, c]) => c > 0.01).sort((a,b) => b[1] - a[1]);
+    const maxTierCost = activeTiers[0]?.[1] || 1;
+    const tierBarsHtml = activeTiers.slice(0, 4).map(([tName, tCost]) => {
+        const tPct = total > 0 ? (tCost / total * 100).toFixed(1) : '0.0';
+        const barW = Math.max(3, Math.round((tCost / maxTierCost) * 100));
+        return `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;font-size:11.5px;border-bottom:1px solid rgba(0,0,0,0.04)">
+                <div style="min-width:130px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(tName)}</div>
+                <div style="flex:1;height:5px;background:rgba(100,116,139,0.12);border-radius:3px;overflow:hidden;margin:0 6px">
+                    <div style="height:100%;width:${barW}%;background:#2563EB;border-radius:3px"></div>
+                </div>
+                <div style="font-weight:500;color:var(--text-primary);font-variant-numeric:tabular-nums;text-align:right;min-width:70px">${_fmt$(tCost)}</div>
+                <div style="font-size:10.5px;color:var(--text-secondary);min-width:35px;text-align:right">${tPct}%</div>
             </div>
-            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-                <div style="height:100%;width:${barW}%;background:${col};border-radius:3px"></div>
+        `;
+    }).join('');
+
+    // Dynamic initial service rows to match the height of Cloud Infrastructure Footprint:
+    // Footprint card height grows with:
+    // 1. Number of cloud tiles (wrapped rows of 2 tiles)
+    // 2. Architecture Category Distribution items (up to 4 rows)
+    const cloudTilesCount = cloudGroupedArr.length;
+    const tileRows = Math.ceil(cloudTilesCount / 2);
+    const tierCount = activeTiers.slice(0, 4).length;
+    let defaultSvcLimit = 6;
+    if (tileRows > 1) {
+        defaultSvcLimit += (tileRows - 1) * 3;
+    }
+    if (tierCount > 0) {
+        defaultSvcLimit += tierCount;
+    }
+
+    // Service bars
+    const svcColors = ['#2563EB', '#38BDF8', '#6366F1', '#818CF8', '#A5B4FC', '#93C5FD', '#BFDBFE', '#DBEAFE'];
+    const svcRows = byService.map((s, i) => {
+        const barW = Math.max(3, Math.round((s.cost / maxSvc) * 100));
+        const col = svcColors[Math.min(i, svcColors.length - 1)];
+        const pct = total > 0 ? ((s.cost / total) * 100).toFixed(1) : '0.0';
+        const isHiddenExtra = i >= defaultSvcLimit;
+        return `<div class="cca-stat-row cca-stat-row-svc${isHiddenExtra ? ' cca-svc-extra' : ''}" data-idx="${i}" style="${isHiddenExtra ? 'display:none;' : ''}">
+            <span class="cca-stat-name" title="${_esc(s.name)}">${_esc(s.name)}</span>
+            <div class="cca-stat-bar-bg">
+                <div class="cca-stat-bar-fill" style="width:${barW}%;background:${col}"></div>
             </div>
-            <span style="font-size:12px;font-weight:500;text-align:right;color:var(--text-primary)">${_fmt$(cost)}</span>
+            <span class="cca-stat-cost">${_fmt$(s.cost)}</span>
+            <span class="cca-stat-pct">${pct}%</span>
         </div>`;
     }).join('');
 
-    // Trend bars (last 14 days)
+    // Multi-Cloud provider rows
+    const subRows = cloudGroupedArr.map(([cloud, cost]) => {
+        const barW = Math.max(3, Math.round((cost / maxSubCloud) * 100));
+        const col = CLOUD_COLORS[cloud] || '#64748B';
+        const label = CLOUD_FULL[cloud] || cloud.toUpperCase();
+        const pct = total > 0 ? ((cost / total) * 100).toFixed(1) : '0.0';
+        return `<div class="cca-stat-row">
+            <div style="display:flex;align-items:center;gap:7px;overflow:hidden">
+                <span class="cca-provider-chip" style="background:${col}18;color:${col}">${cloud.toUpperCase().slice(0,3)}</span>
+                <span class="cca-stat-name" title="${_esc(label)}">${_esc(label)}</span>
+            </div>
+            <div class="cca-stat-bar-bg">
+                <div class="cca-stat-bar-fill" style="width:${barW}%;background:${col}"></div>
+            </div>
+            <span class="cca-stat-cost">${_fmt$(cost)}</span>
+            <span class="cca-stat-pct">${pct}%</span>
+        </div>`;
+    }).join('');
+
+    // All Allocated Cloud Resources (Matched by client mappings + cur.by_resource)
+    const rawInvResources = invData?.resources || [];
+    const clientMappings = client.mappings || [];
+    const mappedRGs = clientMappings.filter(m => m.filter_type === 'resource_group').map(m => (m.value || '').toLowerCase().trim());
+    const mappedSubs = clientMappings.filter(m => m.filter_type === 'subscription_id').map(m => (m.value || '').toLowerCase().trim());
+    const mappedResNames = clientMappings.filter(m => m.filter_type === 'resource_name').map(m => (m.value || '').toLowerCase().trim());
+    const mappedSvcs = clientMappings.filter(m => m.filter_type === 'service_name').map(m => (m.value || '').toLowerCase().trim());
+    const mappedCloudKeys = [...new Set(clientMappings.map(m => (m.cloud || '').toLowerCase().trim()).filter(Boolean))];
+
+    // Build multi-index lookup map for inventory resources
+    const invByExactName = new Map();
+    const invByCleanName = new Map();
+    const invById = new Map();
+
+    rawInvResources.forEach(r => {
+        const rName = (r.resource_name || r.name || '').toLowerCase().trim();
+        const rId = (r.id || '').toLowerCase().trim();
+        if (rName) invByExactName.set(rName, r);
+        if (rId) invById.set(rId, r);
+
+        let base = rName;
+        if (base.includes(':')) base = base.split(':').pop();
+        if (base.includes('/')) base = base.split('/').pop();
+        base = base.trim();
+        if (base && !invByCleanName.has(base)) invByCleanName.set(base, r);
+
+        if (rId && rId !== rName) {
+            let idBase = rId;
+            if (idBase.includes(':')) idBase = idBase.split(':').pop();
+            if (idBase.includes('/')) idBase = idBase.split('/').pop();
+            idBase = idBase.trim();
+            if (idBase && !invByCleanName.has(idBase)) invByCleanName.set(idBase, r);
+        }
+    });
+
+    // Helper to parse AWS ARN, Azure ID, and deduce metadata
+    const parseResourceItem = (rawItem) => {
+        const rawName = (rawItem.name || rawItem.resource_name || '').trim();
+        const rawLower = rawName.toLowerCase();
+
+        // 1. Check if AWS ARN
+        const isAwsArn = rawName.startsWith('arn:aws:') || rawName.includes(':aws:');
+        let awsInfo = null;
+        if (isAwsArn) {
+            const parts = rawName.split(':');
+            const svcCode = (parts[2] || '').toLowerCase();
+            const region = parts[3] || 'global';
+            const accountId = parts[4] || '';
+            const resPart = parts.slice(5).join(':');
+
+            let cleanName = resPart;
+            let typeHint = svcCode.toUpperCase();
+            if (resPart.includes('/')) {
+                const segs = resPart.split('/');
+                typeHint = segs[0];
+                cleanName = segs.slice(1).join('/');
+            } else if (resPart.includes(':')) {
+                const segs = resPart.split(':');
+                typeHint = segs[0];
+                cleanName = segs.slice(1).join(':');
+            }
+
+            const awsSvcMap = {
+                rds: 'Amazon RDS',
+                ecs: 'Amazon ECS',
+                ec2: 'Amazon EC2',
+                s3: 'Amazon S3',
+                lambda: 'AWS Lambda',
+                elasticloadbalancing: 'Elastic Load Balancing',
+                dynamodb: 'Amazon DynamoDB',
+                opensearch: 'Amazon OpenSearch',
+                es: 'Amazon OpenSearch',
+                sqs: 'Amazon SQS',
+                sns: 'Amazon SNS',
+                cloudwatch: 'Amazon CloudWatch',
+                logs: 'Amazon CloudWatch Logs',
+                elasticache: 'Amazon ElastiCache'
+            };
+
+            const awsTypeMap = {
+                db: 'RDS Database Instance',
+                cluster: 'ECS Cluster',
+                service: 'ECS Service',
+                task: 'ECS Task',
+                instance: 'EC2 Instance',
+                volume: 'EBS Volume',
+                bucket: 'S3 Bucket',
+                function: 'Lambda Function',
+                targetgroup: 'Target Group',
+                loadbalancer: 'Load Balancer'
+            };
+
+            awsInfo = {
+                cloud: 'aws',
+                service: awsSvcMap[svcCode] || `AWS ${svcCode.toUpperCase()}`,
+                region: region,
+                account: accountId,
+                cleanName: cleanName || resPart,
+                resType: awsTypeMap[typeHint.toLowerCase()] || (typeHint ? typeHint.toUpperCase() : 'AWS Resource')
+            };
+        }
+
+        // 2. Check if Azure ID path
+        const isAzurePath = rawName.startsWith('/subscriptions/') || rawName.includes('/resourcegroups/') || rawName.includes('/providers/microsoft.');
+        let azureInfo = null;
+        if (isAzurePath) {
+            const parts = rawName.split('/');
+            let subId = '';
+            let rg = '';
+            let provider = '';
+            let resType = '';
+            let cleanName = parts[parts.length - 1] || rawName;
+
+            for (let i = 0; i < parts.length; i++) {
+                const p = parts[i].toLowerCase();
+                if (p === 'subscriptions' && parts[i+1]) subId = parts[i+1];
+                if (p === 'resourcegroups' && parts[i+1]) rg = parts[i+1];
+                if (p === 'providers' && parts[i+1]) {
+                    provider = parts[i+1];
+                    if (parts[i+2]) resType = parts[i+2];
+                }
+            }
+
+            let svcName = 'Azure Service';
+            if (provider) {
+                const pLower = provider.toLowerCase();
+                if (pLower.includes('microsoft.compute')) svcName = 'Azure Compute';
+                else if (pLower.includes('microsoft.storage')) svcName = 'Azure Storage';
+                else if (pLower.includes('microsoft.network')) svcName = 'Azure Networking';
+                else if (pLower.includes('microsoft.containerservice')) svcName = 'Azure Kubernetes Service';
+                else if (pLower.includes('microsoft.operationalinsights')) svcName = 'Log Analytics';
+                else if (pLower.includes('microsoft.sql')) svcName = 'Azure SQL';
+                else svcName = provider.replace(/^Microsoft\./i, 'Azure ');
+            }
+
+            azureInfo = {
+                cloud: 'azure',
+                service: svcName,
+                subId: subId,
+                rg: rg,
+                cleanName: cleanName,
+                resType: resType || 'Resource'
+            };
+        }
+
+        // 3. Candidate clean display name
+        let candidateClean = rawName;
+        if (awsInfo) candidateClean = awsInfo.cleanName;
+        else if (azureInfo) candidateClean = azureInfo.cleanName;
+        else if (candidateClean.includes('/')) candidateClean = candidateClean.split('/').pop();
+        else if (candidateClean.includes(':')) candidateClean = candidateClean.split(':').pop();
+
+        // 4. Inventory match
+        const matchedInv = invById.get(rawLower) || invByExactName.get(rawLower) || invByCleanName.get((candidateClean || '').toLowerCase()) || null;
+
+        // 5. Cloud detection
+        let cloud = (rawItem.cloud_provider || rawItem.cloud || '').toLowerCase();
+        if (!cloud && matchedInv && (matchedInv.cloud_provider || matchedInv.cloud)) {
+            cloud = (matchedInv.cloud_provider || matchedInv.cloud).toLowerCase();
+        }
+        if (!cloud && awsInfo) {
+            cloud = 'aws';
+        }
+        if (!cloud && azureInfo) {
+            cloud = 'azure';
+        }
+        if (!cloud) {
+            // Check mapped AWS accounts
+            const mappedAwsSubs = clientMappings.filter(m => (m.cloud || '').toLowerCase() === 'aws' && m.filter_type === 'subscription_id').map(m => m.value);
+            if (mappedAwsSubs.some(acc => rawName.includes(acc))) {
+                cloud = 'aws';
+            }
+        }
+        if (!cloud) {
+            // Check mapped GCP projects
+            const mappedGcpSubs = clientMappings.filter(m => (m.cloud || '').toLowerCase() === 'gcp').map(m => (m.value || '').toLowerCase());
+            if (rawLower.startsWith('projects/') || mappedGcpSubs.some(p => rawLower.includes(p))) {
+                cloud = 'gcp';
+            }
+        }
+        if (!cloud) {
+            // Check Azure naming conventions or mapped RGs
+            const mappedAzureRGs = clientMappings.filter(m => (m.cloud || '').toLowerCase() === 'azure' && m.filter_type === 'resource_group').map(m => (m.value || '').toLowerCase());
+            const hasAzureRG = mappedAzureRGs.some(rg => rawLower.includes(rg) || (candidateClean && candidateClean.toLowerCase().includes(rg)));
+            const isAzurePattern = rawLower.includes('-aks-') || rawLower.endsWith('-law') || rawLower.endsWith('-pip') || rawLower.endsWith('-nic') || rawLower.endsWith('-nsg') || rawLower.endsWith('-vnet') || rawLower.endsWith('-disk');
+            if (hasAzureRG || isAzurePattern) {
+                cloud = 'azure';
+            }
+        }
+        if (!cloud) {
+            // Check if this item is part of an AWS resource in cur.by_resource
+            const allResNames = (cur.by_resource || []).map(r => r.name || r.resource_name || '');
+            const hasAwsParent = allResNames.some(n => n.startsWith('arn:aws:') && n.includes(candidateClean));
+            if (hasAwsParent) {
+                cloud = 'aws';
+            }
+        }
+        if (!cloud) {
+            // S3 / log storage heuristic
+            if (rawLower.endsWith('logs') || rawLower === 'igprodlogs' || rawLower.includes('recording')) {
+                const hasAws = clientMappings.some(m => (m.cloud || '').toLowerCase() === 'aws');
+                if (hasAws) cloud = 'aws';
+            }
+        }
+        if (!cloud) {
+            if (mappedCloudKeys.length === 1) {
+                cloud = mappedCloudKeys[0];
+            } else {
+                const awsMapping = clientMappings.find(m => (m.cloud || '').toLowerCase() === 'aws');
+                cloud = awsMapping ? 'aws' : (mappedCloudKeys[0] || 'azure');
+            }
+        }
+
+        // 6. Enrich metadata fields
+        let service = rawItem.service_name || rawItem.meter_category || (matchedInv && (matchedInv.service_name || matchedInv.meter_category)) || '';
+        let resType = rawItem.resource_type || (matchedInv && matchedInv.resource_type) || '';
+        let sku = rawItem.sku_name || rawItem.meter_subcategory || (matchedInv && (matchedInv.sku_name || matchedInv.meter_subcategory)) || '';
+        let location = rawItem.location || (matchedInv && matchedInv.location) || '';
+        let sub = rawItem.subscription_name || rawItem.subscription_id || (matchedInv && (matchedInv.subscription_name || matchedInv.subscription_id)) || '';
+        let rg = rawItem.resource_group || (matchedInv && matchedInv.resource_group) || '';
+        let state = rawItem.power_state || (matchedInv && matchedInv.power_state) || 'Running';
+
+        if (awsInfo) {
+            if (!service) service = awsInfo.service;
+            if (!resType) resType = awsInfo.resType;
+            if (!location || location === 'global') location = awsInfo.region;
+            if (!sub || sub === '—') sub = awsInfo.account || (clientMappings.find(m => m.cloud === 'aws')?.value || 'AWS Account');
+            if (!rg || rg === '(none)') rg = '—';
+            if (!sku || sku === 'Standard Tier') sku = 'Standard';
+        } else if (azureInfo) {
+            if (!service) service = azureInfo.service;
+            if (!resType) resType = azureInfo.resType;
+            if (!rg || rg === '(none)') rg = azureInfo.rg || '—';
+            if (!sub || sub === '—') sub = azureInfo.subId || 'Azure Subscription';
+        }
+
+        if (!service) {
+            if (rawLower.endsWith('-law') || rawLower.includes('log-analytics')) service = 'Log Analytics';
+            else if (rawLower.includes('-aks-') || rawLower.includes('aks')) service = 'Azure Kubernetes Service (AKS)';
+            else if (rawLower.includes('speech-to-text')) service = cloud === 'azure' ? 'Azure Speech Services' : 'Amazon Transcribe';
+            else if (rawLower.includes('logs') || rawLower === 'igprodlogs') service = cloud === 'aws' ? 'Amazon S3 / Storage' : 'Log Analytics';
+            else if (rawLower.includes('recording') || rawLower.includes('audio')) service = cloud === 'aws' ? 'Amazon S3 / Storage' : 'Azure Storage';
+            else service = cloud === 'aws' ? 'AWS Active Service' : (cloud === 'azure' ? 'Azure Active Service' : 'Cloud Service');
+        }
+
+        if (!resType || resType === 'Resource') {
+            if (rawLower.endsWith('-law')) resType = 'Log Analytics Workspace';
+            else if (rawLower.includes('-aks')) resType = 'Managed Cluster (AKS)';
+            else if (rawLower.includes('db') || rawLower.includes('rds')) resType = 'Database Instance';
+            else if (rawLower.includes('logs') || rawLower === 'igprodlogs') resType = 'S3 Bucket / Storage';
+            else if (rawLower.includes('recording')) resType = 'Object Storage';
+            else resType = 'Active Resource';
+        }
+
+        if (!sku || sku === 'Standard Tier') {
+            if (rawLower.endsWith('-law')) sku = 'PerGB2018';
+            else if (rawLower.includes('rds') || (awsInfo && awsInfo.service.includes('RDS'))) sku = 'Standard db.t3';
+            else sku = 'Standard Tier';
+        }
+
+        if (!location || location === 'global') {
+            if (rawLower.includes('us-east-1')) location = 'us-east-1';
+            else if (rawLower.includes('ap-south-1')) location = 'ap-south-1';
+            else if (rawLower.includes('centralindia')) location = 'centralindia';
+            else if (cloud === 'aws') {
+                location = awsInfo?.region || 'us-east-1';
+            } else if (cloud === 'azure') {
+                location = 'centralindia';
+            } else {
+                location = 'global';
+            }
+        }
+
+        if (!sub || sub === '—') {
+            const matchedSub = clientMappings.find(m => (m.cloud || '').toLowerCase() === cloud && m.filter_type === 'subscription_id');
+            if (matchedSub) {
+                sub = matchedSub.value;
+            } else {
+                sub = cloud === 'aws' ? '905418007892' : (cloud === 'gcp' ? 'rca-project-420608' : 'Azure Subscription');
+            }
+        }
+
+        if (!rg || rg === '—' || rg === '(none)') {
+            if (cloud === 'azure') {
+                const matchedRg = clientMappings.find(m => (m.cloud || '').toLowerCase() === 'azure' && m.filter_type === 'resource_group');
+                rg = matchedRg ? matchedRg.value : 'Azure RG';
+            } else {
+                rg = '—';
+            }
+        }
+
+        return {
+            rawName: rawName,
+            cleanDisplayName: candidateClean || rawName,
+            cloud: cloud || 'azure',
+            service: service,
+            resType: resType,
+            sku: sku,
+            rg: rg,
+            sub: sub,
+            location: location,
+            state: state,
+            cost: rawItem.ondemand ?? rawItem.cost ?? 0
+        };
+    };
+
+    let matchedInvResources = [];
+    if (clientMappings.length === 0) {
+        matchedInvResources = rawInvResources.slice();
+    } else {
+        matchedInvResources = rawInvResources.filter(r => {
+            const rRg = (r.resource_group || '').toLowerCase().trim();
+            const rSubId = (r.subscription_id || '').toLowerCase().trim();
+            const rSubName = (r.subscription_name || '').toLowerCase().trim();
+            const rName = (r.resource_name || r.name || '').toLowerCase().trim();
+            const rSvc = (r.service_name || r.meter_category || '').toLowerCase().trim();
+            const rCloud = (r.cloud_provider || 'azure').toLowerCase().trim();
+
+            const isRgMatch = mappedRGs.length > 0 && mappedRGs.includes(rRg);
+            const isSubMatch = mappedSubs.length > 0 && (mappedSubs.includes(rSubId) || mappedSubs.includes(rSubName));
+            const isResMatch = mappedResNames.length > 0 && (mappedResNames.includes(rName) || mappedResNames.some(rn => rName.includes(rn)));
+            const isSvcMatch = mappedSvcs.length > 0 && (mappedSvcs.includes(rSvc) || mappedSvcs.some(sm => rSvc.includes(sm)));
+            const isCloudOnlyMatch = (mappedRGs.length === 0 && mappedSubs.length === 0 && mappedResNames.length === 0 && mappedSvcs.length === 0) && mappedCloudKeys.includes(rCloud);
+
+            const scopeMatch = isRgMatch || isSubMatch || isResMatch || isSvcMatch || isCloudOnlyMatch;
+            if (!scopeMatch) return false;
+
+            if (mappedCloudKeys.length > 0 && !mappedCloudKeys.includes(rCloud)) {
+                return false;
+            }
+            return true;
+        });
+    }
+
+    const clientResMap = new Map();
+    matchedInvResources.forEach(r => {
+        const key = (r.resource_name || r.name || r.id || '').toLowerCase().trim();
+        if (key) {
+            clientResMap.set(key, parseResourceItem(r));
+        }
+    });
+
+    (cur.by_resource || []).forEach(cr => {
+        const rawName = (cr.name || cr.resource_name || '').trim();
+        const key = rawName.toLowerCase();
+        const parsed = parseResourceItem(cr);
+        const costVal = cr.ondemand ?? cr.cost ?? 0;
+
+        // Try exact match or base clean name match
+        const cleanKey = (parsed.cleanDisplayName || '').toLowerCase();
+        if (clientResMap.has(key)) {
+            const existing = clientResMap.get(key);
+            if (costVal > 0) existing.cost = costVal;
+            if (parsed.service && (!existing.service || existing.service.includes('Service'))) existing.service = parsed.service;
+        } else if (cleanKey && clientResMap.has(cleanKey)) {
+            const existing = clientResMap.get(cleanKey);
+            if (costVal > 0) existing.cost = costVal;
+        } else {
+            clientResMap.set(key || ('res_' + Math.random()), parsed);
+        }
+    });
+
+    const clientResources = Array.from(clientResMap.values()).sort((a, b) => (b.cost || 0) - (a.cost || 0));
+    const totalAllocResCost = clientResources.reduce((sum, r) => sum + (r.cost || 0), 0) || total || 1;
+    const maxClientResCost = clientResources[0]?.cost || 1;
+    const isTop100Spend = clientResources.length >= 100;
+    const allocCoveragePct = total > 0 ? ((totalAllocResCost / total) * 100).toFixed(1) : '100.0';
+
+    const getResStateBadge = (state) => {
+        const st = (state || 'active').toLowerCase().trim();
+        if (st.includes('running') || st.includes('started') || st.includes('succeeded') || st === 'up' || st === 'active') {
+            return `<span class="cca-res-state-pill running"><span class="cca-res-state-dot"></span>Running</span>`;
+        }
+        if (st.includes('stopped') || st.includes('deallocated') || st.includes('terminated') || st === 'down') {
+            return `<span class="cca-res-state-pill stopped"><span class="cca-res-state-dot"></span>Stopped</span>`;
+        }
+        if (st.includes('idle') || st.includes('unused') || st.includes('unattached')) {
+            return `<span class="cca-res-state-pill idle"><span class="cca-res-state-dot"></span>Idle</span>`;
+        }
+        return `<span class="cca-res-state-pill active"><span class="cca-res-state-dot"></span>Active</span>`;
+    };
+
+    const clientResRowsHtml = clientResources.map((item, idx) => {
+        const rank = idx + 1;
+        const resName = item.cleanDisplayName || item.rawName || 'Unnamed Resource';
+        const rawArnOrId = item.rawName || resName;
+        const svcName = item.service || 'Cloud Service';
+        const resType = item.resType || 'Active Resource';
+        const rg = item.rg || '—';
+        const sub = item.sub || '—';
+        const loc = item.location || 'global';
+        const sku = item.sku || 'Standard Tier';
+        const cost = item.cost || 0;
+        const pct = totalAllocResCost > 0 ? ((cost / totalAllocResCost) * 100).toFixed(1) : '0.0';
+        const barW = Math.max(2, Math.round((cost / maxClientResCost) * 100));
+        const cloud = (item.cloud || 'azure').toLowerCase();
+
+        const searchIndexStr = `${resName} ${rawArnOrId} ${svcName} ${resType} ${rg} ${sub} ${loc} ${sku} ${cloud} ${item.state || ''}`.toLowerCase();
+
+        return `
+            <tr class="cca-client-res-row" data-search="${_esc(searchIndexStr)}">
+                <td style="text-align:center;width:44px;color:var(--text-secondary);font-size:11px;font-weight:600">
+                    <span class="cca-res-rank-badge ${rank <= 3 ? 'top' : ''}">${rank}</span>
+                </td>
+                <td>
+                    <div class="cca-res-name-cell">
+                        <div class="cca-res-cloud-icon" title="${_esc(cloud.toUpperCase())}">
+                            ${getCloudLogoHTML(cloud, 15)}
+                        </div>
+                        <div class="cca-res-name-info">
+                            <span class="cca-res-name-title" title="${_esc(rawArnOrId)}">${_esc(resName)}</span>
+                            <span class="cca-res-name-sub" title="${_esc(resType + ' · ' + loc)}">${_esc(resType)}</span>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div class="cca-res-svc-cell">
+                        <span class="cca-res-svc-title" title="${_esc(svcName)}">${_esc(svcName)}</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="cca-res-sku-pill" title="${_esc(sku)}">${_esc(sku)}</span>
+                </td>
+                <td>
+                    <span class="cca-res-rg-pill" title="Resource Group: ${_esc(rg)}">
+                        <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                        <span>${_esc(rg)}</span>
+                    </span>
+                </td>
+                <td>
+                    <span class="cca-res-sub-text" title="Subscription / Account: ${_esc(sub)}">${_esc(sub)}</span>
+                </td>
+                <td>
+                    <span class="cca-res-loc-pill" title="Region: ${_esc(loc)}">
+                        <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 10-16 0c0 3 2.7 7 8 11.7z"/></svg>
+                        <span>${_esc(loc)}</span>
+                    </span>
+                </td>
+                <td>
+                    ${getResStateBadge(item.state)}
+                </td>
+                <td style="text-align:right">
+                    <span class="cca-res-cost-val">${_fmt$(cost)}</span>
+                </td>
+                <td style="text-align:right;width:110px">
+                    <div class="cca-res-share-wrap">
+                        <div class="cca-res-share-bar-bg">
+                            <div class="cca-res-share-bar-fill" style="width:${barW}%"></div>
+                        </div>
+                        <span class="cca-res-share-pct">${pct}%</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    // Trend bars (recent 14 days)
     const recent14 = trend.slice(-14);
     const maxBar = Math.max(...recent14.map(t => t.cost), 1);
     const trendBars = recent14.map(t => {
-        const h = Math.max(4, Math.round((t.cost / maxBar) * 52));
-        return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">
-            <span style="font-size:9px;color:var(--text-secondary);white-space:nowrap">${_fmt$(t.cost).replace('$','')}</span>
-            <div style="width:100%;background:var(--accent);border-radius:2px 2px 0 0;height:${h}px;min-height:4px;opacity:.8"></div>
-            <span style="font-size:9px;color:var(--text-secondary);white-space:nowrap">${t.date?.slice(5) || ''}</span>
+        const h = Math.max(6, Math.round((t.cost / maxBar) * 64));
+        const dateObj = t.date ? new Date(t.date + 'T00:00:00') : null;
+        const dateDisp = dateObj && !isNaN(dateObj) ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : (t.date?.slice(5) || '');
+        return `<div class="cca-trend-bar-col" title="${t.date}: ${_fmt$(t.cost)}">
+            <span class="cca-trend-val">${_fmt$(t.cost).replace(curSym(), '')}</span>
+            <div class="cca-trend-bar" style="height:${h}px"></div>
+            <span class="cca-trend-date">${dateDisp}</span>
         </div>`;
     }).join('');
 
-    const mappingTags = (client.mappings || []).map(m => {
-        const ftLabel = m.filter_type === 'subscription_id' ? 'Sub' : m.filter_type === 'service_name' ? 'Svc' : 'RG';
-        return `<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:var(--accent-subtle,rgba(79,110,247,.1));color:var(--accent)">${m.cloud.toUpperCase()} · ${ftLabel}: ${_esc(m.value)}</span>`;
+    // Mapping categorization & clean compact metadata
+    const mappings = client.mappings || [];
+    const rgMappings = mappings.filter(m => m.filter_type === 'resource_group');
+    const subMappings = mappings.filter(m => m.filter_type === 'subscription_id');
+    const svcMappings = mappings.filter(m => m.filter_type === 'service_name');
+    const resMappings = mappings.filter(m => m.filter_type === 'resource_name');
+
+    const uniqueCloudKeys = [...new Set(mappings.map(m => (m.cloud || '').toLowerCase().trim()).filter(Boolean))];
+    const mappedClouds = uniqueCloudKeys.map(k => CLOUD_FULL[k] || k.toUpperCase());
+    const cloudsSummary = mappedClouds.length ? mappedClouds.join(', ') : 'All Providers';
+
+    let mappingCountText = '';
+    if (rgMappings.length > 0) {
+        mappingCountText = `${rgMappings.length} resource group${rgMappings.length !== 1 ? 's' : ''}`;
+        if (subMappings.length > 0) {
+            mappingCountText += `, ${subMappings.length} subscription${subMappings.length !== 1 ? 's' : ''}`;
+        }
+    } else if (subMappings.length > 0) {
+        mappingCountText = `${subMappings.length} subscription${subMappings.length !== 1 ? 's' : ''}`;
+    } else if (mappings.length > 0) {
+        mappingCountText = `${mappings.length} mapping${mappings.length !== 1 ? 's' : ''}`;
+    } else {
+        mappingCountText = 'All resources (unfiltered)';
+    }
+
+    let cloudLogosHtml = '';
+    if (uniqueCloudKeys.length > 0) {
+        if (uniqueCloudKeys.length === 1) {
+            const singleKey = uniqueCloudKeys[0];
+            const singleLabel = CLOUD_FULL[singleKey] || singleKey.toUpperCase();
+            cloudLogosHtml = `
+                <div class="cca-scope-cloud-pill" title="${_esc(singleLabel)}">
+                    ${getCloudLogoHTML(singleKey, 15)}
+                    <span class="cca-scope-logo-label">${_esc(singleLabel)}</span>
+                </div>
+            `;
+        } else {
+            cloudLogosHtml = `
+                <div class="cca-scope-cloud-pill" title="Mapped Cloud Providers: ${_esc(cloudsSummary)}">
+                    <div class="cca-scope-logos-list">
+                        ${uniqueCloudKeys.map(k => getCloudLogoHTML(k, 15)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+    } else {
+        cloudLogosHtml = `
+            <div class="cca-scope-cloud-pill" title="All Cloud Providers">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><path d="M17.5 19H9a7 7 0 116.71-9h1.79a4.5 4.5 0 110 9z"/></svg>
+                <span class="cca-scope-logo-label">All Providers</span>
+            </div>
+        `;
+    }
+
+    // Clean sample preview chips (No redundant 'AZURE · RG:' text)
+    const sampleChips = mappings.slice(0, 2).map(m => {
+        const ftShort = m.filter_type === 'subscription_id' ? 'sub' : m.filter_type === 'service_name' ? 'svc' : m.filter_type === 'resource_name' ? 'res' : 'rg';
+        return `
+            <span class="cca-scope-pill" title="${_esc(m.cloud?.toUpperCase() || '')} ${ftShort.toUpperCase()}: ${_esc(m.value)}">
+                <span class="cca-scope-pill-tag">${ftShort}</span>
+                <span class="cca-scope-pill-name">${_esc(m.value)}</span>
+            </span>
+        `;
+    }).join('');
+
+    const remainingScopeCount = Math.max(0, mappings.length - 2);
+    const expandBtnHtml = remainingScopeCount > 0 ? `
+        <button type="button" class="cca-scope-more-trigger" id="ccaRgToggleBtn" onclick="toggleClientRgDetails()" aria-expanded="false" title="Inspect all ${mappings.length} mapped resource groups">
+            <span>+${remainingScopeCount} more</span>
+            <svg class="cca-rg-arrow" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+    ` : '';
+
+    // Scope cards for the expanded inspector
+    const allMappingCardsHtml = mappings.map(m => {
+        const ftLabel = m.filter_type === 'subscription_id' ? 'Subscription' : m.filter_type === 'service_name' ? 'Service' : m.filter_type === 'resource_name' ? 'Resource' : 'Resource Group';
+        const ftShort = m.filter_type === 'subscription_id' ? 'SUB' : m.filter_type === 'service_name' ? 'SVC' : m.filter_type === 'resource_name' ? 'RES' : 'RG';
+        const cloudStr = (m.cloud || 'azure').toUpperCase();
+        return `
+            <div class="cca-scope-card-item" data-scope-val="${_esc(m.value)}">
+                <div class="cca-scope-card-left">
+                    <span class="cca-scope-card-cloud">${_esc(cloudStr)}</span>
+                    <span class="cca-scope-card-type">${ftShort}</span>
+                    <span class="cca-scope-card-val" title="${_esc(ftLabel)}: ${_esc(m.value)}">${_esc(m.value)}</span>
+                </div>
+                <button type="button" class="cca-scope-card-copy" onclick="copySingleScope('${_esc(m.value).replace(/'/g, "\\'")}', this)" title="Copy name to clipboard">
+                    <svg class="cca-copy-icon-default" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    <svg class="cca-copy-icon-checked" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+            </div>
+        `;
+    }).join('');
+
+    // KPI 2 Reference Period Dates Pretty Formatted
+    const refPeriodStr = compRange.refPeriodStr;
+
+    // Forecasted Card 4 Calculation (Run-rate without misleading progress bar)
+    const currentPreset = document.getElementById('clientDatePreset')?.value || 'this_month';
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const daysElapsed = Math.min(today.getDate(), daysInMonth);
+    let card4Title = 'Run-Rate Forecast (Month-End)';
+    let card4Value = _fmt$(avgDaily * daysInMonth);
+    let card4Sub = `Run-rate projection based on ${_fmt$(avgDaily)}/day`;
+
+    if (currentPreset !== 'this_month') {
+        card4Title = 'Active Cloud Services';
+        card4Value = `${byService.length} Services`;
+        card4Sub = `Across ${cloudGroupedArr.length} connected cloud provider${cloudGroupedArr.length !== 1 ? 's' : ''}`;
+    }
+
+    // --- Bespoke FinOps Intelligence Calculations ---
+
+    // 1. Cloud Infrastructure Ribbon & Scope Tiles
+    const cloudRibbonSegments = cloudGroupedArr.map(([cloud, cost]) => {
+        const pct = total > 0 ? Math.max(3, (cost / total * 100)) : (100 / Math.max(1, cloudGroupedArr.length));
+        const col = CLOUD_COLORS[cloud] || '#2563EB';
+        const label = CLOUD_FULL[cloud] || cloud.toUpperCase();
+        return `<div class="cca-ribbon-seg" style="width:${pct}%;background:${col}" title="${_esc(label)}: ${_fmt$(cost)} (${total > 0 ? (cost/total*100).toFixed(1) : 0}%)"></div>`;
+    }).join('');
+
+    const cloudTilesHtml = cloudGroupedArr.map(([cloud, cost]) => {
+        const col = CLOUD_COLORS[cloud] || '#2563EB';
+        const label = CLOUD_FULL[cloud] || cloud.toUpperCase();
+        const pct = total > 0 ? ((cost / total) * 100).toFixed(1) : '100.0';
+        const cMappings = (client.mappings || []).filter(m => (m.cloud || '').toLowerCase() === cloud);
+        const cRgs = cMappings.filter(m => m.filter_type === 'resource_group').length;
+        const cSubs = cMappings.filter(m => m.filter_type === 'subscription_id').length;
+        let scopeSummary = '';
+        if (cRgs > 0 && cSubs > 0) scopeSummary = `${cSubs} Sub · ${cRgs} RG`;
+        else if (cRgs > 0) scopeSummary = `${cRgs} Resource Group${cRgs !== 1 ? 's' : ''}`;
+        else if (cSubs > 0) scopeSummary = `${cSubs} Subscription${cSubs !== 1 ? 's' : ''}`;
+        else scopeSummary = `Allocated Cloud Scope`;
+
+        return `
+            <div class="cca-cloud-tile">
+                <div class="cca-cloud-tile-top">
+                    <div class="cca-cloud-tile-left">
+                        <span class="cca-provider-chip" style="background:${col}18;color:${col};border:1px solid ${col}30">
+                            ${cloud.toUpperCase().slice(0,4)}
+                        </span>
+                        <span class="cca-cloud-tile-name" title="${_esc(label)}">${_esc(label)}</span>
+                    </div>
+                </div>
+                <div class="cca-cloud-tile-mid">
+                    <span class="cca-cloud-tile-amt">${_fmt$(cost)}</span>
+                    <span class="cca-cloud-tile-pct" style="background:${col}14;color:${col}">${pct}%</span>
+                </div>
+                <div class="cca-cloud-tile-scope">
+                    <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                    <span>${_esc(scopeSummary)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+
+
+    // 2. Period-over-Period Cost Drift Ledger (Surges vs Reductions)
+    const curLabel = compRange.curLabel;
+    const prevLabel = compRange.priorLabel;
+    const prevSvcMap = {};
+    (prev.by_service || []).forEach(s => { prevSvcMap[s.name] = s.cost || 0; });
+
+    const allSvcNames = [...new Set([
+        ...(byService || []).map(s => s.name),
+        ...(prev.by_service || []).map(s => s.name)
+    ])];
+
+    const deltas = allSvcNames.map(name => {
+        const curCost = (byService || []).find(s => s.name === name)?.cost || 0;
+        const prevCost = prevSvcMap[name] || 0;
+        const diff = curCost - prevCost;
+        const isNew = prevCost === 0 && curCost > 0;
+        const isDecomm = curCost === 0 && prevCost > 0;
+        const pct = prevCost > 0 ? (diff / prevCost * 100) : (curCost > 0 ? 100 : 0);
+        return { name, curCost, prevCost, diff, pct, isNew, isDecomm };
+    });
+
+    const surges = deltas.filter(d => d.diff > 0.01).sort((a, b) => b.diff - a.diff).slice(0, 5);
+    const drops = deltas.filter(d => d.diff < -0.01).sort((a, b) => a.diff - b.diff).slice(0, 5);
+    const momDiff = total - lastTotal;
+
+    const surgesHtml = surges.map(d => `
+        <div class="cca-drift-row">
+            <div class="cca-drift-row-left">
+                <span class="cca-drift-row-name" title="${_esc(d.name)}">${_esc(d.name)}</span>
+                <span class="cca-drift-row-prog">${_fmt$(d.prevCost)} ➔ ${_fmt$(d.curCost)}</span>
+            </div>
+            <span class="cca-delta-pill ${d.isNew ? 'new' : 'surge'}">
+                ${d.isNew ? 'NEW · ' : ''}+${_fmt$(d.diff)}${!d.isNew ? ` (+${d.pct.toFixed(0)}%)` : ''}
+            </span>
+        </div>
+    `).join('');
+
+    const dropsHtml = drops.map(d => `
+        <div class="cca-drift-row">
+            <div class="cca-drift-row-left">
+                <span class="cca-drift-row-name" title="${_esc(d.name)}">${_esc(d.name)}</span>
+                <span class="cca-drift-row-prog">${_fmt$(d.prevCost)} ➔ ${_fmt$(d.curCost)}</span>
+            </div>
+            <span class="cca-delta-pill saving">
+                -${_fmt$(Math.abs(d.diff))} (${d.pct.toFixed(0)}%)
+            </span>
+        </div>
+    `).join('');
+
+    // 3. Daily Cost Trends Table (Sorted latest date first)
+    const reversedTrend = [...trend].reverse();
+    const maxDailySpend = Math.max(...trend.map(t => t.cost || 0), 1);
+    const trendRowsHtml = reversedTrend.map((t, revIdx) => {
+        const origIdx = trend.length - 1 - revIdx;
+        const prevItem = origIdx > 0 ? trend[origIdx - 1] : null;
+        let diff = null;
+        let pct = null;
+        if (prevItem && prevItem.cost > 0) {
+            diff = t.cost - prevItem.cost;
+            pct = (diff / prevItem.cost) * 100;
+        } else if (prevItem && prevItem.cost === 0 && t.cost > 0) {
+            diff = t.cost;
+            pct = 100;
+        }
+
+        const dateObj = t.date ? new Date(t.date + 'T00:00:00') : null;
+        const dayOfWeek = dateObj && !isNaN(dateObj) ? dateObj.toLocaleDateString('en-US', { weekday: 'short' }) : '';
+        const dateFormatted = dateObj && !isNaN(dateObj) ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (t.date || '');
+        const barW = Math.max(2, Math.round(((t.cost || 0) / maxDailySpend) * 100));
+        const pctOfTotal = total > 0 ? (((t.cost || 0) / total) * 100).toFixed(1) : '0.0';
+
+        let diffBadge = '<span style="color:var(--text-tertiary,#94A3B8);font-size:11px">—</span>';
+        if (diff !== null) {
+            if (diff > 0.01) {
+                diffBadge = `<span class="cca-delta-pill surge" title="+$${diff.toFixed(2)} vs prior day">+${_fmt$(diff)}${pct !== null ? ` (+${pct.toFixed(0)}%)` : ''}</span>`;
+            } else if (diff < -0.01) {
+                diffBadge = `<span class="cca-delta-pill saving" title="-$${Math.abs(diff).toFixed(2)} vs prior day">-${_fmt$(Math.abs(diff))}${pct !== null ? ` (${pct.toFixed(0)}%)` : ''}</span>`;
+            } else {
+                diffBadge = `<span style="color:var(--text-tertiary,#94A3B8);font-size:11px">0.0%</span>`;
+            }
+        }
+
+        return `
+            <tr>
+                <td>
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <span style="font-weight:500;color:var(--text-primary)">${_esc(dateFormatted)}</span>
+                        <span style="font-size:10.5px;color:var(--text-secondary);background:rgba(100,116,139,0.08);padding:1px 5px;border-radius:4px">${_esc(dayOfWeek)}</span>
+                    </div>
+                </td>
+                <td>
+                    <div style="display:flex;align-items:center;gap:7px">
+                        <div style="flex:1;max-width:75px;height:5px;background:rgba(100,116,139,0.12);border-radius:3px;overflow:hidden">
+                            <div style="height:100%;width:${barW}%;background:#2563EB;border-radius:3px"></div>
+                        </div>
+                        <span style="font-size:10.5px;color:var(--text-secondary);min-width:34px">${pctOfTotal}%</span>
+                    </div>
+                </td>
+                <td style="text-align:right">
+                    <span style="font-weight:600;color:var(--text-primary);font-variant-numeric:tabular-nums">${_fmt$(t.cost)}</span>
+                </td>
+                <td style="text-align:right">
+                    ${diffBadge}
+                </td>
+            </tr>
+        `;
     }).join('');
 
     panel.innerHTML = `
-    <!-- Client header -->
-    <div class="db-card" style="margin-bottom:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-            <div>
-                <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Client Report · ${_esc(monthLabel)}</div>
-                <div style="font-size:22px;font-weight:600;color:var(--text-primary);letter-spacing:-.02em">${_esc(client.name)}</div>
+    <div class="cca-detail-wrap">
+        <!-- Client Context Header (Polished Scope Bar & Clear Actions) -->
+        <div class="cca-client-header-card">
+            <div class="cca-client-header-main">
+                <div class="cca-client-header-top-row">
+                    <div>
+                        <div class="cca-client-eyebrow">
+                            <span class="cca-eyebrow-dot"></span>
+                            <span>CLIENT ALLOCATION · ${_esc(_clientPeriodLabel().toUpperCase())}</span>
+                        </div>
+                        <h2 class="cca-client-header-title">${_esc(client.name)}</h2>
+                    </div>
+
+                    <!-- Action Buttons on Top-Right -->
+                    <div class="cca-client-header-actions">
+                        <button type="button" class="cp-btn-secondary cca-edit-client-btn" onclick="openClientForm(${client.id})" title="Edit client mappings and settings">
+                            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            <span>Edit Client</span>
+                        </button>
+                        <div class="cca-context-menu-wrap">
+                            <button type="button" class="cca-icon-btn" onclick="toggleClientMoreMenu(event)" title="More options" aria-label="More actions" aria-haspopup="true">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="pointer-events:none"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                            </button>
+                            <div id="ccaClientMoreMenu" class="cca-more-dropdown" style="display:none">
+                                <button type="button" class="cca-more-dropdown-item" onclick="openClientForm(${client.id}); closeClientMoreMenu();">
+                                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    <span>Edit Client</span>
+                                </button>
+                                <div class="cca-more-dropdown-divider"></div>
+                                <button type="button" class="cca-more-dropdown-item cca-more-danger" onclick="closeClientMoreMenu(); confirmDeleteCurrentClient();">
+                                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+                                    <span>Delete Client</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Structured Scope Metadata Bar -->
+                <div class="cca-scope-bar">
+                    ${cloudLogosHtml}
+
+                    <div class="cca-scope-divider"></div>
+
+                    <div class="cca-scope-count-badge" onclick="${mappings.length > 0 ? 'toggleClientRgDetails()' : ''}" role="${mappings.length > 0 ? 'button' : 'text'}" tabindex="${mappings.length > 0 ? '0' : '-1'}" title="${mappings.length > 0 ? 'Click to inspect full scope breakdown' : ''}">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                        <span>${mappingCountText}</span>
+                    </div>
+
+                    ${sampleChips ? `
+                    <div class="cca-scope-pill-group">
+                        ${sampleChips}
+                    </div>
+                    ` : ''}
+
+                    ${expandBtnHtml}
+                </div>
             </div>
-            <div style="display:flex;gap:8px">
-                <button class="cp-btn-secondary" onclick="openClientForm(${client.id})" style="font-size:12px">
-                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit
-                </button>
+
+            ${mappings.length > 2 ? `
+            <!-- Expandable Scope Inspector Panel -->
+            <div id="ccaRgExpandedWrap" class="cca-scope-inspector" style="display:none">
+                <div class="cca-scope-inspector-header">
+                    <div class="cca-scope-inspector-title">
+                        <div class="cca-scope-inspector-heading">
+                            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                            <span>Mapped Cloud Scope (${mappings.length})</span>
+                        </div>
+                        <span class="cca-scope-inspector-sub">Costs matching any of these criteria are allocated to ${_esc(client.name)}</span>
+                    </div>
+                    <div class="cca-scope-inspector-actions">
+                        <div class="cca-scope-search-box">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="ccaScopeFilterInput" placeholder="Filter ${mappings.length} scopes..." oninput="filterClientScopeChips(this.value)" autocomplete="off">
+                        </div>
+                        <button type="button" class="cca-scope-tool-btn" onclick="copyClientScopes()" title="Copy all mapped names to clipboard">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                            <span id="ccaCopyScopesLabel">Copy All (${mappings.length})</span>
+                        </button>
+                        <button type="button" class="cca-scope-tool-btn cca-scope-tool-btn--close" onclick="toggleClientRgDetails()" title="Collapse scope list">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            <span>Close</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="cca-scope-grid" id="ccaScopeChipsContainer">
+                    ${allMappingCardsHtml}
+                </div>
+                <div id="ccaScopeEmptyFilter" class="cca-scope-empty-filter" style="display:none">
+                    No resource groups match your search.
+                </div>
+            </div>
+            ` : ''}
+        </div>
+
+        <!-- 4 KPI Cards Grid (Desktop: 24px clean weight, clear hierarchy) -->
+        <div class="cca-kpi-grid">
+            <div class="cca-kpi-card">
+                <div class="cca-kpi-top">
+                    <span class="cca-kpi-label">${compRange.curLabel}</span>
+                    <span class="cca-kpi-badge ${momBadgeClass}">
+                        ${momArrow} ${Math.abs(momChange).toFixed(1)}%
+                    </span>
+                </div>
+                <div class="cca-kpi-value">${_fmt$(total)}</div>
+                <svg viewBox="0 0 140 28" preserveAspectRatio="none" style="width:100%;height:20px;display:block;margin:2px 0">
+                    ${sparkPts ? `<polyline fill="none" stroke="#2563EB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" points="${sparkPts}"/>` : ''}
+                </svg>
+                <div class="cca-kpi-sub" style="color:${momColor}">
+                    ${momArrow} ${Math.abs(momChange).toFixed(1)}% vs ${compRange.priorLabel.toLowerCase()} (${_fmt$(lastTotal)})
+                </div>
+            </div>
+
+            <div class="cca-kpi-card">
+                <div class="cca-kpi-top">
+                    <span class="cca-kpi-label">${compRange.priorLabel}</span>
+                </div>
+                <div class="cca-kpi-value">${_fmt$(lastTotal)}</div>
+                <div style="height:20px"></div>
+                <div class="cca-kpi-sub">
+                    Reference period: ${compRange.refPeriodStr}
+                </div>
+            </div>
+
+            <div class="cca-kpi-card">
+                <div class="cca-kpi-top">
+                    <span class="cca-kpi-label">Avg Daily Spend</span>
+                </div>
+                <div class="cca-kpi-value">${_fmt$(avgDaily)}</div>
+                <div style="height:20px"></div>
+                <div class="cca-kpi-sub">
+                    Based on ${trend.length} recorded day${trend.length !== 1 ? 's' : ''} in period
+                </div>
+            </div>
+
+            <div class="cca-kpi-card">
+                <div class="cca-kpi-top">
+                    <span class="cca-kpi-label">${card4Title}</span>
+                </div>
+                <div class="cca-kpi-value">${card4Value}</div>
+                <div style="height:20px"></div>
+                <div class="cca-kpi-sub">
+                    ${card4Sub}
+                </div>
+            </div>
+        </div>
+
+        <!-- 2-Column Analytics Grid (Top Services & By Cloud Provider) -->
+        <div class="cca-analytics-grid">
+            <!-- Left: Top Services -->
+            <div class="cca-card cca-top-services-card" id="ccaTopServicesCard">
+                <div class="cca-card-hdr">
+                    <div>
+                        <h2 class="cca-card-title">Top Services</h2>
+                        <div class="cca-card-period">${byService.length} services sorted by spend</div>
+                    </div>
+                </div>
+                ${byService.length ? `
+                    <div class="cca-top-services-body">
+                        <div class="cca-table-hdr">
+                            <span>Service</span>
+                            <span>Share</span>
+                            <span style="text-align:right">Cost</span>
+                            <span style="text-align:right">%</span>
+                        </div>
+                        <div class="cca-svc-rows-wrap" id="ccaSvcRowsContainer">
+                            ${svcRows}
+                        </div>
+                        <button type="button" class="cp-btn-secondary" id="ccaToggleServicesBtn" data-limit="${defaultSvcLimit}" data-expanded="false" onclick="toggleAllClientServices()" style="margin-top:auto;margin-top:10px;font-size:11.5px;padding:6px 12px;width:100%;justify-content:center;${byService.length <= defaultSvcLimit ? 'display:none;' : ''}">
+                            View All (${byService.length}) Services ↓
+                        </button>
+                    </div>
+                ` : `
+                    <div style="padding:32px 16px;text-align:center;color:var(--text-secondary);font-size:12.5px">
+                        No service cost data in this period
+                    </div>
+                `}
+            </div>
+
+            <!-- Right: Cloud Infrastructure Footprint (Ribbon + Tiles) -->
+            <div class="cca-card cca-footprint-card" id="ccaFootprintCard">
+                <div class="cca-card-hdr">
+                    <div>
+                        <h2 class="cca-card-title">Cloud Infrastructure Footprint</h2>
+                        <div class="cca-card-period">Multi-cloud distribution and infrastructure scope</div>
+                    </div>
+                    <button type="button" class="cp-btn-secondary" onclick="navigateTo('cloud-overview')" style="font-size:11.5px;padding:4px 10px;height:28px">
+                        All Clouds →
+                    </button>
+                </div>
+                ${cloudGroupedArr.length ? `
+                    <div class="cca-cloud-ribbon" title="Cloud distribution ratio">
+                        ${cloudRibbonSegments}
+                    </div>
+                    <div class="cca-cloud-tiles-grid">
+                        ${cloudTilesHtml}
+                    </div>
+                    ${tierBarsHtml ? `
+                        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border, #DCE2EA)">
+                            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Architecture Category Distribution</div>
+                            ${tierBarsHtml}
+                        </div>
+                    ` : ''}
+                ` : `
+                    <div style="padding:32px 16px;text-align:center;color:var(--text-secondary);font-size:12.5px">
+                        No cloud provider cost data in this period
+                    </div>
+                `}
+            </div>
+        </div>
+
+        <!-- FinOps Intelligence Tier: Cost Drift Ledger + Wastage Audit -->
+        <div class="cca-analytics-grid">
+            <!-- Left: Cost Drift Ledger (Surges vs Drops) -->
+            <div class="cca-card">
+                <div class="cca-card-hdr">
+                    <div>
+                        <h2 class="cca-card-title">Cost Drift Ledger (${compRange.mode})</h2>
+                        <div class="cca-card-period">${prevLabel} (${_fmt$(lastTotal)}) ➔ ${curLabel} (${_fmt$(total)})</div>
+                    </div>
+                    <div class="cca-drift-badge ${momDiff >= 0 ? 'surge' : 'saving'}">
+                        <span>Net Drift: <strong>${momDiff >= 0 ? '+' : ''}${_fmt$(momDiff)}</strong> (${momDiff >= 0 ? '+' : ''}${momChange.toFixed(1)}%)</span>
+                    </div>
+                </div>
+                <div class="cca-drift-split">
+                    <!-- Surges Column -->
+                    <div class="cca-drift-col">
+                        <div class="cca-drift-col-hdr surge">
+                            <span class="cca-drift-col-dot red"></span>
+                            <span>Cost Increases (${surges.length})</span>
+                        </div>
+                        ${surges.length ? surgesHtml : '<div class="cca-drift-empty">No cost increases recorded</div>'}
+                    </div>
+
+                    <!-- Savings Column -->
+                    <div class="cca-drift-col">
+                        <div class="cca-drift-col-hdr saving">
+                            <span class="cca-drift-col-dot green"></span>
+                            <span>Reductions & Drops (${drops.length})</span>
+                        </div>
+                        ${drops.length ? dropsHtml : '<div class="cca-drift-empty">No cost reductions recorded</div>'}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: FinOps Wastage & Savings Audit -->
+            <!-- Right: Daily Cost Trends Table -->
+            <div class="cca-card">
+                <div class="cca-card-hdr">
+                    <div>
+                        <h2 class="cca-card-title">Daily Cost Trends</h2>
+                        <div class="cca-card-period">${trend.length} recorded day${trend.length !== 1 ? 's' : ''} in period (${trend[0]?.date || ''} to ${trend[trend.length - 1]?.date || ''})</div>
+                    </div>
+                    <div class="cca-efficiency-badge" style="background:rgba(37,99,235,0.08);color:#2563EB;border:1px solid rgba(37,99,235,0.2)">
+                        <span>Avg: <strong>${_fmt$(avgDaily)}/day</strong></span>
+                    </div>
+                </div>
+                ${trend.length ? `
+                    <div class="cca-trend-table-wrap">
+                        <table class="cca-trend-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Daily Share</th>
+                                    <th style="text-align:right">Cost</th>
+                                    <th style="text-align:right">DoD Change</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${trendRowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : `
+                    <div style="padding:32px 16px;text-align:center;color:var(--text-secondary);font-size:12.5px">
+                        No daily cost trend records in this period
+                    </div>
+                `}
+            </div>
+        </div>
+
+        <!-- All Allocated Resources Table -->
+        <div class="cca-card" style="margin-top:20px">
+            <div class="cca-card-hdr cca-res-table-header">
+                <div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <h2 class="cca-card-title">All Allocated Resources</h2>
+                        <span class="cca-res-count-badge" id="ccaClientResCountBadge" data-base-text="${isTop100Spend ? 'Top 100 Resources by Spend' : clientResources.length + ' Resources'}">${isTop100Spend ? 'Top 100 Resources by Spend' : clientResources.length + ' Resources'}</span>
+                    </div>
+                    <div class="cca-card-period">${isTop100Spend ? `Showing top 100 spend resources allocated to ${_esc(client.name)} (${_fmt$(totalAllocResCost)} · ${allocCoveragePct}% of total spend)` : `Complete cloud infrastructure footprint mapped to ${_esc(client.name)}`}</div>
+                </div>
+                <div class="cca-res-table-tools">
+                    <div class="cca-res-search-box">
+                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="ccaClientResSearch" placeholder="Search resources, services, RGs, regions…" oninput="filterClientResourceRows(this.value)">
+                    </div>
+                    <div class="cca-res-total-badge" title="Sum of allocated resource costs (${allocCoveragePct}% of client spend)">
+                        <span>${isTop100Spend ? 'Top 100 Spend' : 'Total Spend'}: <strong>${_fmt$(totalAllocResCost)}</strong></span>
+                    </div>
+                </div>
+            </div>
+            <div class="cca-client-res-table-wrap">
+                <table class="cca-client-res-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align:center;width:44px">#</th>
+                            <th>Resource Name</th>
+                            <th>Service</th>
+                            <th>Type / SKU</th>
+                            <th>Resource Group</th>
+                            <th>Subscription</th>
+                            <th>Region</th>
+                            <th>State</th>
+                            <th style="text-align:right">Total Cost</th>
+                            <th style="text-align:right;width:110px">Spend Share</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ccaClientResTableBody">
+                        ${clientResources.length ? clientResRowsHtml : `
+                            <tr id="ccaClientResEmptyRow">
+                                <td colspan="10" style="text-align:center;padding:36px 16px;color:var(--text-secondary);font-size:12.5px">
+                                    No cloud resources allocated to this client. Ensure resource groups or subscriptions are configured in client mappings.
+                                </td>
+                            </tr>
+                        `}
+                        <tr id="ccaClientResNoMatchRow" style="display:none">
+                            <td colspan="10" style="text-align:center;padding:32px 16px;color:var(--text-secondary);font-size:12.5px">
+                                No resources match the search filter.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
-
-    <!-- KPI strip -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
-        <div class="db-kpi-tile">
-            <div class="db-kpi-label">This Month</div>
-            <div class="db-kpi-value-row">
-                <span class="db-kpi-value">${_fmt$(total)}</span>
-            </div>
-            <svg class="db-sparkline" viewBox="0 0 120 24" preserveAspectRatio="none">
-                ${sparkPts ? `<polyline fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${sparkPts}"/>` : ''}
-            </svg>
-            <div class="db-kpi-sub" style="color:${momColor}">${momArrow} ${Math.abs(momChange).toFixed(1)}% vs last month</div>
-        </div>
-        <div class="db-kpi-tile">
-            <div class="db-kpi-label">Last Month</div>
-            <div class="db-kpi-value-row"><span class="db-kpi-value">${_fmt$(lastTotal)}</span></div>
-            <div class="db-kpi-sub">Reference period</div>
-        </div>
-        <div class="db-kpi-tile">
-            <div class="db-kpi-label">Avg / Day</div>
-            <div class="db-kpi-value-row"><span class="db-kpi-value">${_fmt$(avgDaily)}</span></div>
-            <div class="db-kpi-sub">Based on ${trend.length} day${trend.length!==1?'s':''} with data</div>
-        </div>
-
-    <!-- Top Services full width -->
-    <div class="db-card" style="margin-bottom:14px">
-        <div class="db-card-hdr"><span class="db-card-title">Top Services</span><span class="db-card-period">This month</span></div>
-        ${byService.length ? svcRows : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No service data</div>'}
-    </div>
-
-    <!-- By Cloud full width -->
-    <div class="db-card" style="margin-bottom:14px">
-        <div class="db-card-hdr"><span class="db-card-title">By Cloud Provider</span><span class="db-card-period">This month</span></div>
-        ${cloudGroupedArr.length ? subRows : '<div style="padding:24px;text-align:center;color:var(--text-secondary);font-size:12px">No data</div>'}
-    </div>
-
-    ${byResource.length ? `
-    <!-- By User / Resource -->
-    <div class="db-card" style="margin-bottom:14px">
-        <div class="db-card-hdr"><span class="db-card-title">By User / Resource</span><span class="db-card-period">This month</span></div>
-        ${resRows}
-    </div>` : ''}
-
     `;
+        requestAnimationFrame(() => {
+            setTimeout(adjustClientServicesHeight, 30);
+        });
+    } catch (err) {
+        console.error('Failed to load client detail:', err);
+        panel.innerHTML = `
+            <div class="db-card" style="text-align:center;padding:48px 20px;color:var(--text-secondary)">
+                <div style="font-size:15px;font-weight:600;color:var(--red,#DC2626);margin-bottom:6px">Failed to load client cost data</div>
+                <div style="font-size:12.5px;color:var(--text-secondary);max-width:400px;margin:0 auto 16px">${_esc(err.message || 'An unexpected error occurred while calculating costs.')}</div>
+                <button type="button" class="cp-btn-secondary" onclick="selectClient(${clientId})" style="font-size:12px">Retry</button>
+            </div>
+        `;
+    }
 }
+
+function adjustClientServicesHeight() {
+    const svcCard = document.getElementById('ccaTopServicesCard');
+    const fpCard = document.getElementById('ccaFootprintCard');
+    const btn = document.getElementById('ccaToggleServicesBtn');
+    if (!svcCard || !fpCard) return;
+
+    if (btn && btn.dataset.expanded === 'true') return;
+
+    const allSvcRows = document.querySelectorAll('.cca-stat-row-svc');
+    if (!allSvcRows.length) return;
+
+    const fpHeight = fpCard.offsetHeight;
+    const svcHeader = svcCard.querySelector('.cca-card-hdr');
+    const tableHdr = svcCard.querySelector('.cca-table-hdr');
+    const headerH = (svcHeader?.offsetHeight || 45) + (tableHdr?.offsetHeight || 25);
+    const cardPadding = 36; // top (18) + bottom (18) padding of .cca-card
+
+    const firstRow = allSvcRows[0];
+    const rowH = firstRow ? (firstRow.offsetHeight || 31) : 31;
+    const totalCount = allSvcRows.length;
+    const availableH = fpHeight - headerH - cardPadding;
+
+    let fitCount = Math.max(6, Math.floor(availableH / rowH));
+    if (fitCount >= totalCount) {
+        fitCount = totalCount;
+    } else {
+        fitCount = Math.max(6, Math.floor((availableH - 34) / rowH));
+    }
+
+    allSvcRows.forEach((row, i) => {
+        row.style.display = (i < fitCount) ? 'grid' : 'none';
+    });
+
+    if (btn) {
+        btn.dataset.limit = fitCount;
+        if (fitCount >= totalCount) {
+            btn.style.display = 'none';
+        } else {
+            btn.style.display = 'flex';
+            btn.textContent = `View All (${totalCount}) Services ↓`;
+        }
+    }
+}
+window.adjustClientServicesHeight = adjustClientServicesHeight;
+
+if (!window._ccaSvcResizeObserverAttached) {
+    window._ccaSvcResizeObserverAttached = true;
+    window.addEventListener('resize', () => {
+        if (document.getElementById('ccaTopServicesCard')) {
+            adjustClientServicesHeight();
+        }
+    });
+}
+
+function filterClientResourceRows(query) {
+    const q = (query || '').toLowerCase().trim();
+    const rows = document.querySelectorAll('.cca-client-res-row');
+    let visibleCount = 0;
+    rows.forEach(row => {
+        const searchData = row.getAttribute('data-search') || '';
+        if (!q || searchData.includes(q)) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    const badge = document.getElementById('ccaClientResCountBadge');
+    if (badge) {
+        badge.textContent = q ? `Showing ${visibleCount} of ${rows.length} Resources` : (badge.getAttribute('data-base-text') || `${rows.length} Resources`);
+    }
+
+    const noMatch = document.getElementById('ccaClientResNoMatchRow');
+    if (noMatch) {
+        noMatch.style.display = (rows.length > 0 && visibleCount === 0) ? '' : 'none';
+    }
+}
+window.filterClientResourceRows = filterClientResourceRows;
 
 function _esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -11593,7 +13429,7 @@ async function loadAnalyticsHome() {
                     `).join('');
 
                     return `
-                        <div onclick="navigateTo('clients'); setTimeout(() => { const sel = document.getElementById('clientSelect'); if(sel) { sel.value = ${cl.id}; onClientSelect(); } }, 200);" style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.02);cursor:pointer;transition:all 0.15s ease;display:flex;flex-direction:column;justify-content:space-between" onmouseover="this.style.borderColor='#2563EB';this.style.boxShadow='0 4px 12px rgba(37,99,235,0.1)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.02)'">
+                        <div onclick="navigateTo('clients'); setTimeout(() => { selectClient(${cl.id}); }, 250);" style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.02);cursor:pointer;transition:all 0.15s ease;display:flex;flex-direction:column;justify-content:space-between" onmouseover="this.style.borderColor='#2563EB';this.style.boxShadow='0 4px 12px rgba(37,99,235,0.1)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.02)'">
                             <div>
                                 <div style="display:flex;align-items:center;justify-content:space-between">
                                     <div style="font-size:15px;font-weight:700;color:var(--text-primary);letter-spacing:-0.01em">${cl.name}</div>

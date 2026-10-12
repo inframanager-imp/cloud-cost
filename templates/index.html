@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v=20260924_light_v2">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260928_kpi_loader">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261012_v4">
     <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260924_light_v2">
     <link rel="stylesheet" href="/static/css/appearance.css?v=20260924_light_v2">
     <script>
@@ -2546,20 +2546,152 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </section>
 
-    <!-- ═══ Clients Page ══════════════════════════════════════════════════ -->
+    <!-- ═══ Clients Page ═══════════════════════════════════════════════════ -->
     <section id="page-clients" class="page-section">
 
-        <!-- Header -->
-        <div class="db-header">
-            <div class="db-header-left">
-                <div class="db-breadcrumb">CLIENTS</div>
-                <h1 class="db-title">Client Cost Allocation</h1>
-                <div class="db-sync-line">
-                    <span style="font-size:12px;color:var(--text-secondary)">Allocate cloud spend to clients by subscription, resource group, or service</span>
+        <!-- Header Row with Integrated Search & Action Controls -->
+        <div class="cca-page-header">
+            <div class="cca-title-row">
+                <div class="cca-title-block">
+                    <div class="cca-breadcrumb">CLIENTS</div>
+                    <h1 class="cca-title">Client Cost Allocation</h1>
+                    <p class="cca-subtitle">Allocate cloud spend to clients by subscription, resource group, or service.</p>
+                </div>
+
+                <!-- Unified Header Controls (Search + Date Range + Icon Actions) -->
+                <div class="cca-header-actions" id="clientHeaderActions">
+                    <!-- Searchable & Browseable Client Dropdown -->
+                    <div class="cca-client-picker" id="clientPickerWrap">
+                        <button type="button" class="cca-picker-trigger" id="clientDropdownTrigger" onclick="toggleClientDropdown(event)" aria-haspopup="listbox" aria-expanded="false" title="Click to browse or search clients">
+                            <div class="cca-trigger-main">
+                                <span class="cca-trigger-label">Client:</span>
+                                <span class="cca-trigger-name" id="clientTriggerName">Loading clients…</span>
+                            </div>
+                            <svg class="cca-trigger-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+
+                        <!-- Dropdown Menu (Opened State) -->
+                        <div class="cca-dropdown-menu" id="clientDropdownMenu" style="display:none" role="listbox">
+                            <div class="cca-dropdown-search-wrap">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="cca-dropdown-search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                <input type="text" id="clientSearchInput" class="cca-dropdown-search-input" placeholder="Search clients..." autocomplete="off" oninput="filterClientDropdown(this.value)" onkeydown="onClientDropdownKeyDown(event)">
+                                <button type="button" id="clientSearchClearBtn" class="cca-dropdown-search-clear" onclick="clearClientSearch()" style="display:none" title="Clear search">&times;</button>
+                            </div>
+                            <div class="cca-dropdown-list" id="clientDropdownList">
+                                <div class="cca-dropdown-empty">Loading client list…</div>
+                            </div>
+                            <div class="cca-dropdown-footer">
+                                <span id="clientDropdownCount">0 clients</span>
+                                <button type="button" class="cca-dropdown-add-btn" onclick="closeClientDropdown(); openClientForm();">+ New Client</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Styled Date Range Selector -->
+                    <div class="cca-date-picker-wrap" id="clientDatePickerWrap">
+                        <!-- Hidden select element preserved for 100% JS backward compatibility -->
+                        <select id="clientDatePreset" style="display:none" onchange="onClientDatePreset()">
+                            <option value="this_month">This Month</option>
+                            <option value="last_month">Last Month</option>
+                            <option value="last_30">Last 30 Days</option>
+                            <option value="last_90">Last 90 Days</option>
+                        </select>
+
+                        <!-- Custom Date Picker Trigger Button -->
+                        <button type="button" class="cca-date-trigger" id="clientDateTrigger" onclick="toggleClientDateDropdown(event)" aria-haspopup="listbox" aria-expanded="false" title="Select billing period">
+                            <div class="cca-date-trigger-left">
+                                <svg class="cca-date-trigger-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                <span class="cca-date-trigger-text" id="clientDateTriggerText">This Month</span>
+                            </div>
+                            <svg class="cca-date-trigger-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+
+                        <!-- Date Selection Card (Opened State) -->
+                        <div class="cca-date-dropdown-card" id="clientDateDropdownCard" style="display:none" role="listbox">
+                            <div class="cca-date-card-header">
+                                <span class="cca-date-card-title">Billing Period</span>
+                                <span class="cca-date-card-sub" id="clientDateCardRangeText">This Month</span>
+                            </div>
+                            <div class="cca-date-card-list" id="clientDateCardList">
+                                <div class="cca-date-card-item is-active" data-val="this_month" role="option" aria-selected="true" onclick="selectClientDatePreset('this_month')">
+                                    <div class="cca-date-item-main">
+                                        <span class="cca-date-item-title">This Month</span>
+                                        <span class="cca-date-item-dates" id="presetDates-this_month">Current billing cycle</span>
+                                    </div>
+                                    <span class="cca-date-item-check">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                    </span>
+                                </div>
+                                <div class="cca-date-card-item" data-val="last_month" role="option" aria-selected="false" onclick="selectClientDatePreset('last_month')">
+                                    <div class="cca-date-item-main">
+                                        <span class="cca-date-item-title">Last Month</span>
+                                        <span class="cca-date-item-dates" id="presetDates-last_month">Previous full billing cycle</span>
+                                    </div>
+                                    <span class="cca-date-item-check">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                    </span>
+                                </div>
+                                <div class="cca-date-card-item" data-val="last_30" role="option" aria-selected="false" onclick="selectClientDatePreset('last_30')">
+                                    <div class="cca-date-item-main">
+                                        <span class="cca-date-item-title">Last 30 Days</span>
+                                        <span class="cca-date-item-dates" id="presetDates-last_30">Past 30 days</span>
+                                    </div>
+                                    <span class="cca-date-item-check">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                    </span>
+                                </div>
+                                <div class="cca-date-card-item" data-val="last_90" role="option" aria-selected="false" onclick="selectClientDatePreset('last_90')">
+                                    <div class="cca-date-item-main">
+                                        <span class="cca-date-item-title">Last 90 Days</span>
+                                        <span class="cca-date-item-dates" id="presetDates-last_90">Quarterly trend view</span>
+                                    </div>
+                                    <span class="cca-date-item-check">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preserved hidden inputs for date ranges -->
+                        <input type="hidden" id="clientDateFrom">
+                        <input type="hidden" id="clientDateTo">
+                    </div>
+
+                    <!-- Icon-Only Action Buttons -->
+                    <div class="cca-icon-actions">
+                        <button class="cca-btn-icon cca-btn-preview" id="clientPreviewBtn" style="display:none" onclick="previewClientReport()" title="Preview client report" aria-label="Preview client report">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                                <circle cx="12" cy="12" r="3.2"/>
+                            </svg>
+                        </button>
+
+                        <button class="cca-btn-icon cca-btn-send" id="clientSendReportBtn" style="display:none" onclick="openClientReportModal()" title="Send report" aria-label="Send Report">
+                            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9" fill="none"/></svg>
+                        </button>
+                        <button class="cca-btn-icon cca-btn-schedules" id="clientSchedulesBtn" style="display:none" onclick="openClientSchedulesModal()" title="Report schedules" aria-label="Report schedules">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none"/><polyline points="12,6 12,12 16,14" fill="none"/></svg>
+                            <span id="clientSchedulesCount" class="count-chip count-chip--small" style="display:none"></span>
+                        </button>
+
+                        <button class="cca-btn-icon cca-btn-new-client" onclick="openClientForm()" title="New Client" aria-label="New Client">
+                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
-            <button class="cp-btn-primary" onclick="openClientForm()" style="height:36px">+ New Client</button>
         </div>
+
+        <!-- Hidden backward-compatibility elements -->
+        <div id="clientListPanel" style="display:none"></div>
+        <span id="clientCount" style="display:none"></span>
 
         <!-- Client form modal (hidden by default) -->
         <div id="clientFormWrap" style="display:none;margin-bottom:16px">
@@ -2587,7 +2719,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="display:flex;flex-wrap:wrap;gap:16px">
                         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="top_services" checked> Top Services Breakdown</label>
                         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="by_cloud" checked> By Cloud Provider</label>
-                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="by_user" checked> By User / Resource</label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="by_user" checked> All Allocated Resources</label>
                         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="trend" checked> Daily Cost Trends</label>
                         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="manual" checked> Other Tools &amp; Subscriptions</label>
                     </div>
@@ -2597,37 +2729,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="cp-btn-primary" onclick="saveClient()">Save Client</button>
                     <button class="cp-btn-secondary" onclick="closeClientForm()">Cancel</button>
                 </div>
-            </div>
-        </div>
-
-        <!-- Date filter + Send Report bar -->
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-            <div style="display:flex;align-items:center;gap:8px">
-                <label style="font-size:12px;color:var(--text-secondary);white-space:nowrap">Date range</label>
-                <select id="clientDatePreset" class="filter-input" style="font-size:12px;height:30px" onchange="onClientDatePreset()">
-                    <option value="this_month">This Month</option>
-                    <option value="last_month">Last Month</option>
-                    <option value="last_30">Last 30 Days</option>
-                    <option value="last_90">Last 90 Days</option>
-                    <option value="custom">Custom</option>
-                </select>
-            </div>
-            <div id="clientCustomDateWrap" style="display:none;display:flex;gap:6px;align-items:center">
-                <input type="text" id="clientRangePick" class="filter-input" style="font-size:12px;height:30px;min-width:170px" placeholder="Select range">
-                <input type="hidden" id="clientDateFrom">
-                <input type="hidden" id="clientDateTo">
-                <button class="cp-btn-secondary" style="height:30px;font-size:12px" onclick="applyClientDateFilter()">Apply</button>
-            </div>
-            <div style="margin-left:auto;display:flex;gap:8px">
-                <button class="cp-btn-secondary" id="clientPreviewBtn" style="height:30px;font-size:12px;display:none" onclick="previewClientReport()">
-                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Preview
-                </button>
-                <button class="cp-btn-primary" id="clientSendReportBtn" style="height:30px;font-size:12px;display:none" onclick="openClientReportModal()">
-                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>Send Report
-                </button>
-                <button class="cp-btn-secondary" id="clientSchedulesBtn" style="height:30px;font-size:12px;display:none" onclick="openClientSchedulesModal()">
-                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>Schedules <span id="clientSchedulesCount" class="count-chip count-chip--small" style="display:none"></span>
-                </button>
             </div>
         </div>
 
@@ -2644,13 +2745,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <option value="last_month">Last Month</option>
                     <option value="last_30">Last 30 Days</option>
                     <option value="last_90">Last 90 Days</option>
-                    <option value="custom">Custom</option>
                 </select>
-                <div id="clientReportCustomWrap" style="display:none;margin-bottom:8px">
-                    <input type="text" id="clientReportRangePick" class="filter-input" style="width:100%" placeholder="Select range">
-                    <input type="hidden" id="clientReportDateFrom">
-                    <input type="hidden" id="clientReportDateTo">
-                </div>
                 <div id="clientReportPeriodLabel" style="font-size:12px;color:var(--text-secondary);margin-bottom:20px"></div>
 
                 <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -2663,53 +2758,74 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
 
         <!-- Schedules Modal: list of this client's recurring schedules (multiple allowed) -->
-        <div id="clientSchedulesModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
-            <div style="background:var(--bg-card,#fff);border-radius:12px;padding:28px;width:720px;max-width:92vw;max-height:85vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.25)">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-                    <div style="font-size:17px;font-weight:600;color:var(--text-primary)">Report Schedules</div>
-                    <button onclick="closeClientSchedulesModal()" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:20px;line-height:1">&times;</button>
+        <div id="clientSchedulesModal" class="cs-modal-backdrop" style="display:none" onclick="if(event.target===this)closeClientSchedulesModal()">
+            <div class="cs-modal-dialog">
+                <!-- Modal Header -->
+                <div class="cs-modal-header">
+                    <div class="cs-modal-header-left">
+                        <div class="cs-modal-icon-badge">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="cs-modal-title-row">
+                                <h3 class="cs-modal-title">Report Schedules</h3>
+                                <span class="cs-modal-client-badge" id="clientSchedulesModalClientName"></span>
+                            </div>
+                            <p class="cs-modal-subtitle">Configure automated recurring cost reports and delivery schedules for this client.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="cs-modal-close-btn" onclick="closeClientSchedulesModal()" aria-label="Close modal">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
-                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:18px">Recurring cost reports for <strong id="clientSchedulesModalClientName"></strong> &mdash; add as many as you need (e.g. a weekly internal digest and a monthly client copy).</div>
 
-                <div id="clientSchedulesList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px"></div>
-                <button type="button" class="cp-btn-secondary" style="font-size:12px;padding:6px 12px" onclick="addClientScheduleRow()">+ Add schedule</button>
+                <!-- Modal Body (Scrollable List) -->
+                <div class="cs-modal-body">
+                    <div id="clientSchedulesList" class="cs-list"></div>
+                </div>
 
-                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
-                    <button class="cp-btn-secondary" onclick="closeClientSchedulesModal()">Close</button>
-                    <button class="cp-btn-primary" onclick="saveAllClientSchedules()">Save Schedules</button>
+                <!-- Modal Footer -->
+                <div class="cs-modal-footer">
+                    <button type="button" class="cs-add-btn" onclick="addClientScheduleRow()">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Add Schedule</span>
+                    </button>
+                    <div class="cs-modal-footer-actions">
+                        <button type="button" class="cp-btn-secondary" style="height:38px;padding:0 16px;font-size:13px" onclick="closeClientSchedulesModal()">Close</button>
+                        <button type="button" class="cp-btn-primary" id="saveSchedulesBtn" style="height:38px;padding:0 18px;font-size:13px;display:inline-flex;align-items:center;gap:7px" onclick="saveAllClientSchedules()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                            <span>Save Schedules</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Two-panel layout: client list + detail -->
-        <div style="display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start">
-
-            <!-- LEFT: Client list -->
-            <div>
-                <div class="db-card" style="padding:0;overflow:hidden">
-                    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-                        <span style="font-size:13px;font-weight:500;color:var(--text-primary)">All Clients</span>
-                        <span style="font-size:11px;color:var(--text-secondary)" id="clientCount"></span>
-                    </div>
-                    <div id="clientListPanel" style="max-height:600px;overflow-y:auto">
-                        <div style="text-align:center;padding:32px;color:var(--text-secondary);font-size:13px">Loading…</div>
-                    </div>
-                </div>
+        <!-- Cost detail panel (Full-Width) -->
+        <div id="clientDetailPanel" style="width:100%">
+            <div class="db-card" style="text-align:center;padding:60px 24px;color:var(--text-secondary)">
+                <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px;display:block;opacity:.4">
+                    <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+                </svg>
+                <div style="font-size:14px;font-weight:500;margin-bottom:4px">Select a client</div>
+                <div style="font-size:12px">Use the client selector above to view and analyze cost allocation</div>
             </div>
-
-            <!-- RIGHT: Cost detail panel -->
-            <div id="clientDetailPanel">
-                <div class="db-card" style="text-align:center;padding:60px 24px;color:var(--text-secondary)">
-                    <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px;display:block;opacity:.4">
-                        <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
-                    </svg>
-                    <div style="font-size:14px;font-weight:500;margin-bottom:4px">Select a client</div>
-                    <div style="font-size:12px">Click a client on the left to see their cost breakdown</div>
-                </div>
-            </div>
-
         </div>
     </section>
+
 
     <!-- ═══ Other Costs Page ══════════════════════════════════════════════ -->
     <section id="page-othercosts" class="page-section">
@@ -5743,7 +5859,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </div>
 
-<script src="/static/js/app.js?v=20260928_kpi_loader"></script>
+<script src="/static/js/app.js?v=20261012_v5"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {

@@ -158,12 +158,14 @@ html[data-appearance="light"] .theme-toggle .icon-sun  { display: inline-block; 
 .cp-page-header__left {}
 .cp-page-header__right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding-top: 6px; }
 
-.cp-btn-secondary, .cp-btn-primary { font-size: 12px; padding: 7px 14px; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; transition: background 0.15s, opacity 0.15s; }
+.cp-btn-secondary, .cp-btn-primary { font-size: 12px; padding: 7px 14px; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; transition: background 0.15s, border-color 0.15s; }
 .cp-btn-secondary { background: var(--bg-card); border: 1px solid var(--border-default); color: var(--text-secondary); }
-.cp-btn-secondary:hover { background: var(--bg-hover); }
-.cp-btn-primary { background: var(--text-primary); color: var(--bg-card); border: 1px solid transparent; }
-.cp-btn-primary:hover { background: #2d2d2d; }
-html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover { background: #d4d4d4; }
+.cp-btn-secondary:hover { background: var(--bg-hover); color: var(--text-primary); }
+.cp-btn-primary { background: #2563EB; color: #FFFFFF; border: 1px solid #2563EB; }
+.cp-btn-primary:hover { background: #1D4ED8; border-color: #1D4ED8; color: #FFFFFF; }
+.cp-btn-primary:active { background: #1E40AF; border-color: #1E40AF; }
+html[data-theme="dark"] .cp-btn-primary, html.dark .cp-btn-primary, body.dark .cp-btn-primary { background: #2563EB; border-color: #2563EB; color: #FFFFFF; }
+html[data-theme="dark"] .cp-btn-primary:hover, html.dark .cp-btn-primary:hover, body.dark .cp-btn-primary:hover { background: #3B82F6; border-color: #3B82F6; }
 
 .upsell-banner {
     background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 7%, var(--bg-card)), var(--bg-card) 65%);
