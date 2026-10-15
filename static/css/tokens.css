@@ -84,11 +84,29 @@ button:focus-visible, .btn:focus-visible { outline: none; box-shadow: var(--focu
 .metric-number { font-size: var(--fs-xl); font-weight: var(--fw-medium); letter-spacing: -0.02em; color: var(--text-primary); display: block; }
 .metric-label  { font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-tertiary); font-weight: var(--fw-regular); }
 
-.badge { display: inline-block; font-size: var(--fs-micro); font-weight: var(--fw-medium); padding: 2px 8px; border-radius: var(--radius-sm); background: var(--bg-subtle); color: var(--text-secondary); }
-.badge.aws    { background: var(--warning-bg); color: var(--warning-text); }
-.badge.azure  { background: var(--accent-bg);  color: var(--accent-text);  }
-.badge.gcp    { background: var(--success-bg); color: var(--success-text); }
-.badge.danger { background: var(--danger-bg);  color: var(--danger-text);  }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs, 12px);
+  font-weight: 600;
+  line-height: 1.25;
+  padding: 4px 11px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default, rgba(0,0,0,0.1));
+  white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+.badge.aws    { background: var(--warning-bg); color: var(--warning-text); border-color: rgba(186, 117, 23, 0.28); }
+.badge.azure  { background: var(--accent-bg);  color: var(--accent-text);  border-color: rgba(24, 95, 165, 0.28); }
+.badge.gcp    { background: var(--success-bg); color: var(--success-text); border-color: rgba(59, 109, 17, 0.28); }
+.badge.danger { background: var(--danger-bg);  color: var(--danger-text);  border-color: rgba(163, 45, 45, 0.28); }
 
 table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 thead th {

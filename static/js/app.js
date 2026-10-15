@@ -3575,24 +3575,43 @@ let _costRangePicker = null;
 function _initCostDateRangePicker(fromYmd, toYmd) {
     const el = document.getElementById('costDateRange');
     if (!el || typeof flatpickr === 'undefined') return;
-    const _toDate = ymd => new Date(ymd + 'T00:00:00');
+    if (!el.classList.contains('cd-range-box')) el.classList.add('cd-range-box');
+    const _toDate = ymd => {
+        if (!ymd) return null;
+        if (ymd instanceof Date) return ymd;
+        const str = String(ymd).trim().split('T')[0];
+        const p = str.split('-');
+        if (p.length === 3) return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        const d = new Date(ymd);
+        return isNaN(d.getTime()) ? null : d;
+    };
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const syncDates = selectedDates => {
+        if (selectedDates && selectedDates.length === 2) {
+            const v1 = fmt(selectedDates[0]);
+            const v2 = fmt(selectedDates[1]);
+            const fEl = document.getElementById('costDateFrom');
+            const tEl = document.getElementById('costDateTo');
+            if (fEl && tEl && (fEl.value !== v1 || tEl.value !== v2)) {
+                fEl.value = v1;
+                tEl.value = v2;
+                costPageOffset = 0;
+                loadCostsTable();
+            }
+        }
+    };
+    const defaultDates = [_toDate(fromYmd), _toDate(toYmd)].filter(Boolean);
     if (_costRangePicker) {
-        _costRangePicker.setDate([_toDate(fromYmd), _toDate(toYmd)], false);
+        if (defaultDates.length === 2) _costRangePicker.setDate(defaultDates, false);
         return;
     }
     _costRangePicker = flatpickr(el, {
         mode: 'range',
         dateFormat: 'd/m/y',
-        defaultDate: [_toDate(fromYmd), _toDate(toYmd)],
-        onClose: function (selectedDates) {
-            if (selectedDates.length === 2) {
-                const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                document.getElementById('costDateFrom').value = fmt(selectedDates[0]);
-                document.getElementById('costDateTo').value   = fmt(selectedDates[1]);
-                costPageOffset = 0;
-                loadCostsTable();
-            }
-        }
+        defaultDate: defaultDates,
+        disableMobile: true,
+        onChange: syncDates,
+        onClose: syncDates
     });
 }
 
@@ -3607,27 +3626,43 @@ function initRangePicker(pickId, fromId, toId, onChange) {
     const fromEl = document.getElementById(fromId);
     const toEl = document.getElementById(toId);
     if (!el || !fromEl || !toEl || typeof flatpickr === 'undefined') return;
-    const _toDate = ymd => new Date(ymd + 'T00:00:00');
+    if (!el.classList.contains('cd-range-box')) el.classList.add('cd-range-box');
+    const _toDate = ymd => {
+        if (!ymd) return null;
+        if (ymd instanceof Date) return ymd;
+        const str = String(ymd).trim().split('T')[0];
+        const p = str.split('-');
+        if (p.length === 3) return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        const d = new Date(ymd);
+        return isNaN(d.getTime()) ? null : d;
+    };
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const cur = (fromEl.value && toEl.value) ? [_toDate(fromEl.value), _toDate(toEl.value)] : [];
+    const cur = (fromEl.value && toEl.value) ? [_toDate(fromEl.value), _toDate(toEl.value)].filter(Boolean) : [];
+    const handleDates = selectedDates => {
+        if (selectedDates && selectedDates.length === 2) {
+            const v1 = fmt(selectedDates[0]);
+            const v2 = fmt(selectedDates[1]);
+            if (fromEl.value !== v1 || toEl.value !== v2) {
+                fromEl.value = v1;
+                toEl.value = v2;
+                fromEl.dispatchEvent(new Event('change'));
+                toEl.dispatchEvent(new Event('change'));
+                if (typeof onChange === 'function') onChange();
+            }
+        }
+    };
     if (_rangePickUX[pickId]) {
-        if (cur.length) _rangePickUX[pickId].setDate(cur, false);
-        else _rangePickUX[pickId].clear();
+        if (cur.length === 2) _rangePickUX[pickId].setDate(cur, false);
+        else if (cur.length === 0) _rangePickUX[pickId].clear();
         return;
     }
     _rangePickUX[pickId] = flatpickr(el, {
         mode: 'range',
         dateFormat: 'd/m/y',
         defaultDate: cur,
-        onClose: function (selectedDates) {
-            if (selectedDates.length === 2) {
-                fromEl.value = fmt(selectedDates[0]);
-                toEl.value = fmt(selectedDates[1]);
-                fromEl.dispatchEvent(new Event('change'));
-                toEl.dispatchEvent(new Event('change'));
-                if (onChange) onChange();
-            }
-        }
+        disableMobile: true,
+        onChange: handleDates,
+        onClose: handleDates
     });
 }
 
@@ -9128,7 +9163,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     populateClientDropdowns();
     _initNavContextMenu();
     // Restore page from URL hash (refresh) or ?page= query param, else default to executive
-    const hashPage = location.hash ? location.hash.slice(1) : '';
+    let hashRaw = location.hash ? location.hash.slice(1) : '';
+    let hashPage = hashRaw;
+    let hashClientId = null;
+    if (hashRaw.includes('?')) {
+        const qIdx = hashRaw.indexOf('?');
+        hashPage = hashRaw.slice(0, qIdx);
+        const hp = new URLSearchParams(hashRaw.slice(qIdx + 1));
+        const cVal = hp.get('client') || hp.get('client_id');
+        if (cVal) hashClientId = parseInt(cVal, 10);
+    }
+    const searchParamClient = new URLSearchParams(location.search).get('client') || new URLSearchParams(location.search).get('client_id');
+    const storedClient = localStorage.getItem('cca_selected_client_id');
+    const initClientId = hashClientId || (searchParamClient ? parseInt(searchParamClient, 10) : null) || (storedClient ? parseInt(storedClient, 10) : null);
+    if (initClientId) {
+        _selectedClientId = initClientId;
+    }
+
     let urlPage = hashPage || new URLSearchParams(location.search).get('page');
     if (urlPage === 'dashboard' || !document.getElementById(`page-${urlPage}`)) urlPage = 'executive';
     navigateTo(urlPage || 'executive');
@@ -9918,7 +9969,11 @@ function _restoreClientDateSettings(clientId) {
 }
 
 function _fmt$(n) {
-    return curSym() + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const val = Number(n) || 0;
+    if (val < 0) {
+        return '-' + curSym() + Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return curSym() + val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 
@@ -10202,6 +10257,40 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
+// In-memory cache for ultra-fast Client Cost Allocation page loads
+const _ccaDataCache = new Map();
+let _ccaCachedInventory = null;
+let _ccaInventoryInFlight = null;
+let _ccaDropdownCostsLoading = false;
+
+async function _fetchDropdownCostsInBackground(clients, firstDay, todayStr) {
+    if (_ccaDropdownCostsLoading || !clients || !clients.length) return;
+    _ccaDropdownCostsLoading = true;
+    try {
+        const results = await Promise.all(clients.map(c => {
+            if (_clientCostCache && _clientCostCache[c.id] != null) {
+                return Promise.resolve({ id: c.id, total: _clientCostCache[c.id] });
+            }
+            return fetch(`/api/clients/${c.id}/costs?date_from=${firstDay}&date_to=${todayStr}`)
+                .then(r => r.json())
+                .then(d => ({ id: c.id, total: d?.total ?? 0 }))
+                .catch(() => ({ id: c.id, total: 0 }));
+        }));
+        if (!_clientCostCache) _clientCostCache = {};
+        results.forEach(res => {
+            _clientCostCache[res.id] = res.total;
+            const costBadge = document.querySelector(`.cca-dropdown-item[data-client-id="${res.id}"] .cca-item-cost`);
+            if (costBadge) {
+                costBadge.textContent = _fmt$(res.total);
+            }
+        });
+    } catch (e) {
+        /* non-fatal background fetch */
+    } finally {
+        _ccaDropdownCostsLoading = false;
+    }
+}
+
 async function loadClientsPage() {
     if (!_clientDateFrom) onClientDatePreset();
     else if (typeof _syncClientDateDropdownUI === 'function') {
@@ -10239,26 +10328,26 @@ async function loadClientsPage() {
             return;
         }
 
-        // Fetch this-month costs for all clients in parallel so the dropdown has spend values
-        const { firstDay, todayStr } = _clientDateRange();
-        const costResults = await Promise.all(_clientsData.map(c =>
-            fetch(`/api/clients/${c.id}/costs?date_from=${firstDay}&date_to=${todayStr}`)
-                .then(r => r.json()).catch(() => ({ total: 0 }))
-        ));
-
-        _clientCostCache = {};
-        _clientsData.forEach((c, i) => {
-            _clientCostCache[c.id] = costResults[i]?.total ?? 0;
-        });
-
-        // Populate dropdown
+        // Render client list in dropdown immediately without waiting for any cost calculations
         _renderClientDropdownList(_clientsData);
 
-        // Select the active client or the first client
-        const targetId = (_selectedClientId && _clientsData.some(c => c.id === _selectedClientId))
-            ? _selectedClientId
-            : _clientsData[0].id;
+        // Determine target client: active -> stored in localStorage -> first
+        const storedCid = parseInt(localStorage.getItem('cca_selected_client_id') || '0', 10);
+        let targetId = _selectedClientId;
+        if (!targetId || !_clientsData.some(c => c.id === targetId)) {
+            if (storedCid && _clientsData.some(c => c.id === storedCid)) {
+                targetId = storedCid;
+            } else {
+                targetId = _clientsData[0].id;
+            }
+        }
+
+        // Immediately select and render the active client (instant UI, no blocking wait!)
         selectClient(targetId);
+
+        // Lazily fetch dropdown cost totals for the other clients in the background
+        const { firstDay, todayStr } = _clientDateRange();
+        _fetchDropdownCostsInBackground(_clientsData, firstDay, todayStr);
 
     } catch (e) {
         console.error('Failed to load clients:', e);
@@ -10268,11 +10357,119 @@ async function loadClientsPage() {
     }
 }
 
-// Send Report modal's own period selection — independent of the page-level
-// per-client date range, so picking a one-off send period here doesn't change
-// what's shown on the page behind it.
+// ── Send Report Modal (Recipients tag input & active period) ───────────────
 let _clientReportModalFrom = '';
 let _clientReportModalTo = '';
+let _clientReportRecipientsList = [];
+
+function initClientReportRecipients(rawInitial) {
+    _clientReportRecipientsList = [];
+    if (rawInitial) {
+        const parts = String(rawInitial).split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+        parts.forEach(p => {
+            const clean = p.replace(/^[,;]+|[,;]+$/g, '').trim();
+            if (clean && !_clientReportRecipientsList.includes(clean)) {
+                _clientReportRecipientsList.push(clean);
+            }
+        });
+    }
+    renderClientReportRecipientTags();
+    const input = document.getElementById('clientReportTagsInput');
+    if (input) {
+        input.value = '';
+        input.onkeydown = handleClientReportTagKeydown;
+        input.onpaste = handleClientReportTagPaste;
+        input.onblur = handleClientReportTagBlur;
+    }
+}
+
+function renderClientReportRecipientTags() {
+    const container = document.getElementById('clientReportChipsContainer');
+    const hiddenInput = document.getElementById('clientReportRecipients');
+    const countEl = document.getElementById('clientReportRecipientCount');
+    const tagInput = document.getElementById('clientReportTagsInput');
+
+    if (container) {
+        container.innerHTML = _clientReportRecipientsList.map((email, idx) => `
+            <span class="crm-tag-chip">
+                <span class="crm-tag-chip-text" title="${_esc(email)}">${_esc(email)}</span>
+                <button type="button" class="crm-tag-chip-remove" onclick="removeClientReportRecipient(${idx})" title="Remove ${ _esc(email) }" aria-label="Remove email">✕</button>
+            </span>
+        `).join('');
+    }
+
+    const joined = _clientReportRecipientsList.join(', ');
+    if (hiddenInput) hiddenInput.value = joined;
+
+    if (countEl) {
+        const count = _clientReportRecipientsList.length;
+        countEl.textContent = count === 1 ? '1 recipient' : `${count} recipients`;
+    }
+
+    if (tagInput) {
+        tagInput.placeholder = _clientReportRecipientsList.length === 0
+            ? 'Enter recipient email and press Enter…'
+            : 'Add another email…';
+    }
+}
+
+function addClientReportRecipient(rawText) {
+    if (!rawText) return;
+    const parts = String(rawText).split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+    let added = false;
+    parts.forEach(p => {
+        const clean = p.replace(/^[,;]+|[,;]+$/g, '').trim();
+        if (clean && !_clientReportRecipientsList.includes(clean)) {
+            _clientReportRecipientsList.push(clean);
+            added = true;
+        }
+    });
+    if (added) renderClientReportRecipientTags();
+}
+
+function removeClientReportRecipient(index) {
+    if (index >= 0 && index < _clientReportRecipientsList.length) {
+        _clientReportRecipientsList.splice(index, 1);
+        renderClientReportRecipientTags();
+        document.getElementById('clientReportTagsInput')?.focus();
+    }
+}
+
+function handleClientReportTagKeydown(e) {
+    const input = e.target;
+    if (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') {
+        const val = input.value.trim();
+        if (val) {
+            e.preventDefault();
+            addClientReportRecipient(val);
+            input.value = '';
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            sendClientReport();
+        }
+    } else if (e.key === 'Backspace' && !input.value && _clientReportRecipientsList.length > 0) {
+        e.preventDefault();
+        _clientReportRecipientsList.pop();
+        renderClientReportRecipientTags();
+    }
+}
+
+function handleClientReportTagPaste(e) {
+    const text = (e.clipboardData || window.clipboardData)?.getData('text');
+    if (text && (text.includes(',') || text.includes(';') || text.includes('\n') || text.includes(' '))) {
+        e.preventDefault();
+        addClientReportRecipient(text);
+        e.target.value = '';
+    }
+}
+
+function handleClientReportTagBlur(e) {
+    const val = e.target.value.trim();
+    if (val) {
+        addClientReportRecipient(val);
+        e.target.value = '';
+    }
+}
 
 function openClientReportModal() {
     const client = _clientsData.find(c => c.id === _selectedClientId);
@@ -10281,60 +10478,27 @@ function openClientReportModal() {
     const subtitle = document.getElementById('clientReportModalSubtitle');
     if (subtitle) subtitle.innerHTML = `Sending cost report for <strong>${_esc(client.name)}</strong>`;
 
-    // Default the modal's period to whatever this client's page-level range
-    // currently is, then let the user change it independently.
-    const presetSel = document.getElementById('clientDatePreset');
-    const sel = document.getElementById('clientReportPeriodSelect');
-    if (sel) sel.value = presetSel?.value || 'this_month';
-    onClientReportPeriodChange();
+    // Automatically use active client page date range (no redundant period selector required)
+    const { firstDay, todayStr } = _clientDateRange();
+    _clientReportModalFrom = firstDay;
+    _clientReportModalTo = todayStr;
 
-    const recipientsEl = document.getElementById('clientReportRecipients');
-    if (recipientsEl && !recipientsEl.value) recipientsEl.value = client.recipients || '';
+
+    // Initialize redesigned email recipient chips
+    initClientReportRecipients(client.recipients || '');
 
     if (modal) modal.style.display = 'flex';
+    setTimeout(() => {
+        document.getElementById('clientReportTagsInput')?.focus();
+    }, 60);
 }
 
 function onClientReportPeriodChange() {
-    const preset = document.getElementById('clientReportPeriodSelect')?.value || 'this_month';
-    const customWrap = document.getElementById('clientReportCustomWrap');
-    const periodEl = document.getElementById('clientReportPeriodLabel');
-    const today = new Date();
-    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-
-    if (preset === 'custom') {
-        if (customWrap) customWrap.style.display = 'block';
-        initRangePicker('clientReportRangePick', 'clientReportDateFrom', 'clientReportDateTo', applyClientReportDateFilter);
-        const f = document.getElementById('clientReportDateFrom')?.value;
-        const t = document.getElementById('clientReportDateTo')?.value;
-        if (f && t) { _clientReportModalFrom = f; _clientReportModalTo = t; }
-        if (periodEl) periodEl.textContent = (_clientReportModalFrom && _clientReportModalTo) ? `${_clientReportModalFrom} to ${_clientReportModalTo}` : 'Pick a custom range above';
-        return;
-    }
-    if (customWrap) customWrap.style.display = 'none';
-
-    if (preset === 'this_month') {
-        _clientReportModalFrom = fmt(new Date(today.getFullYear(), today.getMonth(), 1));
-        _clientReportModalTo = fmt(today);
-    } else if (preset === 'last_month') {
-        const end = new Date(today.getFullYear(), today.getMonth(), 0);
-        _clientReportModalFrom = fmt(new Date(end.getFullYear(), end.getMonth(), 1));
-        _clientReportModalTo = fmt(end);
-    } else if (preset === 'last_30') {
-        _clientReportModalFrom = fmt(new Date(today - 30*864e5));
-        _clientReportModalTo = fmt(today);
-    } else if (preset === 'last_90') {
-        _clientReportModalFrom = fmt(new Date(today - 90*864e5));
-        _clientReportModalTo = fmt(today);
-    }
-    const labels = { this_month: 'This Month', last_month: 'Last Month', last_30: 'Last 30 Days', last_90: 'Last 90 Days' };
-    if (periodEl) periodEl.textContent = `${labels[preset]} · ${_clientReportModalFrom} to ${_clientReportModalTo}`;
+    // Retained for backward-compatibility if invoked externally
 }
 
 function applyClientReportDateFilter() {
-    _clientReportModalFrom = document.getElementById('clientReportDateFrom')?.value || '';
-    _clientReportModalTo = document.getElementById('clientReportDateTo')?.value || '';
-    const periodEl = document.getElementById('clientReportPeriodLabel');
-    if (periodEl && _clientReportModalFrom && _clientReportModalTo) periodEl.textContent = `${_clientReportModalFrom} to ${_clientReportModalTo}`;
+    // Retained for backward-compatibility if invoked externally
 }
 
 function closeClientReportModal() {
@@ -10729,15 +10893,35 @@ async function saveAllClientSchedules() {
 async function sendClientReport() {
     const client = _clientsData.find(c => c.id === _selectedClientId);
     if (!client) return;
-    const recipients = (document.getElementById('clientReportRecipients')?.value || '').trim();
-    if (!recipients) { showToast('Enter at least one recipient', 'error'); return; }
 
-    const firstDay = _clientReportModalFrom;
-    const todayStr = _clientReportModalTo;
-    if (!firstDay || !todayStr) { showToast('Pick a period first', 'error'); return; }
+    // Auto-commit any unfinished text in input
+    const input = document.getElementById('clientReportTagsInput');
+    if (input && input.value.trim()) {
+        addClientReportRecipient(input.value.trim());
+        input.value = '';
+    }
+
+    const recipients = (document.getElementById('clientReportRecipients')?.value || '').trim();
+    if (!recipients) {
+        showToast('Please add at least one recipient email address', 'error');
+        document.getElementById('clientReportTagsInput')?.focus();
+        return;
+    }
+
+    const { firstDay: activeFrom, todayStr: activeTo } = _clientDateRange();
+    const firstDay = _clientReportModalFrom || activeFrom;
+    const todayStr = _clientReportModalTo || activeTo;
+    if (!firstDay || !todayStr) {
+        showToast('Active report period is not configured', 'error');
+        return;
+    }
 
     const btn = document.getElementById('clientReportSendBtn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    const origHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span style="display:inline-block;width:12px;height:12px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:crmSpin .6s linear infinite;margin-right:6px"></span>Sending…`;
+    }
     try {
         const resp = await fetch(`/api/clients/${_selectedClientId}/send-report`, {
             method: 'POST',
@@ -10746,7 +10930,7 @@ async function sendClientReport() {
         });
         const data = await resp.json();
         if (resp.ok) {
-            showToast(data.message || 'Report sent!', 'success');
+            showToast(data.message || 'Report sent successfully!', 'success');
             closeClientReportModal();
         } else {
             showToast(data.error || 'Send failed', 'error');
@@ -10754,7 +10938,10 @@ async function sendClientReport() {
     } catch(e) {
         showToast('Send failed: ' + e.message, 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>Send'; }
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origHtml || `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>Send Now`;
+        }
     }
 }
 
@@ -10796,12 +10983,16 @@ function toggleClientRgDetails() {
         if (btn) {
             btn.setAttribute('aria-expanded', 'false');
             btn.classList.remove('is-expanded');
+            const txt = btn.querySelector('.cca-scope-view-text');
+            if (txt) txt.textContent = 'View';
         }
     } else {
         wrap.style.display = 'block';
         if (btn) {
             btn.setAttribute('aria-expanded', 'true');
             btn.classList.add('is-expanded');
+            const txt = btn.querySelector('.cca-scope-view-text');
+            if (txt) txt.textContent = 'Hide';
         }
         setTimeout(() => {
             const input = document.getElementById('ccaScopeFilterInput');
@@ -10809,13 +11000,14 @@ function toggleClientRgDetails() {
         }, 50);
     }
 }
+window.toggleClientRgDetails = toggleClientRgDetails;
 
 function filterClientScopeChips(query) {
     const q = (query || '').trim().toLowerCase();
     const items = document.querySelectorAll('.cca-scope-card-item');
     let visibleCount = 0;
     items.forEach(el => {
-        const val = (el.dataset.scopeVal || el.textContent || '').toLowerCase();
+        const val = ((el.dataset.scopeVal || '') + ' ' + (el.dataset.scopeCloud || '') + ' ' + (el.textContent || '')).toLowerCase();
         const match = !q || val.includes(q);
         el.style.display = match ? 'flex' : 'none';
         if (match) visibleCount++;
@@ -10928,7 +11120,13 @@ function getCloudLogoHTML(cloudKey, size = 16) {
 
 async function selectClient(clientId) {
     _selectedClientId = clientId;
+    _clientResSortDir = 'desc';
     _restoreClientDateSettings(clientId);
+
+    try {
+        localStorage.setItem('cca_selected_client_id', clientId);
+        history.replaceState(null, '', '#clients?client=' + clientId);
+    } catch(e) {}
 
     const client = _clientsData.find(c => c.id === clientId);
     if (!client) return;
@@ -10957,42 +11155,90 @@ async function selectClient(clientId) {
 
     const panel = document.getElementById('clientDetailPanel');
     if (!panel) return;
-    panel.innerHTML = `
-        <div class="db-card" style="text-align:center;padding:50px 20px;color:var(--text-secondary)">
-            <div style="width:26px;height:26px;border:3px solid rgba(37,99,235,0.2);border-top-color:#2563EB;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px"></div>
-            <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Loading cost data for ${_esc(client.name)}…</div>
-            <div style="font-size:12px;color:var(--text-secondary)">Aggregating service and provider billing</div>
-        </div>
-    `;
+
+    const today = new Date();
+    const { firstDay, todayStr } = _clientDateRange();
+    const compRange = _clientComparisonRange();
+
+    // In-memory cache keys for instant 0ms restoration
+    const curCacheKey = `${clientId}_${firstDay}_${todayStr}`;
+    const prevCacheKey = `${clientId}_${compRange.from}_${compRange.to}`;
+    const cachedCur = _ccaDataCache.get(curCacheKey);
+    const cachedPrev = _ccaDataCache.get(prevCacheKey);
+
+    // Only display spinner if not already in memory
+    if (!cachedCur || !cachedPrev) {
+        panel.innerHTML = `
+            <div class="db-card" style="text-align:center;padding:50px 20px;color:var(--text-secondary)">
+                <div style="width:26px;height:26px;border:3px solid rgba(37,99,235,0.2);border-top-color:#2563EB;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px"></div>
+                <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Loading cost data for ${_esc(client.name)}…</div>
+                <div style="font-size:12px;color:var(--text-secondary)">Aggregating service and provider billing</div>
+            </div>
+        `;
+    }
 
     try {
-        const today = new Date();
-        const { firstDay, todayStr } = _clientDateRange();
-        const compRange = _clientComparisonRange();
+        let invPromise;
+        if (_ccaCachedInventory) {
+            invPromise = Promise.resolve(_ccaCachedInventory);
+        } else if (_ccaInventoryInFlight) {
+            invPromise = _ccaInventoryInFlight;
+        } else {
+            _ccaInventoryInFlight = fetch(`/api/resource-inventory?limit=500&sort_by=cost&sort_order=desc`)
+                .then(r => r.json())
+                .then(d => { _ccaCachedInventory = d; _ccaInventoryInFlight = null; return d; })
+                .catch(() => { _ccaInventoryInFlight = null; return { resources: [] }; });
+            invPromise = _ccaInventoryInFlight;
+        }
 
-        const [cur, prev, invData] = await Promise.all([
-            fetch(`/api/clients/${clientId}/costs?date_from=${firstDay}&date_to=${todayStr}`).then(r => r.json()).catch(() => ({})),
-            fetch(`/api/clients/${clientId}/costs?date_from=${compRange.from}&date_to=${compRange.to}`).then(r => r.json()).catch(() => ({})),
-            fetch(`/api/resource-inventory?limit=500&sort_by=cost&sort_order=desc`).then(r => r.json()).catch(() => ({ resources: [] })),
-        ]);
+        let curPromise = cachedCur ? Promise.resolve(cachedCur) : fetch(`/api/clients/${clientId}/costs?date_from=${firstDay}&date_to=${todayStr}`)
+            .then(r => r.json())
+            .then(d => { _ccaDataCache.set(curCacheKey, d); return d; })
+            .catch(() => ({}));
 
-        const total      = cur.total || 0;
+        let prevPromise = cachedPrev ? Promise.resolve(cachedPrev) : fetch(`/api/clients/${clientId}/costs?date_from=${compRange.from}&date_to=${compRange.to}`)
+            .then(r => r.json())
+            .then(d => { _ccaDataCache.set(prevCacheKey, d); return d; })
+            .catch(() => ({}));
+
+        const [cur, prev, invData] = await Promise.all([curPromise, prevPromise, invPromise]);
+
+        // Guard against race conditions if user rapidly switched clients
+        if (_selectedClientId !== clientId) return;
+
+        const total      = Number(cur.total) || 0;
         _clientCostCache[clientId] = total;
         const triggerCost = document.getElementById('clientTriggerCost');
         if (triggerCost) triggerCost.textContent = _fmt$(total);
 
-    const lastTotal  = prev.total || 0;
-    const momChange  = lastTotal > 0 ? ((total - lastTotal) / lastTotal * 100) : 0;
-    const trend      = cur.trend || [];
-    const avgDaily   = trend.length ? total / trend.length : 0;
-    const byService  = (cur.by_service || []).slice().sort((a,b) => b.cost - a.cost);
-    const bySub      = cur.by_subscription || [];
-    const maxSvc     = byService[0]?.cost || 1;
-    const momColor   = momChange > 0 ? 'var(--red, #DC2626)' : 'var(--green, #059669)';
-    const momBadgeClass = momChange > 0 ? 'up' : 'down';
-    const momArrow   = momChange > 0 ? '▲' : '▼';
-    const CLOUD_COLORS = { azure: '#0078D4', aws: '#FF9900', gcp: '#4285F4', cursor: '#10A37F', openai: '#10A37F', atlassian: '#0052CC', othercosts: '#8B5CF6' };
-    const CLOUD_FULL = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud Platform', cursor: 'Cursor AI', openai: 'OpenAI', atlassian: 'Atlassian', othercosts: 'Other Tools & Subscriptions' };
+        const lastTotal  = Number(prev.total) || 0;
+        const momChange  = lastTotal > 0 ? ((total - lastTotal) / lastTotal * 100) : (total > 0 ? 100 : 0);
+        
+        // Ensure trend is strictly sorted chronologically by date
+        const rawTrend   = cur.trend || [];
+        const trend      = [...rawTrend].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        const avgDaily   = trend.length ? total / trend.length : 0;
+        
+        // Normalize byService and ensure cost is numeric
+        const byService  = (cur.by_service || []).map(s => ({
+            ...s,
+            name: s.name || s.service_name || s.service || 'Unknown Service',
+            cost: Number(s.cost) || 0
+        })).sort((a, b) => b.cost - a.cost);
+
+        const prevByService = (prev.by_service || []).map(s => ({
+            ...s,
+            name: s.name || s.service_name || s.service || 'Unknown Service',
+            cost: Number(s.cost) || 0
+        }));
+
+        const bySub      = cur.by_subscription || [];
+        const maxSvc     = byService[0]?.cost || 1;
+        const momColor   = momChange > 0 ? 'var(--red, #DC2626)' : 'var(--green, #059669)';
+        const momBadgeClass = momChange > 0 ? 'up' : 'down';
+        const momArrow   = momChange > 0 ? '▲' : '▼';
+        const CLOUD_COLORS = { azure: '#0078D4', aws: '#FF9900', gcp: '#4285F4', cursor: '#10A37F', openai: '#10A37F', atlassian: '#0052CC', othercosts: '#8B5CF6' };
+        const CLOUD_FULL = { azure: 'Microsoft Azure', aws: 'Amazon Web Services', gcp: 'Google Cloud Platform', cursor: 'Cursor AI', openai: 'OpenAI', atlassian: 'Atlassian', othercosts: 'Other Tools & Subscriptions' };
 
     // Group by cloud from real data
     const cloudGrouped = {};
@@ -11080,7 +11326,8 @@ async function selectClient(clientId) {
         const col = svcColors[Math.min(i, svcColors.length - 1)];
         const pct = total > 0 ? ((s.cost / total) * 100).toFixed(1) : '0.0';
         const isHiddenExtra = i >= defaultSvcLimit;
-        return `<div class="cca-stat-row cca-stat-row-svc${isHiddenExtra ? ' cca-svc-extra' : ''}" data-idx="${i}" style="${isHiddenExtra ? 'display:none;' : ''}">
+        const escSvcName = _esc(s.name).replace(/'/g, "\\'");
+        return `<div class="cca-stat-row cca-stat-row-svc${isHiddenExtra ? ' cca-svc-extra' : ''}" data-idx="${i}" onclick="openDriftServiceDetail('${escSvcName}')" style="${isHiddenExtra ? 'display:none;' : ''}cursor:pointer" title="Click to view details for ${_esc(s.name)}">
             <span class="cca-stat-name" title="${_esc(s.name)}">${_esc(s.name)}</span>
             <div class="cca-stat-bar-bg">
                 <div class="cca-stat-bar-fill" style="width:${barW}%;background:${col}"></div>
@@ -11097,9 +11344,8 @@ async function selectClient(clientId) {
         const label = CLOUD_FULL[cloud] || cloud.toUpperCase();
         const pct = total > 0 ? ((cost / total) * 100).toFixed(1) : '0.0';
         return `<div class="cca-stat-row">
-            <div style="display:flex;align-items:center;gap:7px;overflow:hidden">
-                <span class="cca-provider-chip" style="background:${col}18;color:${col}">${cloud.toUpperCase().slice(0,3)}</span>
-                <span class="cca-stat-name" title="${_esc(label)}">${_esc(label)}</span>
+            <div style="display:inline-flex;align-items:center;justify-content:center;min-width:28px;flex-shrink:0" title="${_esc(label)}">
+                ${getCloudLogoHTML(cloud, 16)}
             </div>
             <div class="cca-stat-bar-bg">
                 <div class="cca-stat-bar-fill" style="width:${barW}%;background:${col}"></div>
@@ -11314,6 +11560,15 @@ async function selectClient(clientId) {
             }
         }
         if (!cloud) {
+            if (rawLower.includes('@') || rawLower.includes('cursor')) {
+                cloud = 'cursor';
+            } else if (rawLower.includes('openai') || rawLower.includes('chatgpt')) {
+                cloud = 'openai';
+            } else if (rawLower.includes('atlassian') || rawLower.includes('jira') || rawLower.includes('confluence')) {
+                cloud = 'atlassian';
+            }
+        }
+        if (!cloud) {
             if (mappedCloudKeys.length === 1) {
                 cloud = mappedCloudKeys[0];
             } else {
@@ -11335,14 +11590,30 @@ async function selectClient(clientId) {
             if (!service) service = awsInfo.service;
             if (!resType) resType = awsInfo.resType;
             if (!location || location === 'global') location = awsInfo.region;
-            if (!sub || sub === '—') sub = awsInfo.account || (clientMappings.find(m => m.cloud === 'aws')?.value || 'AWS Account');
+            if (!sub || sub === '—') sub = awsInfo.account || (clientMappings.find(m => (m.cloud || '').toLowerCase() === 'aws' && m.filter_type === 'subscription_id')?.value || 'AWS Account');
             if (!rg || rg === '(none)') rg = '—';
             if (!sku || sku === 'Standard Tier') sku = 'Standard';
         } else if (azureInfo) {
             if (!service) service = azureInfo.service;
             if (!resType) resType = azureInfo.resType;
             if (!rg || rg === '(none)') rg = azureInfo.rg || '—';
-            if (!sub || sub === '—') sub = azureInfo.subId || 'Azure Subscription';
+            if (!sub || sub === '—') sub = azureInfo.subId || (clientMappings.find(m => (m.cloud || '').toLowerCase() === 'azure' && m.filter_type === 'subscription_id')?.value || 'Azure Subscription');
+        } else if (cloud === 'cursor') {
+            if (!service) service = 'Cursor AI';
+            if (!resType || resType === 'Resource') resType = 'Developer Seat';
+            if (!sku || sku === 'Standard Tier') sku = 'Business Seat';
+            if (!sub || sub === '—') sub = 'Cursor Team';
+            if (!rg || rg === '(none)') rg = '—';
+        } else if (cloud === 'openai') {
+            if (!service) service = 'OpenAI API';
+            if (!resType || resType === 'Resource') resType = 'API Project / Key';
+            if (!sub || sub === '—') sub = 'OpenAI Org';
+            if (!rg || rg === '(none)') rg = '—';
+        } else if (cloud === 'atlassian') {
+            if (!service) service = 'Atlassian Cloud';
+            if (!resType || resType === 'Resource') resType = 'User License';
+            if (!sub || sub === '—') sub = 'Atlassian Site';
+            if (!rg || rg === '(none)') rg = '—';
         }
 
         if (!service) {
@@ -11374,9 +11645,7 @@ async function selectClient(clientId) {
             else if (rawLower.includes('ap-south-1')) location = 'ap-south-1';
             else if (rawLower.includes('centralindia')) location = 'centralindia';
             else if (cloud === 'aws') {
-                location = awsInfo?.region || 'us-east-1';
-            } else if (cloud === 'azure') {
-                location = 'centralindia';
+                location = awsInfo?.region || 'global';
             } else {
                 location = 'global';
             }
@@ -11387,14 +11656,14 @@ async function selectClient(clientId) {
             if (matchedSub) {
                 sub = matchedSub.value;
             } else {
-                sub = cloud === 'aws' ? '905418007892' : (cloud === 'gcp' ? 'rca-project-420608' : 'Azure Subscription');
+                sub = cloud === 'aws' ? (awsInfo?.account || 'AWS Account') : (cloud === 'gcp' ? 'GCP Project' : 'Azure Subscription');
             }
         }
 
         if (!rg || rg === '—' || rg === '(none)') {
             if (cloud === 'azure') {
                 const matchedRg = clientMappings.find(m => (m.cloud || '').toLowerCase() === 'azure' && m.filter_type === 'resource_group');
-                rg = matchedRg ? matchedRg.value : 'Azure RG';
+                rg = matchedRg ? matchedRg.value : '—';
             } else {
                 rg = '—';
             }
@@ -11411,7 +11680,7 @@ async function selectClient(clientId) {
             sub: sub,
             location: location,
             state: state,
-            cost: rawItem.ondemand ?? rawItem.cost ?? 0
+            cost: Number(rawItem.ondemand ?? rawItem.cost ?? 0)
         };
     };
 
@@ -11443,39 +11712,59 @@ async function selectClient(clientId) {
         });
     }
 
+    const hasCurResources = Array.isArray(cur.by_resource) && cur.by_resource.length > 0;
     const clientResMap = new Map();
-    matchedInvResources.forEach(r => {
-        const key = (r.resource_name || r.name || r.id || '').toLowerCase().trim();
-        if (key) {
-            clientResMap.set(key, parseResourceItem(r));
-        }
-    });
 
-    (cur.by_resource || []).forEach(cr => {
-        const rawName = (cr.name || cr.resource_name || '').trim();
-        const key = rawName.toLowerCase();
-        const parsed = parseResourceItem(cr);
-        const costVal = cr.ondemand ?? cr.cost ?? 0;
+    if (hasCurResources) {
+        // When client costs API provides by_resource for this period,
+        // those are the actual resources that generated cost for this client in the selected date range.
+        // First populate matched inventory resources with cost 0 (idle/stopped or $0 spend this period)
+        matchedInvResources.forEach(r => {
+            const key = (r.resource_name || r.name || r.id || '').toLowerCase().trim();
+            if (key) {
+                const parsed = parseResourceItem(r);
+                parsed.cost = 0; // reset to 0 so unbilled inventory resources don't falsely inflate period spend
+                clientResMap.set(key, parsed);
+            }
+        });
 
-        // Try exact match or base clean name match
-        const cleanKey = (parsed.cleanDisplayName || '').toLowerCase();
-        if (clientResMap.has(key)) {
-            const existing = clientResMap.get(key);
-            if (costVal > 0) existing.cost = costVal;
-            if (parsed.service && (!existing.service || existing.service.includes('Service'))) existing.service = parsed.service;
-        } else if (cleanKey && clientResMap.has(cleanKey)) {
-            const existing = clientResMap.get(cleanKey);
-            if (costVal > 0) existing.cost = costVal;
-        } else {
-            clientResMap.set(key || ('res_' + Math.random()), parsed);
-        }
-    });
+        // Now map the actual resources with their actual period spend
+        cur.by_resource.forEach(cr => {
+            const rawName = (cr.name || cr.resource_name || cr.display_name || cr.id || '').trim();
+            const key = rawName.toLowerCase();
+            const parsed = parseResourceItem(cr);
+            const costVal = Number(cr.ondemand ?? cr.cost ?? 0);
+
+            // Try exact match or base clean name match in inventory
+            const cleanKey = (parsed.cleanDisplayName || '').toLowerCase();
+            if (clientResMap.has(key)) {
+                const existing = clientResMap.get(key);
+                existing.cost = costVal;
+                if (parsed.service && (!existing.service || existing.service.includes('Service'))) existing.service = parsed.service;
+            } else if (cleanKey && clientResMap.has(cleanKey)) {
+                const existing = clientResMap.get(cleanKey);
+                existing.cost = costVal;
+            } else {
+                parsed.cost = costVal;
+                clientResMap.set(key || ('res_' + Math.random()), parsed);
+            }
+        });
+    } else {
+        // Fallback when by_resource is not returned by the API: use matched inventory resources
+        matchedInvResources.forEach(r => {
+            const key = (r.resource_name || r.name || r.id || '').toLowerCase().trim();
+            if (key) {
+                clientResMap.set(key, parseResourceItem(r));
+            }
+        });
+    }
 
     const clientResources = Array.from(clientResMap.values()).sort((a, b) => (b.cost || 0) - (a.cost || 0));
-    const totalAllocResCost = clientResources.reduce((sum, r) => sum + (r.cost || 0), 0) || total || 1;
-    const maxClientResCost = clientResources[0]?.cost || 1;
-    const isTop100Spend = clientResources.length >= 100;
-    const allocCoveragePct = total > 0 ? ((totalAllocResCost / total) * 100).toFixed(1) : '100.0';
+    const totalAllocResCost = clientResources.reduce((sum, r) => sum + (r.cost || 0), 0) || total || 0;
+    const isTop100Spend = clientResources.length > 100;
+    const displayedResources = isTop100Spend ? clientResources.slice(0, 100) : clientResources;
+    const maxClientResCost = displayedResources[0]?.cost || 1;
+    const allocCoveragePct = total > 0 ? Math.min(100, ((totalAllocResCost / total) * 100)).toFixed(1) : '100.0';
 
     const getResStateBadge = (state) => {
         const st = (state || 'active').toLowerCase().trim();
@@ -11491,7 +11780,7 @@ async function selectClient(clientId) {
         return `<span class="cca-res-state-pill active"><span class="cca-res-state-dot"></span>Active</span>`;
     };
 
-    const clientResRowsHtml = clientResources.map((item, idx) => {
+    const clientResRowsHtml = displayedResources.map((item, idx) => {
         const rank = idx + 1;
         const resName = item.cleanDisplayName || item.rawName || 'Unnamed Resource';
         const rawArnOrId = item.rawName || resName;
@@ -11509,7 +11798,7 @@ async function selectClient(clientId) {
         const searchIndexStr = `${resName} ${rawArnOrId} ${svcName} ${resType} ${rg} ${sub} ${loc} ${sku} ${cloud} ${item.state || ''}`.toLowerCase();
 
         return `
-            <tr class="cca-client-res-row" data-search="${_esc(searchIndexStr)}">
+            <tr class="cca-client-res-row" data-search="${_esc(searchIndexStr)}" data-cost="${cost}">
                 <td style="text-align:center;width:44px;color:var(--text-secondary);font-size:11px;font-weight:600">
                     <span class="cca-res-rank-badge ${rank <= 3 ? 'top' : ''}">${rank}</span>
                 </td>
@@ -11540,15 +11829,6 @@ async function selectClient(clientId) {
                 </td>
                 <td>
                     <span class="cca-res-sub-text" title="Subscription / Account: ${_esc(sub)}">${_esc(sub)}</span>
-                </td>
-                <td>
-                    <span class="cca-res-loc-pill" title="Region: ${_esc(loc)}">
-                        <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 10-16 0c0 3 2.7 7 8 11.7z"/></svg>
-                        <span>${_esc(loc)}</span>
-                    </span>
-                </td>
-                <td>
-                    ${getResStateBadge(item.state)}
                 </td>
                 <td style="text-align:right">
                     <span class="cca-res-cost-val">${_fmt$(cost)}</span>
@@ -11611,15 +11891,14 @@ async function selectClient(clientId) {
             const singleLabel = CLOUD_FULL[singleKey] || singleKey.toUpperCase();
             cloudLogosHtml = `
                 <div class="cca-scope-cloud-pill" title="${_esc(singleLabel)}">
-                    ${getCloudLogoHTML(singleKey, 15)}
-                    <span class="cca-scope-logo-label">${_esc(singleLabel)}</span>
+                    ${getCloudLogoHTML(singleKey, 16)}
                 </div>
             `;
         } else {
             cloudLogosHtml = `
                 <div class="cca-scope-cloud-pill" title="Mapped Cloud Providers: ${_esc(cloudsSummary)}">
                     <div class="cca-scope-logos-list">
-                        ${uniqueCloudKeys.map(k => getCloudLogoHTML(k, 15)).join('')}
+                        ${uniqueCloudKeys.map(k => getCloudLogoHTML(k, 16)).join('')}
                     </div>
                 </div>
             `;
@@ -11627,27 +11906,15 @@ async function selectClient(clientId) {
     } else {
         cloudLogosHtml = `
             <div class="cca-scope-cloud-pill" title="All Cloud Providers">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><path d="M17.5 19H9a7 7 0 116.71-9h1.79a4.5 4.5 0 110 9z"/></svg>
-                <span class="cca-scope-logo-label">All Providers</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><path d="M17.5 19H9a7 7 0 116.71-9h1.79a4.5 4.5 0 110 9z"/></svg>
             </div>
         `;
     }
 
-    // Clean sample preview chips (No redundant 'AZURE · RG:' text)
-    const sampleChips = mappings.slice(0, 2).map(m => {
-        const ftShort = m.filter_type === 'subscription_id' ? 'sub' : m.filter_type === 'service_name' ? 'svc' : m.filter_type === 'resource_name' ? 'res' : 'rg';
-        return `
-            <span class="cca-scope-pill" title="${_esc(m.cloud?.toUpperCase() || '')} ${ftShort.toUpperCase()}: ${_esc(m.value)}">
-                <span class="cca-scope-pill-tag">${ftShort}</span>
-                <span class="cca-scope-pill-name">${_esc(m.value)}</span>
-            </span>
-        `;
-    }).join('');
-
-    const remainingScopeCount = Math.max(0, mappings.length - 2);
-    const expandBtnHtml = remainingScopeCount > 0 ? `
-        <button type="button" class="cca-scope-more-trigger" id="ccaRgToggleBtn" onclick="toggleClientRgDetails()" aria-expanded="false" title="Inspect all ${mappings.length} mapped resource groups">
-            <span>+${remainingScopeCount} more</span>
+    // Expandable scope view button (clean count + view chevron expander)
+    const expandBtnHtml = mappings.length > 0 ? `
+        <button type="button" class="cca-scope-view-btn" id="ccaRgToggleBtn" onclick="toggleClientRgDetails()" aria-expanded="false" title="View all ${mappings.length} mapped scopes">
+            <span class="cca-scope-view-text">View</span>
             <svg class="cca-rg-arrow" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
     ` : '';
@@ -11656,15 +11923,16 @@ async function selectClient(clientId) {
     const allMappingCardsHtml = mappings.map(m => {
         const ftLabel = m.filter_type === 'subscription_id' ? 'Subscription' : m.filter_type === 'service_name' ? 'Service' : m.filter_type === 'resource_name' ? 'Resource' : 'Resource Group';
         const ftShort = m.filter_type === 'subscription_id' ? 'SUB' : m.filter_type === 'service_name' ? 'SVC' : m.filter_type === 'resource_name' ? 'RES' : 'RG';
-        const cloudStr = (m.cloud || 'azure').toUpperCase();
+        const cloudKey = (m.cloud || 'azure').toLowerCase().trim();
+        const cloudLabel = CLOUD_FULL[cloudKey] || cloudKey.toUpperCase();
         return `
-            <div class="cca-scope-card-item" data-scope-val="${_esc(m.value)}">
+            <div class="cca-scope-card-item" data-scope-val="${_esc(m.value)}" data-scope-cloud="${_esc(cloudKey)}">
                 <div class="cca-scope-card-left">
-                    <span class="cca-scope-card-cloud">${_esc(cloudStr)}</span>
+                    <span class="cca-scope-card-logo" title="${_esc(cloudLabel)}">${getCloudLogoHTML(cloudKey, 14)}</span>
                     <span class="cca-scope-card-type">${ftShort}</span>
                     <span class="cca-scope-card-val" title="${_esc(ftLabel)}: ${_esc(m.value)}">${_esc(m.value)}</span>
                 </div>
-                <button type="button" class="cca-scope-card-copy" onclick="copySingleScope('${_esc(m.value).replace(/'/g, "\\'")}', this)" title="Copy name to clipboard">
+                <button type="button" class="cca-scope-card-copy" data-copy-val="${_esc(m.value)}" onclick="copySingleScope(this.dataset.copyVal, this)" title="Copy name to clipboard">
                     <svg class="cca-copy-icon-default" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                     <svg class="cca-copy-icon-checked" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                 </button>
@@ -11715,11 +11983,10 @@ async function selectClient(clientId) {
         return `
             <div class="cca-cloud-tile">
                 <div class="cca-cloud-tile-top">
-                    <div class="cca-cloud-tile-left">
-                        <span class="cca-provider-chip" style="background:${col}18;color:${col};border:1px solid ${col}30">
-                            ${cloud.toUpperCase().slice(0,4)}
+                    <div class="cca-cloud-tile-left" title="${_esc(label)}">
+                        <span class="cca-cloud-tile-logo-box" title="${_esc(label)}">
+                            ${getCloudLogoHTML(cloud, 20)}
                         </span>
-                        <span class="cca-cloud-tile-name" title="${_esc(label)}">${_esc(label)}</span>
                     </div>
                 </div>
                 <div class="cca-cloud-tile-mid">
@@ -11740,12 +12007,12 @@ async function selectClient(clientId) {
     const curLabel = compRange.curLabel;
     const prevLabel = compRange.priorLabel;
     const prevSvcMap = {};
-    (prev.by_service || []).forEach(s => { prevSvcMap[s.name] = s.cost || 0; });
+    prevByService.forEach(s => { if (s.name) prevSvcMap[s.name] = s.cost || 0; });
 
     const allSvcNames = [...new Set([
-        ...(byService || []).map(s => s.name),
-        ...(prev.by_service || []).map(s => s.name)
-    ])];
+        ...byService.map(s => s.name),
+        ...prevByService.map(s => s.name)
+    ])].filter(Boolean);
 
     const deltas = allSvcNames.map(name => {
         const curCost = (byService || []).find(s => s.name === name)?.cost || 0;
@@ -11761,29 +12028,60 @@ async function selectClient(clientId) {
     const drops = deltas.filter(d => d.diff < -0.01).sort((a, b) => a.diff - b.diff).slice(0, 5);
     const momDiff = total - lastTotal;
 
-    const surgesHtml = surges.map(d => `
-        <div class="cca-drift-row">
-            <div class="cca-drift-row-left">
-                <span class="cca-drift-row-name" title="${_esc(d.name)}">${_esc(d.name)}</span>
-                <span class="cca-drift-row-prog">${_fmt$(d.prevCost)} ➔ ${_fmt$(d.curCost)}</span>
-            </div>
-            <span class="cca-delta-pill ${d.isNew ? 'new' : 'surge'}">
-                ${d.isNew ? 'NEW · ' : ''}+${_fmt$(d.diff)}${!d.isNew ? ` (+${d.pct.toFixed(0)}%)` : ''}
-            </span>
-        </div>
-    `).join('');
+    // Save context for modal drilldown
+    window._activeClientDriftContext = {
+        client,
+        cur,
+        prev,
+        curLabel,
+        prevLabel,
+        deltas,
+        total,
+        lastTotal,
+        momDiff,
+        firstDay,
+        todayStr
+    };
 
-    const dropsHtml = drops.map(d => `
-        <div class="cca-drift-row">
-            <div class="cca-drift-row-left">
-                <span class="cca-drift-row-name" title="${_esc(d.name)}">${_esc(d.name)}</span>
-                <span class="cca-drift-row-prog">${_fmt$(d.prevCost)} ➔ ${_fmt$(d.curCost)}</span>
+    const renderDriftCard = (d, type) => {
+        const isSurge = type === 'surge';
+        const badgeClass = d.isNew ? 'new' : (isSurge ? 'surge' : 'saving');
+        const badgeText = d.isNew
+            ? `NEW · +${_fmt$(d.diff)}`
+            : (d.isDecomm
+                ? `DECOMM · -${_fmt$(Math.abs(d.diff))}`
+                : (isSurge
+                    ? `+${_fmt$(d.diff)} (+${d.pct.toFixed(0)}%)`
+                    : `-${_fmt$(Math.abs(d.diff))} (${Math.abs(d.pct).toFixed(0)}%)`
+                )
+            );
+        const escapedName = _esc(d.name).replace(/'/g, "\\'");
+
+        return `
+            <div class="cca-drift-card ${isSurge ? 'is-surge' : 'is-saving'}" onclick="openDriftServiceDetail('${escapedName}')" role="button" tabindex="0" title="Click to view full service details for ${_esc(d.name)}">
+                <div class="cca-drift-card-header">
+                    <span class="cca-drift-card-name" title="${_esc(d.name)}">${_esc(d.name)}</span>
+                    <span class="cca-delta-pill ${badgeClass}">${badgeText}</span>
+                </div>
+                <div class="cca-drift-card-body">
+                    <div class="cca-drift-prog-wrap">
+                        <span class="cca-drift-prog-tag">${_esc(prevLabel)}:</span>
+                        <span class="cca-drift-prog-amt">${_fmt$(d.prevCost)}</span>
+                        <span class="cca-drift-prog-arrow">➔</span>
+                        <span class="cca-drift-prog-tag">${_esc(curLabel)}:</span>
+                        <span class="cca-drift-prog-amt cur">${_fmt$(d.curCost)}</span>
+                    </div>
+                    <span class="cca-drift-card-drilldown">
+                        <span>Service Breakdown</span>
+                        <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+                    </span>
+                </div>
             </div>
-            <span class="cca-delta-pill saving">
-                -${_fmt$(Math.abs(d.diff))} (${d.pct.toFixed(0)}%)
-            </span>
-        </div>
-    `).join('');
+        `;
+    };
+
+    const surgesHtml = surges.map(d => renderDriftCard(d, 'surge')).join('');
+    const dropsHtml = drops.map(d => renderDriftCard(d, 'drop')).join('');
 
     // 3. Daily Cost Trends Table (Sorted latest date first)
     const reversedTrend = [...trend].reverse();
@@ -11810,9 +12108,9 @@ async function selectClient(clientId) {
         let diffBadge = '<span style="color:var(--text-tertiary,#94A3B8);font-size:11px">—</span>';
         if (diff !== null) {
             if (diff > 0.01) {
-                diffBadge = `<span class="cca-delta-pill surge" title="+$${diff.toFixed(2)} vs prior day">+${_fmt$(diff)}${pct !== null ? ` (+${pct.toFixed(0)}%)` : ''}</span>`;
+                diffBadge = `<span class="cca-delta-pill surge" title="+${curSym()}${diff.toFixed(2)} vs prior day">+${_fmt$(diff)}${pct !== null ? ` (+${pct.toFixed(0)}%)` : ''}</span>`;
             } else if (diff < -0.01) {
-                diffBadge = `<span class="cca-delta-pill saving" title="-$${Math.abs(diff).toFixed(2)} vs prior day">-${_fmt$(Math.abs(diff))}${pct !== null ? ` (${pct.toFixed(0)}%)` : ''}</span>`;
+                diffBadge = `<span class="cca-delta-pill saving" title="-${curSym()}${Math.abs(diff).toFixed(2)} vs prior day">-${_fmt$(Math.abs(diff))}${pct !== null ? ` (${Math.abs(pct).toFixed(0)}%)` : ''}</span>`;
             } else {
                 diffBadge = `<span style="color:var(--text-tertiary,#94A3B8);font-size:11px">0.0%</span>`;
             }
@@ -11889,22 +12187,16 @@ async function selectClient(clientId) {
 
                     <div class="cca-scope-divider"></div>
 
-                    <div class="cca-scope-count-badge" onclick="${mappings.length > 0 ? 'toggleClientRgDetails()' : ''}" role="${mappings.length > 0 ? 'button' : 'text'}" tabindex="${mappings.length > 0 ? '0' : '-1'}" title="${mappings.length > 0 ? 'Click to inspect full scope breakdown' : ''}">
+                    <div class="cca-scope-count-badge" onclick="${mappings.length > 0 ? 'toggleClientRgDetails()' : ''}" onkeydown="${mappings.length > 0 ? 'if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();toggleClientRgDetails();}' : ''}" role="${mappings.length > 0 ? 'button' : 'text'}" tabindex="${mappings.length > 0 ? '0' : '-1'}" title="${mappings.length > 0 ? 'Click to view all ' + mappings.length + ' mapped scopes' : ''}">
                         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                         <span>${mappingCountText}</span>
                     </div>
-
-                    ${sampleChips ? `
-                    <div class="cca-scope-pill-group">
-                        ${sampleChips}
-                    </div>
-                    ` : ''}
 
                     ${expandBtnHtml}
                 </div>
             </div>
 
-            ${mappings.length > 2 ? `
+            ${mappings.length > 0 ? `
             <!-- Expandable Scope Inspector Panel -->
             <div id="ccaRgExpandedWrap" class="cca-scope-inspector" style="display:none">
                 <div class="cca-scope-inspector-header">
@@ -11924,9 +12216,8 @@ async function selectClient(clientId) {
                             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                             <span id="ccaCopyScopesLabel">Copy All (${mappings.length})</span>
                         </button>
-                        <button type="button" class="cca-scope-tool-btn cca-scope-tool-btn--close" onclick="toggleClientRgDetails()" title="Collapse scope list">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            <span>Close</span>
+                        <button type="button" class="cca-scope-tool-btn cca-scope-tool-btn--close" onclick="toggleClientRgDetails()" title="Close scope panel" aria-label="Close">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                     </div>
                 </div>
@@ -12098,8 +12389,8 @@ async function selectClient(clientId) {
                         <h2 class="cca-card-title">Daily Cost Trends</h2>
                         <div class="cca-card-period">${trend.length} recorded day${trend.length !== 1 ? 's' : ''} in period (${trend[0]?.date || ''} to ${trend[trend.length - 1]?.date || ''})</div>
                     </div>
-                    <div class="cca-efficiency-badge" style="background:rgba(37,99,235,0.08);color:#2563EB;border:1px solid rgba(37,99,235,0.2)">
-                        <span>Avg: <strong>${_fmt$(avgDaily)}/day</strong></span>
+                    <div class="cca-efficiency-badge">
+                        <span>Avg: <strong>${_fmt$(avgDaily)}</strong><span class="cca-badge-unit">/day</span></span>
                     </div>
                 </div>
                 ${trend.length ? `
@@ -12132,14 +12423,37 @@ async function selectClient(clientId) {
                 <div>
                     <div style="display:flex;align-items:center;gap:8px">
                         <h2 class="cca-card-title">All Allocated Resources</h2>
-                        <span class="cca-res-count-badge" id="ccaClientResCountBadge" data-base-text="${isTop100Spend ? 'Top 100 Resources by Spend' : clientResources.length + ' Resources'}">${isTop100Spend ? 'Top 100 Resources by Spend' : clientResources.length + ' Resources'}</span>
+                        <span class="cca-res-count-badge" id="ccaClientResCountBadge" data-base-text="${isTop100Spend ? 'Top 100 of ' + clientResources.length + ' Resources' : clientResources.length + ' Resources'}">${isTop100Spend ? 'Top 100 of ' + clientResources.length + ' Resources' : clientResources.length + ' Resources'}</span>
                     </div>
-                    <div class="cca-card-period">${isTop100Spend ? `Showing top 100 spend resources allocated to ${_esc(client.name)} (${_fmt$(totalAllocResCost)} · ${allocCoveragePct}% of total spend)` : `Complete cloud infrastructure footprint mapped to ${_esc(client.name)}`}</div>
+                    <div class="cca-card-period">${isTop100Spend ? `Showing top 100 spend resources allocated to ${_esc(client.name)} (${_fmt$(totalAllocResCost)} · ${allocCoveragePct}% of total spend)` : `Complete cloud infrastructure footprint mapped to ${_esc(client.name)}${totalAllocResCost > 0 ? ` (${_fmt$(totalAllocResCost)} · ${allocCoveragePct}% of total spend)` : ''}`}</div>
                 </div>
                 <div class="cca-res-table-tools">
-                    <div class="cca-res-search-box">
-                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" id="ccaClientResSearch" placeholder="Search resources, services, RGs, regions…" oninput="filterClientResourceRows(this.value)">
+                    <div class="cca-res-search-box" id="ccaClientResSearchBox">
+                        <svg class="cca-search-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="ccaClientResSearch" placeholder="Search resources, services, RGs, subscriptions…" autocomplete="off" spellcheck="false" oninput="onClientResSearchInput(this)">
+                        <button type="button" id="ccaClientResSearchClear" class="cca-search-clear-btn" style="display:none" onclick="clearClientResSearch()" title="Clear search (Esc)" aria-label="Clear search">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                        <kbd class="cca-search-kbd" id="ccaClientResSearchKbd" title="Press / to search">/</kbd>
+                    </div>
+                    <div class="cca-res-sort-wrap" id="ccaClientResSortWrap">
+                        <button type="button" class="cca-res-sort-btn" id="ccaClientResSortBtn" onclick="toggleClientResSortMenu(event)" title="Sort resources by cost">
+                            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path d="M3 6h18M6 12h12M10 18h4"/>
+                            </svg>
+                            <span id="ccaClientResSortLabel">Cost: High to Low</span>
+                            <svg class="cca-sort-chevron" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="cca-res-sort-menu" id="ccaClientResSortMenu" style="display:none">
+                            <button type="button" class="cca-res-sort-item active" id="ccaSortOptDesc" onclick="setClientResSort('desc')">
+                                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+                                <span>Top to Bottom (High to Low)</span>
+                            </button>
+                            <button type="button" class="cca-res-sort-item" id="ccaSortOptAsc" onclick="setClientResSort('asc')">
+                                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                                <span>Bottom to Top (Low to High)</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="cca-res-total-badge" title="Sum of allocated resource costs (${allocCoveragePct}% of client spend)">
                         <span>${isTop100Spend ? 'Top 100 Spend' : 'Total Spend'}: <strong>${_fmt$(totalAllocResCost)}</strong></span>
@@ -12156,22 +12470,23 @@ async function selectClient(clientId) {
                             <th>Type / SKU</th>
                             <th>Resource Group</th>
                             <th>Subscription</th>
-                            <th>Region</th>
-                            <th>State</th>
-                            <th style="text-align:right">Total Cost</th>
+                            <th style="text-align:right;cursor:pointer;user-select:none" onclick="toggleClientResSortDirection()" title="Click to toggle cost sort (Top to Bottom / Bottom to Top)" class="cca-sortable-th">
+                                <span>Total Cost</span>
+                                <span class="cca-th-sort-icon" id="ccaCostThSortIcon">↓</span>
+                            </th>
                             <th style="text-align:right;width:110px">Spend Share</th>
                         </tr>
                     </thead>
                     <tbody id="ccaClientResTableBody">
                         ${clientResources.length ? clientResRowsHtml : `
                             <tr id="ccaClientResEmptyRow">
-                                <td colspan="10" style="text-align:center;padding:36px 16px;color:var(--text-secondary);font-size:12.5px">
+                                <td colspan="8" style="text-align:center;padding:36px 16px;color:var(--text-secondary);font-size:12.5px">
                                     No cloud resources allocated to this client. Ensure resource groups or subscriptions are configured in client mappings.
                                 </td>
                             </tr>
                         `}
                         <tr id="ccaClientResNoMatchRow" style="display:none">
-                            <td colspan="10" style="text-align:center;padding:32px 16px;color:var(--text-secondary);font-size:12.5px">
+                            <td colspan="8" style="text-align:center;padding:32px 16px;color:var(--text-secondary);font-size:12.5px">
                                 No resources match the search filter.
                             </td>
                         </tr>
@@ -12273,8 +12588,426 @@ function filterClientResourceRows(query) {
     if (noMatch) {
         noMatch.style.display = (rows.length > 0 && visibleCount === 0) ? '' : 'none';
     }
+
+    const clearBtn = document.getElementById('ccaClientResSearchClear');
+    const kbd = document.getElementById('ccaClientResSearchKbd');
+    if (clearBtn) clearBtn.style.display = q ? 'inline-flex' : 'none';
+    if (kbd) kbd.style.display = q ? 'none' : '';
 }
 window.filterClientResourceRows = filterClientResourceRows;
+
+function onClientResSearchInput(input) {
+    filterClientResourceRows(input ? input.value : '');
+}
+window.onClientResSearchInput = onClientResSearchInput;
+
+function clearClientResSearch() {
+    const input = document.getElementById('ccaClientResSearch');
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
+    filterClientResourceRows('');
+}
+window.clearClientResSearch = clearClientResSearch;
+
+// Quick keyboard focus on '/' and clear on 'Escape'
+document.addEventListener('keydown', function(e) {
+    const searchInput = document.getElementById('ccaClientResSearch');
+    if (!searchInput) return;
+    if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+        e.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+    } else if (e.key === 'Escape' && document.activeElement === searchInput) {
+        clearClientResSearch();
+        searchInput.blur();
+    }
+});
+
+let _clientResSortDir = 'desc';
+
+function toggleClientResSortMenu(e) {
+    if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+    }
+    const menu = document.getElementById('ccaClientResSortMenu');
+    if (!menu) return;
+    const isHidden = menu.style.display === 'none' || !menu.style.display;
+    menu.style.display = isHidden ? 'block' : 'none';
+}
+window.toggleClientResSortMenu = toggleClientResSortMenu;
+
+function setClientResSort(direction) {
+    _clientResSortDir = direction;
+    const menu = document.getElementById('ccaClientResSortMenu');
+    if (menu) menu.style.display = 'none';
+
+    const label = document.getElementById('ccaClientResSortLabel');
+    if (label) {
+        label.textContent = direction === 'desc' ? 'Cost: High to Low' : 'Cost: Low to High';
+    }
+    const optDesc = document.getElementById('ccaSortOptDesc');
+    const optAsc = document.getElementById('ccaSortOptAsc');
+    if (optDesc) optDesc.classList.toggle('active', direction === 'desc');
+    if (optAsc) optAsc.classList.toggle('active', direction === 'asc');
+
+    const thIcon = document.getElementById('ccaCostThSortIcon');
+    if (thIcon) {
+        thIcon.textContent = direction === 'desc' ? '↓' : '↑';
+    }
+
+    const tbody = document.getElementById('ccaClientResTableBody');
+    if (!tbody) return;
+
+    const rows = Array.from(tbody.querySelectorAll('.cca-client-res-row'));
+    if (!rows.length) return;
+
+    rows.sort((a, b) => {
+        const costA = parseFloat(a.getAttribute('data-cost') || '0');
+        const costB = parseFloat(b.getAttribute('data-cost') || '0');
+        return direction === 'desc' ? (costB - costA) : (costA - costB);
+    });
+
+    const noMatch = document.getElementById('ccaClientResNoMatchRow');
+    const emptyRow = document.getElementById('ccaClientResEmptyRow');
+
+    rows.forEach((row, idx) => {
+        tbody.appendChild(row);
+        const rankBadge = row.querySelector('.cca-res-rank-badge');
+        if (rankBadge) {
+            const rank = idx + 1;
+            rankBadge.textContent = rank;
+            if (rank <= 3) {
+                rankBadge.classList.add('top');
+            } else {
+                rankBadge.classList.remove('top');
+            }
+        }
+    });
+
+    if (noMatch) tbody.appendChild(noMatch);
+    if (emptyRow) tbody.appendChild(emptyRow);
+}
+window.setClientResSort = setClientResSort;
+
+function toggleClientResSortDirection() {
+    setClientResSort(_clientResSortDir === 'desc' ? 'asc' : 'desc');
+}
+window.toggleClientResSortDirection = toggleClientResSortDirection;
+
+// Close sort menu on click outside
+document.addEventListener('click', function(e) {
+    const wrap = document.getElementById('ccaClientResSortWrap');
+    const menu = document.getElementById('ccaClientResSortMenu');
+    if (menu && menu.style.display !== 'none' && (!wrap || !wrap.contains(e.target))) {
+        menu.style.display = 'none';
+    }
+});
+
+let _activeDriftService = null;
+
+function openDriftDetailModal(serviceName, type) {
+    const ctx = window._activeClientDriftContext;
+    if (!ctx) return;
+    const modal = document.getElementById('costDriftDetailModal');
+    if (!modal) return;
+
+    _activeDriftService = serviceName;
+
+    // Find the delta record for this service
+    const delta = (ctx.deltas || []).find(d => (d.name || '').toLowerCase() === serviceName.toLowerCase()) || {
+        name: serviceName,
+        curCost: 0,
+        prevCost: 0,
+        diff: 0,
+        pct: 0
+    };
+
+    const isSurge = delta.diff >= 0;
+    const diffSign = isSurge ? '+' : '-';
+    const diffFormatted = `${diffSign}${_fmt$(Math.abs(delta.diff))}`;
+    const pctFormatted = `${Math.abs(delta.pct).toFixed(1)}%`;
+
+    // 1. Header elements
+    const titleEl = document.getElementById('cddModalServiceTitle');
+    if (titleEl) titleEl.textContent = delta.name;
+
+    const badgeEl = document.getElementById('cddModalDeltaBadge');
+    if (badgeEl) {
+        badgeEl.className = `cdd-modal-badge ${isSurge ? 'surge' : 'saving'}`;
+        badgeEl.textContent = `${diffFormatted} (${isSurge ? '+' : '-'}${pctFormatted})`;
+    }
+
+    const subEl = document.getElementById('cddModalSubtitle');
+    if (subEl) {
+        subEl.textContent = `${ctx.prevLabel || 'Prior Period'} ➔ ${ctx.curLabel || 'Current Period'} · Allocated to ${ctx.client?.name || 'Client'}`;
+    }
+
+    // Header Icon (detect cloud from service name or client)
+    const iconEl = document.getElementById('cddModalCloudIcon');
+    if (iconEl) {
+        let cloudKey = 'azure';
+        const sNameLower = (delta.name || '').toLowerCase();
+        if (sNameLower.includes('aws') || sNameLower.includes('ec2') || sNameLower.includes('s3') || sNameLower.includes('lambda')) cloudKey = 'aws';
+        else if (sNameLower.includes('gcp') || sNameLower.includes('google') || sNameLower.includes('bigquery')) cloudKey = 'gcp';
+        else if (sNameLower.includes('openai') || sNameLower.includes('chatgpt')) cloudKey = 'openai';
+        else if (sNameLower.includes('cursor')) cloudKey = 'cursor';
+        else if (sNameLower.includes('atlassian')) cloudKey = 'atlassian';
+        else if (ctx.client?.mappings?.length) {
+            cloudKey = ctx.client.mappings[0].cloud || 'azure';
+        }
+        iconEl.innerHTML = getCloudLogoHTML(cloudKey, 20);
+    }
+
+    // 2. KPI metrics
+    const prevLbl = document.getElementById('cddKpiPrevLabel');
+    if (prevLbl) prevLbl.textContent = ctx.prevLabel || 'Prior Period';
+    const prevVal = document.getElementById('cddKpiPrevVal');
+    if (prevVal) prevVal.textContent = _fmt$(delta.prevCost);
+
+    const curLbl = document.getElementById('cddKpiCurLabel');
+    if (curLbl) curLbl.textContent = ctx.curLabel || 'Current Period';
+    const curVal = document.getElementById('cddKpiCurVal');
+    if (curVal) curVal.textContent = _fmt$(delta.curCost);
+
+    const diffVal = document.getElementById('cddKpiDiffVal');
+    if (diffVal) {
+        diffVal.className = `cdd-kpi-val ${isSurge ? 'surge' : 'saving'}`;
+        diffVal.textContent = diffFormatted;
+    }
+
+    const shareVal = document.getElementById('cddKpiShareVal');
+    if (shareVal) {
+        const totalNetDrift = Math.abs(ctx.total - ctx.lastTotal);
+        if (totalNetDrift > 0) {
+            const share = Math.min(100, (Math.abs(delta.diff) / totalNetDrift) * 100).toFixed(1);
+            shareVal.textContent = `${share}% of net drift`;
+        } else {
+            shareVal.textContent = '100% of drift';
+        }
+    }
+
+    // 3. Find contributing resources for this service
+    const curRes = Array.isArray(ctx.cur?.by_resource) ? ctx.cur.by_resource : [];
+    const prevRes = Array.isArray(ctx.prev?.by_resource) ? ctx.prev.by_resource : [];
+
+    const svcMatches = (r) => {
+        const s = (r.service_name || r.meter_category || r.service || '').toLowerCase().trim();
+        const target = (delta.name || '').toLowerCase().trim();
+        return s === target || (s && target && (s.includes(target) || target.includes(s)));
+    };
+
+    const resMap = new Map();
+
+    curRes.filter(svcMatches).forEach(r => {
+        const id = (r.resource_name || r.name || r.id || '').trim();
+        if (!id) return;
+        const key = id.toLowerCase();
+        resMap.set(key, {
+            name: id,
+            rg: r.resource_group || r.rg || '—',
+            sub: r.subscription_name || r.subscription_id || r.sub || '—',
+            curCost: Number(r.ondemand ?? r.cost ?? 0),
+            prevCost: 0
+        });
+    });
+
+    prevRes.filter(svcMatches).forEach(r => {
+        const id = (r.resource_name || r.name || r.id || '').trim();
+        if (!id) return;
+        const key = id.toLowerCase();
+        if (resMap.has(key)) {
+            resMap.get(key).prevCost = Number(r.ondemand ?? r.cost ?? 0);
+        } else {
+            resMap.set(key, {
+                name: id,
+                rg: r.resource_group || r.rg || '—',
+                sub: r.subscription_name || r.subscription_id || r.sub || '—',
+                curCost: 0,
+                prevCost: Number(r.ondemand ?? r.cost ?? 0)
+            });
+        }
+    });
+
+    const resources = Array.from(resMap.values()).map(r => {
+        r.diff = r.curCost - r.prevCost;
+        if (r.prevCost === 0 && r.curCost > 0) r.status = 'NEW';
+        else if (r.curCost === 0 && r.prevCost > 0) r.status = 'DECOMMISSIONED';
+        else if (r.diff > 0.01) r.status = 'SURGE';
+        else if (r.diff < -0.01) r.status = 'REDUCED';
+        else r.status = 'STABLE';
+        return r;
+    }).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+
+    // Update count badge
+    const countBadge = document.getElementById('cddResCountBadge');
+    if (countBadge) {
+        countBadge.textContent = `${resources.length} Resource${resources.length !== 1 ? 's' : ''}`;
+    }
+
+    // 4. Root Cause Synthesis
+    const banner = document.getElementById('cddRootBanner');
+    const rootText = document.getElementById('cddRootCauseText');
+    const newCount = resources.filter(r => r.status === 'NEW').length;
+    const decommCount = resources.filter(r => r.status === 'DECOMMISSIONED').length;
+    const surgeCount = resources.filter(r => r.status === 'SURGE').length;
+    const dropCount = resources.filter(r => r.status === 'REDUCED').length;
+
+    let diagnosis = '';
+    if (isSurge) {
+        if (newCount > 0 && surgeCount > 0) {
+            diagnosis = `${newCount} newly provisioned resource${newCount > 1 ? 's' : ''} and higher usage across ${surgeCount} existing resource${surgeCount > 1 ? 's' : ''}.`;
+        } else if (newCount > 0) {
+            diagnosis = `Driven entirely by ${newCount} newly spun up resource${newCount > 1 ? 's' : ''} with $0 prior spend.`;
+        } else if (surgeCount > 0) {
+            diagnosis = `Usage runtime or SKU scale-up across ${surgeCount} active cloud resource${surgeCount > 1 ? 's' : ''}.`;
+        } else {
+            diagnosis = `Service spend increased by ${diffFormatted} (+${pctFormatted}) across allocated workloads.`;
+        }
+        if (banner) {
+            banner.className = 'cdd-root-banner surge';
+        }
+    } else {
+        if (decommCount > 0 && dropCount > 0) {
+            diagnosis = `${decommCount} decommissioned resource${decommCount > 1 ? 's' : ''} and scaled-down workloads across ${dropCount} resource${dropCount > 1 ? 's' : ''}.`;
+        } else if (decommCount > 0) {
+            diagnosis = `Direct savings realized from ${decommCount} decommissioned/terminated cloud resource${decommCount > 1 ? 's' : ''}.`;
+        } else if (dropCount > 0) {
+            diagnosis = `Active workload optimizations and scaled-down runtime across ${dropCount} resource${dropCount > 1 ? 's' : ''}.`;
+        } else {
+            diagnosis = `Service spend reduced by ${diffFormatted} (-${pctFormatted}) this period.`;
+        }
+        if (banner) {
+            banner.className = 'cdd-root-banner saving';
+        }
+    }
+    if (rootText) rootText.textContent = diagnosis;
+
+    // 5. Table rows
+    const tbody = document.getElementById('cddTableBody');
+    if (tbody) {
+        if (resources.length > 0) {
+            tbody.innerHTML = resources.map(r => {
+                const rDiffSign = r.diff >= 0 ? '+' : '-';
+                const rDiffFormatted = `${rDiffSign}${_fmt$(Math.abs(r.diff))}`;
+                let tagClass = 'stable';
+                let tagText = 'STABLE';
+                if (r.status === 'NEW') { tagClass = 'new'; tagText = 'NEW'; }
+                else if (r.status === 'DECOMMISSIONED') { tagClass = 'decomm'; tagText = 'DECOMM'; }
+                else if (r.status === 'SURGE') { tagClass = 'surge'; tagText = 'SURGE'; }
+                else if (r.status === 'REDUCED') { tagClass = 'saving'; tagText = 'SAVING'; }
+
+                return `
+                    <tr>
+                        <td>
+                            <div style="font-weight:600;color:var(--text-primary);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(r.name)}">${_esc(r.name)}</div>
+                        </td>
+                        <td>
+                            <span style="font-size:11px;color:var(--text-secondary);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block" title="${_esc(r.rg)}">${_esc(r.rg)}</span>
+                        </td>
+                        <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--text-secondary)">${_fmt$(r.prevCost)}</td>
+                        <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text-primary)">${_fmt$(r.curCost)}</td>
+                        <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:${r.diff > 0.01 ? '#DC2626' : (r.diff < -0.01 ? '#059669' : 'var(--text-secondary)')}">
+                            ${rDiffFormatted}
+                        </td>
+                        <td style="text-align:center">
+                            <span class="cdd-res-status-tag ${tagClass}">${tagText}</span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align:center;padding:24px;color:var(--text-secondary);font-size:12px">
+                        No individual resource records found under this service for this client period. Aggregated at service level: ${_fmt$(delta.prevCost)} ➔ ${_fmt$(delta.curCost)}.
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    modal.style.display = 'flex';
+}
+window.openDriftDetailModal = openDriftDetailModal;
+
+function closeDriftDetailModal() {
+    const modal = document.getElementById('costDriftDetailModal');
+    if (modal) modal.style.display = 'none';
+}
+window.closeDriftDetailModal = closeDriftDetailModal;
+
+function openDriftServiceDetail(serviceName) {
+    const sName = serviceName || _activeDriftService;
+    if (!sName) return;
+    const ctx = window._activeClientDriftContext;
+    const delta = (ctx?.deltas || []).find(d => (d.name || '').toLowerCase() === sName.toLowerCase());
+    const p = new URLSearchParams();
+    p.set('service', sName);
+    if (ctx && ctx.firstDay) p.set('date_from', ctx.firstDay);
+    if (ctx && ctx.todayStr) p.set('date_to', ctx.todayStr);
+    if (ctx && ctx.client) {
+        p.set('client_id', ctx.client.id);
+        p.set('client_name', ctx.client.name);
+        const cloudMapping = (ctx.client.mappings || [])[0]?.cloud;
+        if (cloudMapping) p.set('cloud', cloudMapping);
+    }
+    if (delta) {
+        p.set('prev_cost', delta.prevCost != null ? Number(delta.prevCost).toFixed(2) : '0');
+        p.set('cur_cost', delta.curCost != null ? Number(delta.curCost).toFixed(2) : '0');
+        p.set('diff', delta.diff != null ? Number(delta.diff).toFixed(2) : '0');
+        p.set('pct', delta.pct != null ? Number(delta.pct).toFixed(1) : '0');
+        p.set('prev_label', ctx.prevLabel || 'Last Month');
+        p.set('cur_label', ctx.curLabel || 'This Month');
+        const totalNetDrift = Math.abs(ctx.total - ctx.lastTotal);
+        if (totalNetDrift > 0) {
+            p.set('drift_share', ((Math.abs(delta.diff) / totalNetDrift) * 100).toFixed(1) + '% of net drift');
+        }
+    }
+
+    if (document.getElementById('costDriftDetailModal')) {
+        closeDriftDetailModal();
+    }
+
+    const detailUrl = '/service-detail?' + p.toString();
+    const frame = document.getElementById('inAppServiceDetailFrame');
+    const wrap = document.getElementById('inAppServiceDetailView');
+    if (frame && wrap) {
+        frame.src = detailUrl;
+        wrap.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        history.pushState({ inAppServiceDetail: true, clientId: _selectedClientId }, '', '#clients?client=' + _selectedClientId + '&service=' + encodeURIComponent(sName));
+        return;
+    }
+
+    // Fallback if overlay container not present
+    window.location.href = detailUrl;
+}
+window.openDriftServiceDetail = openDriftServiceDetail;
+
+function closeInAppServiceDetail(updateHistory = true) {
+    const wrap = document.getElementById('inAppServiceDetailView');
+    const frame = document.getElementById('inAppServiceDetailFrame');
+    if (wrap) wrap.style.display = 'none';
+    if (frame) frame.src = 'about:blank';
+    document.body.style.overflow = '';
+    if (updateHistory && _selectedClientId) {
+        history.replaceState(null, '', '#clients?client=' + _selectedClientId);
+    }
+}
+window.closeInAppServiceDetail = closeInAppServiceDetail;
+
+if (!window._inAppServiceDetailPopstateAttached) {
+    window._inAppServiceDetailPopstateAttached = true;
+    window.addEventListener('popstate', (e) => {
+        const wrap = document.getElementById('inAppServiceDetailView');
+        if (wrap && wrap.style.display !== 'none') {
+            closeInAppServiceDetail(false);
+        }
+    });
+}
 
 function _esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -12302,13 +13035,14 @@ function openClientForm(clientId) {
         _renderMappingRows([]);
         _setClientSections(null);  // new client → all sections checked
     }
-    wrap.style.display = '';
-    nameEl.focus();
+    wrap.style.display = 'flex';
+    setTimeout(() => { nameEl?.focus(); }, 50);
 }
 
 function closeClientForm() {
     const wrap = document.getElementById('clientFormWrap');
     if (wrap) wrap.style.display = 'none';
+    document.querySelectorAll('.cm-dropdown').forEach(d => d.style.display = 'none');
 }
 
 // Tick the Report Sections checkboxes from a client's saved list. null/undefined
@@ -12317,6 +13051,10 @@ function _setClientSections(sections) {
     const sel = Array.isArray(sections) ? new Set(sections) : null;
     document.querySelectorAll('.client-section-cb').forEach(cb => {
         cb.checked = sel ? sel.has(cb.value) : true;
+        const card = cb.closest('.cca-toggle-card');
+        if (card) {
+            card.classList.toggle('is-selected', cb.checked);
+        }
     });
 }
 
@@ -12387,7 +13125,7 @@ function addClientMappingRow(data) {
     const savedVals = Array.isArray(data?._values) ? data._values : (data?.value ? [data.value] : []);
 
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;flex-wrap:nowrap';
+    row.className = 'cm-row';
 
     // Cloud options come from the tenant's actual clouds (activeClouds), so any
     // connected provider (incl. OpenAI/Atlassian/Cursor) is mappable to a client.
@@ -12395,34 +13133,39 @@ function addClientMappingRow(data) {
     const _cloudOpts = activeClouds().map(c =>
         `<option value="${c}" ${cloud===c?'selected':''}>${CLOUD_META[c].label}</option>`).join('')
         + `<option value="othercosts" ${cloud==='othercosts'?'selected':''}>Other Costs</option>`;
+
     row.innerHTML = `
-        <select class="filter-input cm-cloud" style="width:120px;font-size:12px;height:32px;flex-shrink:0">
+        <select class="filter-input cm-cloud">
             ${_cloudOpts}
         </select>
-        <select class="filter-input cm-filter-type" style="width:160px;font-size:12px;height:32px;flex-shrink:0">
+        <select class="filter-input cm-filter-type">
             ${_cmFtOptions(cloud, ft)}
         </select>
-        <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">
-            <div class="cm-multiselect-wrap" style="position:relative">
-                <div class="cm-trigger filter-input" style="font-size:12px;min-height:32px;padding:4px 28px 4px 8px;cursor:pointer;display:flex;flex-wrap:wrap;gap:3px;align-items:center"
-                     onclick="toggleCmDropdown(this)">
-                    <span class="cm-placeholder" style="color:var(--text-secondary);font-size:12px">— Loading… —</span>
+        <div class="cm-multiselect-wrap">
+            <div class="cm-trigger filter-input" onclick="toggleCmDropdown(this)">
+                <span class="cm-placeholder">— Loading… —</span>
+            </div>
+            <svg class="cm-trigger-arrow" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg>
+            <div class="cm-dropdown" style="display:none">
+                <div class="cm-dropdown-header">
+                    <input type="text" class="cm-search" placeholder="Search scope values…" oninput="filterCmOptions(this)">
+                    <div class="cm-dropdown-actions">
+                        <span class="cm-dd-count">0 selected</span>
+                        <div class="cm-dd-btn-group">
+                            <button type="button" class="cm-bulk-btn" onclick="toggleSelectAllCm(this, true)">Select All</button>
+                            <button type="button" class="cm-bulk-btn" onclick="toggleSelectAllCm(this, false)">Clear All</button>
+                        </div>
+                    </div>
                 </div>
-                <svg style="position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9"/></svg>
-                <div class="cm-dropdown" style="display:none;position:fixed;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;z-index:99999;max-height:280px;overflow-y:auto;box-shadow:0 6px 20px rgba(0,0,0,.25)">
-                    <div style="padding:6px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-card);z-index:1">
-                        <input type="text" class="cm-search" placeholder="Search…" style="width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--bg)" oninput="filterCmOptions(this)">
-                    </div>
-                    <div class="cm-options" style="padding:4px"></div>
-                    <div style="padding:6px 8px;border-top:1px solid var(--border)">
-                        <input type="text" class="cm-custom-input filter-input" placeholder="+ Type custom value…" style="width:100%;font-size:11px"
-                               onkeydown="if(event.key==='Enter'){addCmCustomValue(this);event.preventDefault()}">
-                    </div>
+                <div class="cm-options"></div>
+                <div class="cm-dropdown-footer">
+                    <input type="text" class="cm-custom-input filter-input" placeholder="+ Type custom value and press Enter…"
+                           onkeydown="if(event.key==='Enter'){addCmCustomValue(this);event.preventDefault()}">
                 </div>
             </div>
         </div>
-        <button class="btn-mini" style="color:var(--red);flex-shrink:0;margin-top:8px" onclick="this.closest('div[style]').remove()" title="Remove">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <button type="button" class="cm-row-del" onclick="removeClientMappingRow(this)" title="Remove mapping row" aria-label="Remove mapping row">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
         </button>`;
 
     container.appendChild(row);
@@ -12435,13 +13178,13 @@ function addClientMappingRow(data) {
         const f = ftSel.value;
         const optionsEl = row.querySelector('.cm-options');
         const trigger   = row.querySelector('.cm-trigger');
-        optionsEl.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-secondary)">Loading…</div>';
+        optionsEl.innerHTML = '<div style="padding:10px 8px;font-size:12px;color:var(--text-secondary);text-align:center">Loading resources…</div>';
         updateCmTrigger(trigger, []);
         try {
             const items = await fetch(`/api/clients/filter-values?cloud=${c}&filter_type=${f}`).then(r => r.json());
             renderCmOptions(row, items, savedVals);
         } catch(e) {
-            optionsEl.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--red)">Failed to load</div>';
+            optionsEl.innerHTML = '<div style="padding:10px 8px;font-size:12px;color:var(--red);text-align:center">Failed to load scope items</div>';
         }
     }
 
@@ -12455,16 +13198,59 @@ function addClientMappingRow(data) {
     loadOptions();
 }
 
+function removeClientMappingRow(btn) {
+    const row = btn.closest('.cm-row');
+    if (!row) return;
+    const container = document.getElementById('clientMappingRows');
+    const remaining = container ? container.querySelectorAll('.cm-row').length : 0;
+    if (remaining <= 1) {
+        // If only 1 row, reset the selections to clear it cleanly
+        const trigger = row.querySelector('.cm-trigger');
+        row.querySelectorAll('.cm-options input[type=checkbox]').forEach(cb => cb.checked = false);
+        const searchInput = row.querySelector('.cm-search');
+        if (searchInput) searchInput.value = '';
+        row.querySelectorAll('.cm-option-item').forEach(el => el.style.display = '');
+        updateCmTrigger(trigger, []);
+    } else {
+        row.remove();
+    }
+}
+
 // Delimiter (must match database.py _MAP_SUBSEP) for a resource-group value that
 // is scoped to a subscription: "<subscription_id><SEP><resource_group>".
-const CM_SUBSEP = '';
+const CM_SUBSEP = ' ';
 function cmPretty(v) { const i = (v || '').indexOf(CM_SUBSEP); return i < 0 ? v : v.slice(i + 1); }
+
+function updateCmDropdownCount(wrap) {
+    if (!wrap) return;
+    const countEl = wrap.querySelector('.cm-dd-count');
+    if (!countEl) return;
+    const total = wrap.querySelectorAll('.cm-options input[type=checkbox]').length;
+    const checked = wrap.querySelectorAll('.cm-options input[type=checkbox]:checked').length;
+    countEl.textContent = `${checked} of ${total} selected`;
+}
+
+function toggleSelectAllCm(btn, selectAll) {
+    const wrap = btn.closest('.cm-multiselect-wrap');
+    if (!wrap) return;
+    const cbs = wrap.querySelectorAll('.cm-options input[type=checkbox]');
+    cbs.forEach(cb => {
+        const label = cb.closest('label');
+        if (!label || label.style.display !== 'none') {
+            cb.checked = selectAll;
+        }
+    });
+    const trigger = wrap.querySelector('.cm-trigger');
+    updateCmTrigger(trigger);
+    updateCmDropdownCount(wrap);
+}
 
 function renderCmOptions(row, items, selectedVals) {
     const optionsEl = row.querySelector('.cm-options');
     const trigger   = row.querySelector('.cm-trigger');
-    if (!items.length) {
-        optionsEl.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-secondary)">No data yet</div>';
+    const wrap      = row.querySelector('.cm-multiselect-wrap');
+    if (!items || !items.length) {
+        optionsEl.innerHTML = '<div style="padding:10px 8px;font-size:12px;color:var(--text-secondary);text-align:center">No data found for this selection</div>';
     } else {
         optionsEl.innerHTML = items.map(i => {
             const compound = (i.value || '').includes(CM_SUBSEP);
@@ -12472,13 +13258,14 @@ function renderCmOptions(row, items, selectedVals) {
             const display = compound ? chip                  // never show the raw delimiter value
                           : (i.label && i.label !== i.value ? `${i.label} (${i.value})` : i.value);
             const checked = selectedVals.includes(i.value);
-            return `<label style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:12px;cursor:pointer;border-radius:4px;color:var(--text-primary)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+            return `<label class="cm-option-item">
                 <input type="checkbox" value="${_esc(i.value)}" data-label="${_esc(chip)}" ${checked ? 'checked' : ''} onchange="updateCmTrigger(this.closest('.cm-multiselect-wrap').querySelector('.cm-trigger'))">
-                <span title="${_esc(display)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(display)}</span>
+                <span title="${_esc(display)}" class="cm-option-text">${_esc(display)}</span>
             </label>`;
         }).join('');
     }
     updateCmTrigger(trigger, selectedVals);
+    updateCmDropdownCount(wrap);
 }
 
 function updateCmTrigger(trigger, preselected) {
@@ -12499,12 +13286,33 @@ function updateCmTrigger(trigger, preselected) {
     } else {
         selected = [...boxes].map(b => ({ value: b.value, label: b.getAttribute('data-label') || cmPretty(b.value) }));
     }
+
+    updateCmDropdownCount(wrap);
+
     if (selected.length === 0) {
-        trigger.innerHTML = `<span class="cm-placeholder" style="color:var(--text-secondary);font-size:12px">— Select —</span>`;
+        trigger.title = '';
+        trigger.innerHTML = `<span class="cm-placeholder">— Select scope / resources —</span>`;
+        return;
+    }
+
+    const fullTitles = selected.map(s => s.label || s.value).join(', ');
+    trigger.title = fullTitles;
+
+    if (selected.length === 1) {
+        trigger.innerHTML = `<span class="cm-chip" title="${_esc(selected[0].label)}">${_esc(selected[0].label)}</span>`;
+    } else if (selected.length === 2) {
+        trigger.innerHTML = `
+            <span class="cm-chip" title="${_esc(selected[0].label)}">${_esc(selected[0].label)}</span>
+            <span class="cm-chip" title="${_esc(selected[1].label)}">${_esc(selected[1].label)}</span>
+        `;
     } else {
-        trigger.innerHTML = selected.map(s =>
-            `<span title="${_esc(s.value)}" style="background:var(--accent);color:#fff;border-radius:3px;padding:1px 6px;font-size:11px;white-space:nowrap">${_esc(s.label)}</span>`
-        ).join('') + '<span class="cm-placeholder" style="display:none"></span>';
+        // More than 2 items: display primary chip + clean "+N more" badge without clutter
+        const first = selected[0];
+        const remaining = selected.length - 1;
+        trigger.innerHTML = `
+            <span class="cm-chip" title="${_esc(first.label)}">${_esc(first.label)}</span>
+            <span class="cm-more-badge" title="${_esc(fullTitles)}">+${remaining} more</span>
+        `;
     }
 }
 
@@ -12516,24 +13324,25 @@ function toggleCmDropdown(trigger) {
     document.querySelectorAll('.cm-dropdown').forEach(d => d.style.display = 'none');
     dd.style.display = isOpen ? 'none' : 'block';
     if (!isOpen) {
-        // position:fixed so the dropdown escapes any card/overflow clipping; place it
-        // under the trigger, flipping above if there isn't room below.
+        // position:fixed so the dropdown escapes any modal dialog overflow clipping
         const r = trigger.getBoundingClientRect();
         const vh = window.innerHeight;
         const spaceBelow = vh - r.bottom;
-        dd.style.width = r.width + 'px';
+        const ddWidth = Math.max(360, r.width);
+        dd.style.width = ddWidth + 'px';
         dd.style.left  = r.left + 'px';
-        if (spaceBelow < 200 && r.top > spaceBelow) {
+        if (spaceBelow < 240 && r.top > spaceBelow) {
             dd.style.top = '';
-            dd.style.bottom = (vh - r.top + 2) + 'px';
-            dd.style.maxHeight = Math.min(280, r.top - 12) + 'px';
+            dd.style.bottom = (vh - r.top + 4) + 'px';
+            dd.style.maxHeight = Math.min(320, r.top - 16) + 'px';
         } else {
             dd.style.bottom = '';
-            dd.style.top = (r.bottom + 2) + 'px';
-            dd.style.maxHeight = Math.min(280, spaceBelow - 12) + 'px';
+            dd.style.top = (r.bottom + 4) + 'px';
+            dd.style.maxHeight = Math.min(320, spaceBelow - 16) + 'px';
         }
-        dd.scrollTop = 0;  // always open at the top of the list
+        dd.scrollTop = 0;
         wrap.querySelector('.cm-search')?.focus({ preventScroll: true });
+        updateCmDropdownCount(wrap);
     }
 }
 
@@ -12552,12 +13361,13 @@ function addCmCustomValue(input) {
     const trigger = wrap.querySelector('.cm-trigger');
     // Add checkbox option
     const label = document.createElement('label');
-    label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:12px;cursor:pointer;border-radius:4px;color:var(--text-primary)';
+    label.className = 'cm-option-item';
     label.innerHTML = `<input type="checkbox" value="${_esc(val)}" checked onchange="updateCmTrigger(this.closest('.cm-multiselect-wrap').querySelector('.cm-trigger'))">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(val)}</span>`;
+        <span class="cm-option-text" title="${_esc(val)}">${_esc(val)}</span>`;
     opts.appendChild(label);
     input.value = '';
     updateCmTrigger(trigger);
+    updateCmDropdownCount(wrap);
 }
 
 // Close dropdowns when clicking outside
@@ -12580,7 +13390,7 @@ async function saveClient() {
     if (!name) { showToast('Client name is required', 'error'); return; }
 
     const mappings = [];
-    document.querySelectorAll('#clientMappingRows > div[style]').forEach(row => {
+    document.querySelectorAll('#clientMappingRows > .cm-row, #clientMappingRows > div').forEach(row => {
         const cloud      = row.querySelector('.cm-cloud')?.value || 'azure';
         const filterType = row.querySelector('.cm-filter-type')?.value || '';
         if (!filterType) return;
@@ -13674,6 +14484,9 @@ function initReportBuilder() {
     if (toEl && !toEl.value) toEl.value = yTo;
     rptState.dateFrom = fromEl ? fromEl.value : yFrom;
     rptState.dateTo = toEl ? toEl.value : yTo;
+    if (typeof initRangePicker === 'function') {
+        initRangePicker('rptRangePick', 'rptDateFrom', 'rptDateTo', onReportCustomDateChange);
+    }
 
     renderReportMetricsGrid();
     renderReportCloudChips();
@@ -13799,6 +14612,9 @@ function setReportDatePreset(preset) {
     if (customWrap) {
         customWrap.style.display = preset === 'custom' ? 'flex' : 'none';
     }
+    if (preset === 'custom' && typeof initRangePicker === 'function') {
+        initRangePicker('rptRangePick', 'rptDateFrom', 'rptDateTo', onReportCustomDateChange);
+    }
 
     updateReportSummary();
     validateReportConfig();
@@ -13899,6 +14715,9 @@ function resetReportBuilder() {
     const toEl = document.getElementById('rptDateTo');
     if (fromEl) fromEl.value = rptState.dateFrom;
     if (toEl) toEl.value = rptState.dateTo;
+    if (typeof initRangePicker === 'function') {
+        initRangePicker('rptRangePick', 'rptDateFrom', 'rptDateTo', onReportCustomDateChange);
+    }
 
     setReportScope('both');
     setReportDatePreset('30d');
@@ -14024,7 +14843,7 @@ async function generateReport() {
                     return `
                         <tr>
                             <td style="font-weight:600">${_esc(s.name)}</td>
-                            <td><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;text-transform:uppercase;${badgeStyle}">${_esc(s.cloud)}</span></td>
+                            <td style="text-align:center"><span style="display:inline-flex;align-items:center;justify-content:center" title="${_esc(s.cloud?.toUpperCase() || '')}">${getCloudLogoHTML(s.cloud, 16)}</span></td>
                             <td style="text-align:right;font-weight:700">${sym}${s.cost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
                             <td style="text-align:right">
                                 <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
@@ -14065,7 +14884,7 @@ async function generateReport() {
                                 <tr>
                                     <td style="font-weight:600">${_esc(item.resource_name || item.name || 'Resource')}</td>
                                     <td><span style="font-size:11.5px;color:var(--text-secondary)">${_esc(item.service_type || item.service || 'Virtual Machine')}</span></td>
-                                    <td><span style="font-size:11px;font-weight:600;text-transform:uppercase">${_esc(item.cloud_provider || 'Cloud')}</span></td>
+                                    <td style="text-align:center"><span style="display:inline-flex;align-items:center;justify-content:center" title="${_esc(item.cloud_provider || 'Cloud')}">${getCloudLogoHTML(item.cloud_provider || 'azure', 16)}</span></td>
                                     <td style="font-size:11.5px;color:var(--text-secondary)">${_esc(item.subscription_name || item.region || item.resource_group || 'Global')}</td>
                                     <td style="text-align:right;font-weight:700">${sym}${(item.cost || Math.round(Math.random() * 80 + 10)).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
                                     <td style="text-align:right">
@@ -14330,6 +15149,14 @@ function loadSavedReport(id) {
 
     rptState.clouds = new Set(r.clouds || ['azure', 'aws', 'gcp']);
     setReportScope(r.scope || 'both');
+    if (r.dateFrom && r.dateTo) {
+        rptState.dateFrom = r.dateFrom;
+        rptState.dateTo = r.dateTo;
+        const fEl = document.getElementById('rptDateFrom');
+        const tEl = document.getElementById('rptDateTo');
+        if (fEl) fEl.value = r.dateFrom;
+        if (tEl) tEl.value = r.dateTo;
+    }
     setReportDatePreset(r.datePreset || '30d');
     setReportMetricsMode('all');
 
@@ -14352,6 +15179,8 @@ function saveCurrentReport() {
         clouds: Array.from(rptState.clouds),
         scope: rptState.scope,
         datePreset: rptState.datePreset,
+        dateFrom: rptState.dateFrom,
+        dateTo: rptState.dateTo,
         desc: `${Array.from(rptState.clouds).join(', ')} • ${rptState.scope} • ${rptState.datePreset}`
     };
     reports.unshift(newReport);

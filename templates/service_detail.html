@@ -1,124 +1,435 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-appearance="light" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Service Detail</title>
-    <link rel="stylesheet" href="/static/css/tokens.css">
-    <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/appearance.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=20261014_v3">
+    <link rel="stylesheet" href="/static/css/style.css?v=20261014_v3">
+    <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260924_light_v2">
+    <link rel="stylesheet" href="/static/css/appearance.css?v=20260924_light_v2">
     <script>
     (function () {
         try {
             var app = localStorage.getItem('uiAppearance') || localStorage.getItem('theme');
             if (app === 'dark') {
+                document.documentElement.setAttribute('data-appearance', 'dark');
                 document.documentElement.setAttribute('data-theme', 'dark');
             } else {
                 document.documentElement.setAttribute('data-appearance', 'light');
                 document.documentElement.setAttribute('data-theme', 'light');
             }
         } catch (e) {
-            try { document.documentElement.setAttribute('data-appearance', 'light'); } catch (e2) {}
+            try {
+                document.documentElement.setAttribute('data-appearance', 'light');
+                document.documentElement.setAttribute('data-theme', 'light');
+            } catch (e2) {}
         }
     })();
     </script>
     <script src="/static/vendor/chart.umd.min.js?v=4.4.7"></script>
     <style>
-        body { background: var(--bg-primary); margin: 0; padding: 24px 28px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        .sd-wrap { max-width: 1200px; margin: 0 auto; }
+        body {
+            background: var(--bg-page, var(--bg, #F8FAFC));
+            color: var(--text-primary, #0F172A);
+            margin: 0;
+            padding: 24px 32px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .sd-wrap { max-width: 1240px; margin: 0 auto; }
 
         /* Breadcrumb */
-        .sd-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+        .sd-breadcrumb { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); margin-bottom: 18px; }
+        .sd-back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 8px;
+            background: var(--bg-card, #FFFFFF);
+            border: 1px solid var(--border-default, #E2E8F0);
+            color: var(--text-primary, #0F172A);
+            font-size: 12.5px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+        .sd-back-btn:hover {
+            background: var(--bg-hover, #F1F5F9);
+            border-color: var(--border-strong, #CBD5E1);
+            color: var(--accent, #2563EB);
+        }
         .sd-breadcrumb a { color: var(--accent); text-decoration: none; cursor: pointer; }
         .sd-breadcrumb a:hover { text-decoration: underline; }
         .sd-breadcrumb .sep { opacity: 0.4; }
 
         /* Header */
-        .sd-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
-        .sd-header-logo { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; flex-shrink: 0; padding: 6px; }
+        .sd-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+        .sd-header-logo { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: var(--bg-card); border: 1px solid var(--border-default, #E2E8F0); border-radius: 12px; flex-shrink: 0; padding: 7px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
         .sd-header-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
         .sd-header-info { flex: 1; min-width: 0; }
-        .sd-header-info h1 { font-size: 22px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; line-height: 1.2; }
+        .sd-header-info h1 { font-size: 24px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; line-height: 1.25; }
         .sd-header-meta { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--text-secondary); flex-wrap: wrap; }
         .sd-header-meta .meta-item { display: flex; align-items: center; gap: 5px; }
         .sd-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
         .sd-last-updated { font-size: 12px; color: var(--text-secondary); text-align: right; margin-top: 4px; }
 
+        /* Drift & Variance KPI Strip */
+        .sd-drift-kpi-wrap { margin-bottom: 20px; }
+        .sd-drift-header-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+        .sd-drift-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: rgba(37, 99, 235, 0.08); color: var(--accent, #2563EB); border: 1px solid rgba(37, 99, 235, 0.22); letter-spacing: -0.01em; }
+        .sd-drift-badge.saving { background: rgba(16, 185, 129, 0.12); color: #059669; border-color: rgba(16, 185, 129, 0.28); }
+        .sd-drift-badge.surge  { background: rgba(239, 68, 68, 0.12);  color: #DC2626; border-color: rgba(239, 68, 68, 0.28); }
+        .sd-drift-sub { font-size: 12.5px; color: var(--text-secondary, #64748B); display: flex; align-items: center; gap: 6px; }
+        .sd-drift-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+
         /* Stat cards — override for 4-col layout */
         .sd-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-        .sd-stats .stat-card { padding: 16px 18px; }
-        .sd-stats .stat-card .stat-label { font-size: 11px; margin-bottom: 6px; }
-        .sd-stats .stat-card .stat-value { font-size: 24px; font-weight: 700; }
-        .sd-stat-featured { background: var(--accent) !important; border-color: var(--accent) !important; }
-        .sd-stat-featured .stat-label { color: rgba(255,255,255,0.75) !important; }
+        .stat-card {
+            background: var(--bg-card, #FFFFFF);
+            border: 1px solid var(--border-default, #E2E8F0);
+            border-radius: 14px;
+            padding: 18px 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.02);
+            transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card:hover {
+            box-shadow: 0 6px 18px -2px rgba(15, 23, 42, 0.08);
+            transform: translateY(-1px);
+        }
+        .stat-card .stat-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary, #64748B);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+        .stat-card .stat-value {
+            font-size: 19px;
+            font-weight: 700;
+            color: var(--text-primary, #0F172A);
+            font-variant-numeric: tabular-nums;
+            line-height: 1.25;
+            letter-spacing: -0.01em;
+        }
+        .sd-stat-featured {
+            background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+            border-color: #1D4ED8 !important;
+            box-shadow: 0 4px 16px rgba(37, 99, 235, 0.28) !important;
+        }
+        .sd-stat-featured .stat-label { color: rgba(255,255,255,0.85) !important; }
         .sd-stat-featured .stat-value { color: #fff !important; }
-        .sd-stat-featured .stat-sub { color: rgba(255,255,255,0.75) !important; }
-        .stat-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .sd-stat-featured .stat-sub { color: rgba(255,255,255,0.85) !important; }
+        .stat-sub { font-size: 12px; color: var(--text-secondary, #64748B); margin-top: 5px; }
         .stat-icon { float: right; opacity: 0.25; margin-top: 2px; }
-        .sd-stat-featured .stat-icon { opacity: 0.4; }
+        .sd-stat-featured .stat-icon { opacity: 0.35; }
+
+        /* KPI Card special states */
+        .stat-card.is-saving {
+            background: linear-gradient(180deg, rgba(16, 185, 129, 0.04) 0%, rgba(16, 185, 129, 0.01) 100%);
+            border-color: rgba(16, 185, 129, 0.28);
+        }
+        .stat-card.is-surge {
+            background: linear-gradient(180deg, rgba(239, 68, 68, 0.04) 0%, rgba(239, 68, 68, 0.01) 100%);
+            border-color: rgba(239, 68, 68, 0.28);
+        }
+        .sd-share-bar-track {
+            height: 6px;
+            background: rgba(100, 116, 139, 0.12);
+            border-radius: 999px;
+            margin: 10px 0 6px;
+            overflow: hidden;
+        }
+        .sd-share-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #2563EB, #60A5FA);
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            min-width: 4px;
+        }
+
+        /* Secondary Metrics Strip */
+        .sd-secondary-metrics-strip {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            background: var(--bg-card, #FFFFFF);
+            border: 1px solid var(--border-default, #E2E8F0);
+            border-radius: 12px;
+            padding: 12px 18px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+        }
+        .sd-sec-metric-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sd-sec-icon-wrap {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: rgba(37, 99, 235, 0.08);
+            color: var(--accent, #2563EB);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .sd-sec-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); font-weight: 600; margin-bottom: 2px; }
+        .sd-sec-val { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+
+        /* Table header & Search Input */
+        .sd-table-head-flex { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+        .sd-search-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-page, #F8FAFC);
+            border: 1px solid var(--border-default, #CBD5E1);
+            border-radius: 8px;
+            padding: 5px 12px;
+            width: 250px;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .sd-search-wrap:focus-within {
+            border-color: var(--accent, #2563EB);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            background: var(--bg-card, #FFFFFF);
+        }
+        .sd-search-icon { color: var(--text-secondary); flex-shrink: 0; }
+        .sd-search-input {
+            border: none;
+            background: transparent;
+            font-size: 12.5px;
+            color: var(--text-primary);
+            width: 100%;
+            outline: none;
+            font-family: inherit;
+        }
+        .sd-search-clear {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 15px;
+            line-height: 1;
+            padding: 0;
+            display: none;
+        }
+        .sd-search-clear:hover { color: var(--text-primary); }
+
+        /* Empty/Unassigned Pill */
+        .sd-empty-pill {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: rgba(100, 116, 139, 0.09);
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-style: italic;
+        }
+
+        /* GUID Copy snippet */
+        .res-guid-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 12px;
+            color: var(--text-primary);
+        }
+        .res-copy-btn {
+            opacity: 0;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px;
+            border-radius: 4px;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            transition: opacity 0.15s ease, color 0.15s ease;
+        }
+        tr:hover .res-copy-btn { opacity: 0.8; }
+        .res-copy-btn:hover { opacity: 1; color: var(--accent); }
 
         /* Body two-column layout */
-        .sd-body { display: grid; grid-template-columns: 1fr 380px; gap: 16px; align-items: start; }
+        .sd-body { display: grid; grid-template-columns: 1fr 380px; gap: 18px; align-items: start; }
 
         /* Cards */
-        .chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); }
+        .chart-card { background: var(--bg-card, #FFFFFF); border: 1px solid var(--border-default, #E2E8F0); border-radius: 14px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
         .chart-card h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 14px; }
 
         /* Resources table */
         .res-table { width: 100%; border-collapse: collapse; }
-        .res-table th { font-size: 11px; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 10px 10px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
+        .res-table th { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; padding: 9px 10px 11px; border-bottom: 1px solid var(--border-default, #E2E8F0); cursor: pointer; user-select: none; white-space: nowrap; }
         .res-table th:hover { color: var(--accent); }
-        .res-table td { padding: 10px 10px; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid var(--border); }
+        .res-table td { padding: 10px 10px; font-size: 12.5px; color: var(--text-primary); border-bottom: 1px solid var(--border-default, #E2E8F0); vertical-align: middle; }
         .res-table tr:last-child td { border-bottom: none; }
-        .res-table tr:hover td { background: var(--bg-input); }
-        .res-num { color: var(--text-secondary); font-size: 12px; width: 32px; }
-        .res-name-cell { max-width: 200px; }
-        .res-name-inner { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-        .res-cost { text-align: right; font-weight: 500; white-space: nowrap; }
-        .res-pct-cell { width: 100px; }
+        .res-table tr:hover td { background: var(--bg-hover, #F8FAFC); }
+        .res-num { color: var(--text-secondary); font-size: 11px; width: 32px; font-weight: 600; }
+        .res-name-cell { max-width: 240px; }
+        .res-name-inner { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-weight: 500; }
+        .res-cost { text-align: right; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .res-pct-cell { width: 115px; }
         .res-bar-wrap { display: flex; align-items: center; gap: 8px; }
-        .res-bar-bg { flex: 1; height: 4px; background: var(--border); border-radius: 2px; }
-        .res-bar-fill { height: 4px; border-radius: 2px; background: var(--accent); min-width: 2px; }
-        .res-pct-label { font-size: 12px; color: var(--text-secondary); min-width: 36px; text-align: right; }
+        .res-bar-bg { flex: 1; height: 6px; background: rgba(100,116,139,0.12); border-radius: 999px; overflow: hidden; }
+        .res-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent, #2563EB), #60A5FA); min-width: 2px; }
+        .res-pct-label { font-size: 11.5px; color: var(--text-secondary); min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
         .sort-ind { margin-left: 3px; font-size: 10px; opacity: 0.6; }
         .view-all-row { padding: 12px 0 2px; }
-        .view-all-btn { background: none; border: none; color: var(--accent); font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 0; }
+        .view-all-btn { background: none; border: none; color: var(--accent); font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 0; }
         .view-all-btn:hover { text-decoration: underline; }
 
         /* Right column */
-        .sd-right { display: flex; flex-direction: column; gap: 16px; }
-        .region-legend { margin-top: 12px; }
-        .region-legend-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+        .sd-right { display: flex; flex-direction: column; gap: 18px; }
+        .region-legend { margin-top: 14px; }
+        .region-legend-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border-subtle, #F1F5F9); font-size: 12px; }
         .region-legend-item:last-child { border-bottom: none; }
-        .region-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-        .region-name { flex: 1; color: var(--text-primary); }
-        .region-cost { font-weight: 500; color: var(--text-primary); }
-        .region-pct { color: var(--text-secondary); min-width: 44px; text-align: right; }
+        .region-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .region-name { flex: 1; color: var(--text-primary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .region-cost { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+        .region-pct { color: var(--text-secondary); min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
         .trend-controls { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
         .trend-controls h3 { margin: 0; }
-        .trend-toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-        .trend-toggle button { background: none; border: none; padding: 4px 10px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
-        .trend-toggle button.active { background: var(--accent); color: #fff; }
+        .trend-toggle { display: flex; border: 1px solid var(--border-default, #E2E8F0); border-radius: 7px; overflow: hidden; }
+        .trend-toggle button { background: none; border: none; padding: 4px 11px; font-size: 12px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.15s ease; }
+        .trend-toggle button.active { background: var(--accent, #2563EB); color: #fff; font-weight: 600; }
 
         /* Insight banner */
-        .sd-insight { margin-top: 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; box-shadow: var(--shadow); }
-        .sd-insight-icon { width: 36px; height: 36px; background: rgba(79,110,247,0.12); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent); font-size: 18px; }
+        .sd-insight { margin-top: 20px; background: var(--bg-card); border: 1px solid var(--border-default, #E2E8F0); border-radius: 14px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+        .sd-insight-icon { width: 40px; height: 40px; background: rgba(37,99,235,0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent); font-size: 20px; }
         .sd-insight-body { flex: 1; }
         .sd-insight-title { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 3px; }
-        .sd-insight-text { font-size: 13px; color: var(--text-secondary); }
+        .sd-insight-text { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
         .sd-insight-text strong { color: var(--text-primary); }
 
         /* Loading/error */
         .dd-loading { text-align: center; padding: 80px 20px; color: var(--text-secondary); font-size: 15px; }
-        .dd-error   { text-align: center; padding: 60px 20px; color: var(--red); font-size: 14px; }
+        .dd-error   { text-align: center; padding: 60px 20px; color: var(--red, #DC2626); font-size: 14px; }
+
+        /* Dark mode overrides */
+        html[data-theme="dark"] body,
+        html.dark body {
+            background: #0B0F19;
+            color: #F8FAFC;
+        }
+        html[data-theme="dark"] .stat-card,
+        html.dark .stat-card,
+        html[data-theme="dark"] .chart-card,
+        html.dark .chart-card,
+        html[data-theme="dark"] .sd-header-logo,
+        html.dark .sd-header-logo {
+            background: #151D2E;
+            border-color: #26334D;
+        }
+        html[data-theme="dark"] .stat-card:not(.sd-stat-featured) .stat-value,
+        html.dark .stat-card:not(.sd-stat-featured) .stat-value,
+        html[data-theme="dark"] .sd-header-info h1,
+        html.dark .sd-header-info h1,
+        html[data-theme="dark"] .chart-card h3,
+        html.dark .chart-card h3,
+        html[data-theme="dark"] .res-table td,
+        html.dark .res-table td,
+        html[data-theme="dark"] .region-name,
+        html.dark .region-name,
+        html[data-theme="dark"] .region-cost,
+        html.dark .region-cost,
+        html[data-theme="dark"] #donutCenter,
+        html.dark #donutCenter {
+            color: #F8FAFC;
+        }
+        html[data-theme="dark"] .res-table th,
+        html.dark .res-table th {
+            border-color: #26334D;
+            color: #94A3B8;
+        }
+        html[data-theme="dark"] .res-table td,
+        html.dark .res-table td,
+        html[data-theme="dark"] .region-legend-item,
+        html.dark .region-legend-item {
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+        html[data-theme="dark"] .res-table tr:hover td,
+        html.dark .res-table tr:hover td {
+            background: #1E293B;
+        }
+        html[data-theme="dark"] .sd-insight,
+        html.dark .sd-insight {
+            background: #151D2E;
+            border-color: #26334D;
+        }
+        html[data-theme="dark"] .trend-toggle,
+        html.dark .trend-toggle {
+            border-color: #26334D;
+        }
+        html[data-theme="dark"] .sd-back-btn,
+        html.dark .sd-back-btn {
+            background: #151D2E;
+            border-color: #26334D;
+            color: #F8FAFC;
+        }
+        html[data-theme="dark"] .sd-back-btn:hover,
+        html.dark .sd-back-btn:hover {
+            background: #1E293B;
+            border-color: #3B82F6;
+            color: #60A5FA;
+        }
+        html[data-theme="dark"] .sd-drift-badge.saving,
+        html.dark .sd-drift-badge.saving {
+            background: rgba(16, 185, 129, 0.18);
+            color: #34D399;
+            border-color: rgba(52, 211, 153, 0.3);
+        }
+        html[data-theme="dark"] .sd-drift-badge.surge,
+        html.dark .sd-drift-badge.surge {
+            background: rgba(239, 68, 68, 0.18);
+            color: #F87171;
+            border-color: rgba(248, 113, 113, 0.3);
+        }
+        html[data-theme="dark"] .sd-secondary-metrics-strip,
+        html.dark .sd-secondary-metrics-strip {
+            background: #151D2E;
+            border-color: #26334D;
+        }
+        html[data-theme="dark"] .sd-sec-icon-wrap,
+        html.dark .sd-sec-icon-wrap {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60A5FA;
+        }
+        html[data-theme="dark"] .sd-search-wrap,
+        html.dark .sd-search-wrap {
+            background: #0B0F19;
+            border-color: #26334D;
+        }
+        html[data-theme="dark"] .sd-search-wrap:focus-within,
+        html.dark .sd-search-wrap:focus-within {
+            background: #151D2E;
+            border-color: #3B82F6;
+        }
+        html[data-theme="dark"] .sd-empty-pill,
+        html.dark .sd-empty-pill {
+            background: rgba(255, 255, 255, 0.06);
+            color: #94A3B8;
+        }
 
         /* Responsive */
         @media (max-width: 900px) {
             .sd-body { grid-template-columns: 1fr; }
-            .sd-stats { grid-template-columns: repeat(2, 1fr); }
+            .sd-stats, .sd-drift-kpi-grid { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 560px) {
-            .sd-stats { grid-template-columns: 1fr; }
+            .sd-stats, .sd-drift-kpi-grid { grid-template-columns: 1fr; }
             body { padding: 16px; }
         }
     </style>
@@ -128,9 +439,14 @@
 
     <!-- Breadcrumb -->
     <div class="sd-breadcrumb">
-        <a onclick="window.close()">Services</a>
+        <button class="sd-back-btn" onclick="navigateBack()" title="Back">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            <span>Back to Clients</span>
+        </button>
+        <span class="sep" id="sdBreadSep" style="display:none">›</span>
+        <span id="sdBreadClient" style="display:none;font-weight:500;color:var(--text-secondary)"></span>
         <span class="sep">›</span>
-        <span id="sdBreadService">Loading…</span>
+        <span id="sdBreadService" style="font-weight:600;color:var(--text-primary)">Loading…</span>
     </div>
 
     <!-- Header -->
@@ -139,8 +455,15 @@
             <img id="sdLogoImg" src="" alt="">
         </div>
         <div class="sd-header-info">
-            <h1 id="sdTitle">Loading…</h1>
-            <div class="sd-header-meta">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <h1 id="sdTitle" style="margin:0">Loading…</h1>
+                <span id="sdHeaderVarianceBadge" class="sd-drift-badge" style="display:none"></span>
+            </div>
+            <div class="sd-header-meta" style="margin-top:6px">
+                <span class="meta-item" id="sdMetaClient" style="display:none">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span id="sdClientLabel"></span>
+                </span>
                 <span class="meta-item" id="sdMetaAccount" style="display:none">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
                     <span id="sdAccountLabel"></span>
@@ -162,13 +485,86 @@
         </div>
     </div>
 
+    <!-- Drift & Variance KPI Strip -->
+    <div class="sd-drift-kpi-wrap" id="sdDriftKpiWrap" style="display:none">
+        <div class="sd-drift-header-meta">
+            <span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-secondary)">Period Drift & Variance Analysis</span>
+            <span class="sd-drift-sub" id="sdDriftSubText"></span>
+        </div>
+        <div class="sd-drift-kpi-grid">
+            <div class="stat-card">
+                <div class="stat-label" id="sdKpiPrevLabel">Last Month</div>
+                <div class="stat-value" id="sdKpiPrevVal">—</div>
+                <div class="stat-sub">Prior baseline spend</div>
+            </div>
+            <div class="stat-card sd-stat-featured">
+                <div class="stat-label" id="sdKpiCurLabel">This Month</div>
+                <div class="stat-value" id="sdKpiCurVal">—</div>
+                <div class="stat-sub">Current period spend</div>
+            </div>
+            <div class="stat-card" id="sdKpiDiffCard">
+                <div class="stat-label">Net Variance</div>
+                <div class="stat-value" id="sdKpiDiffVal" style="font-weight:700">—</div>
+                <div class="stat-sub" id="sdKpiDiffSub">Variance vs baseline</div>
+            </div>
+            <div class="stat-card" id="sdKpiShareCard">
+                <div class="stat-label">Client Net Drift Share</div>
+                <div class="stat-value" id="sdKpiShareVal" style="color:var(--accent, #2563EB)">—</div>
+                <div class="sd-share-bar-track">
+                    <div class="sd-share-bar-fill" id="sdShareBarFill" style="width:0%"></div>
+                </div>
+                <div class="stat-sub">Share of client net drift</div>
+            </div>
+        </div>
+    </div>
+
     <div id="sdLoading" class="dd-loading">Loading…</div>
     <div id="sdError"   class="dd-error" style="display:none"></div>
 
     <div id="sdContent" style="display:none">
 
-        <!-- Stat cards -->
-        <div class="sd-stats">
+        <!-- Secondary Context Metrics Strip (Active during Drift analysis to avoid duplicate blue cards) -->
+        <div class="sd-secondary-metrics-strip" id="sdSecondaryMetricsStrip" style="display:none">
+            <div class="sd-sec-metric-item">
+                <div class="sd-sec-icon-wrap">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                </div>
+                <div>
+                    <div class="sd-sec-label">Resources Count</div>
+                    <div class="sd-sec-val" id="scSecResources">—</div>
+                </div>
+            </div>
+            <div class="sd-sec-metric-item">
+                <div class="sd-sec-icon-wrap">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+                </div>
+                <div>
+                    <div class="sd-sec-label">Avg / Resource</div>
+                    <div class="sd-sec-val" id="scSecAvg">—</div>
+                </div>
+            </div>
+            <div class="sd-sec-metric-item">
+                <div class="sd-sec-icon-wrap">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </div>
+                <div>
+                    <div class="sd-sec-label">Top Scope / RG</div>
+                    <div class="sd-sec-val" id="scSecTopRegion">—</div>
+                </div>
+            </div>
+            <div class="sd-sec-metric-item">
+                <div class="sd-sec-icon-wrap">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <div>
+                    <div class="sd-sec-label">Reporting Period</div>
+                    <div class="sd-sec-val" id="scSecPeriod">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Standard Stat cards (Shown when drift analysis is NOT active) -->
+        <div class="sd-stats" id="sdStandardStats">
             <div class="stat-card sd-stat-featured">
                 <svg class="stat-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                 <div class="stat-label">Total Cost</div>
@@ -188,7 +584,7 @@
                 <div class="stat-sub" id="scAvgSub"></div>
             </div>
             <div class="stat-card">
-                <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <svg class="stat-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"/></svg>
                 <div class="stat-label">Top Region</div>
                 <div class="stat-value" id="scTopRegion" style="font-size:16px;padding-top:4px">—</div>
                 <div class="stat-sub" id="scTopRegionSub"></div>
@@ -200,9 +596,16 @@
 
             <!-- Left: Resources table -->
             <div class="chart-card">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-                    <h3 style="margin:0">Top Resources by Cost</h3>
-                    <div style="font-size:12px;color:var(--text-secondary)" id="sdTableMeta"></div>
+                <div class="sd-table-head-flex">
+                    <div>
+                        <h3 style="margin:0;font-size:15px;font-weight:600">Top Resources by Cost</h3>
+                        <div style="font-size:12px;color:var(--text-secondary);margin-top:2px" id="sdTableMeta"></div>
+                    </div>
+                    <div class="sd-search-wrap">
+                        <svg class="sd-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="sdSearchInput" class="sd-search-input" placeholder="Search resources or RG..." oninput="onSearchChange(this.value)">
+                        <button id="sdSearchClear" class="sd-search-clear" onclick="clearSearch()" title="Clear search">&times;</button>
+                    </div>
                 </div>
                 <table class="res-table">
                     <thead>
@@ -223,40 +626,41 @@
                 </div>
             </div>
 
-            <!-- Right: Charts -->
-            <div class="sd-right">
-
-                <!-- Region doughnut -->
-                <div class="chart-card">
-                    <h3>Cost by Region</h3>
-                    <div style="position:relative;height:200px;display:flex;align-items:center;justify-content:center">
-                        <canvas id="regionChart"></canvas>
-                        <div style="position:absolute;text-align:center;pointer-events:none">
-                            <div style="font-size:11px;color:var(--text-secondary)">Total</div>
-                            <div style="font-size:15px;font-weight:700;color:var(--text-primary)" id="donutCenter">—</div>
-                        </div>
+            <!-- Right: Cost by Region doughnut -->
+            <div class="chart-card sd-region-card">
+                <h3>Cost by Region</h3>
+                <div style="position:relative;height:200px;display:flex;align-items:center;justify-content:center">
+                    <canvas id="regionChart"></canvas>
+                    <div style="position:absolute;text-align:center;pointer-events:none">
+                        <div style="font-size:11px;color:var(--text-secondary)">Total</div>
+                        <div style="font-size:15px;font-weight:700;color:var(--text-primary)" id="donutCenter">—</div>
                     </div>
-                    <div class="region-legend" id="regionLegend"></div>
                 </div>
-
-                <!-- Trend chart -->
-                <div class="chart-card">
-                    <div class="trend-controls">
-                        <h3>Cost Trend</h3>
-                        <div class="trend-toggle">
-                            <button id="btnDaily"  class="active" onclick="setTrendView('daily')">Daily</button>
-                            <button id="btnWeekly"            onclick="setTrendView('weekly')">Weekly</button>
-                        </div>
-                    </div>
-                    <div style="height:180px"><canvas id="trendChart"></canvas></div>
-                </div>
-
+                <div class="region-legend" id="regionLegend"></div>
             </div>
+
+        </div>
+
+        <!-- Full-Width Cost Trend Section -->
+        <div class="chart-card sd-trend-card" style="margin-top: 18px;">
+            <div class="trend-controls">
+                <div>
+                    <h3 style="margin:0;font-size:14px;font-weight:600">Cost Trend</h3>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">Spend trajectory over the selected period</div>
+                </div>
+                <div class="trend-toggle">
+                    <button id="btnDaily"  class="active" onclick="setTrendView('daily')">Daily</button>
+                    <button id="btnWeekly"            onclick="setTrendView('weekly')">Weekly</button>
+                </div>
+            </div>
+            <div style="height:220px;position:relative"><canvas id="trendChart"></canvas></div>
         </div>
 
         <!-- Insight -->
         <div class="sd-insight" id="sdInsight" style="display:none">
-            <div class="sd-insight-icon">&#128161;</div>
+            <div class="sd-insight-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-7 7c0 2.5 1.5 4.5 3 6h8c1.5-1.5 3-3.5 3-6a7 7 0 0 0-7-7z"/></svg>
+            </div>
             <div class="sd-insight-body">
                 <div class="sd-insight-title">Cost Insight</div>
                 <div class="sd-insight-text" id="sdInsightText"></div>
@@ -270,24 +674,53 @@
 
 </div>
 <script>
-const CHART_COLORS = ['#4f6ef7','#2ecc71','#e67e22','#9b59b6','#1abc9c','#e74c3c','#f39c12','#3498db','#e91e63','#00bcd4'];
+const CHART_COLORS = ['#3B82F6','#10B981','#8B5CF6','#F59E0B','#06B6D4','#EC4899','#6366F1','#64748B','#14B8A6','#F97316'];
 
 const qp       = new URLSearchParams(window.location.search);
 const service  = qp.get('service')   || '';
 const cloud    = qp.get('cloud')     || '';
-const account  = qp.get('account')  || '';
+const account  = qp.get('account')   || '';
+const clientId = qp.get('client_id') || '';
+const clientName = qp.get('client_name') || '';
 const dateFrom = qp.get('date_from') || '';
 const dateTo   = qp.get('date_to')   || '';
+const prevCost = qp.get('prev_cost');
+const curCost  = qp.get('cur_cost');
+const diff     = qp.get('diff');
+const pct      = qp.get('pct');
+const prevLabel = qp.get('prev_label') || 'Last Month';
+const curLabel  = qp.get('cur_label')  || 'This Month';
+const driftShare = qp.get('drift_share') || '';
+
+function navigateBack() {
+    if (window.parent && window.parent !== window && typeof window.parent.closeInAppServiceDetail === 'function') {
+        window.parent.closeInAppServiceDetail();
+        return;
+    }
+    const cId = clientId;
+    if (cId) {
+        window.location.href = `/#clients?client=${encodeURIComponent(cId)}`;
+    } else if (document.referrer && document.referrer.includes(window.location.host)) {
+        history.back();
+    } else {
+        window.location.href = '/#clients';
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') navigateBack();
+});
 
 let allRows     = [];
 let sortBy      = 'cost';
 let sortDir     = 'desc';
 let showAll     = false;
 let sym         = '$';
-let totalCost   = 0;
+let totalCost   = curCost != null ? Number(curCost) : 0;
 let dailyTrend  = [];
 let trendView   = 'daily';
 let chartInstances = {};
+let searchTerm  = '';
 
 const PREVIEW_COUNT = 10;
 
@@ -311,6 +744,32 @@ function fmtShort(v) {
     return fmt(v);
 }
 
+function copyGuid(guid, btn) {
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(guid).then(() => {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '✓';
+        btn.style.color = '#10B981';
+        setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 1200);
+    });
+}
+
+function onSearchChange(val) {
+    searchTerm = (val || '').toLowerCase().trim();
+    const clearBtn = document.getElementById('sdSearchClear');
+    if (clearBtn) clearBtn.style.display = searchTerm ? 'block' : 'none';
+    renderTable();
+}
+
+function clearSearch() {
+    const input = document.getElementById('sdSearchInput');
+    if (input) input.value = '';
+    searchTerm = '';
+    const clearBtn = document.getElementById('sdSearchClear');
+    if (clearBtn) clearBtn.style.display = 'none';
+    renderTable();
+}
+
 /* ─── page init ────────────────────────────────────────────────────────── */
 const cloudLabel = {aws:'AWS',azure:'Azure',gcp:'GCP'}[cloud] || (cloud||'').toUpperCase();
 const cloudIcon  = {aws:'/static/img/aws-logo.svg', azure:'/static/img/azure-logo.svg', gcp:'/static/img/gcp-logo.svg'}[cloud] || '';
@@ -318,6 +777,16 @@ const cloudIcon  = {aws:'/static/img/aws-logo.svg', azure:'/static/img/azure-log
 document.title = service ? service + ' — Resources' : 'Service Detail';
 document.getElementById('sdBreadService').textContent = service || 'Service Detail';
 document.getElementById('sdTitle').textContent        = service || 'Service Detail';
+
+if (clientName) {
+    document.getElementById('sdBreadSep').style.display = '';
+    const breadClient = document.getElementById('sdBreadClient');
+    breadClient.style.display = '';
+    breadClient.textContent = clientName;
+
+    document.getElementById('sdMetaClient').style.display = '';
+    document.getElementById('sdClientLabel').textContent = 'Client: ' + clientName;
+}
 
 const logoImg = document.getElementById('sdLogoImg');
 if (cloudIcon) { logoImg.src = cloudIcon; logoImg.alt = cloudLabel; }
@@ -335,13 +804,81 @@ if (dateFrom || dateTo) {
     document.getElementById('sdDateLabel').textContent  = (dateFrom || '…') + ' – ' + (dateTo || '…');
 }
 
+// Populate Drift & Variance Hero KPI cards if available
+const hasDrift = prevCost !== null && curCost !== null && diff !== null;
+if (hasDrift) {
+    const pCost = Number(prevCost || 0);
+    const cCost = Number(curCost || 0);
+    const dVal  = Number(diff || 0);
+    const pVal  = Number(pct || 0);
+    const isSurge = dVal >= 0;
+    const diffSign = isSurge ? '+' : '-';
+    const diffFmt  = `${diffSign}${fmt(Math.abs(dVal))}`;
+    const pctFmt   = `${Math.abs(pVal).toFixed(1)}%`;
+
+    const kpiWrap = document.getElementById('sdDriftKpiWrap');
+    if (kpiWrap) kpiWrap.style.display = 'block';
+
+    document.getElementById('sdKpiPrevLabel').textContent = prevLabel;
+    document.getElementById('sdKpiPrevVal').textContent   = fmt(pCost);
+    document.getElementById('sdKpiCurLabel').textContent  = curLabel;
+    document.getElementById('sdKpiCurVal').textContent   = fmt(cCost);
+
+    const diffCard = document.getElementById('sdKpiDiffCard');
+    if (diffCard) {
+        diffCard.classList.remove('is-saving', 'is-surge');
+        diffCard.classList.add(isSurge ? 'is-surge' : 'is-saving');
+    }
+
+    const diffEl = document.getElementById('sdKpiDiffVal');
+    if (diffEl) {
+        diffEl.innerHTML = `${diffFmt} <span style="font-size:13.5px;font-weight:600;opacity:0.9">(${diffSign}${pctFmt})</span>`;
+        diffEl.style.color = isSurge ? '#DC2626' : '#059669';
+    }
+
+    const diffSub = document.getElementById('sdKpiDiffSub');
+    if (diffSub) {
+        diffSub.innerHTML = isSurge ? '▲ Spend surged vs baseline' : '▼ Spend reduced vs baseline';
+    }
+
+    const shareEl = document.getElementById('sdKpiShareVal');
+    if (shareEl) {
+        const valStr = driftShare || '100% of drift';
+        const parts = valStr.match(/^([\d.]+%?)(.*)$/);
+        if (parts) {
+            shareEl.innerHTML = `${parts[1]} <span style="font-size:13px;font-weight:500;opacity:0.85">${parts[2].trim()}</span>`;
+        } else {
+            shareEl.textContent = valStr;
+        }
+    }
+
+    const shareMatch = (driftShare || '').match(/([\d.]+)%/);
+    const sharePct = shareMatch ? parseFloat(shareMatch[1]) : 100;
+    const shareFill = document.getElementById('sdShareBarFill');
+    if (shareFill) {
+        shareFill.style.width = Math.min(100, Math.max(4, sharePct)) + '%';
+    }
+
+    const badgeEl = document.getElementById('sdHeaderVarianceBadge');
+    if (badgeEl) {
+        badgeEl.textContent = `${diffFmt} (${diffSign}${pctFmt})`;
+        badgeEl.className = `sd-drift-badge ${isSurge ? 'surge' : 'saving'}`;
+        badgeEl.style.display = 'inline-flex';
+    }
+
+    const subText = document.getElementById('sdDriftSubText');
+    if (subText) {
+        subText.textContent = `${prevLabel} ➔ ${curLabel}${clientName ? (' · Allocated to ' + clientName) : ''}`;
+    }
+}
+
 function formatTs(d) {
     return d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}) +
            ' ' + d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
 }
 document.getElementById('sdLastUpdated').textContent = 'Last updated: ' + formatTs(new Date());
 
-/* ─── sorting ──────────────────────────────────────────────────────────── */
+/* ─── sorting & filtering ──────────────────────────────────────────────── */
 function sortTable(col) {
     if (col === 'num') { sortBy = 'cost'; sortDir = 'desc'; }
     else if (sortBy === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
@@ -349,8 +886,18 @@ function sortTable(col) {
     renderTable();
 }
 
+function getFilteredRows() {
+    if (!searchTerm) return allRows;
+    return allRows.filter(r => {
+        const n = (dispName(r) || '').toLowerCase();
+        const raw = (r.resource_name || '').toLowerCase();
+        const rg = (r.region || '').toLowerCase();
+        return n.includes(searchTerm) || raw.includes(searchTerm) || rg.includes(searchTerm);
+    });
+}
+
 function getSorted() {
-    return [...allRows].sort((a, b) => {
+    return [...getFilteredRows()].sort((a, b) => {
         let av, bv;
         if (sortBy === 'cost')        { av = a.total_cost; bv = b.total_cost; }
         else if (sortBy === 'region') { av = (a.region||'').toLowerCase(); bv = (b.region||'').toLowerCase(); }
@@ -367,26 +914,55 @@ function renderTable() {
         if (el) el.textContent = c === sortBy ? (sortDir === 'asc' ? '↑' : '↓') : '↕';
     });
 
-    const sorted  = getSorted();
-    const visible = showAll ? sorted : sorted.slice(0, PREVIEW_COUNT);
-    const body    = document.getElementById('sdBody');
+    const filtered = getFilteredRows();
+    const sorted   = getSorted();
+    const visible  = showAll ? sorted : sorted.slice(0, PREVIEW_COUNT);
+    const body     = document.getElementById('sdBody');
 
     if (!visible.length) {
-        body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">No resources found.</td></tr>`;
+        if (searchTerm) {
+            body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:36px;color:var(--text-secondary)">No resources match "<strong>${esc(searchTerm)}</strong>". <a href="javascript:void(0)" onclick="clearSearch()" style="color:var(--accent);margin-left:6px">Clear filter</a></td></tr>`;
+        } else if (clientName) {
+            body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:36px 20px;color:var(--text-secondary);font-size:13px">
+                No individual resource records found under this service for this client period.<br>
+                <span style="display:inline-block;margin-top:6px;font-weight:600;color:var(--text-primary)">Aggregated at service level: ${fmt(prevCost || 0)} ➔ ${fmt(curCost || totalCost)}</span>
+            </td></tr>`;
+        } else {
+            body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary)">No resources found.</td></tr>`;
+        }
         return;
     }
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     body.innerHTML = visible.map((r, i) => {
         const disp   = dispName(r);
         const rawId  = r.resource_name || '';
         const tip    = disp !== rawId ? esc(disp) + ' — ' + esc(rawId) : esc(rawId);
-        const region = r.region || '-';
+        const isUuid = uuidRegex.test(disp);
+        const isMissingRg = !r.region || r.region === '-';
+        const regionHtml = isMissingRg
+            ? `<span class="sd-empty-pill">Unassigned RG</span>`
+            : esc(r.region);
+
+        let nameHtml = '';
+        if (isUuid) {
+            nameHtml = `<span class="res-guid-badge" title="${tip}">
+                <span>${esc(disp.slice(0, 8))}…${esc(disp.slice(-4))}</span>
+                <button type="button" class="res-copy-btn" onclick="copyGuid('${esc(disp)}', this)" title="Copy full ID">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+            </span>`;
+        } else {
+            nameHtml = `<span class="res-name-inner" title="${tip}">${esc(disp)}</span>`;
+        }
+
         const pct    = totalCost > 0 ? (r.total_cost / totalCost * 100) : 0;
         const barW   = Math.max(2, Math.round(pct));
         return `<tr>
             <td class="res-num">${i+1}</td>
-            <td class="res-name-cell"><span class="res-name-inner" title="${tip}">${esc(disp)}</span></td>
-            <td style="color:var(--text-secondary);font-size:12px">${esc(region)}</td>
+            <td class="res-name-cell">${nameHtml}</td>
+            <td style="color:var(--text-secondary);font-size:12px">${regionHtml}</td>
             <td class="res-cost">${fmt(r.total_cost)}</td>
             <td class="res-pct-cell">
                 <div class="res-bar-wrap">
@@ -400,17 +976,19 @@ function renderTable() {
     // View all toggle
     const viewAllRow = document.getElementById('viewAllRow');
     const viewAllBtn = document.getElementById('viewAllBtn');
-    if (allRows.length > PREVIEW_COUNT) {
+    if (filtered.length > PREVIEW_COUNT) {
         viewAllRow.style.display = '';
         viewAllBtn.innerHTML = showAll
             ? `Show top ${PREVIEW_COUNT} <span id="viewAllArrow">↑</span>`
-            : `View all ${allRows.length} resources <span id="viewAllArrow">›</span>`;
+            : `View all ${filtered.length} resources <span id="viewAllArrow">›</span>`;
     } else {
         viewAllRow.style.display = 'none';
     }
 
-    document.getElementById('sdTableMeta').textContent =
-        showAll ? `${allRows.length} resources` : `Top ${Math.min(PREVIEW_COUNT, allRows.length)} of ${allRows.length}`;
+    const countLabel = searchTerm
+        ? `${filtered.length} matching (of ${allRows.length})`
+        : (showAll ? `${allRows.length} resources` : `Top ${Math.min(PREVIEW_COUNT, allRows.length)} of ${allRows.length}`);
+    document.getElementById('sdTableMeta').textContent = countLabel;
 }
 
 function toggleViewAll() { showAll = !showAll; renderTable(); }
@@ -429,7 +1007,14 @@ function makeChart(id, type, data, opts = {}) {
             devicePixelRatio: window.devicePixelRatio || 2,
             plugins: {
                 legend: { display: false },
-                tooltip: { callbacks: { label: ctx => ' ' + sym + Number(ctx.parsed || ctx.raw || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) } },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                    titleFont: { size: 12, weight: 600 },
+                    bodyFont: { size: 12 },
+                    padding: 10,
+                    cornerRadius: 8,
+                    callbacks: { label: ctx => ' ' + sym + Number(ctx.parsed?.y ?? ctx.parsed ?? ctx.raw ?? 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) }
+                },
             },
             ...opts,
         },
@@ -438,22 +1023,39 @@ function makeChart(id, type, data, opts = {}) {
 
 function renderRegionChart() {
     const byRegion = {};
-    allRows.forEach(r => { byRegion[r.region || '-'] = (byRegion[r.region || '-'] || 0) + r.total_cost; });
+    allRows.forEach(r => {
+        let rg = r.region || '-';
+        if (rg === '-') rg = 'Unassigned / Global';
+        byRegion[rg] = (byRegion[rg] || 0) + r.total_cost;
+    });
     const sorted = Object.entries(byRegion).sort((a,b) => b[1] - a[1]);
     const topN   = sorted.slice(0, 6);
     const other  = sorted.slice(6).reduce((s,[,v]) => s+v, 0);
     if (other > 0) topN.push(['Others', other]);
+
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.documentElement.getAttribute('data-appearance') === 'dark';
+    const borderCol = isDark ? '#151D2E' : '#FFFFFF';
 
     makeChart('regionChart', 'doughnut', {
         labels: topN.map(([k]) => k),
         datasets: [{
             data:            topN.map(([,v]) => parseFloat(v.toFixed(2))),
             backgroundColor: CHART_COLORS,
-            borderColor:     'var(--bg-card)',
-            borderWidth:     3,
-            hoverOffset:     6,
+            borderColor:     borderCol,
+            borderWidth:     topN.length > 1 ? 2 : 0,
+            hoverOffset:     4,
         }],
-    }, { cutout: '68%', plugins: { legend: { display: false } } });
+    }, { 
+        cutout: '72%', 
+        plugins: { 
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: ctx => ` ${ctx.label}: ${sym}${Number(ctx.parsed ?? ctx.raw ?? 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`
+                }
+            }
+        } 
+    });
 
     document.getElementById('donutCenter').textContent = fmtShort(totalCost);
 
@@ -461,7 +1063,7 @@ function renderRegionChart() {
         const pct = totalCost > 0 ? (cost / totalCost * 100).toFixed(1) : '0.0';
         return `<div class="region-legend-item">
             <div class="region-dot" style="background:${CHART_COLORS[i % CHART_COLORS.length]}"></div>
-            <span class="region-name">${esc(name)}</span>
+            <span class="region-name" title="${esc(name)}">${esc(name)}</span>
             <span class="region-cost">${fmt(cost)}</span>
             <span class="region-pct">(${pct}%)</span>
         </div>`;
@@ -483,22 +1085,62 @@ function aggregateWeekly(daily) {
 
 function renderTrendChart() {
     const data = trendView === 'weekly' ? aggregateWeekly(dailyTrend) : dailyTrend;
+    const canvas = document.getElementById('trendChart');
+    const ctx = canvas?.getContext('2d');
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.documentElement.getAttribute('data-appearance') === 'dark';
+
+    let bgGrad = 'rgba(37, 99, 235, 0.12)';
+    if (ctx) {
+        const g = ctx.createLinearGradient(0, 0, 0, 220);
+        g.addColorStop(0, isDark ? 'rgba(59, 130, 246, 0.28)' : 'rgba(37, 99, 235, 0.18)');
+        g.addColorStop(1, 'rgba(37, 99, 235, 0.00)');
+        bgGrad = g;
+    }
+
     makeChart('trendChart', 'line', {
-        labels: data.map(d => d.date),
+        labels: data.map(d => {
+            const parts = d.date.split('-');
+            return parts.length === 3 ? (parts[1] + '/' + parts[2]) : d.date;
+        }),
         datasets: [{
             data:            data.map(d => d.cost),
-            borderColor:     '#4f6ef7',
-            backgroundColor: 'rgba(79,110,247,0.10)',
+            borderColor:     '#2563EB',
+            backgroundColor: bgGrad,
             fill:            true,
             tension:         0.35,
-            pointRadius:     data.length > 30 ? 0 : 3,
-            pointHoverRadius: 5,
-            borderWidth:     2,
+            pointRadius:     data.length > 35 ? 0 : 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: '#2563EB',
+            pointBorderColor: isDark ? '#151D2E' : '#FFFFFF',
+            pointBorderWidth: 2,
+            borderWidth:     2.5,
+            clip:            false,
         }],
     }, {
+        layout: {
+            padding: { left: 8, right: 26, top: 16, bottom: 4 }
+        },
         scales: {
-            x: { ticks: { color:'#8b8fa3', font:{size:10}, maxTicksLimit:8 }, grid: { color:'rgba(255,255,255,0.05)' } },
-            y: { ticks: { color:'#8b8fa3', font:{size:10}, callback: v => sym + (v>=1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(0)) }, grid: { color:'rgba(255,255,255,0.05)' } },
+            x: {
+                ticks: {
+                    color: isDark ? '#94A3B8' : '#64748B',
+                    font: { size: 11, family: 'Inter, sans-serif' },
+                    maxTicksLimit: 14
+                },
+                grid: {
+                    color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                }
+            },
+            y: {
+                ticks: {
+                    color: isDark ? '#94A3B8' : '#64748B',
+                    font: { size: 11, family: 'Inter, sans-serif' },
+                    callback: v => sym + (v>=1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(0))
+                },
+                grid: {
+                    color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                }
+            },
         },
     });
 }
@@ -540,6 +1182,7 @@ async function load() {
         if (dateFrom) q.set('date_from',  dateFrom);
         if (dateTo)   q.set('date_to',    dateTo);
         if (cloud)    q.set('cloud_provider', cloud);
+        if (clientId) q.set('client_id', clientId);
 
         const resp = await fetch('/api/costs/resource-detail?' + q);
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -547,24 +1190,37 @@ async function load() {
 
         allRows    = json.rows       || [];
         sym        = json.currency_symbol || '$';
-        totalCost  = json.total_cost  || 0;
+        totalCost  = (json.total_cost != null && json.total_cost > 0) ? json.total_cost : (curCost != null ? Number(curCost) : 0);
         dailyTrend = json.daily_trend || [];
 
-        // Stat cards
         const resCount = allRows.length;
         const avg      = resCount > 0 ? totalCost / resCount : 0;
         const byRegion = {};
         allRows.forEach(r => { const rg = r.region||'-'; byRegion[rg] = (byRegion[rg]||0) + r.total_cost; });
         const topRegionEntry = Object.entries(byRegion).sort((a,b) => b[1]-a[1])[0] || ['-', 0];
 
-        document.getElementById('scTotal').textContent      = fmt(totalCost);
-        document.getElementById('scPeriod').textContent     = dateFrom && dateTo ? dateFrom + ' – ' + dateTo : '';
-        document.getElementById('scResources').textContent  = resCount;
-        document.getElementById('scResourceSub').textContent = resCount === 500 ? '500+ (capped)' : '';
-        document.getElementById('scAvg').textContent        = fmt(avg);
-        document.getElementById('scAvgSub').textContent     = 'per resource';
-        document.getElementById('scTopRegion').textContent  = topRegionEntry[0];
-        document.getElementById('scTopRegionSub').textContent = fmt(topRegionEntry[1]) + ' (' + (totalCost > 0 ? (topRegionEntry[1]/totalCost*100).toFixed(1) : '0.0') + '%)';
+        // Switch between Secondary Metrics strip (Drift view) vs Standard Stat cards
+        if (hasDrift) {
+            document.getElementById('sdSecondaryMetricsStrip').style.display = 'grid';
+            document.getElementById('sdStandardStats').style.display = 'none';
+
+            document.getElementById('scSecResources').textContent   = `${resCount} Resources`;
+            document.getElementById('scSecAvg').textContent         = fmt(avg);
+            document.getElementById('scSecTopRegion').textContent   = (topRegionEntry[0] === '-' ? 'Unassigned' : topRegionEntry[0]) + (topRegionEntry[1] > 0 ? ` (${fmt(topRegionEntry[1])})` : '');
+            document.getElementById('scSecPeriod').textContent      = dateFrom && dateTo ? (dateFrom + ' – ' + dateTo) : (curLabel || 'Current Period');
+        } else {
+            document.getElementById('sdSecondaryMetricsStrip').style.display = 'none';
+            document.getElementById('sdStandardStats').style.display = 'grid';
+
+            document.getElementById('scTotal').textContent      = fmt(totalCost);
+            document.getElementById('scPeriod').textContent     = dateFrom && dateTo ? dateFrom + ' – ' + dateTo : '';
+            document.getElementById('scResources').textContent  = resCount;
+            document.getElementById('scResourceSub').textContent = resCount === 500 ? '500+ (capped)' : '';
+            document.getElementById('scAvg').textContent        = fmt(avg);
+            document.getElementById('scAvgSub').textContent     = 'per resource';
+            document.getElementById('scTopRegion').textContent  = topRegionEntry[0] === '-' ? 'Unassigned' : topRegionEntry[0];
+            document.getElementById('scTopRegionSub').textContent = fmt(topRegionEntry[1]) + ' (' + (totalCost > 0 ? (topRegionEntry[1]/totalCost*100).toFixed(1) : '0.0') + '%)';
+        }
 
         document.getElementById('sdLoading').style.display = 'none';
         document.getElementById('sdContent').style.display = 'block';
@@ -581,15 +1237,41 @@ async function load() {
             const topPct = (topRes.total_cost / totalCost * 100).toFixed(1);
             const noRegion = allRows.filter(r => !r.region || r.region === '-').length;
             let insight = `Top resource <strong>${esc(dispName(topRes))}</strong> accounts for <strong>${topPct}%</strong> of this service's cost.`;
-            if (noRegion > 0) insight += ` <strong>${noRegion}</strong> resource${noRegion>1?'s have':' has'} no region data — run a Full Sync to populate.`;
+            if (noRegion > 0) insight += ` <strong>${noRegion}</strong> resource${noRegion>1?'s have':' has'} unassigned region data — run a Full Sync to populate.`;
             document.getElementById('sdInsightText').innerHTML = insight;
             document.getElementById('sdInsight').style.display = '';
         }
 
     } catch(e) {
-        document.getElementById('sdLoading').style.display = 'none';
-        document.getElementById('sdError').style.display   = 'block';
-        document.getElementById('sdError').textContent     = 'Failed to load: ' + e.message;
+        if (curCost != null || prevCost != null) {
+            if (hasDrift) {
+                document.getElementById('sdSecondaryMetricsStrip').style.display = 'grid';
+                document.getElementById('sdStandardStats').style.display = 'none';
+                document.getElementById('scSecResources').textContent   = '0 Resources';
+                document.getElementById('scSecAvg').textContent         = fmt(totalCost);
+                document.getElementById('scSecTopRegion').textContent   = 'Aggregated Scope';
+                document.getElementById('scSecPeriod').textContent      = dateFrom && dateTo ? (dateFrom + ' – ' + dateTo) : (curLabel || 'Current Period');
+            } else {
+                document.getElementById('sdSecondaryMetricsStrip').style.display = 'none';
+                document.getElementById('sdStandardStats').style.display = 'grid';
+                document.getElementById('scTotal').textContent       = fmt(totalCost);
+                document.getElementById('scPeriod').textContent      = dateFrom && dateTo ? dateFrom + ' – ' + dateTo : '';
+                document.getElementById('scResources').textContent   = '0';
+                document.getElementById('scResourceSub').textContent = 'Service aggregate';
+                document.getElementById('scAvg').textContent         = fmt(totalCost);
+                document.getElementById('scAvgSub').textContent      = 'service spend';
+                document.getElementById('scTopRegion').textContent   = '-';
+                document.getElementById('scTopRegionSub').textContent= '-';
+            }
+
+            document.getElementById('sdLoading').style.display = 'none';
+            document.getElementById('sdContent').style.display = 'block';
+            renderTable();
+        } else {
+            document.getElementById('sdLoading').style.display = 'none';
+            document.getElementById('sdError').style.display   = 'block';
+            document.getElementById('sdError').textContent     = 'Failed to load: ' + e.message;
+        }
     }
 }
 

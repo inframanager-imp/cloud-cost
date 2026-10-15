@@ -6,9 +6,9 @@
     <title>Cloud Cost Analyzer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v=20260924_light_v2">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261012_v4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261014_v3">
     <link rel="stylesheet" href="/static/css/themes-trial.css?v=20260924_light_v2">
     <link rel="stylesheet" href="/static/css/appearance.css?v=20260924_light_v2">
     <script>
@@ -41,13 +41,13 @@
     <script src="/static/vendor/flatpickr.min.js?v=4.6.13"></script>
     <style>
         .flatpickr-calendar { font-family: inherit; font-size: 12px; }
-        .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange { background:#10a37f!important; border-color:#10a37f!important; }
-        .flatpickr-day.inRange { background:rgba(16,163,127,.15)!important; border-color:transparent!important; box-shadow:-5px 0 0 rgba(16,163,127,.15),5px 0 0 rgba(16,163,127,.15)!important; }
+        .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange { background:var(--accent,#2563eb)!important; border-color:var(--accent,#2563eb)!important; color:#fff!important; }
+        .flatpickr-day.inRange { background:var(--accent-soft,rgba(37,99,235,.12))!important; border-color:transparent!important; color:var(--text-primary,#0f172a)!important; box-shadow:-5px 0 0 var(--accent-soft,rgba(37,99,235,.12)),5px 0 0 var(--accent-soft,rgba(37,99,235,.12))!important; }
         /* The single styled input IS the box now — strip the old wrapper box */
         .cost-date-range { border: none !important; background: transparent !important; padding: 0 !important; height: auto !important; gap: 0 !important; }
         /* Styled, compact date-range box: calendar icon left, chevron right */
-        #costDateRange.cd-range-box {
-            width: 172px; box-sizing: border-box;
+        .cd-range-box, input.cd-range-box {
+            box-sizing: border-box;
             padding: 6px 26px 6px 30px;
             font-size: 12px; line-height: 1.4;
             border: 1px solid var(--border-default); border-radius: 6px;
@@ -59,8 +59,11 @@
             background-image:
               url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7785' stroke-width='2' stroke-linecap='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E"),
               url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
-        #costDateRange.cd-range-box:hover { border-color: var(--border-strong); }
+        #costDateRange.cd-range-box { width: 172px; }
+        .cd-range-box:hover, input.cd-range-box:hover { border-color: var(--border-strong); }
+        .cd-range-box:focus, input.cd-range-box:focus { border-color: var(--accent,#2563eb); }
         /* Compact calendar — smaller days, months, weekdays */
         .flatpickr-calendar { width: 270px !important; }
         .flatpickr-days, .flatpickr-days .dayContainer { width: 252px !important; min-width: 252px !important; max-width: 252px !important; }
@@ -1513,26 +1516,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="cost-filter-field">
                     <label class="cost-filter-label">Cloud</label>
                     <div class="cp-segmented cp-segmented--cloud">
-                        <button class="cp-seg cp-seg--cloud active" data-costs-cloud="azure" onclick="setCostsCloud(this,'azure')">
-                            <img src="/static/img/azure-logo.svg" alt="">Azure
+                        <button class="cp-seg cp-seg--cloud active" data-costs-cloud="azure" onclick="setCostsCloud(this,'azure')" title="Microsoft Azure">
+                            <img src="/static/img/azure-logo.svg" alt="Azure">
                         </button>
-                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="aws" onclick="setCostsCloud(this,'aws')">
-                            <img src="/static/img/aws-logo.svg" alt="">AWS
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="aws" onclick="setCostsCloud(this,'aws')" title="Amazon Web Services">
+                            <img src="/static/img/aws-logo.svg" alt="AWS">
                         </button>
-                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="gcp" onclick="setCostsCloud(this,'gcp')">
-                            <img src="/static/img/gcp-logo.svg" alt="">GCP
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="gcp" onclick="setCostsCloud(this,'gcp')" title="Google Cloud Platform">
+                            <img src="/static/img/gcp-logo.svg" alt="GCP">
                         </button>
-                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="openai" onclick="setCostsCloud(this,'openai')">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="cp-seg__icon" style="color:#10a37f"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0L4.06 14.2A4.501 4.501 0 0 1 2.34 7.895zm16.597 3.855l-5.843-3.369 2.02-1.168a.076.076 0 0 1 .071 0l4.757 2.746a4.494 4.494 0 0 1-.695 8.104v-5.678a.79.79 0 0 0-.31-.635zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.756-2.746a4.5 4.5 0 0 1 6.679 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.392.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>OpenAI
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="openai" onclick="setCostsCloud(this,'openai')" title="OpenAI">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="cp-seg__icon" style="color:#10a37f"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0L4.06 14.2A4.501 4.501 0 0 1 2.34 7.895zm16.597 3.855l-5.843-3.369 2.02-1.168a.076.076 0 0 1 .071 0l4.757 2.746a4.494 4.494 0 0 1-.695 8.104v-5.678a.79.79 0 0 0-.31-.635zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.756-2.746a4.5 4.5 0 0 1 6.679 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.392.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>
                         </button>
-                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="chatgpt" onclick="setCostsCloud(this,'chatgpt')">
-                            <img src="/static/img/chatgpt-logo.svg" alt="" class="cp-seg__icon" style="width:14px;height:14px">ChatGPT
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="chatgpt" onclick="setCostsCloud(this,'chatgpt')" title="ChatGPT">
+                            <img src="/static/img/chatgpt-logo.svg" alt="ChatGPT" class="cp-seg__icon" style="width:14px;height:14px">
                         </button>
-                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="atlassian" onclick="setCostsCloud(this,'atlassian')">
-                            <svg width="14" height="14" viewBox="0 0 32 32" class="cp-seg__icon"><defs><linearGradient id="atlsg" x1="50%" y1="40%" x2="0%" y2="100%"><stop offset="0" stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs><path fill="url(#atlsg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/><path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/></svg>Atlassian
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="atlassian" onclick="setCostsCloud(this,'atlassian')" title="Atlassian">
+                            <svg width="14" height="14" viewBox="0 0 32 32" class="cp-seg__icon"><defs><linearGradient id="atlsg" x1="50%" y1="40%" x2="0%" y2="100%"><stop offset="0" stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs><path fill="url(#atlsg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/><path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/></svg>
                         </button>
-                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="cursor" onclick="setCostsCloud(this,'cursor')">
-                            <img src="/static/img/cursor-logo.svg" alt="" class="cp-seg__icon" style="width:14px;height:14px">Cursor
+                        <button class="cp-seg cp-seg--cloud" data-costs-cloud="cursor" onclick="setCostsCloud(this,'cursor')" title="Cursor AI">
+                            <img src="/static/img/cursor-logo.svg" alt="Cursor" class="cp-seg__icon" style="width:14px;height:14px">
                         </button>
                     </div>
                 </div>
@@ -1947,26 +1950,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="filter-bar__field">
                     <span class="micro-label">Cloud</span>
                     <div class="segmented-control segmented-control--small">
-                        <button class="seg active" data-cmp-cloud="azure" onclick="setCmpCloud(this,'azure')">
-                            <img src="/static/img/azure-logo.svg" alt="" style="width:13px;height:13px">Azure
+                        <button class="seg active" data-cmp-cloud="azure" onclick="setCmpCloud(this,'azure')" title="Microsoft Azure">
+                            <img src="/static/img/azure-logo.svg" alt="Azure" style="width:14px;height:14px;object-fit:contain">
                         </button>
-                        <button class="seg" data-cmp-cloud="aws" onclick="setCmpCloud(this,'aws')">
-                            <img src="/static/img/aws-logo.svg" alt="" style="width:13px;height:13px">AWS
+                        <button class="seg" data-cmp-cloud="aws" onclick="setCmpCloud(this,'aws')" title="Amazon Web Services">
+                            <img src="/static/img/aws-logo.svg" alt="AWS" style="width:18px;height:12px;object-fit:contain">
                         </button>
-                        <button class="seg" data-cmp-cloud="gcp" onclick="setCmpCloud(this,'gcp')">
-                            <img src="/static/img/gcp-logo.svg" alt="" style="width:13px;height:13px">GCP
+                        <button class="seg" data-cmp-cloud="gcp" onclick="setCmpCloud(this,'gcp')" title="Google Cloud Platform">
+                            <img src="/static/img/gcp-logo.svg" alt="GCP" style="width:14px;height:14px;object-fit:contain">
                         </button>
-                        <button class="seg" data-cmp-cloud="openai" onclick="setCmpCloud(this,'openai')">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="color:#10a37f"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0L4.06 14.2A4.501 4.501 0 0 1 2.34 7.895zm16.597 3.855l-5.843-3.369 2.02-1.168a.076.076 0 0 1 .071 0l4.757 2.746a4.494 4.494 0 0 1-.695 8.104v-5.678a.79.79 0 0 0-.31-.635zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.756-2.746a4.5 4.5 0 0 1 6.679 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.392.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>OpenAI
+                        <button class="seg" data-cmp-cloud="openai" onclick="setCmpCloud(this,'openai')" title="OpenAI">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:#10a37f"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0L4.06 14.2A4.501 4.501 0 0 1 2.34 7.895zm16.597 3.855l-5.843-3.369 2.02-1.168a.076.076 0 0 1 .071 0l4.757 2.746a4.494 4.494 0 0 1-.695 8.104v-5.678a.79.79 0 0 0-.31-.635zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.756-2.746a4.5 4.5 0 0 1 6.679 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.392.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>
                         </button>
-                        <button class="seg" data-cmp-cloud="chatgpt" onclick="setCmpCloud(this,'chatgpt')">
-                            <img src="/static/img/chatgpt-logo.svg" alt="" style="width:13px;height:13px">ChatGPT
+                        <button class="seg" data-cmp-cloud="chatgpt" onclick="setCmpCloud(this,'chatgpt')" title="ChatGPT">
+                            <img src="/static/img/chatgpt-logo.svg" alt="ChatGPT" style="width:14px;height:14px">
                         </button>
-                        <button class="seg" data-cmp-cloud="atlassian" onclick="setCmpCloud(this,'atlassian')">
-                            <svg width="13" height="13" viewBox="0 0 32 32"><defs><linearGradient id="cmpatlsg" x1="50%" y1="40%" x2="0%" y2="100%"><stop offset="0" stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs><path fill="url(#cmpatlsg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/><path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/></svg>Atlassian
+                        <button class="seg" data-cmp-cloud="atlassian" onclick="setCmpCloud(this,'atlassian')" title="Atlassian">
+                            <svg width="14" height="14" viewBox="0 0 32 32"><defs><linearGradient id="cmpatlsg" x1="50%" y1="40%" x2="0%" y2="100%"><stop offset="0" stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs><path fill="url(#cmpatlsg)" d="M9.5 15.1a.83.83 0 0 0-1.42.18L1.06 29.4a.86.86 0 0 0 .77 1.24h9.8a.83.83 0 0 0 .77-.47c2.1-4.36.83-10.98-2.9-15.07z"/><path fill="#2684FF" d="M15.3 1.43a18.9 18.9 0 0 0-1.1 18.66l4.72 9.45a.86.86 0 0 0 .77.47h9.8a.86.86 0 0 0 .77-1.24S17.5 2.06 17.2 1.43a.8.8 0 0 0-1.9 0z"/></svg>
                         </button>
-                        <button class="seg" data-cmp-cloud="cursor" onclick="setCmpCloud(this,'cursor')">
-                            <img src="/static/img/cursor-logo.svg" alt="" style="width:13px;height:13px">Cursor
+                        <button class="seg" data-cmp-cloud="cursor" onclick="setCmpCloud(this,'cursor')" title="Cursor AI">
+                            <img src="/static/img/cursor-logo.svg" alt="Cursor" style="width:14px;height:14px">
                         </button>
                     </div>
                 </div>
@@ -2114,14 +2117,14 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="filter-bar__row cmp-custom" style="display:none;margin-top:10px;flex-wrap:wrap">
                 <div class="filter-bar__field">
                     <span class="micro-label">Period 1</span>
-                    <input type="text" class="filter-bar__select" id="cmpCustom1Pick" placeholder="Select range" style="min-width:165px">
+                    <input type="text" class="filter-bar__select cd-range-box" id="cmpCustom1Pick" placeholder="Select range" style="min-width:165px">
                     <input type="hidden" id="cmpCustom1From">
                     <input type="hidden" id="cmpCustom1To">
                 </div>
                 <span class="period-arrow">→</span>
                 <div class="filter-bar__field">
                     <span class="micro-label">Period 2</span>
-                    <input type="text" class="filter-bar__select" id="cmpCustom2Pick" placeholder="Select range" style="min-width:165px">
+                    <input type="text" class="filter-bar__select cd-range-box" id="cmpCustom2Pick" placeholder="Select range" style="min-width:165px">
                     <input type="hidden" id="cmpCustom2From">
                     <input type="hidden" id="cmpCustom2To">
                 </div>
@@ -2368,7 +2371,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 <!-- Custom date inputs (shown only when Custom selected) -->
                 <div class="filter-bar__custom-dates" id="customDateInputs" style="display:none">
-                    <input type="text" class="cost-filter-input" id="ccRangePick" placeholder="Select range" style="min-width:170px">
+                    <input type="text" class="cost-filter-input cd-range-box" id="ccRangePick" placeholder="Select range" style="min-width:170px">
                     <input type="hidden" id="ccDateFrom">
                     <input type="hidden" id="ccDateTo">
                 </div>
@@ -2694,64 +2697,355 @@ document.addEventListener('DOMContentLoaded', () => {
         <span id="clientCount" style="display:none"></span>
 
         <!-- Client form modal (hidden by default) -->
-        <div id="clientFormWrap" style="display:none;margin-bottom:16px">
-            <div class="db-card">
-                <div class="db-card-hdr" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:16px">
-                    <span class="db-card-title" id="clientFormTitle">New Client</span>
-                    <button class="btn-mini" onclick="closeClientForm()" style="margin-left:auto">
-                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <!-- Client form modal (Redesigned modern modal) -->
+        <div id="clientFormWrap" class="cs-modal-backdrop" style="display:none" onclick="if(event.target===this)closeClientForm()">
+            <div class="cs-modal-dialog cca-client-modal-dialog">
+                <!-- Modal Header -->
+                <div class="cs-modal-header">
+                    <div class="cs-modal-header-left">
+                        <div class="cs-modal-icon-badge">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="cs-modal-title-row">
+                                <h3 class="cs-modal-title" id="clientFormTitle">New Client</h3>
+                            </div>
+                            <p class="cs-modal-subtitle">Configure client identity, cost mapping scope, and included analytical report sections.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="cs-modal-close-btn" onclick="closeClientForm()" aria-label="Close modal">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
                     </button>
                 </div>
-                <div style="display:flex;gap:24px;flex-wrap:wrap">
-                    <div style="min-width:200px">
-                        <label class="cost-filter-label" style="display:block;margin-bottom:4px">Client Name</label>
-                        <input type="text" id="clientName" class="filter-input" style="width:260px" placeholder="e.g. Acme Corp">
-                        <input type="hidden" id="clientEditId" value="">
+
+                <!-- Modal Body -->
+                <div class="cs-modal-body cca-client-modal-body">
+                    <!-- Section 1: Client Name -->
+                    <div class="cca-form-section">
+                        <div class="cca-form-section-hdr">
+                            <div class="cca-form-section-icon">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            </div>
+                            <div>
+                                <h4 class="cca-form-section-title">Client Information</h4>
+                                <span class="cca-form-section-desc">Client or internal department name used for reports and views.</span>
+                            </div>
+                        </div>
+                        <div class="cca-form-section-body">
+                            <label class="cca-form-label" for="clientName">
+                                Client Name <span class="cca-required">*</span>
+                            </label>
+                            <div class="cca-input-wrap">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="cca-input-icon">
+                                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                <input type="text" id="clientName" class="filter-input cca-input-styled" placeholder="e.g. Azure Gyan RG Cost or Acme Corp" autocomplete="off">
+                            </div>
+                            <input type="hidden" id="clientEditId" value="">
+                        </div>
                     </div>
-                    <div style="flex:1;min-width:400px">
-                        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Cost Mappings</div>
-                        <div id="clientMappingRows"></div>
-                        <button class="cp-btn-secondary" style="margin-top:8px;font-size:12px" onclick="addClientMappingRow()">+ Add Mapping Row</button>
+
+                    <!-- Section 2: Cost Mappings -->
+                    <div class="cca-form-section">
+                        <div class="cca-form-section-hdr" style="justify-content:space-between">
+                            <div style="display:flex;align-items:center;gap:10px">
+                                <div class="cca-form-section-icon">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                                </div>
+                                <div>
+                                    <h4 class="cca-form-section-title">Cost Mappings &amp; Scope</h4>
+                                    <span class="cca-form-section-desc">Associate specific cloud subscriptions, resource groups, or services with this client.</span>
+                                </div>
+                            </div>
+                            <button type="button" class="cca-btn-add-row" onclick="addClientMappingRow()">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                <span>Add Mapping Row</span>
+                            </button>
+                        </div>
+                        <div class="cca-form-section-body">
+                            <!-- Table Column Headers -->
+                            <div class="cm-table-header">
+                                <div class="cm-th-cloud">Cloud Provider</div>
+                                <div class="cm-th-dim">Dimension</div>
+                                <div class="cm-th-scope">Mapped Scope / Resources</div>
+                                <div class="cm-th-action"></div>
+                            </div>
+                            <div id="clientMappingRows" class="cm-rows-container"></div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Report Sections -->
+                    <div class="cca-form-section">
+                        <div class="cca-form-section-hdr">
+                            <div class="cca-form-section-icon">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            </div>
+                            <div>
+                                <h4 class="cca-form-section-title">Report Sections</h4>
+                                <span class="cca-form-section-desc">Choose which sections are included when viewing or exporting this client's reports.</span>
+                            </div>
+                        </div>
+                        <div class="cca-form-section-body">
+                            <div class="cca-section-grid">
+                                <label class="cca-toggle-card is-selected">
+                                    <input type="checkbox" class="client-section-cb" value="top_services" checked onchange="this.closest('.cca-toggle-card').classList.toggle('is-selected', this.checked)">
+                                    <div class="cca-toggle-icon">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                                    </div>
+                                    <div class="cca-toggle-content">
+                                        <span class="cca-toggle-title">Top Services</span>
+                                        <span class="cca-toggle-desc">Breakdown of top spending services</span>
+                                    </div>
+                                    <div class="cca-toggle-check">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    </div>
+                                </label>
+
+                                <label class="cca-toggle-card is-selected">
+                                    <input type="checkbox" class="client-section-cb" value="by_cloud" checked onchange="this.closest('.cca-toggle-card').classList.toggle('is-selected', this.checked)">
+                                    <div class="cca-toggle-icon">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>
+                                    </div>
+                                    <div class="cca-toggle-content">
+                                        <span class="cca-toggle-title">By Cloud Provider</span>
+                                        <span class="cca-toggle-desc">Multi-cloud share and totals</span>
+                                    </div>
+                                    <div class="cca-toggle-check">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    </div>
+                                </label>
+
+                                <label class="cca-toggle-card is-selected">
+                                    <input type="checkbox" class="client-section-cb" value="by_user" checked onchange="this.closest('.cca-toggle-card').classList.toggle('is-selected', this.checked)">
+                                    <div class="cca-toggle-icon">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                                    </div>
+                                    <div class="cca-toggle-content">
+                                        <span class="cca-toggle-title">Allocated Resources</span>
+                                        <span class="cca-toggle-desc">Full resource list and breakdown</span>
+                                    </div>
+                                    <div class="cca-toggle-check">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    </div>
+                                </label>
+
+                                <label class="cca-toggle-card is-selected">
+                                    <input type="checkbox" class="client-section-cb" value="trend" checked onchange="this.closest('.cca-toggle-card').classList.toggle('is-selected', this.checked)">
+                                    <div class="cca-toggle-icon">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                                    </div>
+                                    <div class="cca-toggle-content">
+                                        <span class="cca-toggle-title">Daily Cost Trends</span>
+                                        <span class="cca-toggle-desc">Day-by-day cost progression</span>
+                                    </div>
+                                    <div class="cca-toggle-check">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    </div>
+                                </label>
+
+                                <label class="cca-toggle-card is-selected">
+                                    <input type="checkbox" class="client-section-cb" value="manual" checked onchange="this.closest('.cca-toggle-card').classList.toggle('is-selected', this.checked)">
+                                    <div class="cca-toggle-icon">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                                    </div>
+                                    <div class="cca-toggle-content">
+                                        <span class="cca-toggle-title">Other Tools &amp; SaaS</span>
+                                        <span class="cca-toggle-desc">Subscriptions and manual items</span>
+                                    </div>
+                                    <div class="cca-toggle-check">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
-                    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Report Sections</div>
-                    <div style="display:flex;flex-wrap:wrap;gap:16px">
-                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="top_services" checked> Top Services Breakdown</label>
-                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="by_cloud" checked> By Cloud Provider</label>
-                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="by_user" checked> All Allocated Resources</label>
-                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="trend" checked> Daily Cost Trends</label>
-                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="client-section-cb" value="manual" checked> Other Tools &amp; Subscriptions</label>
+
+                <!-- Modal Footer -->
+                <div class="cs-modal-footer">
+                    <span class="cca-modal-footer-hint">Unchecked report sections will be excluded from this client's dashboards and scheduled reports.</span>
+                    <div class="cs-modal-footer-actions">
+                        <button type="button" class="cp-btn-secondary cca-modal-btn" onclick="closeClientForm()">Cancel</button>
+                        <button type="button" class="cp-btn-primary cca-modal-btn" id="saveClientBtn" onclick="saveClient()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                            <span>Save Client</span>
+                        </button>
                     </div>
-                    <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Unchecked sections won't appear in this client's report.</div>
-                </div>
-                <div style="display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
-                    <button class="cp-btn-primary" onclick="saveClient()">Save Client</button>
-                    <button class="cp-btn-secondary" onclick="closeClientForm()">Cancel</button>
                 </div>
             </div>
         </div>
 
         <!-- Send Report Modal -->
-        <div id="clientReportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
-            <div style="background:var(--bg-card,#fff);border-radius:12px;padding:28px;width:440px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,.25)">
-                <div style="font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Send Client Report</div>
-                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:18px" id="clientReportModalSubtitle">Sending cost report for <strong></strong></div>
-                <label style="font-size:12px;font-weight:500;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Recipients</label>
-                <input type="text" id="clientReportRecipients" class="filter-input" style="width:100%;margin-bottom:16px" placeholder="email1@company.com, email2@company.com">
-                <label style="font-size:12px;font-weight:500;color:var(--text-secondary);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Period</label>
-                <select id="clientReportPeriodSelect" class="filter-input" style="width:100%;margin-bottom:8px" onchange="onClientReportPeriodChange()">
-                    <option value="this_month">This Month</option>
-                    <option value="last_month">Last Month</option>
-                    <option value="last_30">Last 30 Days</option>
-                    <option value="last_90">Last 90 Days</option>
-                </select>
-                <div id="clientReportPeriodLabel" style="font-size:12px;color:var(--text-secondary);margin-bottom:20px"></div>
+        <!-- Send Report Modal -->
+        <div id="clientReportModal" class="crm-modal-backdrop" style="display:none" onclick="if(event.target===this)closeClientReportModal()">
+            <div class="crm-modal-card">
+                <!-- Modal Header -->
+                <div class="crm-modal-header">
+                    <div class="crm-modal-header-left">
+                        <div class="crm-modal-icon-badge">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9"></polygon>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="crm-modal-title">Send Client Report</div>
+                            <div class="crm-modal-sub" id="clientReportModalSubtitle">Sending cost report for <strong></strong></div>
+                        </div>
+                    </div>
+                    <button type="button" class="crm-modal-close-btn" onclick="closeClientReportModal()" title="Close dialog" aria-label="Close dialog">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
 
-                <div style="display:flex;gap:8px;justify-content:flex-end">
-                    <button class="cp-btn-secondary" onclick="closeClientReportModal()">Cancel</button>
-                    <button class="cp-btn-primary" id="clientReportSendBtn" onclick="sendClientReport()">
-                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>Send Now
+
+                <!-- Redesigned Recipients Input Field -->
+                <div class="crm-field-group">
+                    <div class="crm-field-header">
+                        <label for="clientReportTagsInput" class="crm-field-label">Recipients</label>
+                        <span id="clientReportRecipientCount" class="crm-field-count">0 recipients</span>
+                    </div>
+
+                    <!-- Interactive multi-email tag input container -->
+                    <div class="crm-recipients-box" id="clientReportRecipientsBox" onclick="document.getElementById('clientReportTagsInput')?.focus()">
+                        <div class="crm-box-icon">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                <polyline points="22,6 12,13 2,6"></polyline>
+                            </svg>
+                        </div>
+                        <div class="crm-chips-container" id="clientReportChipsContainer"></div>
+                        <input type="text" id="clientReportTagsInput" class="crm-tag-input" placeholder="Enter recipient email and press Enter…" autocomplete="off" spellcheck="false">
+                        <input type="hidden" id="clientReportRecipients" value="">
+                    </div>
+
+                    <div class="crm-help-row">
+                        <span>Press <kbd class="crm-kbd">Enter</kbd> or <kbd class="crm-kbd">,</kbd> to add email. Multiple emails can be pasted.</span>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="crm-modal-actions">
+                    <button type="button" class="cp-btn-secondary" onclick="closeClientReportModal()">Cancel</button>
+                    <button type="button" class="cp-btn-primary" id="clientReportSendBtn" onclick="sendClientReport()">
+                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:6px">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9"></polygon>
+                        </svg>Send Now
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cost Drift Detail Modal -->
+        <div id="costDriftDetailModal" class="crm-modal-backdrop" style="display:none" onclick="if(event.target===this)closeDriftDetailModal()">
+            <div class="cdd-modal-card">
+                <!-- Modal Header -->
+                <div class="cdd-modal-header">
+                    <div class="cdd-modal-header-left">
+                        <div class="cdd-modal-icon-badge" id="cddModalCloudIcon">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        </div>
+                        <div>
+                            <div class="cdd-modal-title-row">
+                                <h3 class="cdd-modal-title" id="cddModalServiceTitle">Service Name</h3>
+                                <span class="cdd-modal-badge" id="cddModalDeltaBadge">+$0.00 (+0%)</span>
+                            </div>
+                            <div class="cdd-modal-sub" id="cddModalSubtitle">Last Month ➔ This Month · Cost Variance Analysis</div>
+                        </div>
+                    </div>
+                    <button type="button" class="crm-modal-close-btn" onclick="closeDriftDetailModal()" title="Close dialog" aria-label="Close dialog">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- KPI Metric Grid -->
+                <div class="cdd-kpi-grid">
+                    <div class="cdd-kpi-card">
+                        <span class="cdd-kpi-label" id="cddKpiPrevLabel">Prior Period</span>
+                        <span class="cdd-kpi-val" id="cddKpiPrevVal">$0.00</span>
+                    </div>
+                    <div class="cdd-kpi-arrow-box">➔</div>
+                    <div class="cdd-kpi-card">
+                        <span class="cdd-kpi-label" id="cddKpiCurLabel">Current Period</span>
+                        <span class="cdd-kpi-val" id="cddKpiCurVal">$0.00</span>
+                    </div>
+                    <div class="cdd-kpi-card highlight" id="cddKpiDiffCard">
+                        <span class="cdd-kpi-label">Net Variance</span>
+                        <span class="cdd-kpi-val" id="cddKpiDiffVal">$0.00</span>
+                    </div>
+                    <div class="cdd-kpi-card">
+                        <span class="cdd-kpi-label">Client Net Drift Share</span>
+                        <span class="cdd-kpi-val" id="cddKpiShareVal">0%</span>
+                    </div>
+                </div>
+
+                <!-- Root Cause Banner -->
+                <div class="cdd-root-banner" id="cddRootBanner">
+                    <div class="cdd-root-icon" id="cddRootIcon">
+                        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    </div>
+                    <div class="cdd-root-text-wrap">
+                        <span class="cdd-root-title">Variance Diagnosis:</span>
+                        <span class="cdd-root-text" id="cddRootCauseText">Analyzing driver...</span>
+                    </div>
+                </div>
+
+                <!-- Contributing Resources Section -->
+                <div class="cdd-section-header">
+                    <div class="cdd-section-title">
+                        <span>Contributing Cloud Resources</span>
+                        <span class="cdd-count-pill" id="cddResCountBadge">0 Resources</span>
+                    </div>
+                    <span class="cdd-section-desc">Ranked by cost change</span>
+                </div>
+
+                <div class="cdd-table-wrap">
+                    <table class="cdd-table">
+                        <thead>
+                            <tr>
+                                <th>Resource Name</th>
+                                <th>Scope / Resource Group</th>
+                                <th style="text-align:right" id="cddThPrevCol">Prior Cost</th>
+                                <th style="text-align:right" id="cddThCurCol">Current Cost</th>
+                                <th style="text-align:right">Change</th>
+                                <th style="text-align:center;width:95px">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cddTableBody">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Modal Actions -->
+                <div class="cdd-modal-footer">
+                    <button type="button" class="cp-btn-secondary" onclick="closeDriftDetailModal()">Close</button>
+                    <button type="button" class="cp-btn-primary" id="cddOpenServiceBtn" onclick="openDriftServiceDetail()">
+                        <span>Open Service Detail</span>
+                        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-left:5px">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -3269,18 +3563,18 @@ document.addEventListener('DOMContentLoaded', () => {
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
             <span class="cp-breadcrumb" style="margin:0">Cloud</span>
             <div class="cp-segmented">
-                <button class="cp-seg active" data-act-cloud="" onclick="setActCloud(this,'')">All</button>
-                <button class="cp-seg" data-act-cloud="azure" onclick="setActCloud(this,'azure')">
-                    <img src="/static/img/azure-logo.svg" alt="" style="height:12px;vertical-align:middle;margin-right:3px">Azure
+                <button class="cp-seg active" data-act-cloud="" onclick="setActCloud(this,'')" title="All Clouds">All</button>
+                <button class="cp-seg" data-act-cloud="azure" onclick="setActCloud(this,'azure')" title="Microsoft Azure">
+                    <img src="/static/img/azure-logo.svg" alt="Azure" style="height:14px;vertical-align:middle">
                 </button>
-                <button class="cp-seg" data-act-cloud="aws" onclick="setActCloud(this,'aws')">
-                    <img src="/static/img/aws-logo.svg" alt="" style="height:10px;vertical-align:middle;margin-right:3px">AWS
+                <button class="cp-seg" data-act-cloud="aws" onclick="setActCloud(this,'aws')" title="Amazon Web Services">
+                    <img src="/static/img/aws-logo.svg" alt="AWS" style="height:12px;vertical-align:middle">
                 </button>
-                <button class="cp-seg" data-act-cloud="gcp" onclick="setActCloud(this,'gcp')">
-                    <img src="/static/img/gcp-logo.svg" alt="" style="height:12px;vertical-align:middle;margin-right:3px">GCP
+                <button class="cp-seg" data-act-cloud="gcp" onclick="setActCloud(this,'gcp')" title="Google Cloud Platform">
+                    <img src="/static/img/gcp-logo.svg" alt="GCP" style="height:14px;vertical-align:middle">
                 </button>
-                <button class="cp-seg" data-act-cloud="openai" onclick="setActCloud(this,'openai')">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#10a37f" style="vertical-align:middle;margin-right:3px"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073z"/></svg>OpenAI
+                <button class="cp-seg" data-act-cloud="openai" onclick="setActCloud(this,'openai')" title="OpenAI">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="#10a37f" style="vertical-align:middle"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073z"/></svg>
                 </button>
             </div>
         </div>
@@ -3395,7 +3689,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="cost-filter-field">
                     <label class="cost-filter-label">Date range</label>
-                    <input type="text" class="cost-filter-input" id="actRangePick" placeholder="All time" style="min-width:170px">
+                    <input type="text" class="cost-filter-input cd-range-box" id="actRangePick" placeholder="All time" style="min-width:170px">
                     <input type="hidden" id="actDateFrom">
                     <input type="hidden" id="actDateTo">
                 </div>
@@ -3637,13 +3931,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 <div class="rpt-custom-dates-wrap" id="rptCustomDateWrap" style="display:none">
                     <div style="flex:1">
-                        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">FROM</label>
-                        <input type="date" id="rptDateFrom" class="filter-input" style="width:100%;font-size:12px;padding:6px 10px" onchange="onReportCustomDateChange()">
-                    </div>
-                    <span style="color:var(--text-tertiary);margin-top:14px">→</span>
-                    <div style="flex:1">
-                        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">TO</label>
-                        <input type="date" id="rptDateTo" class="filter-input" style="width:100%;font-size:12px;padding:6px 10px" onchange="onReportCustomDateChange()">
+                        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Custom Range</label>
+                        <input type="text" id="rptRangePick" class="filter-input cd-range-box" style="width:100%" placeholder="Select custom date range">
+                        <input type="hidden" id="rptDateFrom" onchange="onReportCustomDateChange()">
+                        <input type="hidden" id="rptDateTo" onchange="onReportCustomDateChange()">
                     </div>
                 </div>
             </div>
@@ -3949,7 +4240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="email-field" style="flex:1;display:none" id="emReportFromGroup">
                             <label>Date range</label>
-                            <input type="text" id="emReportRangePick" class="filter-input" placeholder="Select range">
+                            <input type="text" id="emReportRangePick" class="filter-input cd-range-box" placeholder="Select range">
                             <input type="hidden" id="emReportDateFrom">
                             <input type="hidden" id="emReportDateTo">
                         </div>
@@ -4047,7 +4338,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="email-field" style="flex:1" id="crDateFromGroup" style="display:none">
                             <label>Date range</label>
-                            <input type="text" id="crRangePick" class="filter-input" placeholder="Select range">
+                            <input type="text" id="crRangePick" class="filter-input cd-range-box" placeholder="Select range">
                             <input type="hidden" id="crDateFrom">
                             <input type="hidden" id="crDateTo">
                         </div>
@@ -4942,7 +5233,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
                             <div style="grid-column:1 / -1">
                                 <label class="form-label">Date range <span style="font-weight:400;color:var(--text-secondary)">(optional)</span></label>
-                                <input type="text" id="curRangePick" class="filter-input" style="width:100%" placeholder="Select range">
+                                <input type="text" id="curRangePick" class="filter-input cd-range-box" style="width:100%" placeholder="Select range">
                                 <input type="hidden" id="curDateFrom">
                                 <input type="hidden" id="curDateTo">
                             </div>
@@ -5103,7 +5394,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="display:flex;gap:12px">
                             <div style="flex:1">
                                 <label class="form-label">Date range</label>
-                                <input type="text" id="budgetRangePick" class="filter-input" style="width:100%" placeholder="Select range">
+                                <input type="text" id="budgetRangePick" class="filter-input cd-range-box" style="width:100%" placeholder="Select range">
                                 <input type="hidden" id="budgetStartDate">
                                 <input type="hidden" id="budgetEndDate">
                             </div>
@@ -5859,7 +6150,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </div>
 
-<script src="/static/js/app.js?v=20261012_v5"></script>
+<script src="/static/js/app.js?v=20261014_v3"></script>
 <script>
     // Close any open multi-select dropdown when clicking outside
     document.addEventListener('click', function(e) {
@@ -7916,9 +8207,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         _oaiFp = flatpickr(dispEl, {
             mode: 'range',
-            dateFormat: 'd-m-Y',
+            dateFormat: 'd/m/y',
             defaultDate: [defFrom, defTo],
-            showMonths: 2,
+            disableMobile: true,
             onChange: function(selectedDates) {
                 if (selectedDates.length === 2) {
                     const fromEl = document.getElementById('oai-date-from');
@@ -8749,6 +9040,11 @@ window.exitImpersonation = function() {
         .catch(() => { window.location.href = '/superadmin'; });
 };
 </script>
+
+<!-- Seamless In-App Service Detail View (Zero Page Refresh) -->
+<div id="inAppServiceDetailView" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99998;background:var(--bg-page,#F8FAFC);overflow:hidden;">
+    <iframe id="inAppServiceDetailFrame" style="width:100%;height:100%;border:none;display:block;" title="Service Detail"></iframe>
+</div>
 
 <!-- Global Animated Loader Overlay -->
 <div id="globalLogoLoader" class="active">
