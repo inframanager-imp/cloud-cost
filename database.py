@@ -1724,19 +1724,43 @@ def query_costs(filters=None, tenant_id=None, reporting_currency=None):
     _SORTABLE = {
         "date": date_expr,
         "cloud_provider": "cloud_provider",
-        "resource_group": "resource_group",
+        # Must be the same expression the GROUP BY uses, which differs by mode.
+        "resource_group": _dim_expr("resource_group"),
         "service_name": "service_name",
         "resource_name": _display_resource_sort_expr(),
         "meter_category": "meter_category",
         "subscription_id": "subscription_id",
         "cost": "cost",
     }
+    # Which grouped columns each sort expression actually reads. A roll-up mode
+    # only groups by its own dimensions, and _nocase_order_expr wraps the term
+    # in LOWER() -- an expression, unlike a bare column name, is not matched
+    # against the SELECT aliases, so it resolves to the base table column and
+    # Postgres demands it be in GROUP BY. Sorting any column the active mode
+    # does not group by therefore returned a 500 ("column cost_data.
+    # resource_group must appear in the GROUP BY clause"); fall back to the
+    # default order instead. resource_name's key mirrors the display transform,
+    # which reads three columns, so all three have to be grouped.
+    _SORT_DEPS = {
+        "date": (),
+        "cost": (),
+        "cloud_provider": ("cloud_provider",),
+        "resource_group": ("resource_group",),
+        "service_name": ("service_name",),
+        "resource_name": ("resource_name", "resource_type", "service_name"),
+        "meter_category": ("meter_category",),
+        "subscription_id": ("subscription_id",),
+    }
     sort_by = (filters or {}).get("sort_by")
     sort_dir = "ASC" if str((filters or {}).get("sort_dir", "")).lower() == "asc" else "DESC"
+    sortable_here = (
+        sort_by in _SORTABLE
+        and all(d in group_dims for d in _SORT_DEPS.get(sort_by, ()))
+    )
     if sort_by == "date":
         # Keep the original default's cost tiebreak within a day.
         order_by = f"{date_expr} {sort_dir}, cost DESC"
-    elif sort_by in _SORTABLE:
+    elif sortable_here:
         col = _SORTABLE[sort_by]
         # Text columns sort case-insensitively so "Apple" and "apple" sit
         # together, matching what the user sees in the grid.
