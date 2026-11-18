@@ -56,15 +56,22 @@ aws iam create-user --user-name "$USER_NAME" > /dev/null 2>&1 && \
 
 # ── Step 2: IAM Policy ───────────────────────────────────────────────────────
 echo -e "[2/5] Attaching read-only cost policy"
+# S3 access is scoped to this account's CUR bucket only. The rest of the policy
+# stays single-quoted (no expansion); the bucket ARNs splice $BUCKET_NAME in by
+# closing and reopening the quote. The bucket does not exist yet at this point
+# -- IAM happily references an ARN that is created two steps later.
 POLICY_DOC='{
   "Version": "2012-10-17",
   "Statement": [
     {"Sid":"CostBillingAccess","Effect":"Allow",
      "Action":["ce:*","cur:DescribeReportDefinitions","budgets:ViewBudget"],
      "Resource":"*"},
-    {"Sid":"S3CURAccess","Effect":"Allow",
-     "Action":["s3:GetObject","s3:ListBucket"],
-     "Resource":"*"},
+    {"Sid":"S3CURList","Effect":"Allow",
+     "Action":["s3:ListBucket"],
+     "Resource":"arn:aws:s3:::'"${BUCKET_NAME}"'"},
+    {"Sid":"S3CURRead","Effect":"Allow",
+     "Action":["s3:GetObject"],
+     "Resource":"arn:aws:s3:::'"${BUCKET_NAME}"'/*"},
     {"Sid":"ResourceDiscovery","Effect":"Allow",
      "Action":["ec2:Describe*","rds:Describe*",
                "elasticloadbalancing:Describe*",
