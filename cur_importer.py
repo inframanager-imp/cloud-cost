@@ -20,6 +20,7 @@ import gzip
 import json
 import csv
 import os
+import zlib
 from datetime import datetime, timezone
 
 try:
@@ -70,6 +71,11 @@ def _s3_client(credentials: dict):
     return boto3.client("s3", **sess_kwargs)
 
 
+# Advisory-lock namespace for CUR imports, so these locks cannot collide with
+# any other pg_advisory_* user in the app. Arbitrary but fixed.
+_CUR_LOCK_NAMESPACE = 0x43555200 & 0x7FFFFFFF
+
+
 def list_cur_manifests(s3, bucket: str, prefix: str) -> list[dict]:
     """
     List all manifest JSON files under prefix.
@@ -86,7 +92,20 @@ def list_cur_manifests(s3, bucket: str, prefix: str) -> list[dict]:
                 period = next((p for p in parts if "-2026" in p or "202" in p and len(p) == 17), key)
                 manifests.append({"key": key, "period": period, "last_modified": obj["LastModified"]})
     manifests.sort(key=lambda x: x["last_modified"], reverse=True)
-    return manifests
+
+    # AWS refreshes a billing period by dropping a fresh timestamped assembly
+    # folder (.../20261101-20261201/20261117T173554Z/...), each carrying its own
+    # complete manifest for that same month. Keeping all of them re-reads the
+    # month once per refresh -- account 319640437000 listed 25 November
+    # snapshots on 2026-11-18. Sorted newest-first above, so the first manifest
+    # seen for a period is the current one.
+    newest_per_period, seen_periods = [], set()
+    for m in manifests:
+        if m["period"] in seen_periods:
+            continue
+        seen_periods.add(m["period"])
+        newest_per_period.append(m)
+    return newest_per_period
 
 
 def _parse_manifest(s3, bucket: str, manifest_key: str) -> list[str]:
@@ -569,8 +588,22 @@ def import_from_s3_bucket(provider: dict, credentials: dict = None,
         # insert_cost_records_with_tenant expects tenant_id as 13th element
         stamped.append(tuple(row_list))
 
-    from database import get_db
+    from database import get_db, DB_ENGINE
     conn = get_db()
+
+    # Serialize concurrent imports of the same account. Two independent
+    # schedulers reach this function -- the CUR auto-import timer and the
+    # per-tenant auto-sync -- and each only guards itself, so both can be in
+    # here at once. Both then DELETE the window (the second against a snapshot
+    # that does not yet hold the first's rows) and both INSERT, landing the
+    # month twice: on 2026-11-18 account 319640437000 got two identical
+    # 18,400-row batches 3s apart, doubling its October and November totals.
+    # An xact lock is released by the commit/rollback below, so it spans
+    # exactly the delete+insert pair that has to be atomic.
+    if DB_ENGINE == "postgres":
+        lock_id = zlib.crc32(f"cur-import:{tid}:{account_id}".encode()) & 0x7FFFFFFF
+        conn.execute("SELECT pg_advisory_xact_lock(?, ?)", (_CUR_LOCK_NAMESPACE, lock_id))
+
     if del_from and del_to and del_from <= del_to:
         conn.execute(
             "DELETE FROM cost_data WHERE date>=? AND date<=? AND cloud_provider='aws' AND subscription_id=? AND tenant_id=?",
